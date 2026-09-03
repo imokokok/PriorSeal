@@ -1,0 +1,12 @@
+export const chains: Record<number, string> = { 1: 'Ethereum', 8453: 'Base', 42161: 'Arbitrum' }
+export const short = (value?: string | null, left = 10, right = 7) => !value ? '—' : value.length <= left + right + 1 ? value : `${value.slice(0, left)}…${value.slice(-right)}`
+export const dateTime = (seconds?: number | null) => seconds ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(seconds * 1000) : '—'
+export const relative = (seconds?: number) => seconds ? new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(Math.round((seconds - Date.now() / 1000) / 86400), 'day') : '—'
+export const toUnix = (date: string) => Math.floor(new Date(date).getTime() / 1000)
+export const fromUnix = (seconds: number) => new Date(seconds * 1000).toISOString().slice(0, 16)
+export const reasonText: Record<string, string> = {
+  CHAIN_MISMATCH: 'The execution was observed on a different chain.', SENDER_MISMATCH: 'The observed sender differs from the authorized sender.', RECIPIENT_MISMATCH: 'The observed recipient differs from the authorized recipient.', ASSET_MISMATCH: 'The observed asset differs from the authorized asset.', AMOUNT_MISMATCH: 'The observed amount differs from the authorized amount.', NONCE_MISMATCH: 'The transaction nonce differs from the authorized nonce.', OUTSIDE_TIME_WINDOW: 'The execution falls outside the intent validity window.', INSUFFICIENT_FINALITY: 'The requested confirmation threshold was not reached.', GAS_LIMIT_EXCEEDED: 'Observed gas use exceeds the intent constraint.', AMBIGUOUS_TRANSFER: 'More than one transfer could match the intent.', EXECUTION_UNAVAILABLE: 'Execution data is not available from the observation source.'
+}
+export const verificationText: Record<string, string> = {
+  OK: 'The receipt signature and structured fields passed this verification.', UNKNOWN_KEY: 'The receipt key is not present in the available key registry.', MISSING_SIGNATURE: 'The receipt does not contain a signature.', UNSUPPORTED_SCHEMA: 'This receipt schema is not supported by this verifier.', UNSUPPORTED_ALGORITHM: 'This signature algorithm is not supported.', INVALID_DOMAIN: 'The receipt domain does not match the RunProof receipt domain.', EXECUTION_HASH_MISMATCH: 'The embedded execution does not match its recorded execution hash.', INVALID_SIGNATURE: 'The signature could not be verified with the registered public key.', EXPIRED: 'The receipt validity window has ended.', NOT_YET_VALID: 'The receipt was issued in the future relative to the verifier clock.'
+}

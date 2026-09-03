@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
+import { buildIntent, buildReceipt, signReceipt, verifyReceipt } from '../src/receipt.mjs';
+import { canonicalize, hashJson } from '../src/canonical.mjs';
+const keys = generateKeyPairSync('ed25519'); const priv = keys.privateKey.export({ type: 'pkcs8', format: 'pem' }); const pub = keys.publicKey.export({ type: 'spki', format: 'pem' });
+const intent = buildIntent({ intentId: 'i-1', chainId: 8453, action: 'TRANSFER', asset: '0xtoken', amount: '10', sender: '0xAa', recipient: '0xBb', validUntil: 2000000000, nonce: '1' });
+const execution = { chainId: 8453, txHash: '0x' + '1'.repeat(64), status: 'CONFIRMED', observedAt: 100, sender: '0xaa', recipient: '0xbb', asset: '0xtoken', amount: '10', finalityState: 'CONFIRMED' };
+test('canonical JSON sorts objects but preserves arrays', () => { assert.equal(hashJson({ b: 2, a: 1 }), hashJson({ a: 1, b: 2 })); assert.notEqual(hashJson({ a: [1, 2] }), hashJson({ a: [2, 1] })); assert.equal(canonicalize({ a: null, b: 'x', c: 2 }), '{"a":null,"b":"x","c":2}'); });
+test('receipt verifies offline and detects mutation', () => { const receipt = signReceipt(buildReceipt({ intent, execution, issuer: 'test', keyId: 'k1', issuedAt: 100 }), priv); assert.equal(verifyReceipt(receipt, pub, { keyId: 'k1', now: 101 }).valid, true); assert.equal(verifyReceipt({ ...receipt, outcome: 'FAILED' }, pub, { keyId: 'k1', now: 101 }).code, 'INVALID_SIGNATURE'); assert.equal(verifyReceipt({ ...receipt, executionHash: 'bad' }, pub, { keyId: 'k1', now: 101 }).code, 'EXECUTION_HASH_MISMATCH'); });
+test('intent fields bind to completed execution', () => { assert.equal(buildReceipt({ intent, execution, issuer: 'test' }).outcome, 'COMPLETED'); assert.equal(buildReceipt({ intent, execution: { ...execution, recipient: '0xcc' }, issuer: 'test' }).outcome, 'UNDETERMINED'); assert.equal(buildReceipt({ intent, execution: { ...execution, status: 'PENDING' }, issuer: 'test' }).outcome, 'PENDING'); });

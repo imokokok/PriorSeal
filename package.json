@@ -1,0 +1,15 @@
+{
+  "name": "runproof",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A minimal, independently verifiable execution receipt demo for crypto agents.",
+  "type": "module",
+  "scripts": {
+    "demo": "node demo/runproof-demo.mjs",
+    "verify": "node demo/verify-receipt.mjs demo/receipt.json demo/public-key.pem",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

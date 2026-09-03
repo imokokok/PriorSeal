@@ -1,0 +1,8 @@
+node_modules/
+.env
+demo/private-key.pem
+demo/public-key.pem
+demo/receipt.json
+demo/private-key.pem
+demo/public-key.pem
+*.log
