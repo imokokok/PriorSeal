@@ -2,14 +2,23 @@
   "name": "runproof",
   "version": "0.1.0",
   "private": true,
-  "description": "A minimal, independently verifiable execution receipt demo for crypto agents.",
+  "description": "Independently verifiable on-chain execution evidence for agents.",
   "type": "module",
   "scripts": {
     "demo": "node demo/runproof-demo.mjs",
     "verify": "node demo/verify-receipt.mjs demo/receipt.json demo/public-key.pem",
-    "test": "node --test"
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "lint": "node scripts/quality.mjs lint",
+    "format:check": "node scripts/quality.mjs format",
+    "typecheck": "node scripts/quality.mjs typecheck",
+    "build": "npm --prefix web run build",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run build",
+    "audit": "npm audit --omit=dev",
+    "start:api": "node src/interfaces/http/main.mjs"
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "workspaces": ["web"]
 }

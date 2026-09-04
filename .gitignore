@@ -1,5 +1,8 @@
 node_modules/
 .env
+.env.local
+.env.*.local
+web/dist/
 demo/private-key.pem
 demo/public-key.pem
 demo/receipt.json

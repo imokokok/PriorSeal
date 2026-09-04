@@ -5,7 +5,11 @@ export function canonicalize(value) {
   if (typeof value === 'number' && !Number.isFinite(value)) throw new TypeError('non-finite number is not valid canonical JSON');
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`;
-  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalize(value[key])}`).join(',')}}`;
+  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) throw new TypeError('canonical JSON requires a plain object');
+  return `{${Object.keys(value).sort().map((key) => {
+    if (['__proto__', 'prototype', 'constructor'].includes(key)) throw new TypeError('unsafe canonical JSON key');
+    return `${JSON.stringify(key)}:${canonicalize(value[key])}`;
+  }).join(',')}}`;
 }
 
 export function sha256Hex(value) {

@@ -9,7 +9,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     const response = await fetch(`${BASE_URL}${path}`, {
       ...options, signal: controller.signal,
-      headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers }
+      headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() } : {}), ...options.headers }
     })
     const data: unknown = await response.json().catch(() => null)
     if (!response.ok) {

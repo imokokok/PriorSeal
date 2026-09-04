@@ -1,0 +1,2 @@
+# ADR 008: Observability
+**Context:** sensitive evidence service needs useful but safe diagnostics. **Decision:** structured event injection points, health endpoints, and metric hooks without a telemetry vendor dependency. **Alternatives:** mandatory SaaS SDK. **Consequences:** deployment supplies exporter/logger; secrets/bodies are excluded. **Revisit triggers:** SLOs or tracing correlation needed across services.

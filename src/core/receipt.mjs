@@ -5,7 +5,11 @@ import { bindIntentExecution } from './binding.mjs';
 export const RECEIPT_SCHEMA = 'runproof.execution-receipt.v1';
 export function buildReceipt({ intent, execution, issuer, keyId = 'default', issuedAt = Math.floor(Date.now() / 1000), verifierVersion = '1.0.0', reasonCodes = [] }) {
   const binding = bindIntentExecution(intent, execution, issuedAt);
-  const unsigned = { schema: RECEIPT_SCHEMA, domain: 'runproof/execution-receipt/v1', receiptId: `rpr_${hashJson({ intentHash: intent.intentHash, txHash: execution.txHash }).slice(0, 24)}`, intentHash: intent.intentHash, executionHash: hashJson(execution), execution, issuer, issuedAt, validUntil: intent.validUntil, outcome: classifyOutcome(intent, execution), reasonCodes: [...new Set([...reasonCodes, ...binding.reasonCodes])], binding, algorithm: 'Ed25519', keyId, verifierVersion };
+  const executionHash = hashJson(execution);
+  // Receipt IDs include the complete observed evidence hash. Re-observation after a
+  // reorg produces a new, non-overwriting evidence record rather than silently
+  // replacing a prior signed statement.
+  const unsigned = { schema: RECEIPT_SCHEMA, domain: 'runproof/execution-receipt/v1', receiptId: `rpr_${hashJson({ intentHash: intent.intentHash, executionHash, issuer, keyId }).slice(0, 32)}`, intentHash: intent.intentHash, executionHash, execution, issuer, issuedAt, validUntil: intent.validUntil, outcome: classifyOutcome(intent, execution), reasonCodes: [...new Set([...reasonCodes, ...binding.reasonCodes])], binding, algorithm: 'Ed25519', keyId, verifierVersion };
   return unsigned;
 }
 export function signReceipt(receipt, privateKeyPem) { const key = createPrivateKey(privateKeyPem); return { ...receipt, signature: sign(null, Buffer.from(canonicalize(receipt)), key).toString('base64url') }; }

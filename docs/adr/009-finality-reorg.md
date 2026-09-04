@@ -1,0 +1,2 @@
+# ADR 009: Finality and reorg receipts
+**Context:** EVM observations may change. **Decision:** finality is a policy threshold; append new evidence and preserve previous signed receipts. **Alternatives:** overwrite receipt or treat first RPC result as final. **Consequences:** consumers must understand `REORGED`/`UNDETERMINED`. **Revisit triggers:** chain-specific finality APIs or legal revocation requirements.

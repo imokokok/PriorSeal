@@ -1,0 +1,2 @@
+# ADR 002: JavaScript with strict boundaries
+**Context:** core is Node ESM and dependency-light. **Decision:** retain JavaScript, use explicit validation/value modules and progressively add JSDoc/checking where value is highest. **Alternatives:** immediate TypeScript rewrite. **Consequences:** no big-bang protocol churn; runtime validation remains mandatory. **Revisit triggers:** public SDK extraction or repeated boundary/type defects.

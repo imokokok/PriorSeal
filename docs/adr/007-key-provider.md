@@ -1,0 +1,2 @@
+# ADR 007: Key provider evolution
+**Context:** issuer keys must never be API/database/frontend data. **Decision:** local read-only key files for development and a provider seam for KMS/HSM. **Alternatives:** environment PEM or database keys. **Consequences:** production must mount/use a secret provider; public registry supports rotation. **Revisit triggers:** production rollout or compliance requirement.

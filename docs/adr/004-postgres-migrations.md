@@ -1,0 +1,2 @@
+# ADR 004: PostgreSQL and forward migrations
+**Context:** evidence, idempotency and jobs need durable relational state. **Decision:** parameterized pg-compatible adapter and ordered SQL migrations. **Alternatives:** ORM, document store. **Consequences:** SQL remains auditable and optional for offline verification. **Revisit triggers:** cross-database support or migration complexity that demonstrably needs a tool.
