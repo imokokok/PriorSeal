@@ -3,12 +3,13 @@
 ## Baseline architecture
 
 ```text
-React console → Node HTTP API → core protocol → memory/PostgreSQL adapter
-                              ↘ EVM JSON-RPC observer
-Worker (in-memory jobs) ──────→ observer → receipt signer → verifier
+React console → HTTP interface → application use cases → domain protocol
+                                              ↓                 ↑
+                                  persistence / EVM / key adapters
+Background worker ────────────→ observation use case → receipt signer → verifier
 ```
 
-Baseline tests passed (10 Node tests). The repository contained no tracked PEM/private-key files; demo artifacts are ignored. This is not proof that a credential was never exposed outside reachable Git history or outside this checkout.
+Baseline tests passed (10 Node tests). The repository contained no tracked PEM/private-key files; generated example artifacts are ignored. This is not proof that a credential was never exposed outside reachable Git history or outside this checkout.
 
 ## Risk matrix and disposition
 
@@ -26,13 +27,13 @@ Baseline tests passed (10 Node tests). The repository contained no tracked PEM/p
 ## Target architecture
 
 ```text
-interfaces/http, interfaces/worker
+interfaces/http                 bootstrap
+          ↓                         ↓
+application use cases ← dependency composition
           ↓
-application composition (next extraction boundary)
-          ↓
-domain values + core protocol/policy
+domain protocol, values, and policy
           ↑                 ↑
-storage ports         EVM RPC adapter / key provider
+persistence adapters    EVM RPC adapter / key provider
 ```
 
 The project stays a modular monolith. Protocol code has no HTTP, database, environment, or fetch dependency.

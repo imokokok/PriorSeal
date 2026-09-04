@@ -1,4 +1,4 @@
-import { RunProofError } from '../core/errors.mjs';
+import { RunProofError } from './errors.mjs';
 
 export const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 export const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;

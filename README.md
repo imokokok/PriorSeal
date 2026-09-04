@@ -22,11 +22,11 @@ npm --prefix web run dev
 
 The console is served by Vite on its displayed URL and proxies API calls to port 3000. It stores browser-local session activity only; it is not a server-side evidence archive. Amounts are atomic unsigned integer strings (never floats), such as `"1000000"`.
 
-To run the demo (which creates ignored temporary key artifacts):
+To run the receipt example (which creates ignored temporary key artifacts):
 
 ```bash
-npm run demo
-npm run verify
+npm run example:receipt
+npm run verify:receipt
 ```
 
 ## Quality checks
@@ -42,6 +42,8 @@ The API contract is at `/openapi/v1.json`. Operational endpoints are `/health/li
 ## API and security boundaries
 
 `POST /v1/intents`, `POST /v1/executions/observe`, `GET /v1/receipts/:receiptId`, `POST /v1/receipts/verify`, and `GET /.well-known/runproof-keys.json` are the stable v1 surface. Use an `Idempotency-Key` for writes. The same key and request body replay a result for 24 hours; a different body produces `IDEMPOTENCY_CONFLICT`.
+
+Startup configuration is validated before the HTTP server listens: `PORT` must be 1–65535, `RUNPROOF_TRUST_PROXY` must be `true` or `false`, CORS entries must be complete HTTP(S) origins, and issuer key paths must be configured as a pair.
 
 Only configured RPC endpoints are used (`RUNPROOF_RPC_ETHEREUM`, `RUNPROOF_RPC_BASE`, `RUNPROOF_RPC_ARBITRUM`). RPC timeouts, not-found states, and inconsistent/invalid responses are not treated as on-chain failure or success. Confirmed observations include finality; a changed block hash is evidence of reorganization and creates new evidence rather than overwriting old signed receipts.
 
@@ -61,7 +63,7 @@ Mount issuer key files read-only outside the image and inject production configu
 
 ## Architecture
 
-RunProof is a modular monolith: interfaces call pure protocol/domain code through storage, key, and EVM adapter seams. This intentionally avoids premature microservices, queues, ORM, and cloud lock-in. The Phase 0 audit, risk matrix, and target architecture are in [docs/architecture/phase-0-audit.md](docs/architecture/phase-0-audit.md). Design decisions are recorded under [docs/adr](docs/adr).
+RunProof is a modular monolith with explicit dependency direction: `domain` contains pure protocol rules, `application` coordinates use cases, `infrastructure` implements persistence/blockchain/key adapters, `interfaces` exposes HTTP, and `bootstrap` wires runtime configuration. `src/index.mjs` is the stable local library surface; callers should not import internal paths. This intentionally avoids premature microservices, queues, ORM, and cloud lock-in. The Phase 0 audit, risk matrix, and target architecture are in [docs/architecture/phase-0-audit.md](docs/architecture/phase-0-audit.md). Design decisions are recorded under [docs/adr](docs/adr).
 
 ## License
 

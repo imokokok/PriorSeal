@@ -3,9 +3,5 @@ node_modules/
 .env.local
 .env.*.local
 web/dist/
-demo/private-key.pem
-demo/public-key.pem
-demo/receipt.json
-demo/private-key.pem
-demo/public-key.pem
+examples/receipt-artifacts/
 *.log

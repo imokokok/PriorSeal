@@ -5,8 +5,8 @@
   "description": "Independently verifiable on-chain execution evidence for agents.",
   "type": "module",
   "scripts": {
-    "demo": "node demo/runproof-demo.mjs",
-    "verify": "node demo/verify-receipt.mjs demo/receipt.json demo/public-key.pem",
+    "example:receipt": "node examples/create-signed-receipt.mjs",
+    "verify:receipt": "node examples/verify-signed-receipt.mjs",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage",
     "lint": "node scripts/quality.mjs lint",
@@ -15,10 +15,15 @@
     "build": "npm --prefix web run build",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run build",
     "audit": "npm audit --omit=dev",
-    "start:api": "node src/interfaces/http/main.mjs"
+    "start:api": "node src/bootstrap/http-server.mjs"
   },
   "engines": {
     "node": ">=20"
   },
-  "workspaces": ["web"]
+  "workspaces": [
+    "web"
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.12"
+  }
 }

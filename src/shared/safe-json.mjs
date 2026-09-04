@@ -1,4 +1,4 @@
-import { RunProofError } from '../core/errors.mjs';
+import { RunProofError } from '../domain/errors.mjs';
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
