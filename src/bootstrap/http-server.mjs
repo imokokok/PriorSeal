@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import pg from 'pg';
 import { createHttpServer } from '../interfaces/http/create-http-server.mjs';
 import { createKeyRegistry } from '../domain/key-registry.mjs';
@@ -14,7 +15,8 @@ const privateKeyPem = keyProvider.getPrivateKey();
 const publicKeyPem = keyProvider.getPublicKey();
 const registry = createKeyRegistry(publicKeyPem ? [{ issuer: config.issuer, keyId: config.keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active' }] : []);
 const server = createHttpServer({ store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy });
-server.listen(config.port, () => console.log(JSON.stringify({ level: 'info', event: 'server.started', port: config.port, storage: pool ? 'postgresql' : 'memory' })));
+const databaseConfigFingerprint = config.databaseUrl ? createHash('sha256').update(config.databaseUrl).digest('hex').slice(0, 12) : null;
+server.listen(config.port, () => console.log(JSON.stringify({ level: 'info', event: 'server.started', port: config.port, storage: pool ? 'postgresql' : 'memory', databaseConfigFingerprint })));
 function shutdown(signal) {
   server.close(() => {
     if (!pool) return process.exit(0);
