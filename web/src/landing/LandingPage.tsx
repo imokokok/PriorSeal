@@ -62,7 +62,7 @@ export function LandingPage() {
         <MuseumMark />
         <nav aria-label="Homepage navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}
-          <Link to="/app/api">API</Link>
+          <Link className="museum-nav-api" to="/app/api">Docs</Link>
         </nav>
         <Link className="museum-entry" to="/app"><span>Enter console</span><b aria-hidden="true">↗</b></Link>
       </header>

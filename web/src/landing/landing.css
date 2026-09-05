@@ -75,6 +75,11 @@
 }
 
 .museum-nav nav a { position: relative; }
+.museum-nav nav a.museum-nav-api {
+  margin-left: clamp(2px, 0.8vw, 12px);
+  padding-left: clamp(20px, 2vw, 30px);
+  border-left: 1px solid var(--rule);
+}
 .museum-nav nav a::after,
 .museum-link::after {
   content: "";

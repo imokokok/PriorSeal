@@ -1,7 +1,7 @@
 export const sectionLinks = [
-  ['Archive', 'archive'],
+  ['Collection', 'archive'],
   ['Provenance', 'provenance'],
-  ['Object', 'object'],
+  ['Receipt', 'object'],
   ['Boundaries', 'boundary'],
 ] as const
 
