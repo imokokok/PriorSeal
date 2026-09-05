@@ -294,6 +294,127 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .audit-filters { display: grid; grid-template-columns: minmax(260px,1fr) 190px 190px; gap: 12px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--ink); }
 .audit-filters label { display: grid; gap: 8px; }
 
+/* Each route is a different room in the same archive, not a repeated dashboard. */
+.sidebar nav a { font-size: 14px; }
+.side-caption, .environment small, .side-accession, .nav-index, .eyebrow, .api-state, .field-label, .audit-filters label span { font-size: 12px; }
+.side-bottom, .side-bottom small, .top-title strong, .top-title span, .panel p, .start-card p, .timeline strong, .timeline span, .receipt-row strong, .receipt-row > div:first-child > span:last-child, .code-value, .field-hint, .field-error, .form-footer, .data-grid dd, .notice, .key-table, .endpoint small { font-size: 12px; }
+.lede, .field input, .field select, .field textarea, textarea, .audit-filters input, .audit-filters select { font-size: 15px; }
+.status, .status.small, .copy-button, .method { font-size: 11px; }
+.page { position: relative; isolation: isolate; }
+.page::before { content: attr(data-room); position: absolute; z-index: -1; top: 22px; right: clamp(28px, 4vw, 58px); color: transparent; -webkit-text-stroke: 1px rgba(25,25,27,.09); font: italic clamp(140px, 16vw, 240px)/.75 "Iowan Old Style", Baskerville, Georgia, serif; pointer-events: none; }
+
+/* 01 — Overview: a spacious entrance gallery. */
+.page-overview { max-width: 1380px; }
+.page-overview .page-header { max-width: 1000px; min-height: 225px; padding-right: 160px; }
+.page-overview .page-header h1 { font-size: clamp(58px, 6vw, 88px); }
+.page-overview .start-card { min-height: 250px; margin-left: 8%; }
+.page-overview .two-column { grid-template-columns: .82fr 1.18fr; margin-top: 58px; align-items: start; }
+.page-overview .two-column > .panel:first-child { margin-top: 72px; background: transparent; border-color: var(--ink); }
+.page-overview .two-column > .panel:first-child::before { width: 100%; background: var(--ink); }
+.page-overview .two-column > .panel:last-child { min-height: 430px; padding: 38px; }
+.page-overview .activity { margin-top: 72px; border-left: 5px solid var(--blue); }
+
+/* 02 — Quickstart: a guided procession through three rooms. */
+.page-quickstart { max-width: 1180px; }
+.page-quickstart::before { right: auto; left: 34px; top: 140px; color: rgba(38,62,181,.06); -webkit-text-stroke: 0; }
+.page-quickstart .page-header { margin-left: 20%; grid-template-columns: 1fr; padding-left: 0; }
+.page-quickstart .page-header::before { inset: auto 0 36px 0; width: auto; height: 4px; }
+.page-quickstart .readiness-card { width: 72%; margin-left: auto; padding: 28px 34px; color: var(--porcelain); background: var(--ink); border-color: var(--ink); }
+.page-quickstart .readiness-card p { color: #aaa69e; }
+.page-quickstart .onboarding-steps { width: 94%; margin-top: 64px; border: 0; }
+.page-quickstart .onboarding-steps li { width: 82%; min-height: 150px; padding: 28px 34px; background: var(--porcelain); border: 1px solid var(--rule); }
+.page-quickstart .onboarding-steps li:nth-child(2) { margin-left: 10%; }
+.page-quickstart .onboarding-steps li:nth-child(3) { margin-left: 20%; }
+.page-quickstart .onboarding-steps li + li { margin-top: -1px; }
+.page-quickstart .step-number { width: 56px; height: 56px; font-size: 14px; }
+.page-quickstart > .notice:last-child { width: 70%; margin: 56px 0 0 auto; }
+
+/* 03 — Intent: a drafting table with a blue specimen sheet. */
+.page-intent { max-width: 1320px; background-image: linear-gradient(rgba(25,25,27,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(25,25,27,.045) 1px, transparent 1px); background-size: 32px 32px; background-position: 0 0; }
+.page-intent .page-header { width: 70%; min-height: 150px; }
+.page-intent .form-layout { grid-template-columns: minmax(0,1.35fr) minmax(320px,.65fr); gap: 34px; }
+.page-intent .intent-form { padding: 38px; border-color: var(--ink); box-shadow: 10px 10px 0 rgba(25,25,27,.08); }
+.page-intent .intent-form::before { width: 42%; background: var(--ink); }
+.page-intent .preview { margin-top: 86px; padding: 30px; color: var(--porcelain); background: var(--blue); border-color: var(--blue); box-shadow: 12px 12px 0 var(--ink); }
+.page-intent .preview::before { background: var(--copper); }
+.page-intent .preview p, .page-intent .preview dt, .page-intent .preview dd, .page-intent .preview .code-value { color: rgba(247,245,239,.78); }
+.page-intent .preview .status { color: var(--porcelain); background: transparent; }
+.page-intent .preview .notice.info { color: var(--porcelain); background: rgba(25,25,27,.22); border-color: rgba(247,245,239,.55); }
+.page-intent .preview .copy-button { color: var(--porcelain); border-color: rgba(247,245,239,.45); }
+.page-intent .success-result { margin: 40px auto 0; transform: rotate(-.35deg); }
+
+/* 04 — Observe: an asymmetric observation chamber. */
+.page-observe { max-width: 1260px; }
+.page-observe::before { top: 260px; right: 2%; color: rgba(167,101,66,.07); -webkit-text-stroke: 0; }
+.page-observe .page-header { width: 76%; margin-left: auto; padding-left: 34px; border-bottom-color: var(--copper); }
+.page-observe .page-header::before { background: var(--copper); }
+.page-observe .form-layout { grid-template-columns: minmax(280px,.72fr) minmax(0,1.28fr); gap: 0; }
+.page-observe .form-layout > form { grid-column: 2; grid-row: 1; padding: 38px; border-color: var(--ink); }
+.page-observe .form-layout > aside { grid-column: 1; grid-row: 1; position: static; min-height: 100%; padding: 34px 28px; color: var(--porcelain); background: var(--ink); border-color: var(--ink); }
+.page-observe .form-layout > aside::before { width: 100%; background: var(--copper); }
+.page-observe .form-layout > aside p, .page-observe .form-layout > aside dt, .page-observe .form-layout > aside dd, .page-observe .form-layout > aside .code-value { color: #bbb7af; }
+.page-observe .observation-result { margin: 54px 0 0 7%; padding: 38px; box-shadow: -12px 12px 0 var(--copper); }
+
+/* 05 — Audit: a dense registrar's index. */
+.page-audit { max-width: 1400px; }
+.page-audit .page-header { min-height: 140px; grid-template-columns: minmax(0,1fr) minmax(220px,.45fr); }
+.page-audit .page-header h1 { max-width: 650px; }
+.page-audit .audit-stats { margin-top: 8px; margin-left: 5%; }
+.page-audit .audit-stats article:nth-child(even) { color: var(--porcelain); background: var(--blue); }
+.page-audit .audit-stats article:nth-child(even) small { color: rgba(247,245,239,.7); }
+.page-audit .audit-panel { margin-top: 44px; padding: 34px; border-top: 5px solid var(--ink); }
+.page-audit .audit-panel::before { display: none; }
+.page-audit .audit-filters { grid-template-columns: minmax(260px,1fr) 180px 180px; }
+
+/* 06 — Verify: a reading room split between document and apparatus. */
+.page-verify { max-width: 1320px; }
+.page-verify .page-header { width: 76%; min-height: 185px; }
+.page-verify .verify-layout { grid-template-columns: 1.35fr .65fr; gap: 0; align-items: stretch; }
+.page-verify .verify-layout > section:first-child { padding: 42px; color: var(--porcelain); background: var(--ink); border-color: var(--ink); }
+.page-verify .verify-layout > section:first-child::before { width: 100%; background: var(--blue); }
+.page-verify .verify-layout > section:first-child p { color: #aaa69e; }
+.page-verify .verify-layout > section:first-child textarea { min-height: 330px; color: var(--ink); background: var(--porcelain); border-color: var(--porcelain); }
+.page-verify .verify-layout > .lookup { margin: 70px 0 -34px; padding: 32px; border-left: 0; box-shadow: 12px 12px 0 var(--blue); }
+.page-verify .verification-result { margin: 88px auto 0; transform: rotate(.25deg); }
+
+/* 07 — Receipts: a horizontal archive register; details become a certificate. */
+.page-receipts { max-width: 1360px; }
+.page-receipts .page-header { min-height: 150px; padding-right: 12%; }
+.page-receipts > .panel:not(.raw):not(.verification-result) { padding: 0; background: transparent; border: 0; }
+.page-receipts > .panel:not(.raw):not(.verification-result)::before { display: none; }
+.page-receipts > .panel > .panel-head { padding: 22px 26px; color: var(--porcelain); background: var(--ink); border: 0; }
+.page-receipts > .panel > .panel-head p { color: #aaa69e; }
+.page-receipts > .panel > .receipt-row { min-height: 94px; padding: 0 26px; background: var(--porcelain); border: 1px solid var(--rule); border-top: 0; }
+.page-receipts .evidence-chain { width: 92%; margin-left: auto; box-shadow: -10px 10px 0 var(--copper); }
+.page-receipts .receipt-layout { margin-top: 46px; grid-template-columns: 1.4fr .6fr; }
+.page-receipts .receipt-layout > div > .panel:first-child { border-top: 5px solid var(--blue); }
+.page-receipts .proof { transform: translateY(46px); }
+.page-receipts .raw { margin-top: 74px; }
+
+/* 08 — Keys: an institutional ledger with one uninterrupted datum plane. */
+.page-keys { max-width: 1380px; }
+.page-keys::before { right: auto; left: 47%; color: rgba(38,62,181,.055); -webkit-text-stroke: 0; }
+.page-keys .page-header { width: 62%; min-height: 190px; }
+.page-keys .key-table { margin-top: 45px; padding: 0; border: 1px solid var(--ink); box-shadow: 14px 14px 0 var(--blue); }
+.page-keys .key-table::before { display: none; }
+.page-keys .key-table .panel-head { margin: 0; padding: 26px 30px; color: var(--porcelain); background: var(--ink); border: 0; }
+.page-keys .key-table .panel-head p { color: #aaa69e; }
+.page-keys .key-table th { height: 52px; background: var(--blue); }
+.page-keys .key-table td { height: 76px; background: var(--porcelain); }
+
+/* 09 — API: a vertical catalogue of numbered interfaces. */
+.page-api { max-width: 1180px; }
+.page-api .page-header { width: 72%; margin-left: 14%; }
+.page-api > .notice { width: 68%; margin-left: 32%; }
+.page-api .endpoint-list { display: block; margin-top: 70px; counter-reset: endpoint; }
+.page-api .endpoint { width: 84%; min-height: 260px; margin-bottom: 28px; padding: 34px 38px 34px 128px; counter-increment: endpoint; border-color: var(--ink); }
+.page-api .endpoint:nth-child(even) { margin-left: 16%; }
+.page-api .endpoint::after { content: "0" counter(endpoint); position: absolute; left: 34px; top: 30px; color: var(--blue); font: italic 54px "Iowan Old Style", Baskerville, Georgia, serif; }
+.page-api .endpoint::before { width: 5px; height: 100%; background: var(--blue); }
+.page-api .endpoint:nth-child(even)::before { background: var(--copper); }
+.page-api .endpoint > div:first-child { justify-content: space-between; }
+.page-api .endpoint pre { min-height: auto; }
+
 @media (max-width: 980px) {
   .shell { display: block; }
   .sidebar { transform: translateX(-100%); transition: transform 220ms ease; }
@@ -351,6 +472,58 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .audit-stats article { min-height: 102px; }
   .key-table { padding-left: 0; padding-right: 0; }
   .key-table .panel-head { margin-left: 18px; margin-right: 18px; }
+}
+
+@media (max-width: 980px) {
+  .page-overview .page-header, .page-intent .page-header, .page-observe .page-header, .page-verify .page-header, .page-keys .page-header, .page-api .page-header { width: 100%; margin-left: 0; }
+  .page-overview .two-column > .panel:first-child { margin-top: 0; }
+  .page-quickstart .page-header { margin-left: 12%; }
+  .page-intent .preview { margin-top: 0; }
+  .page-observe .form-layout { display: grid; grid-template-columns: 1fr; gap: 20px; }
+  .page-observe .form-layout > form { grid-column: 1; grid-row: 2; }
+  .page-observe .form-layout > aside { grid-column: 1; grid-row: 1; }
+  .page-audit .page-header { grid-template-columns: 1fr; }
+  .page-verify .verify-layout { grid-template-columns: 1fr; gap: 20px; }
+  .page-verify .verify-layout > .lookup { margin: 0; }
+  .page-receipts .receipt-layout { grid-template-columns: 1fr; }
+  .page-receipts .proof { transform: none; }
+  .page-api .endpoint { width: 92%; }
+  .page-api .endpoint:nth-child(even) { margin-left: 8%; }
+}
+
+@media (max-width: 680px) {
+  .page::before { top: 16px; right: 18px; font-size: 120px; }
+  .page-overview .page-header { min-height: 0; padding-right: 0; }
+  .page-overview .page-header h1 { font-size: clamp(46px, 14vw, 66px); }
+  .page-overview .start-card { margin-left: 0; }
+  .page-overview .two-column { margin-top: 28px; }
+  .page-overview .two-column > .panel:last-child { min-height: 0; padding: 22px 18px; }
+  .page-overview .activity { margin-top: 28px; }
+  .page-quickstart::before { left: 18px; top: 120px; }
+  .page-quickstart .page-header { margin-left: 0; padding-left: 18px; }
+  .page-quickstart .page-header::before { inset: 0 auto 27px 0; width: 3px; height: auto; }
+  .page-quickstart .readiness-card, .page-quickstart .onboarding-steps, .page-quickstart .onboarding-steps li, .page-quickstart > .notice:last-child { width: 100%; margin-left: 0; }
+  .page-quickstart .onboarding-steps { margin-top: 34px; }
+  .page-quickstart .onboarding-steps li:nth-child(2), .page-quickstart .onboarding-steps li:nth-child(3) { margin-left: 0; }
+  .page-quickstart .step-number { width: 42px; height: 42px; }
+  .page-intent { background-size: 24px 24px; }
+  .page-intent .intent-form, .page-observe .form-layout > form, .page-observe .observation-result, .page-verify .verify-layout > section:first-child { padding: 24px 18px; }
+  .page-observe .page-header { width: 100%; margin-left: 0; padding-left: 18px; }
+  .page-observe .observation-result { margin-left: 0; box-shadow: -6px 7px 0 var(--copper); }
+  .page-audit .audit-stats { margin-left: 0; }
+  .page-audit .audit-panel { padding: 24px 18px; }
+  .page-verify .verify-layout > section:first-child textarea { min-height: 260px; }
+  .page-verify .verification-result { margin-top: 42px; }
+  .page-receipts .page-header { padding-right: 0; }
+  .page-receipts .evidence-chain { width: 100%; margin-left: 0; }
+  .page-receipts > .panel > .receipt-row { padding: 18px; }
+  .page-receipts .receipt-layout { margin-top: 30px; }
+  .page-receipts .raw { margin-top: 36px; }
+  .page-keys .key-table { box-shadow: 7px 7px 0 var(--blue); }
+  .page-api > .notice, .page-api .endpoint, .page-api .endpoint:nth-child(even) { width: 100%; margin-left: 0; }
+  .page-api .endpoint-list { margin-top: 36px; }
+  .page-api .endpoint { min-height: 0; padding: 78px 20px 24px; }
+  .page-api .endpoint::after { left: 20px; top: 17px; font-size: 42px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

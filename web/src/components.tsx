@@ -13,21 +13,21 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
 export function PageHeader({ eyebrow, title, children, actions }: { eyebrow?: string; title: string; children?: ReactNode; actions?: ReactNode }) { return <div className="page-header"><div className="page-heading">{eyebrow && <p className="eyebrow">{eyebrow}</p>}<h1>{title}</h1>{children && <p className="lede">{children}</p>}</div>{actions && <div className="header-actions">{actions}</div>}</div> }
 
 const nav = [
-  { index: '01', label: 'Overview', to: '/app' },
-  { index: '02', label: 'Quickstart', to: '/app/quickstart' },
-  { index: '03', label: 'Create intent', to: '/app/intents/new' },
-  { index: '04', label: 'Observe execution', to: '/app/observe' },
-  { index: '05', label: 'Audit workspace', to: '/app/audit' },
-  { index: '06', label: 'Verify receipt', to: '/app/verify' },
-  { index: '07', label: 'Receipts', to: '/app/receipts' },
-  { index: '08', label: 'Key registry', to: '/app/keys' },
-  { index: '09', label: 'API reference', to: '/app/api' },
+  { index: '01', key: 'overview', label: 'Overview', to: '/app' },
+  { index: '02', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart' },
+  { index: '03', key: 'intent', label: 'Create intent', to: '/app/intents/new' },
+  { index: '04', key: 'observe', label: 'Observe execution', to: '/app/observe' },
+  { index: '05', key: 'audit', label: 'Audit workspace', to: '/app/audit' },
+  { index: '06', key: 'verify', label: 'Verify receipt', to: '/app/verify' },
+  { index: '07', key: 'receipts', label: 'Receipts', to: '/app/receipts' },
+  { index: '08', key: 'keys', label: 'Key registry', to: '/app/keys' },
+  { index: '09', key: 'api', label: 'API reference', to: '/app/api' },
 ]
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const current = [...nav].reverse().find((item) => item.to === '/app' ? location.pathname === '/app' : location.pathname.startsWith(item.to)) ?? nav[0]
-  return <div className="shell"><aside className={open ? 'sidebar open' : 'sidebar'}><div className="side-top"><Logo compact /><button className="mobile-close" onClick={() => setOpen(false)} aria-label="Close navigation">×</button></div><div className="environment"><span className="live-dot" /><span>Archive console</span><small>LOCAL / ACTIVE</small></div><p className="side-caption">Collection index</p><nav aria-label="Console navigation">{nav.map((item) => <NavLink end={item.to === '/app'} key={item.to} to={item.to} onClick={() => setOpen(false)}><span className="nav-index">{item.index}</span><span>{item.label}</span></NavLink>)}</nav><div className="side-bottom"><span>Browser-local collection</span><small>Objects created here remain on this device unless exported.</small><span className="side-accession">RP / MMXXVI / 001</span></div></aside><main><header className="app-topbar"><button className="menu" onClick={() => setOpen(true)} aria-label="Open navigation">☰</button><div className="top-title"><span>{current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className="api-state"><span className="live-dot" /> API configurable</span><Link className="text-link" to="/">Exhibition site ↗</Link></div></header><div className="page">{children}</div></main></div>
+  return <div className="shell"><aside className={open ? 'sidebar open' : 'sidebar'}><div className="side-top"><Logo compact /><button className="mobile-close" onClick={() => setOpen(false)} aria-label="Close navigation">×</button></div><div className="environment"><span className="live-dot" /><span>Archive console</span><small>LOCAL / ACTIVE</small></div><p className="side-caption">Collection index</p><nav aria-label="Console navigation">{nav.map((item) => <NavLink end={item.to === '/app'} key={item.to} to={item.to} onClick={() => setOpen(false)}><span className="nav-index">{item.index}</span><span>{item.label}</span></NavLink>)}</nav><div className="side-bottom"><span>Browser-local collection</span><small>Objects created here remain on this device unless exported.</small><span className="side-accession">RP / MMXXVI / 001</span></div></aside><main><header className="app-topbar"><button className="menu" onClick={() => setOpen(true)} aria-label="Open navigation">☰</button><div className="top-title"><span>{current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className="api-state"><span className="live-dot" /> API configurable</span><Link className="text-link" to="/">Exhibition site ↗</Link></div></header><div className={`page page-${current.key}`} data-room={current.index}>{children}</div></main></div>
 }
 
 export function ReceiptSummary({ receipt }: { receipt: Receipt }) { const navigate = useNavigate(); return <article className="receipt-row"><div><Status value={receipt.outcome} /><strong>{receipt.receiptId}</strong><span>{chains[Number(receipt.execution.chainId)] ?? 'Chain ' + receipt.execution.chainId} · {dateTime(receipt.issuedAt)}</span></div><div className="receipt-row-actions"><CodeValue value={receipt.intentHash} /><button className="text-link" onClick={() => navigate('/app/receipts/' + encodeURIComponent(receipt.receiptId))}>View</button></div></article> }
