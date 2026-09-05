@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { buildIntent, buildReceipt, signReceipt } from '../src/index.mjs';
 
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
@@ -21,6 +21,8 @@ const execution = {
   chainId: intent.chainId,
   txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   status: 'CONFIRMED',
+  action: 'TRANSFER',
+  executedAt: 1893455800,
   observedAt: 1893455900,
   sender: intent.sender,
   recipient: intent.recipient,
@@ -31,6 +33,7 @@ const execution = {
 const unsignedReceipt = buildReceipt({ intent, execution, issuer: 'runproof-example-attester' });
 const receipt = signReceipt(unsignedReceipt, privateKeyPem);
 
+await mkdir(new URL('./receipt-artifacts/', import.meta.url), { recursive: true });
 await writeFile(new URL('./receipt-artifacts/private-key.pem', import.meta.url), privateKeyPem);
 await writeFile(new URL('./receipt-artifacts/public-key.pem', import.meta.url), publicKeyPem);
 await writeFile(new URL('./receipt-artifacts/receipt.json', import.meta.url), `${JSON.stringify(receipt, null, 2)}\n`);

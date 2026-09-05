@@ -8,6 +8,7 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 export function loadRuntimeConfig(environment = process.env) {
   const privateKeyFile = optionalValue(environment.RUNPROOF_PRIVATE_KEY_FILE);
   const publicKeyFile = optionalValue(environment.RUNPROOF_PUBLIC_KEY_FILE);
+  const keyRegistryFile = optionalValue(environment.RUNPROOF_KEY_REGISTRY_FILE);
   if (Boolean(privateKeyFile) !== Boolean(publicKeyFile)) {
     throw new TypeError('RUNPROOF_PRIVATE_KEY_FILE and RUNPROOF_PUBLIC_KEY_FILE must be configured together');
   }
@@ -18,6 +19,7 @@ export function loadRuntimeConfig(environment = process.env) {
     keyId: identifierValue(environment.RUNPROOF_KEY_ID, 'RUNPROOF_KEY_ID', 'default'),
     privateKeyFile,
     publicKeyFile,
+    keyRegistryFile,
     databaseUrl: databaseUrl(environment.DATABASE_URL, 'DATABASE_URL'),
     databaseDirectUrl: databaseUrl(environment.DATABASE_URL_UNPOOLED, 'DATABASE_URL_UNPOOLED'),
     corsOrigins: corsOrigins(environment.RUNPROOF_CORS_ORIGINS),

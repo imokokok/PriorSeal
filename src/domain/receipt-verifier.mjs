@@ -13,7 +13,8 @@ export function verifyReceipt(receipt, publicKeyPem, options = {}) {
   if (options.now !== undefined && options.key?.validFrom != null && receipt.issuedAt < options.key.validFrom) return fail('KEY_NOT_YET_VALID');
   if (options.now !== undefined && options.key?.validUntil != null && receipt.issuedAt > options.key.validUntil) return fail('KEY_EXPIRED');
   if (options.now !== undefined && receipt.issuedAt > options.now) return fail('NOT_YET_VALID');
-  if (options.now !== undefined && receipt.validUntil < options.now) return fail('EXPIRED');
+  // validUntil belongs to the authorization intent, not to the evidence
+  // receipt. A receipt remains verifiable after the authorization window.
   if (receipt.executionHash !== hashJson(receipt.execution)) return fail('EXECUTION_HASH_MISMATCH');
   return verifySignature(receipt, publicKeyPem) ? { valid: true, code: 'OK', outcome: receipt.outcome, receiptId: receipt.receiptId } : fail('INVALID_SIGNATURE');
 }

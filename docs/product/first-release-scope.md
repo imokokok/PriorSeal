@@ -41,4 +41,4 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 - Authenticated projects, environments, roles and server-side evidence archives.
 - Read-only receipt sharing with revocation/supersession status.
 - Policy templates, approval workflows, notifications and webhooks.
-- Published SDK/CLI and browser-compatible offline verifier.
+- Published SDK/CLI distribution for the already browser-compatible local verifier.

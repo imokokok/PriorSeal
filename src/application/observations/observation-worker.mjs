@@ -18,11 +18,13 @@ export function createObservationWorker({ observe, saveObservation, store = null
     jobs.set(job.jobId, job); return job;
   }
   async function runOnce() {
-    const due = store?.claimDueJobs ? await store.claimDueJobs(clock()) : [...jobs.values()].filter((job) => ['QUEUED', 'RETRY_WAIT'].includes(job.state) && job.nextAttemptAt <= clock());
+    const persistentClaims = Boolean(store?.claimDueJobs);
+    const due = persistentClaims ? await store.claimDueJobs(clock()) : [...jobs.values()].filter((job) => ['QUEUED', 'RETRY_WAIT'].includes(job.state) && job.nextAttemptAt <= clock());
     for (const job of due) {
-      job.state = 'RUNNING'; job.attempts += 1;
+      job.state = 'RUNNING'; if (!persistentClaims) job.attempts += 1;
       try {
-        const observation = await observe(job.input); if (detectReorg(job.observation, observation)) observation.status = 'REORGED', observation.finalityState = 'REORGED'; job.observation = observation; await saveObservation(observation);
+        const previous = job.observation ?? (store?.getObservation ? await store.getObservation(job.input.chainId, job.input.txHash) : null);
+        const observation = await observe(job.input); if (detectReorg(previous, observation)) observation.status = 'REORGED', observation.finalityState = 'REORGED', observation.previousBlockHash = previous.blockHash; job.observation = observation; await saveObservation(observation);
         if (retryable.has(observation.status) && job.attempts < maxAttempts) { job.state = 'RETRY_WAIT'; job.nextAttemptAt = nextRetry(job.attempts); }
         else { job.state = observation.status === 'CONFIRMED' || observation.status === 'REVERTED' ? 'COMPLETED' : 'UNDETERMINED'; }
       } catch (error) {

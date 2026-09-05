@@ -40,11 +40,11 @@ export function createHttpServer({ store = createMemoryStore(), issuer = 'runpro
         return respond(result.replay ? 200 : 201, { ...result.response, requestId }, result.replay ? { 'idempotency-replayed': 'true' } : {});
       }
       if (req.method === 'POST' && path === '/v1/executions/observe') {
-        const result = await observeExecution({ input: body, store, observer, signal: controller.signal, privateKeyPem, issuer, keyId, publicKeyPem });
-        return respond(200, result);
+        const result = await observeExecution({ input: body, store, observer, signal: controller.signal, privateKeyPem, issuer, keyId, publicKeyPem, idempotencyKey: req.headers['idempotency-key'], now });
+        return respond(200, { ...result.response, requestId }, result.replay ? { 'idempotency-replayed': 'true' } : {});
       }
       const match = req.method === 'GET' && path.match(/^\/v1\/receipts\/([^/]+)$/);
-      if (match) { const receipt = await store.getReceipt(decodeURIComponent(match[1])); if (!receipt) throw new RunProofError('RECEIPT_NOT_FOUND', 'Receipt not found'); return respond(200, { ...receipt, requestId }); }
+      if (match) { const receipt = await store.getReceipt(decodeURIComponent(match[1])); if (!receipt) throw new RunProofError('RECEIPT_NOT_FOUND', 'Receipt not found'); return respond(200, receipt); }
       if (req.method === 'POST' && path === '/v1/receipts/verify') { assertOnlyFields(body, ['receipt'], 'verification request'); const entry = keyRegistry.get(body.receipt?.keyId); return respond(200, { convenienceEndpoint: true, independentVerification: 'Use the local verifier; do not trust this API response alone.', result: entry ? verifyReceipt(body.receipt, entry.publicKey, { keyId: entry.keyId, now: Math.floor(now() / 1000), key: entry }) : { valid: false, code: 'UNKNOWN_KEY' }, requestId }); }
       if (req.method === 'GET' && path === '/.well-known/runproof-keys.json') return respond(200, { schema: 'runproof.keys.v1', issuer, keys: keyRegistry.list(), verifierVersion: '1.0.0', schemaVersions: ['runproof.execution-receipt.v1'], requestId }, { 'cache-control': 'public, max-age=300' });
       if (req.method === 'GET' && serveStaticAsset && await serveStaticAsset({ pathname: path, res })) return;

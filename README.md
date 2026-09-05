@@ -14,19 +14,21 @@ Requires Node 20+. In a clean checkout:
 
 ```bash
 npm --prefix web ci
-cp .env.example .env
-# Set development-only RUNPROOF_* key-file paths and a configured RPC endpoint in .env.
+cp .env.example .env.local
+# Set development-only RUNPROOF_* key-file paths and a configured RPC endpoint in .env.local.
 npm run start:api
 npm --prefix web run dev
 ```
 
 The console is served by Vite on its displayed URL and proxies API calls to port 3000. It stores browser-local session activity only; it is not a server-side evidence archive. Amounts are atomic unsigned integer strings (never floats), such as `"1000000"`.
 
-To run the receipt example (which creates ignored temporary key artifacts):
+To run the receipt example (which creates its ignored temporary artifact directory):
 
 ```bash
 npm run example:receipt
 npm run verify:receipt
+# Or verify arbitrary files:
+npm run verify:receipt -- /path/to/receipt.json /path/to/public-key.pem
 ```
 
 ## Quality checks
@@ -45,9 +47,11 @@ The API contract is at `/openapi/v1.json`. Operational endpoints are `/health/li
 
 Startup configuration is validated before the HTTP server listens: `PORT` must be 1–65535, `RUNPROOF_TRUST_PROXY` must be `true` or `false`, CORS entries must be complete HTTP(S) origins, and issuer key paths must be configured as a pair.
 
-Only configured RPC endpoints are used (`RUNPROOF_RPC_ETHEREUM`, `RUNPROOF_RPC_BASE`, `RUNPROOF_RPC_ARBITRUM`). RPC timeouts, not-found states, and inconsistent/invalid responses are not treated as on-chain failure or success. Confirmed observations include finality; a changed block hash is evidence of reorganization and creates new evidence rather than overwriting old signed receipts.
+Only configured RPC endpoints are used (`RUNPROOF_RPC_ETHEREUM`, `RUNPROOF_RPC_BASE`, `RUNPROOF_RPC_ARBITRUM`). Receipts contain a non-secret configured-source identifier, never the endpoint URL. RPC timeouts, not-found states, and inconsistent/invalid responses are not treated as on-chain failure or success. Confirmed observations include the containing block timestamp and finality. Re-observing a transaction whose confirmed block hash changed creates new `REORGED` evidence without overwriting the old signed receipt.
 
-Issuer private keys are read only from a configured local file for development and must never enter HTTP requests, logs, the frontend bundle, database records, or Git. Production deployments should replace that provider with a KMS/HSM/secret-manager adapter. See [the threat model](docs/security/threat-model.md), [API compatibility](docs/api/compatibility.md), and [lifecycle](docs/architecture/lifecycle.md).
+Intent `validUntil` bounds the block execution time; it does not expire a receipt. Historical receipts remain cryptographically verifiable. The console verifies pasted receipts locally with browser Web Crypto and can use either a pasted trusted public key or a key fetched from the registry; receipt bytes are not sent to the convenience verification API.
+
+Issuer private keys are read only from a configured local file for development and must never enter HTTP requests, logs, the frontend bundle, database records, or Git. `RUNPROOF_KEY_REGISTRY_FILE` may point to a public-only `runproof.keys.v1` JSON document so retired keys remain published for historical verification. Production deployments should replace the signing provider with a KMS/HSM/secret-manager adapter. See [the threat model](docs/security/threat-model.md), [API compatibility](docs/api/compatibility.md), and [lifecycle](docs/architecture/lifecycle.md).
 
 ## Persistence and operations
 

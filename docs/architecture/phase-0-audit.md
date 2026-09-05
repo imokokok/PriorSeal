@@ -16,7 +16,7 @@ Baseline tests passed (10 Node tests). The repository contained no tracked PEM/p
 | Priority | Finding | Disposition |
 | --- | --- | --- |
 | P0 | API accepted arbitrary fields and matched full URL including query strings | fixed: pathname routing, bounded/safe JSON and allowlists |
-| P0 | Worker jobs disappeared on restart | fixed interface and PostgreSQL-backed job schema/claim implementation; production wiring requires pool composition |
+| P0 | Worker jobs disappeared on restart | fixed interface and PostgreSQL-backed job schema/claim implementation; synchronous API re-observation now performs the authoritative reorg comparison and receipt issuance |
 | P1 | Receipt ID could collide across re-observations of the same transaction | fixed: evidence hash participates in ID; old receipts remain immutable |
 | P1 | RPC trusted response shape and chain identity | fixed: endpoint chain check, envelope checks, retries, timeout, safer log parsing |
 | P1 | Postgres observation persistence was a stub | fixed: immutable observation versions and retrieval |

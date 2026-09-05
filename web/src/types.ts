@@ -4,12 +4,13 @@ export type Intent = {
   schema?: string; intentId: string; intentHash?: string; chainId: ChainId | string; action: string; asset: string; amount: string
   sender: string; recipient: string; validUntil: number; nonce?: string; constraints?: { minConfirmations?: number; maxGasUsed?: string }
 }
-export type ExecutionStatus = 'PENDING' | 'CONFIRMED' | 'REVERTED' | 'NOT_FOUND' | 'RPC_ERROR' | 'UNSUPPORTED_CHAIN'
+export type ExecutionStatus = 'PENDING' | 'CONFIRMED' | 'REVERTED' | 'REORGED' | 'NOT_FOUND' | 'RPC_ERROR' | 'UNSUPPORTED_CHAIN'
 export type Execution = {
   schema?: string; chainId: ChainId | string; txHash?: string; status: ExecutionStatus; blockNumber?: number | null; blockHash?: string | null
-  observedAt?: number; nonce?: string | null; sender?: string | null; recipient?: string | null; asset?: string | null; amount?: string | null
-  transfers?: unknown[]; nativeValue?: string | null; tokenValue?: string | null; gasUsed?: string | null; fee?: string | null
+  executedAt?: number | null; observedAt?: number; action?: string | null; nonce?: string | null; sender?: string | null; recipient?: string | null; asset?: string | null; amount?: string | null
+  transfers?: unknown[]; transferMatchUnique?: boolean; nativeValue?: string | null; tokenValue?: string | null; gasUsed?: string | null; fee?: string | null
   executionDataAvailable?: boolean; observationSource?: string; finalityState?: string; confirmations?: number
+  previousBlockHash?: string
 }
 export type Binding = { bound: boolean; reasonCodes: string[]; [key: string]: unknown }
 export type Receipt = {

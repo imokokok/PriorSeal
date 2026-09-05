@@ -25,3 +25,9 @@ test('create intent coordinates policy, persistence, and idempotent replay', asy
   assert.equal(replayed.replay, true);
   assert.equal(await store.getIntent(input.intentId), created.response.intent);
 });
+
+test('create intent rejects policy violations and unsafe idempotency keys', async () => {
+  const store = createMemoryStore();
+  await assert.rejects(() => createIntent({ input, store, policy: { allowedChainIds: [1] } }), (error) => error.code === 'POLICY_REJECTED');
+  await assert.rejects(() => createIntent({ input, store, idempotencyKey: 'not safe' }), (error) => error.code === 'INVALID_IDEMPOTENCY_KEY');
+});

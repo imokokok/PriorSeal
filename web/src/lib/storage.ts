@@ -16,8 +16,8 @@ function save(activity: LocalActivity) { try { localStorage.setItem(key, JSON.st
 function newest<T>(items: T[], item: T, predicate: (candidate: T) => boolean) { return [item, ...items.filter((candidate) => !predicate(candidate))].slice(0, 50) }
 export const session = {
   saveIntent(intent: Intent) { const activity = getActivity(); save({ ...activity, intents: newest(activity.intents, intent, (x) => x.intentId === intent.intentId) }) },
-  saveReceipt(receipt: Receipt) { const activity = getActivity(); save({ ...activity, receipts: newest(activity.receipts, receipt, (x) => x.receiptId === receipt.receiptId) }) },
-  saveObservation(observation: Execution) { const activity = getActivity(); save({ ...activity, observations: newest(activity.observations, observation, (x) => x.txHash === observation.txHash) }) },
+  saveReceipt(receipt: Receipt) { const activity = getActivity(); if (activity.receipts.some((item) => item.receiptId === receipt.receiptId)) return; save({ ...activity, receipts: newest(activity.receipts, receipt, (x) => x.receiptId === receipt.receiptId) }) },
+  saveObservation(observation: Execution) { const activity = getActivity(); save({ ...activity, observations: newest(activity.observations, observation, (x) => x.chainId === observation.chainId && x.txHash === observation.txHash && x.blockHash === observation.blockHash && x.observedAt === observation.observedAt) }) },
   export() { return JSON.stringify({ schema: 'runproof.local-session.v2', exportedAt: new Date().toISOString(), activity: getActivity() }, null, 2) },
   clear() { try { localStorage.removeItem(key); localStorage.removeItem(legacyKey) } catch { /* Storage is best effort. */ } },
   getActivity

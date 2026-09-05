@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -30,6 +31,29 @@ test('API rejects unknown fields and unsafe JSON keys without exposing internals
   const server = await serverFor(t); const unknown = await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...intent, unexpected: true }) }); assert.equal(unknown.status, 400); assert.equal(unknown.json().error.code, 'UNKNOWN_FIELD');
   const badType = await request(server, '/v1/intents', { method: 'POST', body: JSON.stringify(intent) }); assert.equal(badType.status, 415);
   const health = await request(server, '/health/live'); assert.equal(health.json().status, 'ok');
+});
+test('observation writes honor Idempotency-Key and return a signed linked receipt', async (t) => {
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
+  let calls = 0;
+  const txHash = `0x${'1'.repeat(64)}`;
+  const server = createHttpServer({ privateKeyPem, publicKeyPem, observer: async () => { calls += 1; return { chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_000, observedAt: 1_001, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'evm-json-rpc:eip155:8453:configured-1' }; } });
+  t.after(() => server.close());
+  await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
+  const options = { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'observe-1' }, body: JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 }) };
+  const first = await request(server, '/v1/executions/observe', options);
+  const replay = await request(server, '/v1/executions/observe', options);
+  assert.equal(first.status, 200);
+  const issued = first.json().receipt;
+  assert.equal(issued.binding.bound, true);
+  assert.equal(replay.headers['idempotency-replayed'], 'true');
+  assert.equal(calls, 1);
+  const fetched = await request(server, `/v1/receipts/${issued.receiptId}`);
+  assert.deepEqual(fetched.json(), issued);
+  assert.ok(fetched.headers['x-request-id']);
+  const verified = await request(server, '/v1/receipts/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receipt: fetched.json() }) });
+  assert.equal(verified.json().result.valid, true);
 });
 test('serves the production console and preserves API 404 responses', async (t) => {
   const staticDir = await mkdtemp(join(tmpdir(), 'runproof-static-'));

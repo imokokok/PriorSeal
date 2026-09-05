@@ -9,3 +9,14 @@ test('observation worker is idempotent and retries pending observations', async 
   await worker.runOnce(); assert.equal(worker.get(first.jobId).state, 'RETRY_WAIT'); now += 10; await worker.runOnce(); assert.equal(worker.get(first.jobId).state, 'COMPLETED'); assert.equal(saved.length, 2);
 });
 test('re-observation detects a changed block hash', () => { assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', blockHash: '0xb' }), true); assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', blockHash: '0xa' }), false); });
+test('persistent worker does not double-count atomically claimed attempts', async () => {
+  let saved;
+  const store = {
+    async claimDueJobs() { return [{ jobId: 'job-1', input: { chainId: 8453, txHash: '0x1' }, state: 'RUNNING', attempts: 1, nextAttemptAt: 0, observation: null }]; },
+    async saveJob(job) { saved = { ...job }; return saved; },
+  };
+  const worker = createObservationWorker({ store, retryDelayMs: 10, observe: async () => ({ status: 'PENDING', txHash: '0x1' }), saveObservation: async () => {} });
+  await worker.runOnce();
+  assert.equal(saved.attempts, 1);
+  assert.equal(saved.state, 'RETRY_WAIT');
+});

@@ -10,12 +10,16 @@ export function bindIntentExecution(intent, execution, now = execution.observedA
   const reasons = [];
   if (execution?.executionDataAvailable === false) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
   if (execution.chainId !== intent.chainId) reasons.push(BINDING_CODES.CHAIN_MISMATCH);
+  if (!same(execution.action, intent.action)) reasons.push(BINDING_CODES.ACTION_MISMATCH);
   if (!same(execution.sender, intent.sender)) reasons.push(BINDING_CODES.SENDER_MISMATCH);
   if (!same(execution.recipient, intent.recipient)) reasons.push(BINDING_CODES.RECIPIENT_MISMATCH);
   if (!same(execution.asset, intent.asset)) reasons.push(BINDING_CODES.ASSET_MISMATCH);
   if (String(execution.amount ?? '') !== String(intent.amount)) reasons.push(BINDING_CODES.AMOUNT_MISMATCH);
   if (execution.nonce != null && String(execution.nonce) !== String(intent.nonce)) reasons.push(BINDING_CODES.NONCE_MISMATCH);
-  if (execution.observedAt > intent.validUntil || now < 0) reasons.push(BINDING_CODES.OUTSIDE_TIME_WINDOW);
+  // New observations carry the block timestamp. The fallback preserves
+  // compatibility with already-issued v1 receipts that only had observedAt.
+  const executedAt = execution.executedAt ?? execution.observedAt;
+  if (executedAt != null && executedAt > intent.validUntil) reasons.push(BINDING_CODES.OUTSIDE_TIME_WINDOW);
   const constraints = intent.constraints ?? {};
   if (constraints.minConfirmations != null && Number(execution.confirmations ?? 0) < Number(constraints.minConfirmations)) reasons.push(BINDING_CODES.INSUFFICIENT_FINALITY);
   if (constraints.maxGasUsed != null && BigInt(execution.gasUsed ?? 0) > BigInt(constraints.maxGasUsed)) reasons.push(BINDING_CODES.GAS_LIMIT_EXCEEDED);
