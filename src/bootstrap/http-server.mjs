@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { resolve } from 'node:path';
 import { createHttpServer } from '../interfaces/http/create-http-server.mjs';
 import { createKeyRegistry } from '../domain/key-registry.mjs';
 import { createFileKeyProvider } from '../infrastructure/keys/file-key-provider.mjs';
@@ -13,7 +14,7 @@ const keyProvider = createFileKeyProvider({ privateKeyFile: config.privateKeyFil
 const privateKeyPem = keyProvider.getPrivateKey();
 const publicKeyPem = keyProvider.getPublicKey();
 const registry = createKeyRegistry(publicKeyPem ? [{ issuer: config.issuer, keyId: config.keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active' }] : []);
-const server = createHttpServer({ store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy });
+const server = createHttpServer({ store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, staticDir: resolve('web/dist') });
 server.listen(config.port, () => console.log(JSON.stringify({ level: 'info', event: 'server.started', port: config.port, storage: pool ? 'postgresql' : 'memory' })));
 function shutdown(signal) {
   server.close(() => {

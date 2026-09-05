@@ -11,12 +11,14 @@ import { observeExecution } from '../../application/observations/observe-executi
 import { createMemoryRateLimiter } from './rate-limiter.mjs';
 import { readJsonBody, requestPath } from './request-parser.mjs';
 import { errorBody, sendJson } from './response-writer.mjs';
+import { createStaticAssetHandler } from './static-assets.mjs';
 
 const ERROR_STATUS = Object.freeze({ INVALID_JSON: 400, INVALID_REQUEST: 400, UNKNOWN_FIELD: 400, DANGEROUS_JSON_KEY: 400, JSON_TOO_DEEP: 400, INVALID_INTENT: 400, INVALID_CHAIN_ID: 400, INVALID_TX_HASH: 400, INVALID_ADDRESS: 400, INVALID_ASSET: 400, INVALID_UINT: 400, INVALID_TIME: 400, INVALID_IDENTIFIER: 400, INVALID_CONSTRAINT: 400, INVALID_IDEMPOTENCY_KEY: 400, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, IDEMPOTENCY_CONFLICT: 409, POLICY_REJECTED: 403, INTENT_NOT_FOUND: 404, RECEIPT_NOT_FOUND: 404, NOT_FOUND: 404, REQUEST_TIMEOUT: 504, RPC_NOT_CONFIGURED: 503, RPC_TIMEOUT: 503, RPC_FAILURE: 503 });
 
 function requester(req, trustProxy) { return trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown' : req.socket.remoteAddress || 'unknown'; }
 
-export function createHttpServer({ store = createMemoryStore(), issuer = 'runproof-local', privateKeyPem, publicKeyPem, keyId = 'default', keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null }] : []), policy = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15_000, observer = observeEvm, corsOrigins = [], trustProxy = false, version = process.env.RUNPROOF_BUILD_VERSION ?? 'dev', logger = null, now = () => Date.now() } = {}) {
+export function createHttpServer({ store = createMemoryStore(), issuer = 'runproof-local', privateKeyPem, publicKeyPem, keyId = 'default', keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null }] : []), policy = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15_000, observer = observeEvm, corsOrigins = [], trustProxy = false, version = process.env.RUNPROOF_BUILD_VERSION ?? 'dev', staticDir, logger = null, now = () => Date.now() } = {}) {
+  const serveStaticAsset = staticDir ? createStaticAssetHandler(staticDir) : null;
   return createServer(async (req, res) => {
     const requestId = typeof req.headers['x-request-id'] === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(req.headers['x-request-id']) ? req.headers['x-request-id'] : randomUUID();
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), requestTimeoutMs); const cleanup = () => clearTimeout(timeout);
@@ -45,6 +47,7 @@ export function createHttpServer({ store = createMemoryStore(), issuer = 'runpro
       if (match) { const receipt = await store.getReceipt(decodeURIComponent(match[1])); if (!receipt) throw new RunProofError('RECEIPT_NOT_FOUND', 'Receipt not found'); return respond(200, { ...receipt, requestId }); }
       if (req.method === 'POST' && path === '/v1/receipts/verify') { assertOnlyFields(body, ['receipt'], 'verification request'); const entry = keyRegistry.get(body.receipt?.keyId); return respond(200, { convenienceEndpoint: true, independentVerification: 'Use the local verifier; do not trust this API response alone.', result: entry ? verifyReceipt(body.receipt, entry.publicKey, { keyId: entry.keyId, now: Math.floor(now() / 1000), key: entry }) : { valid: false, code: 'UNKNOWN_KEY' }, requestId }); }
       if (req.method === 'GET' && path === '/.well-known/runproof-keys.json') return respond(200, { schema: 'runproof.keys.v1', issuer, keys: keyRegistry.list(), verifierVersion: '1.0.0', schemaVersions: ['runproof.execution-receipt.v1'], requestId }, { 'cache-control': 'public, max-age=300' });
+      if (req.method === 'GET' && serveStaticAsset && await serveStaticAsset({ pathname: path, res })) return;
       throw new RunProofError('NOT_FOUND', 'Route not found');
     } catch (error) {
       const code = controller.signal.aborted ? 'REQUEST_TIMEOUT' : error instanceof RunProofError ? error.code : error?.code || 'INTERNAL_ERROR'; const status = ERROR_STATUS[code] ?? 500;

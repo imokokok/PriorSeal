@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { createHttpServer } from '../../src/index.mjs';
 
@@ -15,7 +18,7 @@ async function serverFor(testContext) {
 async function request(server, path, { method = 'GET', headers = {}, body } = {}) {
   const req = Readable.from(body ? [Buffer.from(body)] : []); Object.assign(req, { method, url: path, headers, socket: { remoteAddress: '127.0.0.1' } });
   const res = new EventEmitter(); res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
-  const done = new Promise((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers, json: () => JSON.parse(res.body) };
+  const done = new Promise((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers, json: () => JSON.parse(res.body), text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
 test('API matches pathnames with query strings and uses idempotency safely', async (t) => {
   const server = await serverFor(t); const options = { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'intent-1' }, body: JSON.stringify(intent) };
@@ -27,4 +30,13 @@ test('API rejects unknown fields and unsafe JSON keys without exposing internals
   const server = await serverFor(t); const unknown = await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...intent, unexpected: true }) }); assert.equal(unknown.status, 400); assert.equal(unknown.json().error.code, 'UNKNOWN_FIELD');
   const badType = await request(server, '/v1/intents', { method: 'POST', body: JSON.stringify(intent) }); assert.equal(badType.status, 415);
   const health = await request(server, '/health/live'); assert.equal(health.json().status, 'ok');
+});
+test('serves the production console and preserves API 404 responses', async (t) => {
+  const staticDir = await mkdtemp(join(tmpdir(), 'runproof-static-'));
+  await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>RunProof console</title>');
+  const server = createHttpServer({ staticDir }); t.after(() => server.close());
+  const root = await request(server, '/'); const route = await request(server, '/app/receipts'); const missingApi = await request(server, '/v1/missing');
+  assert.equal(root.status, 200); assert.match(root.headers['content-type'], /^text\/html/); assert.match(root.text(), /RunProof console/);
+  assert.equal(route.status, 200); assert.equal(route.text(), root.text());
+  assert.equal(missingApi.status, 404); assert.equal(missingApi.json().error.code, 'NOT_FOUND');
 });
