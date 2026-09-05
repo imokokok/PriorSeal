@@ -1,0 +1,607 @@
+.museum-site {
+  --stone: #e9e6de;
+  --porcelain: #f7f5ef;
+  --ink: #19191b;
+  --muted: #706d66;
+  --rule: #bdb8ae;
+  --blue: #263eb5;
+  --blue-dark: #172678;
+  --copper: #a76542;
+  min-height: 100vh;
+  color: var(--ink);
+  background: var(--stone);
+  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+  overflow: clip;
+}
+
+.museum-site *,
+.museum-site *::before,
+.museum-site *::after { box-sizing: border-box; }
+
+.museum-site::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+}
+
+.museum-nav {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 50;
+  min-height: 88px;
+  padding: 0 clamp(24px, 4.5vw, 76px);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  border-bottom: 1px solid rgba(25, 25, 27, 0.22);
+}
+
+.museum-mark {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+}
+
+.museum-monogram {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-family: "Iowan Old Style", Baskerville, Georgia, serif;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.museum-name {
+  display: grid;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.museum-name small {
+  margin-top: 2px;
+  color: var(--muted);
+  font: 8px "JetBrains Mono", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.museum-nav nav {
+  display: flex;
+  gap: clamp(20px, 3vw, 44px);
+  color: #56534d;
+  font: 500 11px "JetBrains Mono", monospace;
+  letter-spacing: 0.04em;
+}
+
+.museum-nav nav a { position: relative; }
+.museum-nav nav a::after,
+.museum-link::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -6px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 220ms ease;
+}
+
+.museum-nav nav a:hover { color: var(--blue); }
+.museum-nav nav a:hover::after,
+.museum-link:hover::after { transform: scaleX(1); transform-origin: left; }
+
+.museum-entry {
+  justify-self: end;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: stretch;
+  color: var(--porcelain);
+  background: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.museum-entry span { padding: 14px 17px; }
+.museum-entry b { padding: 14px; border-left: 1px solid rgba(247, 245, 239, 0.28); font-weight: 400; }
+.museum-entry:hover { background: var(--blue); }
+
+.museum-hero {
+  position: relative;
+  min-height: 100svh;
+  padding: 136px clamp(24px, 5.5vw, 92px) 72px;
+  display: grid;
+  grid-template-columns: 56px minmax(430px, 0.88fr) minmax(490px, 1.12fr);
+  align-items: center;
+  gap: clamp(28px, 4vw, 70px);
+  background: var(--stone);
+}
+
+.hero-index {
+  align-self: stretch;
+  padding: 8px 0 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-right: 1px solid var(--rule);
+  font: 8px "JetBrains Mono", monospace;
+  letter-spacing: 0.12em;
+}
+
+.hero-index > span { writing-mode: vertical-rl; }
+.hero-index b { margin-top: auto; color: var(--blue); font: 400 48px "Iowan Old Style", Baskerville, Georgia, serif; }
+.hero-index small { margin-top: 24px; color: var(--muted); line-height: 1.6; text-align: center; }
+
+.museum-hero-copy { position: relative; z-index: 4; max-width: 760px; }
+
+.museum-kicker {
+  margin: 0 0 25px;
+  color: var(--blue);
+  font: 600 10px "JetBrains Mono", monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.museum-kicker > span { margin-right: 18px; color: var(--copper); }
+
+.museum-site h1,
+.museum-site h2 {
+  margin: 0;
+  font-family: "Iowan Old Style", Baskerville, Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.96;
+  text-wrap: balance;
+}
+
+.museum-hero h1 { max-width: 780px; font-size: clamp(66px, 7vw, 116px); }
+.museum-hero h1 em { color: var(--blue); font-weight: 400; }
+
+.hero-lede {
+  max-width: 610px;
+  margin: 33px 0 0;
+  color: #514e48;
+  font-size: clamp(17px, 1.35vw, 21px);
+  line-height: 1.65;
+}
+
+.museum-actions {
+  margin-top: 36px;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  flex-wrap: wrap;
+}
+
+.museum-button {
+  min-height: 50px;
+  padding: 0 19px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 44px;
+  border: 1px solid currentColor;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.museum-button span,
+.museum-link span { transition: transform 180ms ease; }
+.museum-button:hover span,
+.museum-link:hover span { transform: translateX(4px); }
+.museum-button.blue { color: var(--porcelain); background: var(--blue); border-color: var(--blue); }
+.museum-button.blue:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
+
+.museum-link {
+  position: relative;
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  color: var(--ink);
+  font: 600 12px "JetBrains Mono", monospace;
+}
+
+.artifact-study { position: relative; align-self: stretch; min-height: 650px; }
+
+.study-field {
+  position: absolute;
+  inset: 3% 0 5%;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 48% 48% 2px 2px;
+  background: var(--porcelain);
+}
+
+.study-field::before,
+.study-field::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(38, 62, 181, 0.28);
+}
+
+.study-field::before { width: 78%; aspect-ratio: 1; left: -24%; top: 16%; }
+.study-field::after { width: 96%; aspect-ratio: 1; right: -49%; bottom: -35%; border-color: rgba(167, 101, 66, 0.35); }
+.study-field i { position: absolute; display: block; background: var(--blue); }
+.study-field i:nth-child(1) { width: 1px; height: 100%; left: 50%; }
+.study-field i:nth-child(2) { width: 100%; height: 1px; top: 58%; }
+.study-field i:nth-child(3) { width: 11px; height: 11px; left: calc(50% - 5px); top: calc(58% - 5px); border-radius: 50%; background: var(--copper); }
+
+.study-sheet { position: absolute; width: 48%; height: 57%; }
+.study-sheet-back { right: 9%; top: 17%; background: var(--copper); transform: rotate(8deg); }
+.study-sheet-middle { right: 15%; top: 14%; background: var(--blue); transform: rotate(2deg); }
+.study-sheet-front {
+  right: 20%;
+  top: 11%;
+  z-index: 3;
+  padding: clamp(20px, 2vw, 34px);
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  color: var(--ink);
+  background: var(--porcelain);
+  border: 1px solid var(--ink);
+  box-shadow: 18px 22px 34px rgba(40, 36, 29, 0.13);
+  transform: rotate(-3deg);
+}
+
+.sheet-heading,
+.sheet-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font: 7px "JetBrains Mono", monospace;
+  letter-spacing: 0.1em;
+}
+
+.sheet-seal {
+  width: 54px;
+  height: 54px;
+  margin-top: 12%;
+  display: grid;
+  place-items: center;
+  color: var(--porcelain);
+  background: var(--blue);
+  border-radius: 50%;
+  font: italic 23px "Iowan Old Style", Baskerville, Georgia, serif;
+}
+
+.sheet-title { align-self: end; margin: 16px 0; display: grid; gap: 5px; }
+.sheet-title small { color: var(--muted); font: 7px "JetBrains Mono", monospace; letter-spacing: 0.08em; }
+.sheet-title strong { font: 500 clamp(17px, 1.7vw, 26px) "Iowan Old Style", Baskerville, Georgia, serif; }
+.sheet-data { padding: 11px 0; display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 7px 13px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); font: 7px "JetBrains Mono", monospace; }
+.sheet-data span { color: var(--muted); }
+.sheet-data b { font-weight: 500; overflow-wrap: anywhere; }
+.sheet-foot { margin-top: 14px; }
+
+.study-caption {
+  position: absolute;
+  left: 2%;
+  bottom: 4%;
+  max-width: 250px;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.study-caption span { color: var(--blue); font: 8px "JetBrains Mono", monospace; }
+.study-caption p { margin: 0; }
+
+.hero-register {
+  position: absolute;
+  left: calc(clamp(24px, 5.5vw, 92px) + 125px);
+  right: clamp(24px, 5.5vw, 92px);
+  bottom: 25px;
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr auto 1fr;
+  gap: 10px 18px;
+  color: var(--muted);
+  font: 8px "JetBrains Mono", monospace;
+  letter-spacing: 0.08em;
+}
+
+.hero-register strong { color: var(--ink); font-weight: 500; }
+
+.collection-section,
+.provenance-section,
+.object-section,
+.reading-room {
+  padding: clamp(100px, 11vw, 168px) clamp(24px, 6vw, 100px);
+}
+
+.collection-section { background: var(--porcelain); }
+
+.collection-heading {
+  max-width: 1080px;
+  display: grid;
+  grid-template-columns: 170px minmax(500px, 1fr);
+  gap: 26px clamp(40px, 7vw, 120px);
+}
+
+.collection-heading .museum-kicker { grid-row: 1 / 3; }
+.collection-heading h2,
+.provenance-intro h2,
+.object-wall-label h2,
+.boundary-title h2,
+.reading-heading h2,
+.museum-closing h2 { font-size: clamp(55px, 6.5vw, 104px); }
+.collection-heading > p:not(.museum-kicker) { max-width: 650px; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.7; }
+
+.collection-grid {
+  margin-top: 100px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+
+.collection-grid article { padding: 24px clamp(20px, 3vw, 48px) 42px; border-right: 1px solid var(--rule); }
+.collection-grid article:last-child { border-right: 0; }
+.collection-grid article > small { color: var(--copper); font: 8px "JetBrains Mono", monospace; letter-spacing: 0.12em; }
+.collection-grid h3 { margin: 18px 0 10px; font: 400 clamp(28px, 2.5vw, 40px) "Iowan Old Style", Baskerville, Georgia, serif; }
+.collection-grid p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+
+.collection-figure {
+  position: relative;
+  height: 280px;
+  margin: 0 0 28px;
+  overflow: hidden;
+  background: var(--stone);
+}
+
+.figure-intent span { position: absolute; inset: 15% 19%; border: 1px solid var(--blue); border-radius: 50%; }
+.figure-intent span::after { content: ""; position: absolute; inset: 14%; border: 1px solid var(--blue); border-radius: 50%; }
+.figure-intent i { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--copper); }
+.figure-observation span { position: absolute; left: 10%; right: 10%; top: 50%; height: 1px; background: var(--ink); }
+.figure-observation i { position: absolute; left: 22%; top: 33%; width: 34%; height: 34%; border: 1px solid var(--blue); transform: rotate(45deg); }
+.figure-observation b { position: absolute; right: 18%; top: 43%; width: 38px; height: 38px; border-radius: 50%; background: var(--copper); }
+.figure-receipt span { position: absolute; inset: 14% 25% 10%; background: var(--blue); transform: rotate(7deg); }
+.figure-receipt i { position: absolute; inset: 10% 29% 14% 21%; background: var(--porcelain); border: 1px solid var(--ink); transform: rotate(-4deg); box-shadow: 8px 10px 0 var(--copper); }
+.figure-receipt i::after { content: ""; position: absolute; left: 17%; right: 17%; top: 27%; height: 36%; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+
+.provenance-section { color: var(--porcelain); background: var(--ink); }
+.provenance-intro { display: grid; grid-template-columns: 170px minmax(480px, 1fr) minmax(260px, 0.45fr); align-items: end; gap: clamp(28px, 6vw, 100px); }
+.provenance-intro .museum-kicker { align-self: start; color: #aebaff; }
+.provenance-intro > p:not(.museum-kicker) { margin: 0; color: #aaa69d; font-size: 15px; line-height: 1.7; }
+
+.provenance-list { margin: 100px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); list-style: none; }
+.provenance-list li { position: relative; padding: 24px clamp(18px, 2.4vw, 38px) 18px 0; border-top: 1px solid rgba(247, 245, 239, 0.32); }
+.provenance-list li > span { color: #aebaff; font: 600 9px "JetBrains Mono", monospace; }
+.provenance-list h3 { margin: 44px 0 13px; font: 400 clamp(27px, 2.3vw, 38px) "Iowan Old Style", Baskerville, Georgia, serif; }
+.provenance-list p { margin: 0; color: #aaa69d; font-size: 13px; line-height: 1.65; }
+.provenance-list i { position: absolute; top: -6px; left: 0; width: 11px; height: 11px; border: 1px solid #aebaff; border-radius: 50%; background: var(--ink); }
+.provenance-list li:last-child i { background: var(--copper); border-color: var(--copper); }
+
+.object-section {
+  min-height: 930px;
+  display: grid;
+  grid-template-columns: minmax(360px, 0.72fr) minmax(540px, 1.28fr);
+  align-items: center;
+  gap: clamp(50px, 8vw, 140px);
+  background: #dce4ee;
+}
+
+.object-wall-label { max-width: 600px; }
+.object-wall-label > p:not(.museum-kicker) { margin: 30px 0; color: #555963; font-size: 16px; line-height: 1.75; }
+.object-plinth { position: relative; min-height: 650px; display: grid; place-items: center; }
+.object-plinth::before { content: ""; position: absolute; left: 8%; right: 8%; bottom: 0; height: 26%; background: #c7ced6; clip-path: polygon(12% 0, 88% 0, 100% 100%, 0 100%); }
+.plinth-number { position: absolute; right: 2%; top: 9%; color: rgba(23, 38, 120, 0.16); font: 400 clamp(90px, 12vw, 190px) "Iowan Old Style", Baskerville, Georgia, serif; }
+
+.archive-object {
+  position: relative;
+  z-index: 2;
+  width: min(590px, 84%);
+  min-height: 510px;
+  padding: 38px 38px 34px 100px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  color: var(--ink);
+  background: var(--porcelain);
+  border: 1px solid var(--ink);
+  box-shadow: 18px 21px 0 var(--blue);
+  transform: rotate(-2deg);
+}
+
+.object-spine { position: absolute; inset: 0 auto 0 0; width: 64px; padding: 24px 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; border-right: 1px solid var(--ink); }
+.object-spine span { font: 600 10px "JetBrains Mono", monospace; writing-mode: vertical-rl; }
+.object-spine small { color: var(--muted); font: 7px "JetBrains Mono", monospace; letter-spacing: 0.08em; writing-mode: vertical-rl; }
+.object-header,
+.object-signature { display: flex; justify-content: space-between; gap: 20px; font: 8px "JetBrains Mono", monospace; letter-spacing: 0.1em; }
+.object-id { margin: 42px 0 28px; display: grid; gap: 6px; }
+.object-id small { color: var(--muted); font: 8px "JetBrains Mono", monospace; }
+.object-id strong { color: var(--blue); font: 400 31px "Iowan Old Style", Baskerville, Georgia, serif; }
+.archive-object dl { margin: 0; }
+.archive-object dl > div { padding: 12px 0; display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 16px; border-top: 1px solid var(--rule); font: 9px "JetBrains Mono", monospace; }
+.archive-object dt { color: var(--muted); }
+.archive-object dd { margin: 0; overflow-wrap: anywhere; }
+.archive-object dl > div:nth-child(3) dd,
+.archive-object dl > div:nth-child(4) dd { color: var(--blue); font-weight: 700; }
+.object-signature { padding-top: 18px; border-top: 1px solid var(--ink); }
+.object-signature span:nth-child(2) { color: var(--copper); font: italic 22px Georgia, serif; }
+
+.boundary-section {
+  padding: clamp(110px, 12vw, 180px) clamp(24px, 6vw, 100px);
+  color: var(--porcelain);
+  background: var(--blue-dark);
+}
+
+.boundary-title { display: grid; grid-template-columns: 170px 1fr; gap: clamp(40px, 7vw, 120px); }
+.boundary-title .museum-kicker { color: #bdc5ff; }
+.boundary-title .museum-kicker span { color: #dc9a73; }
+.boundary-title h2 { max-width: 1080px; }
+.boundary-title h2 em { color: #bdc5ff; }
+
+.boundary-catalogue { max-width: 1080px; margin: 110px 0 0 auto; }
+.boundary-catalogue > div { padding: 28px 0; display: grid; grid-template-columns: 44px minmax(180px, 0.7fr) minmax(300px, 1.3fr); gap: 26px; border-top: 1px solid rgba(247, 245, 239, 0.34); }
+.boundary-catalogue > div:last-child { border-bottom: 1px solid rgba(247, 245, 239, 0.34); }
+.boundary-catalogue > div > span { color: #bdc5ff; font: 600 9px "JetBrains Mono", monospace; }
+.boundary-catalogue dt { font: 400 22px "Iowan Old Style", Baskerville, Georgia, serif; }
+.boundary-catalogue dd { margin: 0; color: #c9c9cf; font-size: 15px; line-height: 1.65; }
+
+.reading-room { background: var(--porcelain); }
+.reading-heading { display: grid; grid-template-columns: 170px 1fr; gap: clamp(40px, 7vw, 120px); }
+.reader-list { max-width: 1080px; margin: 100px 0 0 auto; border-top: 1px solid var(--ink); }
+.reader-list article { padding: 30px 0; display: grid; grid-template-columns: 44px minmax(190px, 0.7fr) minmax(300px, 1.3fr); gap: 26px; border-bottom: 1px solid var(--rule); }
+.reader-list article > span { color: var(--copper); font: 600 9px "JetBrains Mono", monospace; }
+.reader-list h3 { margin: 0; font: 400 25px "Iowan Old Style", Baskerville, Georgia, serif; }
+.reader-list p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+
+.museum-closing {
+  position: relative;
+  min-height: 820px;
+  padding: 120px clamp(24px, 6vw, 100px) 44px;
+  display: grid;
+  grid-template-columns: minmax(430px, 0.9fr) minmax(500px, 1.1fr);
+  align-items: center;
+  gap: clamp(50px, 8vw, 140px);
+  background: var(--stone);
+  overflow: hidden;
+}
+
+.closing-sculpture { position: relative; min-height: 570px; }
+.closing-sculpture > span { position: absolute; border-radius: 50%; border: 1px solid var(--blue); }
+.closing-sculpture > span:first-child { inset: 2% 17% 8% 3%; }
+.closing-sculpture > span:nth-child(2) { inset: 16% 4% 1% 25%; border-color: var(--copper); }
+.closing-sculpture i { position: absolute; inset: 22% 25% 16% 23%; background: var(--blue); clip-path: polygon(0 12%, 82% 0, 100% 86%, 17% 100%); }
+.closing-sculpture i::after { content: ""; position: absolute; inset: 16%; background: var(--stone); clip-path: inherit; }
+.museum-closing-copy { position: relative; z-index: 3; }
+.museum-closing h2 { max-width: 790px; }
+
+.museum-closing footer {
+  position: absolute;
+  left: clamp(24px, 4.5vw, 76px);
+  right: clamp(24px, 4.5vw, 76px);
+  bottom: 28px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  color: var(--muted);
+  font: 8px "JetBrains Mono", monospace;
+  letter-spacing: 0.08em;
+}
+
+.museum-closing footer > span:last-child { justify-self: end; }
+
+.motion-ready .museum-site [data-reveal] {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 760ms cubic-bezier(0.22, 1, 0.36, 1), transform 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.motion-ready .museum-site [data-reveal].is-visible { opacity: 1; transform: none; }
+
+@media (max-width: 1050px) {
+  .museum-nav { grid-template-columns: 1fr auto; }
+  .museum-nav nav { display: none; }
+  .museum-hero { min-height: auto; grid-template-columns: 46px 1fr; padding-bottom: 110px; }
+  .artifact-study { grid-column: 2; min-height: 650px; }
+  .hero-register { left: 150px; grid-template-columns: auto 1fr auto 1fr; }
+  .hero-register span:nth-of-type(3),
+  .hero-register strong:nth-of-type(3) { display: none; }
+  .collection-heading,
+  .provenance-intro,
+  .boundary-title,
+  .reading-heading { grid-template-columns: 130px 1fr; }
+  .provenance-intro > p:not(.museum-kicker) { grid-column: 2; }
+  .provenance-list { grid-template-columns: 1fr; }
+  .provenance-list li { display: grid; grid-template-columns: 42px 150px 1fr; gap: 20px; align-items: start; }
+  .provenance-list h3 { margin: 0; }
+  .provenance-list i { top: 27px; left: auto; right: 0; }
+  .object-section { min-height: auto; grid-template-columns: 1fr; }
+  .object-wall-label { max-width: 760px; }
+  .object-plinth { min-height: 690px; }
+  .museum-closing { min-height: auto; grid-template-columns: 1fr; padding-bottom: 100px; }
+  .closing-sculpture { min-height: 480px; }
+}
+
+@media (max-width: 720px) {
+  .museum-nav { min-height: 70px; padding: 0 18px; }
+  .museum-name small { display: none; }
+  .museum-entry { min-height: 40px; }
+  .museum-entry span,
+  .museum-entry b { padding: 12px; }
+  .museum-hero { grid-template-columns: 1fr; padding: 112px 20px 75px; }
+  .hero-index { display: none; }
+  .museum-hero h1 { font-size: clamp(58px, 17vw, 82px); }
+  .hero-lede { font-size: 16px; }
+  .museum-actions { align-items: flex-start; flex-direction: column; }
+  .museum-button { width: 100%; }
+  .artifact-study { grid-column: 1; min-height: 510px; }
+  .study-sheet { width: 61%; height: 59%; }
+  .study-sheet-back { right: 3%; }
+  .study-sheet-middle { right: 10%; }
+  .study-sheet-front { right: 17%; padding: 18px; }
+  .sheet-seal { width: 42px; height: 42px; }
+  .study-caption { left: 4%; bottom: 2%; }
+  .hero-register { display: none; }
+  .collection-section,
+  .provenance-section,
+  .object-section,
+  .reading-room,
+  .boundary-section { padding: 82px 20px; }
+  .collection-heading,
+  .provenance-intro,
+  .boundary-title,
+  .reading-heading { grid-template-columns: 1fr; gap: 20px; }
+  .collection-heading .museum-kicker { grid-row: auto; }
+  .collection-heading h2,
+  .provenance-intro h2,
+  .object-wall-label h2,
+  .boundary-title h2,
+  .reading-heading h2,
+  .museum-closing h2 { font-size: clamp(49px, 14vw, 72px); }
+  .provenance-intro > p:not(.museum-kicker) { grid-column: 1; }
+  .collection-grid { margin-top: 70px; grid-template-columns: 1fr; }
+  .collection-grid article { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .collection-grid article:last-child { border-bottom: 0; }
+  .collection-figure { height: 240px; }
+  .provenance-list { margin-top: 70px; }
+  .provenance-list li { grid-template-columns: 34px 1fr; gap: 10px; padding: 24px 0; }
+  .provenance-list h3 { font-size: 29px; }
+  .provenance-list p { grid-column: 2; }
+  .provenance-list i { right: 0; }
+  .object-plinth { min-height: 540px; }
+  .archive-object { width: 92%; min-height: 440px; padding: 26px 20px 24px 70px; box-shadow: 12px 14px 0 var(--blue); }
+  .object-spine { width: 48px; }
+  .object-id { margin: 30px 0 20px; }
+  .object-id strong { font-size: 25px; }
+  .archive-object dl > div { font-size: 8px; }
+  .plinth-number { right: -7%; }
+  .boundary-catalogue,
+  .reader-list { margin-top: 70px; }
+  .boundary-catalogue > div,
+  .reader-list article { grid-template-columns: 32px 1fr; gap: 10px; }
+  .boundary-catalogue dd,
+  .reader-list p { grid-column: 2; }
+  .museum-closing { padding: 80px 20px 100px; }
+  .closing-sculpture { min-height: 360px; }
+  .museum-closing footer { left: 20px; right: 20px; grid-template-columns: 1fr auto; }
+  .museum-closing footer > span:nth-child(2) { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .museum-site *,
+  .museum-site *::before,
+  .museum-site *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .motion-ready .museum-site [data-reveal] { opacity: 1; transform: none; }
+}
