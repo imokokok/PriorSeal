@@ -9,6 +9,8 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     RUNPROOF_KEY_ID: 'key-1',
     RUNPROOF_PRIVATE_KEY_FILE: ' /run/secrets/private.pem ',
     RUNPROOF_PUBLIC_KEY_FILE: ' /run/secrets/public.pem ',
+    DATABASE_URL: 'postgresql://app:secret@db.example/runproof?sslmode=require',
+    DATABASE_URL_UNPOOLED: 'postgresql://app:secret@db.example/runproof?sslmode=require',
     RUNPROOF_CORS_ORIGINS: 'https://console.example, https://console.example',
     RUNPROOF_TRUST_PROXY: 'true',
   });
@@ -19,6 +21,8 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     keyId: 'key-1',
     privateKeyFile: '/run/secrets/private.pem',
     publicKeyFile: '/run/secrets/public.pem',
+    databaseUrl: 'postgresql://app:secret@db.example/runproof?sslmode=require',
+    databaseDirectUrl: 'postgresql://app:secret@db.example/runproof?sslmode=require',
     corsOrigins: ['https://console.example'],
     trustProxy: true,
   });
@@ -29,4 +33,5 @@ test('runtime configuration rejects ambiguous or invalid values before startup',
   assert.throws(() => loadRuntimeConfig({ RUNPROOF_PRIVATE_KEY_FILE: '/private.pem' }), /configured together/);
   assert.throws(() => loadRuntimeConfig({ RUNPROOF_CORS_ORIGINS: 'https://console.example/path' }), /without paths/);
   assert.throws(() => loadRuntimeConfig({ RUNPROOF_TRUST_PROXY: 'yes' }), /true or false/);
+  assert.throws(() => loadRuntimeConfig({ DATABASE_URL: 'https://db.example' }), /PostgreSQL/);
 });

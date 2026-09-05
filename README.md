@@ -51,7 +51,7 @@ Issuer private keys are read only from a configured local file for development a
 
 ## Persistence and operations
 
-`migrations/001_init.sql` establishes evidence tables; `migrations/002_runtime_state.sql` adds durable intents, observation versions, idempotency records, and at-least-once worker jobs. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
+Neon is the production persistence backend. `DATABASE_URL` is the pooled application connection and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. The migrations establish evidence tables, durable intents, observation versions, idempotency records, and at-least-once worker jobs. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
 
 For a local container environment:
 

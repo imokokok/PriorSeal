@@ -8,7 +8,8 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
-COPY package.json ./
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 COPY src ./src
 COPY --from=web-build /app/web/dist ./web/dist
 RUN addgroup -S runproof && adduser -S -G runproof runproof

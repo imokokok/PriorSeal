@@ -18,9 +18,26 @@ export function loadRuntimeConfig(environment = process.env) {
     keyId: identifierValue(environment.RUNPROOF_KEY_ID, 'RUNPROOF_KEY_ID', 'default'),
     privateKeyFile,
     publicKeyFile,
+    databaseUrl: databaseUrl(environment.DATABASE_URL, 'DATABASE_URL'),
+    databaseDirectUrl: databaseUrl(environment.DATABASE_URL_UNPOOLED, 'DATABASE_URL_UNPOOLED'),
     corsOrigins: corsOrigins(environment.RUNPROOF_CORS_ORIGINS),
     trustProxy: booleanValue(environment.RUNPROOF_TRUST_PROXY, 'RUNPROOF_TRUST_PROXY', false),
   };
+}
+
+function databaseUrl(value, name) {
+  const url = optionalValue(value);
+  if (!url) return undefined;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new TypeError(`${name} must be a PostgreSQL connection URL`);
+  }
+  if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname) {
+    throw new TypeError(`${name} must be a PostgreSQL connection URL`);
+  }
+  return url;
 }
 
 function optionalValue(value) {
