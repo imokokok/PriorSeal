@@ -3,7 +3,17 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { chains, dateTime, short } from './lib/format'
 import type { Receipt } from './types'
 
-export function Logo({ compact = false }: { compact?: boolean }) { return <Link className="logo" to={compact ? '/app' : '/'} aria-label="RunProof home"><span className="logo-mark">RP</span><span className="logo-type">RunProof<small>Execution Archive</small></span></Link> }
+export function RunProofMark({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`runproof-mark ${className}`.trim()} viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <path className="runproof-mark-blue" d="M29 44H8V8h29l6 6v14" />
+      <path className="runproof-mark-ink" d="M35 32h15l6 6v18H30l-6-6V36" />
+      <circle className="runproof-mark-proof" cx="32" cy="32" r="4.5" />
+    </svg>
+  )
+}
+
+export function Logo({ compact = false }: { compact?: boolean }) { return <Link className="logo" to={compact ? '/app' : '/'} aria-label="RunProof home"><span className="logo-symbol"><RunProofMark /></span><span className="logo-type">RunProof<small>Execution Archive</small></span></Link> }
 export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) { const [copied, setCopied] = useState(false); return <button className="copy-button" onClick={async () => { await navigator.clipboard?.writeText(value); setCopied(true); window.setTimeout(() => setCopied(false), 1600) }}>{copied ? 'Copied' : label}</button> }
 export function CodeValue({ value, title }: { value?: string | null; title?: string }) { return <span className="code-value" title={title ?? value ?? ''}>{short(value)}{value && <CopyButton value={value} />}</span> }
 export function Status({ value, small = false }: { value?: string | null; small?: boolean }) { const text = value ?? 'UNKNOWN'; const tone = /COMPLETED|CONFIRMED|VALID|BOUND|ACTIVE|OK/.test(text) ? 'success' : /FAILED|INVALID|REVERTED|EXPIRED|ERROR|MISMATCH|NOT_FOUND/.test(text) ? 'danger' : /PENDING|INACTIVE|UNDETERMINED|REORGED/.test(text) ? 'warning' : 'neutral'; return <span className={'status ' + tone + (small ? ' small' : '')}><span aria-hidden="true">{tone === 'success' ? '✓' : tone === 'danger' ? '!' : '•'}</span>{text.replaceAll('_', ' ')}</span> }

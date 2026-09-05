@@ -49,17 +49,7 @@
   color: inherit;
 }
 
-.museum-monogram {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  font-family: "Iowan Old Style", Baskerville, Georgia, serif;
-  font-size: 11px;
-  font-style: italic;
-}
+.museum-logo-symbol { width: 38px; height: 38px; flex: 0 0 auto; }
 
 .museum-name {
   display: grid;

@@ -1,12 +1,13 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { RunProofMark } from '../components'
 import { audiences, boundaries, proofSequence, receiptLines, sectionLinks } from './content'
 import './landing.css'
 
 function MuseumMark() {
   return (
     <Link className="museum-mark" to="/" aria-label="RunProof home">
-      <span className="museum-monogram" aria-hidden="true">RP</span>
+      <span className="museum-logo-symbol"><RunProofMark /></span>
       <span className="museum-name">RunProof<small>Execution Archive</small></span>
     </Link>
   )
