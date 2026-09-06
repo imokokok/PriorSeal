@@ -34,7 +34,7 @@ function ArtifactStudy() {
 function ArchiveObject() {
   return (
     <div className="archive-object">
-      <div className="object-spine"><span>RP–001</span><small>PERMANENT RECORD</small></div>
+      <div className="object-spine"><span>PS–001</span><small>PERMANENT RECORD</small></div>
       <div className="object-header"><span>PRIORSEAL RECEIPT</span><span>SCHEMA / V1</span></div>
       <div className="object-id"><small>ACCESSION NUMBER</small><strong>psr_83c1c94f</strong></div>
       <dl>
