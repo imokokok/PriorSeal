@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import pg from 'pg';
 
 const { Pool } = pg;
-const connectionString = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+const configuredConnectionString = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+const connectionString = secureConnectionString(configuredConnectionString);
 if (!connectionString) throw new Error('DATABASE_URL_UNPOOLED or DATABASE_URL is required for migrations');
 
 const migrationsDirectory = new URL('../migrations/', import.meta.url);
@@ -38,4 +39,11 @@ try {
   await client.query("SELECT pg_advisory_unlock(hashtext('runproof:migrations'))").catch(() => {});
   client.release();
   await pool.end();
+}
+
+function secureConnectionString(value) {
+  if (!value) return value;
+  const url = new URL(value);
+  if (['prefer', 'require', 'verify-ca'].includes(url.searchParams.get('sslmode'))) url.searchParams.set('sslmode', 'verify-full');
+  return url.toString();
 }

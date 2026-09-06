@@ -15,13 +15,13 @@ export function OnboardingPage() {
   }, [])
 
   const steps = [
-    { title: 'Create a bounded intent', done: activity.intents.length > 0, copy: 'Choose a chain, atomic amount, participants and expiry before the transaction is observed.', action: '/app/intents/new', label: 'Create intent' },
+    { title: 'Sign and timestamp a bounded intent', done: activity.authorizations.length > 0, copy: 'Choose exact constraints, authorize them with EIP-712, then let RunProof obtain the independent RFC 3161 timestamp.', action: '/app/intents/new', label: 'Sign intent' },
     { title: 'Observe one transaction', done: activity.observations.length > 0, copy: 'Submit an EVM transaction hash. Pending and unavailable results remain explicitly uncertain.', action: '/app/observe', label: 'Observe execution' },
-    { title: 'Inspect and verify evidence', done: activity.receipts.length > 0, copy: 'Download the signed receipt, inspect binding reason codes and verify it independently.', action: activity.receipts[0] ? `/app/receipts/${encodeURIComponent(activity.receipts[0].receiptId)}` : '/app/verify', label: activity.receipts.length ? 'Open receipt' : 'Open verifier' },
+    { title: 'Inspect and verify evidence', done: activity.receipts.length > 0, copy: 'Recompute authorization, DigiCert timestamp, hashes, binding and issuer signatures locally.', action: activity.receipts[0] ? `/app/receipts/${encodeURIComponent(activity.receipts[0].receiptId)}` : '/app/verify', label: activity.receipts.length ? 'Open receipt' : 'Open verifier' },
   ]
 
   return <AppShell>
-    <PageHeader eyebrow="3-MINUTE QUICKSTART" title="Create your first execution proof.">This walkthrough uses the local console. Nothing here moves funds or asks for a wallet signature.</PageHeader>
+    <PageHeader eyebrow="3-MINUTE QUICKSTART" title="Create your first execution proof.">This walkthrough uses the local console. It asks for an authorization signature, never a transaction signature, and does not move funds.</PageHeader>
     <section className="readiness-card panel"><div><h2>Environment readiness</h2><p>API and issuer signing availability</p></div><Status value={readiness === 'ready' ? 'READY' : readiness === 'checking' ? 'CHECKING' : readiness === 'unsigned' ? 'UNSIGNED' : 'OFFLINE'} /></section>
     {readiness === 'unsigned' && <Notice tone="warning" title="Issuer signing is not configured">You can create intents and inspect the product, but observations will not produce signed receipts until an issuer key is configured.</Notice>}
     {readiness === 'offline' && <Notice tone="danger" title="The local API is unavailable">Start the API on port 3000, then reload this page.</Notice>}

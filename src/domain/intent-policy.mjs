@@ -6,6 +6,7 @@ export const POLICY_CODES = Object.freeze({
   RECIPIENT_NOT_ALLOWED: 'POLICY_RECIPIENT_NOT_ALLOWED',
   AMOUNT_EXCEEDED: 'POLICY_AMOUNT_EXCEEDED',
   EXPIRY_TOO_FAR: 'POLICY_EXPIRY_TOO_FAR',
+  PRINCIPAL_NOT_ALLOWED: 'POLICY_PRINCIPAL_NOT_ALLOWED',
 });
 const listHas = (list, value) => Array.isArray(list) && !list.map(String).map((x) => x.toLowerCase()).includes(String(value).toLowerCase());
 export function evaluateIntentPolicy(intent, policy = {}, now = Math.floor(Date.now() / 1000)) {
@@ -18,4 +19,17 @@ export function evaluateIntentPolicy(intent, policy = {}, now = Math.floor(Date.
   if (policy.maxAmount != null && BigInt(intent.amount) > BigInt(policy.maxAmount)) reasonCodes.push(POLICY_CODES.AMOUNT_EXCEEDED);
   if (policy.maxValiditySeconds != null && Number(intent.validUntil) > now + Number(policy.maxValiditySeconds)) reasonCodes.push(POLICY_CODES.EXPIRY_TOO_FAR);
   return { allowed: reasonCodes.length === 0, reasonCodes, policyId: policy.policyId ?? null, evaluatedAt: now };
+}
+
+export function evaluateAuthorizationPolicy(authorization, policy = {}, now = Math.floor(Date.now() / 1000)) {
+  const intentResult = evaluateIntentPolicy(authorization.intent, policy, now);
+  const reasonCodes = [...intentResult.reasonCodes];
+  if (Array.isArray(policy.principals)) {
+    const matched = policy.principals.some((principal) => principal.id === authorization.principal.id
+      && principal.type === authorization.principal.type
+      && principal.account.toLowerCase() === authorization.principal.account
+      && principal.authorizerType === authorization.authorizer.type);
+    if (!matched) reasonCodes.push(POLICY_CODES.PRINCIPAL_NOT_ALLOWED);
+  }
+  return { ...intentResult, allowed: reasonCodes.length === 0, reasonCodes };
 }

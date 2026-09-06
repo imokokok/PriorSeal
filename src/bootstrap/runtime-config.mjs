@@ -6,25 +6,39 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
  * receive explicit values rather than reading process.env themselves.
  */
 export function loadRuntimeConfig(environment = process.env) {
+  const runtimeEnvironment = environmentValue(environment.RUNPROOF_ENVIRONMENT);
   const privateKeyFile = optionalValue(environment.RUNPROOF_PRIVATE_KEY_FILE);
   const publicKeyFile = optionalValue(environment.RUNPROOF_PUBLIC_KEY_FILE);
   const keyRegistryFile = optionalValue(environment.RUNPROOF_KEY_REGISTRY_FILE);
+  const policyFile = optionalValue(environment.RUNPROOF_POLICY_FILE);
+  const transparencyAnchorFile = optionalValue(environment.RUNPROOF_TRANSPARENCY_ANCHOR_FILE);
+  const witnessEndpointsFile = optionalValue(environment.RUNPROOF_WITNESS_ENDPOINTS_FILE);
   if (Boolean(privateKeyFile) !== Boolean(publicKeyFile)) {
     throw new TypeError('RUNPROOF_PRIVATE_KEY_FILE and RUNPROOF_PUBLIC_KEY_FILE must be configured together');
   }
 
-  return {
+  const preExecutionProofMode = proofModeValue(environment.RUNPROOF_PREEXECUTION_PROOF_MODE, environment.RUNPROOF_REQUIRE_EXTERNAL_ANCHOR, runtimeEnvironment);
+  const config = {
+    environment: runtimeEnvironment,
     port: portValue(environment.PORT),
     issuer: identifierValue(environment.RUNPROOF_ISSUER, 'RUNPROOF_ISSUER', 'runproof-local'),
     keyId: identifierValue(environment.RUNPROOF_KEY_ID, 'RUNPROOF_KEY_ID', 'default'),
+    authorizationAudience: identifierValue(environment.RUNPROOF_AUTHORIZATION_AUDIENCE, 'RUNPROOF_AUTHORIZATION_AUDIENCE', 'runproof'),
     privateKeyFile,
     publicKeyFile,
     keyRegistryFile,
+    policyFile,
+    transparencyAnchorFile,
+    witnessEndpointsFile,
+    preExecutionProofMode,
+    requireExternalAnchor: preExecutionProofMode === 'evm-anchor',
     databaseUrl: databaseUrl(environment.DATABASE_URL, 'DATABASE_URL'),
     databaseDirectUrl: databaseUrl(environment.DATABASE_URL_UNPOOLED, 'DATABASE_URL_UNPOOLED'),
     corsOrigins: corsOrigins(environment.RUNPROOF_CORS_ORIGINS),
     trustProxy: booleanValue(environment.RUNPROOF_TRUST_PROXY, 'RUNPROOF_TRUST_PROXY', false),
   };
+  if (runtimeEnvironment === 'production') validateProductionConfig(config);
+  return config;
 }
 
 function databaseUrl(value, name) {
@@ -39,11 +53,37 @@ function databaseUrl(value, name) {
   if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname) {
     throw new TypeError(`${name} must be a PostgreSQL connection URL`);
   }
-  return url;
+  if (['prefer', 'require', 'verify-ca'].includes(parsed.searchParams.get('sslmode'))) parsed.searchParams.set('sslmode', 'verify-full');
+  return parsed.toString();
 }
 
 function optionalValue(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function environmentValue(value) {
+  const environment = optionalValue(value) ?? 'development';
+  if (!['development', 'test', 'production'].includes(environment)) throw new TypeError('RUNPROOF_ENVIRONMENT must be development, test, or production');
+  return environment;
+}
+
+function validateProductionConfig(config) {
+  if (!config.databaseUrl || !config.databaseDirectUrl) throw new TypeError('Production requires DATABASE_URL and DATABASE_URL_UNPOOLED');
+  if (!config.privateKeyFile || !config.publicKeyFile) throw new TypeError('Production requires issuer signing key files');
+  if (!config.policyFile) throw new TypeError('Production requires RUNPROOF_POLICY_FILE');
+  if (config.issuer === 'runproof-local' || config.authorizationAudience === 'runproof') throw new TypeError('Production requires deployment-specific issuer and authorization audience values');
+  if (config.preExecutionProofMode === 'issuer') throw new TypeError('Production requires rfc3161, witness-quorum, or evm-anchor pre-execution proof');
+  if (config.preExecutionProofMode === 'witness-quorum' && !config.witnessEndpointsFile) throw new TypeError('Production witness-quorum mode requires RUNPROOF_WITNESS_ENDPOINTS_FILE');
+  if (!config.corsOrigins.length || config.corsOrigins.some((origin) => new URL(origin).hostname === 'localhost')) throw new TypeError('Production requires at least one non-localhost CORS origin');
+}
+
+function proofModeValue(value, legacyAnchor, environment) {
+  const explicit = optionalValue(value);
+  if (explicit && !['issuer', 'rfc3161', 'witness-quorum', 'evm-anchor'].includes(explicit)) throw new TypeError('RUNPROOF_PREEXECUTION_PROOF_MODE must be issuer, rfc3161, witness-quorum, or evm-anchor');
+  if (explicit) return explicit;
+  if (booleanValue(legacyAnchor, 'RUNPROOF_REQUIRE_EXTERNAL_ANCHOR', false)) return 'evm-anchor';
+  if (environment === 'production') throw new TypeError('Production requires explicit RUNPROOF_PREEXECUTION_PROOF_MODE');
+  return 'issuer';
 }
 
 function portValue(value) {

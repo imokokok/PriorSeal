@@ -1,0 +1,3 @@
+export type TimestampPolicy = { schema: 'runproof.timestamp-policy.v1'; profile: 'digicert-rfc3161-v1'; maxClockSkewSeconds: number };
+export type TimestampEvidence = { schema: 'runproof.rfc3161-evidence.v1'; domain: string; profile: string; tsaUrl: string; authorizationHash: string; requestedAt: number; nonce: string; timestamp: number; serialNumber: string; policyOid: string; digestAlgorithm: string; responseHash: string; response: string };
+export function verifyTimestampEvidence(evidence: TimestampEvidence | undefined, data: Uint8Array, policy: TimestampPolicy, options: { authorizationHash: string; requestedAt: number; before?: number; cryptoProvider?: Crypto }): Promise<{ valid: boolean; code: string; timestamp?: number; serialNumber?: string; profile?: string }>;

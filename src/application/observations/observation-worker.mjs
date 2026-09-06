@@ -7,14 +7,14 @@ export function createObservationWorker({ observe, saveObservation, store = null
   const jobs = new Map();
   async function enqueuePersistent(input) {
     if (!store?.enqueueJob) return enqueue(input);
-    const now = clock(); const job = { jobId: randomUUID(), idempotencyKey: input.idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`, input: { ...input }, state: 'QUEUED', attempts: 0, createdAt: now, nextAttemptAt: now, observation: null, error: null };
+    const { idempotencyKey, ...workInput } = input; const now = clock(); const job = { jobId: randomUUID(), idempotencyKey: idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`, input: workInput, state: 'QUEUED', attempts: 0, createdAt: now, nextAttemptAt: now, observation: null, error: null };
     return store.enqueueJob(job);
   }
   function enqueue(input) {
-    const key = input.idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`;
+    const { idempotencyKey, ...workInput } = input; const key = idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`;
     const existing = [...jobs.values()].find((job) => job.key === key);
     if (existing) return existing;
-    const job = { jobId: randomUUID(), key, input: { ...input }, state: 'QUEUED', attempts: 0, createdAt: clock(), nextAttemptAt: clock(), observation: null, error: null };
+    const job = { jobId: randomUUID(), key, input: workInput, state: 'QUEUED', attempts: 0, createdAt: clock(), nextAttemptAt: clock(), observation: null, error: null };
     jobs.set(job.jobId, job); return job;
   }
   async function runOnce() {

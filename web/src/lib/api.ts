@@ -1,4 +1,4 @@
-import type { ApiError, Intent, KeyRegistry, Receipt, VerificationResult, Execution } from '../types'
+import type { ApiError, Authorization, AuthorizationReceipt, Intent, KeyRegistry, PolicyEvidence, Receipt, VerificationResult, Execution, TimestampEvidence, WitnessEvidence } from '../types'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 const timeoutMs = 15_000
@@ -30,7 +30,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   createIntent: (intent: Intent) => request<{ intent: Intent; intentHash: string; policy: { allowed: boolean; reasonCodes: string[]; policyId: string | null } }>('/v1/intents', { method: 'POST', body: JSON.stringify(intent) }),
-  observe: (input: { intentId: string; chainId: number; txHash: string; confirmations: number }) => request<{ observation: Execution; receipt: Receipt | null; verification?: VerificationResult }>('/v1/executions/observe', { method: 'POST', body: JSON.stringify(input) }),
+  prepareAuthorization: (authorization: Omit<Authorization, 'schema' | 'domain' | 'authorizationId' | 'intentHash' | 'signature' | 'policyHash'> & { policyHash?: string }) => request<{ authorization: Authorization; typedData: Record<string, unknown> }>('/v1/authorizations/prepare', { method: 'POST', body: JSON.stringify(authorization) }),
+  authorize: (authorization: Authorization) => request<{ authorization: Authorization; acceptance: AuthorizationReceipt; policyEvidence?: PolicyEvidence; timestampEvidence?: TimestampEvidence; witnessEvidence?: WitnessEvidence; policy: { allowed: boolean; reasonCodes: string[]; policyId: string | null } }>('/v1/authorizations', { method: 'POST', body: JSON.stringify(authorization) }),
+  authorization: (id: string) => request<{ authorization: Authorization; acceptance: AuthorizationReceipt; status: string; boundTxHash: string | null; uses: number }>(`/v1/authorizations/${encodeURIComponent(id)}`),
+  observe: (input: { intentId?: string; authorizationId?: string; chainId: number; txHash: string; confirmations: number }) => request<{ observation: Execution; receipt: Receipt | null; verification?: VerificationResult }>('/v1/executions/observe', { method: 'POST', body: JSON.stringify(input) }),
   receipt: (id: string) => request<Receipt>(`/v1/receipts/${encodeURIComponent(id)}`),
   verify: (receipt: Receipt) => request<{ convenienceEndpoint: true; independentVerification: string; result: VerificationResult }>('/v1/receipts/verify', { method: 'POST', body: JSON.stringify({ receipt }) }),
   keys: () => request<KeyRegistry>('/.well-known/runproof-keys.json')

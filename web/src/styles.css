@@ -175,6 +175,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .receipt-row { min-height: 78px; display: flex; align-items: center; justify-content: space-between; gap: 22px; border-top: 1px solid var(--rule-soft); }
 .receipt-row:first-of-type { border-top-color: var(--ink); }
 .receipt-row > div:first-child { min-width: 0; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px 12px; }
+.receipt-badges { grid-row: 1 / span 2; display: flex; align-items: flex-start; flex-direction: column; gap: 5px; }
 .receipt-row strong { font: 600 11px "JetBrains Mono", monospace; overflow-wrap: anywhere; }
 .receipt-row > div:first-child > span:last-child { grid-column: 2; color: var(--muted); font-size: 10px; }
 .receipt-row-actions { display: flex; align-items: center; gap: 16px; }
@@ -214,6 +215,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .hash-result { min-height: 58px; padding: 13px; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: #e7e3da; border-left: 3px solid var(--blue); }
 .hash-result code { font-size: 11px; overflow-wrap: anywhere; }
 .result-actions { margin-top: 28px; display: flex; justify-content: flex-end; gap: 8px; }
+.timestamp-summary { margin-top: 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+.timestamp-summary > div { min-width: 0; padding: 14px; display: grid; gap: 8px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.timestamp-summary small { color: var(--muted); font: 600 8px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.timestamp-summary strong { font-size: 12px; }
 .intent-mini { padding-top: 3px; }
 
 .observation-result { margin-top: 20px; }
@@ -290,13 +295,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .step-number { width: 42px; height: 42px; display: grid; place-items: center; color: var(--porcelain); background: var(--ink); border: 1px solid var(--ink); border-radius: 50%; font: 600 10px "JetBrains Mono", monospace; }
 .step-number.done { color: var(--green); background: transparent; border-color: var(--green); }
 
-.audit-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-bottom: 20px; background: var(--ink); border: 1px solid var(--ink); }
+.audit-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; margin-bottom: 20px; background: var(--ink); border: 1px solid var(--ink); }
 .audit-stats article { min-height: 116px; display: grid; align-content: space-between; gap: 10px; background: var(--porcelain); border: 0; }
 .audit-stats article::before { display: none; }
 .audit-stats small { color: var(--muted); font: 500 8px "JetBrains Mono", monospace; letter-spacing: .09em; text-transform: uppercase; }
 .audit-stats strong { font: 400 43px "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.05em; }
 .audit-panel { padding-top: 21px; }
-.audit-filters { display: grid; grid-template-columns: minmax(260px,1fr) 190px 190px; gap: 12px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--ink); }
+.audit-filters { display: grid; grid-template-columns: minmax(260px,1fr) repeat(3, minmax(150px, 180px)); gap: 12px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--ink); }
 .audit-filters label { display: grid; gap: 8px; }
 
 /* Each route is a different room in the same archive, not a repeated dashboard. */
@@ -369,7 +374,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .page-audit .audit-stats article:nth-child(even) small { color: rgba(247,245,239,.7); }
 .page-audit .audit-panel { margin-top: 44px; padding: 34px; border-top: 5px solid var(--ink); }
 .page-audit .audit-panel::before { display: none; }
-.page-audit .audit-filters { grid-template-columns: minmax(260px,1fr) 180px 180px; }
+.page-audit .audit-filters { grid-template-columns: minmax(260px,1fr) repeat(3, minmax(150px, 180px)); }
 
 /* 06 — Verify: a reading room split between document and apparatus. */
 .page-verify { max-width: 1320px; }
@@ -471,6 +476,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .result-actions .button { width: 100%; }
   .hash-result { align-items: flex-start; flex-direction: column; }
   .success-result { padding: 29px 22px; box-shadow: 7px 7px 0 var(--blue); }
+  .timestamp-summary { grid-template-columns: 1fr; }
   .onboarding-steps li { grid-template-columns: auto 1fr; padding: 20px 17px; }
   .onboarding-steps li .button { grid-column: 2; width: max-content; }
   .audit-stats { grid-template-columns: 1fr 1fr; }

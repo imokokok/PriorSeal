@@ -1,0 +1,26 @@
+# Signed authorization and pre-execution evidence
+
+RunProof v2 separates an agent proposal from authority. A draft intent is not authorization. An accepted authorization contains the complete canonical intent, an EIP-712 or ERC-1271 signature, the principal and delegated executor, a validity window, an audience, the active policy hash, and a single-use authorization nonce.
+
+Wallet control alone is not a civil-identity proof. Deployments that need a named real user or organization must configure `policy.principals` as a change-controlled identity registry. Each entry binds one reviewed principal ID and type to one EVM account and authorizer type; RunProof rejects a signed authorization that does not match it, and the registry is covered by the signed `policyHash`. For organizations, the account should normally be the published Safe/ERC-1271 account rather than an employee wallet.
+
+```text
+draft intent → authorizer signature → RunProof acceptance → independent RFC 3161 timestamp
+             → agent execution → EVM observation → v2 execution receipt
+```
+
+`POST /v1/authorizations/prepare` returns canonical EIP-712 typed data. `POST /v1/authorizations` verifies the signature and active policy before issuing an Ed25519 authorization receipt. `POST /v1/executions/observe` accepts `authorizationId`; the first observed transaction with available execution data binds the authorization, and a different transaction is rejected.
+
+The v2 receipt embeds the authorization and acceptance statement. When configured, it also embeds an RFC 3161 response, independently signed witness attestations and/or the signed append-only hash-chain checkpoint. The verifier recomputes the intent hash, authorization hash, execution hash, receipt ID, binding reason codes and outcome before checking signatures.
+
+In `rfc3161` mode, `policy.timestampPolicy` is included in the principal-signed policy hash. RunProof hashes the canonical authorization with SHA-256 and asks DigiCert's public RFC 3161 TSA to timestamp that imprint. It stores the full DER response and verifies the nonce, imprint, DigiCert policy OID, CMS signature, Time Stamping EKU, certificate validity at the signed time, and a certificate path ending at one of the pinned DigiCert roots. Execution is rejected if the token is absent, invalid, outside the allowed acceptance-clock skew, or later than the transaction. The TSA receives a digest rather than the authorization fields. Offline verification does not make live OCSP or CRL requests, so operators must monitor DigiCert trust changes and ship reviewed pin/profile updates when required.
+
+In `witness-quorum` mode, `policy.witnessQuorum` is part of the user-signed policy hash and declares a threshold plus distinct Ed25519 public keys. RunProof requests attestations concurrently and returns an accepted authorization only after the threshold is met. A witness signs the canonical request hash, authorization and intent hashes, its identity/key ID, its observation time, and the authorization expiry. Duplicate identities or keys do not create extra votes. The final verifier requires a quorum whose observation times do not follow the execution time. Endpoint URLs and bearer tokens are operational secrets configured separately and are never embedded in authorization or receipt evidence.
+
+A witness attests that it saw a digest at its stated time; it does not decide whether the transfer is safe and does not receive the full intent. Real independence therefore requires different administrative operators and separately protected clocks/keys. Three processes controlled by the same administrator are cryptographically distinct but not organizationally independent.
+
+An issuer-signed acceptance proves only that the issuer claims to have received the authorization before execution. Independent ordering can instead use an RFC 3161 TSA or witness quorum with no chain or Gas, or an external EVM anchor. RFC 3161 trades decentralized consensus for much simpler operations and dependence on the TSA's key, clock and availability. Operators choosing EVM mode can submit the current checkpoint head to `RunProofTransparencyAnchor.sol`, then configure `RUNPROOF_TRANSPARENCY_ANCHOR_FILE` with the confirmed transaction reference. At startup RunProof verifies the transaction target, successful receipt, calldata, block and timestamp against a configured chain RPC.
+
+`RunProofAuthorizationModule.sol` is a reference Safe module. It verifies the Safe's ERC-1271 signature, executor, exact calldata hash, value, time window and one-time nonce before calling the Safe and emitting `IntentExecuted`. It is deliberately isolated from the default off-chain flow and must not be used with real funds until independently audited, tested with the target Safe version, and equipped with deployment-specific recovery procedures.
+
+ERC-1271 verification depends on contract state. The default HTTP verifier queries the configured RPC at current state; a fully offline verifier reports `AUTHORIZATION_REQUIRES_CHAIN_VERIFICATION`. Strong historical verification requires an execution-module event, an archive-state check at the acceptance block, or a future receipt profile carrying an account-state proof.

@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { createHttpServer } from '../../src/index.mjs';
+import { authorizationTypedData, buildAuthorization } from '../../src/index.mjs';
+import { privateKeyToAccount } from 'viem/accounts';
 
 const sender = `0x${'a'.repeat(40)}`;
 const recipient = `0x${'b'.repeat(40)}`;
@@ -53,6 +55,28 @@ test('observation writes honor Idempotency-Key and return a signed linked receip
   assert.deepEqual(fetched.json(), issued);
   assert.ok(fetched.headers['x-request-id']);
   const verified = await request(server, '/v1/receipts/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receipt: fetched.json() }) });
+  assert.equal(verified.json().result.valid, true);
+});
+test('signed authorization is accepted before execution and produces a v2 receipt', async (t) => {
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
+  const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);
+  const executionIntent = { ...intent, intentId: 'intent-authorized-api', sender: account.address.toLowerCase(), validUntil: 2_000 };
+  const draft = buildAuthorization({ intent: executionIntent, principal: { type: 'organization', id: 'org-test', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-test', executor: account.address }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'2'.repeat(64)}`, maxUses: '1', audience: 'runproof', policyHash: `0x${'0'.repeat(64)}` });
+  const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
+  const txHash = `0x${'5'.repeat(64)}`;
+  const server = createHttpServer({ privateKeyPem, publicKeyPem, now: () => 1_001_000, observer: async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_100, observedAt: 1_101, sender: account.address.toLowerCase(), recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'test' }) });
+  t.after(() => server.close());
+  const accepted = await request(server, '/v1/authorizations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(authorization) });
+  assert.equal(accepted.status, 201);
+  const authorizationId = accepted.json().authorization.authorizationId;
+  const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ authorizationId, chainId: 8453, txHash, confirmations: 12 }) });
+  assert.equal(observed.status, 200);
+  assert.equal(observed.json().receipt.schema, 'runproof.execution-receipt.v2');
+  assert.equal(observed.json().receipt.binding.bound, true);
+  assert.equal(observed.json().verification.valid, true);
+  const verified = await request(server, '/v1/receipts/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receipt: observed.json().receipt }) });
   assert.equal(verified.json().result.valid, true);
 });
 test('serves the production console and preserves API 404 responses', async (t) => {

@@ -1,0 +1,16 @@
+{
+  "policyId": "runproof-production-v1",
+  "principals": [],
+  "allowedChainIds": [8453],
+  "allowedActions": ["TRANSFER", "CONTRACT_CALL"],
+  "allowedAssets": [],
+  "allowedSenders": [],
+  "allowedRecipients": [],
+  "maxAmount": "0",
+  "maxValiditySeconds": 900,
+  "timestampPolicy": {
+    "schema": "runproof.timestamp-policy.v1",
+    "profile": "digicert-rfc3161-v1",
+    "maxClockSkewSeconds": 300
+  }
+}

@@ -1,9 +1,9 @@
 # RunProof
 
-RunProof creates portable evidence about an agent's observed EVM execution:
+RunProof creates portable evidence connecting user or organization authority to an agent's observed EVM execution:
 
 ```text
-Intent → canonical intent hash → EVM observation → binding result → Ed25519 receipt → offline verification
+Draft intent → EIP-712/ERC-1271 authorization → RFC 3161 timestamp → EVM observation → binding result → Ed25519 receipt → offline verification
 ```
 
 It does not custody assets, operate wallets, or hold transaction-signing keys. A valid receipt proves only that its issuer signed the included claims; it is not an economic-safety guarantee or proof that an RPC source is infallible. Local, independent receipt verification is authoritative; the HTTP verification endpoint is a convenience.
@@ -39,11 +39,17 @@ npm run test:coverage
 npm --prefix web audit --omit=dev
 ```
 
-The API contract is at `/openapi/v1.json`. Operational endpoints are `/health/live`, `/health/ready`, and `/v1/version`.
+The API contract is at `/openapi/v1.json`. Operational endpoints are `/health/live`, `/health/ready`, and `/v1/version`. The default console uses signed v2 authorizations; `POST /v1/intents` remains a deprecated compatibility path for unsigned v1 evidence.
 
 ## API and security boundaries
 
-`POST /v1/intents`, `POST /v1/executions/observe`, `GET /v1/receipts/:receiptId`, `POST /v1/receipts/verify`, and `GET /.well-known/runproof-keys.json` are the stable v1 surface. Use an `Idempotency-Key` for writes. The same key and request body replay a result for 24 hours; a different body produces `IDEMPOTENCY_CONFLICT`.
+`POST /v1/authorizations/prepare` canonicalizes a draft and returns EIP-712 typed data. `POST /v1/authorizations` accepts the resulting EOA signature or an ERC-1271 contract-account signature, evaluates the configured policy, and issues a signed acceptance statement. A change-controlled `policy.principals` registry can bind reviewed user or organization IDs to specific accounts and authorizer types; its snapshot and independently recomputable evaluation are embedded in v2 receipts. Without that registry, RunProof proves account control but treats the human-readable principal ID as self-asserted. `POST /v1/executions/observe` accepts `authorizationId`; the first available transaction consumes the single-use authorization and produces a v2 receipt containing the complete evidence chain. Use an `Idempotency-Key` for writes. The same key and request body replay a result for 24 hours; a different body produces `IDEMPOTENCY_CONFLICT`.
+
+V2 verification recomputes the intent, authorization and execution hashes, binding reason codes, outcome and receipt ID before checking the authorizer, acceptance and issuer signatures. Browser-local verification supports EIP-712 EOAs. ERC-1271 verification is contract-state dependent: the default server checks current state through a configured EVM source, while strong historical verification requires an archive-state check, module event, or a future account-state proof profile.
+
+The simplest Gas-free ordering mode is `rfc3161`. RunProof sends only the SHA-256 imprint of the canonical authorization to DigiCert's RFC 3161 TSA, verifies the returned CMS signature, timestamping certificate usage, certificate path, pinned DigiCert roots, policy OID and nonce, then stores the complete response. The signed `timestampPolicy` makes this requirement part of the principal-approved policy hash. The final receipt carries `runproof.rfc3161-evidence.v1`, which both server and browser verifiers reject if it was changed or timestamped after execution. No wallet, contract, witness deployment or Gas is required.
+
+Gas-free multi-operator ordering remains available with a signed `2-of-3` (or stricter) witness policy. The policy hash signed by the principal commits to every witness ID and Ed25519 public key. RunProof sends only the authorization digest to separately operated witness services, validates the returned signatures before accepting the authorization, and embeds them in the final receipt. Both the server and browser verifier reject duplicate witnesses, changed keys, insufficient quorum, or attestations timestamped after execution. Start a witness with `npm run start:witness`; keep endpoint URLs and bearer tokens in `RUNPROOF_WITNESS_ENDPOINTS_FILE`, outside the public signed policy.
 
 Startup configuration is validated before the HTTP server listens: `PORT` must be 1–65535, `RUNPROOF_TRUST_PROXY` must be `true` or `false`, CORS entries must be complete HTTP(S) origins, and issuer key paths must be configured as a pair.
 
@@ -53,9 +59,13 @@ Intent `validUntil` bounds the block execution time; it does not expire a receip
 
 Issuer private keys are read only from a configured local file for development and must never enter HTTP requests, logs, the frontend bundle, database records, or Git. `RUNPROOF_KEY_REGISTRY_FILE` may point to a public-only `runproof.keys.v1` JSON document so retired keys remain published for historical verification. Production deployments should replace the signing provider with a KMS/HSM/secret-manager adapter. See [the threat model](docs/security/threat-model.md), [API compatibility](docs/api/compatibility.md), and [lifecycle](docs/architecture/lifecycle.md).
 
+Accepted authorizations are appended to a signed hash-chain checkpoint. `RUNPROOF_TRANSPARENCY_ANCHOR_FILE` can attach a confirmed external EVM anchor to a checkpoint without giving RunProof custody of an anchoring wallet; startup verifies the successful anchor call, block and timestamp against a configured RPC. See [signed authorization](docs/architecture/signed-authorization.md). The Solidity contracts under `contracts/` are unaudited reference implementations and must not be enabled on a production Safe or funded account.
+
+Production mode is fail-closed. Set `RUNPROOF_ENVIRONMENT=production`; startup then requires explicit database URLs, issuer keys, non-default issuer/audience values, a reviewed principal policy, production CORS, and `RUNPROOF_PREEXECUTION_PROOF_MODE=rfc3161`, `witness-quorum`, or `evm-anchor`. The production example uses `rfc3161`. EVM mode remains available for deployments that require public-chain consensus; `npm run contracts:build`, `npm run anchor:prepare`, and `npm run anchor:record` support its custody-free workflow.
+
 ## Persistence and operations
 
-Neon is the production persistence backend. `DATABASE_URL` is the pooled application connection and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. The migrations establish evidence tables, durable intents, observation versions, idempotency records, and at-least-once worker jobs. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
+Neon is the production persistence backend. `DATABASE_URL` is the pooled application connection and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. Apply migrations through `006_rfc3161_timestamp.sql`; they establish authorization, timestamp and witness evidence storage, durable intents, observation versions, idempotency records, and at-least-once worker jobs. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
 
 For a local container environment:
 
