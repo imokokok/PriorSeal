@@ -1,11 +1,13 @@
 FROM node:20-alpine AS web-build
-WORKDIR /app/web
-COPY web/package.json web/package-lock.json ./
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY sdk/package.json ./sdk/package.json
+COPY web/package.json ./web/package.json
 RUN npm ci
-COPY web/ ./
+COPY sdk/ ./sdk/
+COPY web/ ./web/
 COPY src/domain/rfc3161.mjs src/domain/rfc3161.d.mts /app/src/domain/
-RUN ln -s /app/web/node_modules /app/node_modules
-RUN npm run build
+RUN npm --prefix web run build
 
 FROM node:20-alpine
 WORKDIR /app
