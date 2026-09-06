@@ -1,6 +1,7 @@
 export const chains: Record<number, string> = { 1: 'Ethereum', 8453: 'Base', 42161: 'Arbitrum' }
 export const short = (value?: string | null, left = 10, right = 7) => !value ? '—' : value.length <= left + right + 1 ? value : `${value.slice(0, left)}…${value.slice(-right)}`
-export const dateTime = (seconds?: number | null) => seconds ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(seconds * 1000) : '—'
+const dateTimeFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+export const dateTime = (seconds?: number | null) => seconds ? dateTimeFormatter.format(seconds * 1000) : '—'
 export const relative = (seconds?: number) => seconds ? new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(Math.round((seconds - Date.now() / 1000) / 86400), 'day') : '—'
 export const toUnix = (date: string) => Math.floor(new Date(date).getTime() / 1000)
 export const fromUnix = (seconds: number) => new Date(seconds * 1000).toISOString().slice(0, 16)

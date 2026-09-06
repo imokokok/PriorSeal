@@ -19,6 +19,22 @@ test('SDK maps typed methods to the PriorSeal API and sends stable idempotency k
   assert.deepEqual(JSON.parse(calls[0].init.body), { authorizationId: 'auth_1', chainId: 8453, txHash: '0x1', confirmations: 0 });
 });
 
+test('SDK binds the browser global fetch implementation', async () => {
+  const originalFetch = globalThis.fetch;
+  let receiver;
+  globalThis.fetch = async function () {
+    receiver = this;
+    return response({ status: 'ok' });
+  };
+  try {
+    const client = createPriorSealClient();
+    assert.equal((await client.health()).status, 'ok');
+    assert.equal(receiver, globalThis);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('SDK retrieves transparency evidence and observation jobs from encoded paths', async () => {
   const paths = [];
   const client = createPriorSealClient({ fetch: async (url) => {

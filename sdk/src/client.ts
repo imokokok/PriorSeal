@@ -47,7 +47,7 @@ export class PriorSealClient {
   private readonly makeIdempotencyKey: () => string
 
   constructor(options: PriorSealClientOptions = {}) {
-    const fetcher = options.fetch ?? globalThis.fetch
+    const fetcher = options.fetch ?? globalThis.fetch?.bind(globalThis)
     if (!fetcher) throw new TypeError('PriorSealClient requires a Fetch-compatible implementation')
     this.fetcher = fetcher
     this.baseUrl = (options.baseUrl ?? '').replace(/\/$/, '')

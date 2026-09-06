@@ -163,7 +163,7 @@
 .museum-closing > footer { position: absolute; left: clamp(26px, 4.8vw, 82px); right: clamp(26px, 4.8vw, 82px); bottom: 28px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; color: #96938a; font-size: 12px; }
 .museum-closing > footer > span:last-child { justify-self: end; }
 
-.motion-ready .priorseal-museum [data-reveal] { opacity: 0; transform: translateY(15px); transition: opacity 720ms cubic-bezier(.22,1,.36,1), transform 720ms cubic-bezier(.22,1,.36,1); }
+.motion-ready .priorseal-museum [data-reveal] { opacity: 0; transform: translateY(15px); transition: opacity 420ms cubic-bezier(.22,1,.36,1), transform 420ms cubic-bezier(.22,1,.36,1); }
 .motion-ready .priorseal-museum [data-reveal].is-visible { opacity: 1; transform: none; }
 
 @media (max-width: 1100px) {

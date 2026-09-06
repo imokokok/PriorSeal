@@ -1,32 +1,72 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppShell, Empty, PageHeader, ReceiptSummary } from '../components'
 import { downloadJson } from '../lib/download'
 import { chains } from '../lib/format'
-import type { TimestampProofResult } from 'priorseal-sdk/verifier'
+import { verifyTimestampProofOffline, type TimestampProofResult } from '../lib/offline-verify'
 import { getActivity } from '../lib/storage'
+import type { Receipt } from '../types'
+
+const timestampProofCache = new Map<string, Promise<TimestampProofResult>>()
+
+async function timestampProofKey(receipt: Receipt) {
+  const evidence = receipt.authorizationEvidence
+  const payload = JSON.stringify({
+    receiptId: receipt.receiptId,
+    authorizationHash: receipt.authorizationHash,
+    executionHash: receipt.executionHash,
+    executedAt: receipt.execution.executedAt,
+    observedAt: receipt.execution.observedAt,
+    authorization: evidence?.authorization,
+    acceptance: evidence?.acceptance,
+    policy: evidence?.policy?.document?.timestampPolicy,
+    timestamp: evidence?.timestamp,
+  })
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload))
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function verifyTimestampCached(receipt: Receipt) {
+  const key = await timestampProofKey(receipt)
+  const cached = timestampProofCache.get(key)
+  if (cached) return cached
+  const pending = verifyTimestampProofOffline(receipt)
+  timestampProofCache.set(key, pending)
+  return pending
+}
 
 export function AuditPage() {
-  const activity = getActivity()
+  const [activity] = useState(getActivity)
   const [query, setQuery] = useState('')
   const [outcome, setOutcome] = useState('ALL')
   const [chain, setChain] = useState('ALL')
   const [timestampFilter, setTimestampFilter] = useState('ALL')
   const [timestampResults, setTimestampResults] = useState<Record<string, TimestampProofResult>>({})
-  const outcomes = [...new Set(activity.receipts.map((receipt) => receipt.outcome))].sort()
-  const timestampStatus = (receipt: typeof activity.receipts[number]) => timestampResults[receipt.receiptId]?.status ?? (receipt.authorizationEvidence?.policy?.document?.timestampPolicy ? receipt.authorizationEvidence.timestamp ? 'CHECKING' : 'MISSING' : receipt.authorizationEvidence?.timestamp ? 'INVALID' : 'NOT_REQUIRED')
+  const outcomes = useMemo(() => [...new Set(activity.receipts.map((receipt) => receipt.outcome))].sort(), [activity.receipts])
+  const timestampStatus = useCallback((receipt: Receipt) => timestampResults[receipt.receiptId]?.status ?? (receipt.authorizationEvidence?.policy?.document?.timestampPolicy ? receipt.authorizationEvidence.timestamp ? 'CHECKING' : 'MISSING' : receipt.authorizationEvidence?.timestamp ? 'INVALID' : 'NOT_REQUIRED'), [timestampResults])
   const filtered = useMemo(() => activity.receipts.filter((receipt) => {
     const searchable = [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.issuer, receipt.authorizationEvidence?.timestamp?.serialNumber, receipt.authorizationEvidence?.timestamp?.profile, ...receipt.reasonCodes].join(' ').toLowerCase()
     return (outcome === 'ALL' || receipt.outcome === outcome) && (chain === 'ALL' || String(receipt.execution.chainId) === chain) && (timestampFilter === 'ALL' || timestampStatus(receipt) === timestampFilter) && searchable.includes(query.trim().toLowerCase())
-  }), [activity.receipts, chain, outcome, query, timestampFilter, timestampResults])
-  const attention = activity.receipts.filter((receipt) => receipt.outcome !== 'COMPLETED' || ['INVALID', 'MISSING'].includes(timestampStatus(receipt))).length
-  const validTimestamps = activity.receipts.filter((receipt) => timestampStatus(receipt) === 'VALID').length
+  }), [activity.receipts, chain, outcome, query, timestampFilter, timestampStatus])
+  const { attention, validTimestamps } = useMemo(() => ({
+    attention: activity.receipts.filter((receipt) => receipt.outcome !== 'COMPLETED' || ['INVALID', 'MISSING'].includes(timestampStatus(receipt))).length,
+    validTimestamps: activity.receipts.filter((receipt) => timestampStatus(receipt) === 'VALID').length,
+  }), [activity.receipts, timestampStatus])
 
   useEffect(() => {
     let active = true
-    import('priorseal-sdk/verifier').then(({ verifyTimestampProofLocally }) => Promise.all(activity.receipts.map(async (receipt) => [receipt.receiptId, await verifyTimestampProofLocally(receipt)] as const))).then((entries) => { if (active) setTimestampResults(Object.fromEntries(entries)) })
+    async function verifyInBatches() {
+      for (let index = 0; index < activity.receipts.length; index += 4) {
+        const batch = activity.receipts.slice(index, index + 4)
+        const entries = await Promise.all(batch.map(async (receipt) => [receipt.receiptId, await verifyTimestampCached(receipt)] as const))
+        if (!active) return
+        setTimestampResults((current) => ({ ...current, ...Object.fromEntries(entries) }))
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+      }
+    }
+    void verifyInBatches()
     return () => { active = false }
-  }, [])
+  }, [activity.receipts])
 
   function exportBundle() {
     const intentHashes = new Set(filtered.map((receipt) => receipt.intentHash))

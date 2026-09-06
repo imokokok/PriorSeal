@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@font-face { font-family: Inter; src: url('./assets/fonts/inter-latin.woff2') format('woff2'); font-style: normal; font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url('./assets/fonts/jetbrains-mono-latin.woff2') format('woff2'); font-style: normal; font-weight: 400 600; font-display: swap; }
 
 :root {
   font-family: Inter, "Helvetica Neue", Arial, sans-serif;
@@ -77,7 +78,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .api-state.offline { color: var(--red); }
 
 /* Shared archive page language */
-.page { width: min(1490px, 100%); margin: 0 auto; padding: 44px clamp(24px, 3.6vw, 54px) 96px; }
+.page { width: min(1490px, 100%); margin: 0 auto; padding: 44px clamp(24px, 3.6vw, 54px) 96px; animation: page-enter 160ms cubic-bezier(.22,1,.36,1); }
+@keyframes page-enter { from { opacity: .55; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.route-loading { min-height: 100vh; display: grid; place-items: center; color: var(--muted); background: var(--stone); font: 500 13px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }
 .page-header { min-height: 164px; margin-bottom: 28px; padding: 0 0 30px; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; border-bottom: 1px solid var(--ink); }
 .page-heading { min-width: 0; }
 .eyebrow { margin: 0 0 11px; color: var(--wine); font: 600 12px "JetBrains Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
@@ -381,7 +384,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 720px) {
-  .app-topbar { height: 62px; padding: 0 18px; }
+  .app-topbar { height: 62px; padding: 0 18px; backdrop-filter: none; }
   .top-title strong { display: none; }
   .topbar-right { gap: 14px; }
   .api-state { font-size: 11px; }

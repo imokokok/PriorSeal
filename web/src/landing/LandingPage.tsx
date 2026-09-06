@@ -1,8 +1,17 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { PriorSealMark } from '../components'
+import { PriorSealMark } from '../brand'
+import { loadConsole } from '../route-loaders'
+import archive800 from '../assets/images/priorseal-archive-800.jpg'
+import archive1200 from '../assets/images/priorseal-archive-1200.jpg'
+import archive1600 from '../assets/images/priorseal-archive-1600.jpg'
+import museum800 from '../assets/images/priorseal-museum-800.jpg'
+import museum1200 from '../assets/images/priorseal-museum-1200.jpg'
+import museum1600 from '../assets/images/priorseal-museum-1600.jpg'
 import { audiences, boundaries, proofSequence, receiptLines, sectionLinks } from './content'
 import './landing.css'
+
+const preloadConsole = () => { void loadConsole() }
 
 function InstitutionMark({ inverse = false }: { inverse?: boolean }) {
   return (
@@ -41,7 +50,7 @@ export function LandingPage() {
   useEffect(() => {
     document.documentElement.classList.add('motion-ready')
     const observer = new IntersectionObserver(
-      (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add('is-visible')),
+      (entries) => entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target) } }),
       { threshold: 0.1 },
     )
     document.querySelectorAll('.priorseal-museum [data-reveal]').forEach((node) => observer.observe(node))
@@ -57,26 +66,26 @@ export function LandingPage() {
         <InstitutionMark />
         <nav aria-label="Homepage navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}
-          <Link to="/app/sdk">SDK</Link>
+          <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/sdk">SDK</Link>
         </nav>
-        <Link className="museum-nav__entry" to="/app">Open console <span>↗</span></Link>
+        <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-nav__entry" to="/app">Open console <span>↗</span></Link>
       </header>
 
       <main>
         <section className="museum-hero">
-          <div className="museum-hero__copy" data-reveal>
+          <div className="museum-hero__copy">
             <p className="museum-kicker"><span>PRIORSEAL</span> / EVIDENCE INSTITUTION 001</p>
             <h1>Authority,<br /><em>before action.</em></h1>
             <p className="museum-hero__statement">A verifiable record connecting what a person or organization authorized to what an autonomous agent actually executed onchain.</p>
             <div className="museum-actions">
-              <Link className="museum-button" to="/app/intents/new">Authorize an intent <span>→</span></Link>
-              <Link className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
+              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Authorize an intent <span>→</span></Link>
+              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
             </div>
             <p className="museum-hero__note">Portable evidence for EVM agents. No custody. No transaction-signing keys.</p>
           </div>
 
-          <figure className="museum-hero__visual" data-reveal>
-            <img src="/images/priorseal-museum.jpg" alt="Visitors viewing works inside a real contemporary museum gallery" />
+          <figure className="museum-hero__visual">
+            <img src={museum1200} srcSet={`${museum800} 800w, ${museum1200} 1200w, ${museum1600} 1600w`} sizes="(max-width: 720px) 100vw, 55vw" width="1200" height="1600" loading="eager" decoding="async" fetchPriority="high" alt="Visitors viewing works inside a real contemporary museum gallery" />
             <figcaption>
               <span>FIELD REFERENCE / 01</span>
               <p>A record should remain legible beyond the system that produced it.</p>
@@ -122,7 +131,7 @@ export function LandingPage() {
 
         <section className="archive-room" id="archive">
           <figure className="archive-room__photograph" data-reveal>
-            <img src="/images/priorseal-archive.jpg" alt="Rows of archival boxes stored on wooden shelves" />
+            <img src={archive1200} srcSet={`${archive800} 800w, ${archive1200} 1200w, ${archive1600} 1600w`} sizes="(max-width: 1100px) 100vw, 50vw" width="1200" height="675" loading="lazy" decoding="async" alt="Rows of archival boxes stored on wooden shelves" />
             <figcaption><span>ARCHIVAL REFERENCE / 02</span><PhotoCredit href="https://unsplash.com/photos/rows-of-white-archive-boxes-on-wooden-shelves-5utYi64hnJ0">Oxford · Luke Caunt</PhotoCredit></figcaption>
           </figure>
           <div className="archive-room__copy" data-reveal>
@@ -144,7 +153,7 @@ export function LandingPage() {
             <p className="museum-kicker">THE PORTABLE RECORD</p>
             <h2>Built to be<br />examined.</h2>
             <p>A v2 receipt carries the signed authorization, policy result, independent time evidence, observed execution, binding decision and issuer signature in one document.</p>
-            <Link className="museum-text-link" to="/app/verify">Open the local verifier <span>↗</span></Link>
+            <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Open the local verifier <span>↗</span></Link>
           </div>
           <div className="receipt-gallery__record" data-reveal>
             <p>SPECIMEN DATA / EVERY FIELD MACHINE-VERIFIABLE</p>
@@ -175,7 +184,7 @@ export function LandingPage() {
           <div data-reveal>
             <p className="museum-kicker">PRIORSEAL / AUTHORIZATION EVIDENCE</p>
             <h2>Make authority<br />inspectable.</h2>
-            <div className="museum-actions"><Link className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/app/sdk">Use the SDK <span>↗</span></Link></div>
+            <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/sdk">Use the SDK <span>↗</span></Link></div>
           </div>
           <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for EVM agents.</span><span>© {new Date().getFullYear()}</span></footer>
         </section>

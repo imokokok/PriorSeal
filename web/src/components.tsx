@@ -1,18 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { PriorSealMark } from './brand'
 import { api } from './lib/api'
 import { chains, dateTime, short } from './lib/format'
 import type { Receipt } from './types'
-
-export function PriorSealMark({ className = '' }: { className?: string }) {
-  return (
-    <svg className={`priorseal-mark ${className}`.trim()} viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-      <path className="priorseal-mark-blue" d="M29 44H8V8h29l6 6v14" />
-      <path className="priorseal-mark-ink" d="M35 32h15l6 6v18H30l-6-6V36" />
-      <circle className="priorseal-mark-proof" cx="32" cy="32" r="4.5" />
-    </svg>
-  )
-}
 
 export function Logo({ compact = false }: { compact?: boolean }) { return <Link className="logo" to={compact ? '/app' : '/'} aria-label="PriorSeal home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Authority Evidence</small></span></Link> }
 export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) { const [copied, setCopied] = useState(false); return <button className="copy-button" onClick={async () => { await navigator.clipboard?.writeText(value); setCopied(true); window.setTimeout(() => setCopied(false), 1600) }}>{copied ? 'Copied' : label}</button> }
@@ -41,18 +32,26 @@ const nav = [
   { index: '09', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Developers' },
   { index: '10', key: 'api', label: 'API reference', to: '/app/api', group: 'Developers' },
 ]
+const AppShellContext = createContext(false)
+
 export function AppShell({ children }: { children: ReactNode }) {
+  return useContext(AppShellContext) ? <>{children}</> : <AppShellFrame>{children}</AppShellFrame>
+}
+
+function AppShellFrame({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [apiState, setApiState] = useState<'checking' | 'online' | 'offline'>('checking')
   const location = useLocation()
   const current = [...nav].reverse().find((item) => item.to === '/app' ? location.pathname === '/app' : location.pathname.startsWith(item.to)) ?? nav[0]
+
   useEffect(() => {
     let active = true
     api.health().then(() => { if (active) setApiState('online') }).catch(() => { if (active) setApiState('offline') })
     return () => { active = false }
   }, [])
+
   const groups = [...new Set(nav.map((item) => item.group))]
-  return <div className="shell"><aside className={open ? 'sidebar open' : 'sidebar'}><div className="side-top"><Logo compact /><button className="mobile-close" onClick={() => setOpen(false)} aria-label="Close navigation">×</button></div><div className="environment"><span className={`live-dot ${apiState}`} /><span>Local collection</span><small>DEVICE SCOPE</small></div><nav aria-label="Console navigation">{groups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{nav.filter((item) => item.group === group).map((item) => <NavLink end={item.to === '/app'} key={item.to} to={item.to} onClick={() => setOpen(false)}><span className="nav-index">{item.index}</span><span>{item.label}</span></NavLink>)}</div>)}</nav><div className="side-bottom"><span>Evidence archive</span><small>Records remain on this device until exported. Production history requires a server-backed workspace.</small><span className="side-accession">PRIORSEAL / LOCAL / 001</span></div></aside><main><header className="app-topbar"><button className="menu" onClick={() => setOpen(true)} aria-label="Open navigation">☰</button><div className="top-title"><span>{current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className={`api-state ${apiState}`}><span className={`live-dot ${apiState}`} /> API {apiState}</span><Link className="text-link" to="/">Public collection ↗</Link></div></header><div className={`page page-${current.key}`}>{children}</div></main></div>
+  return <AppShellContext.Provider value><div className="shell"><aside className={open ? 'sidebar open' : 'sidebar'}><div className="side-top"><Logo compact /><button className="mobile-close" onClick={() => setOpen(false)} aria-label="Close navigation">×</button></div><div className="environment"><span className={`live-dot ${apiState}`} /><span>Local collection</span><small>DEVICE SCOPE</small></div><nav aria-label="Console navigation">{groups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{nav.filter((item) => item.group === group).map((item) => <NavLink end={item.to === '/app'} key={item.to} to={item.to} onClick={() => setOpen(false)}><span className="nav-index">{item.index}</span><span>{item.label}</span></NavLink>)}</div>)}</nav><div className="side-bottom"><span>Evidence archive</span><small>Records remain on this device until exported. Production history requires a server-backed workspace.</small><span className="side-accession">PRIORSEAL / LOCAL / 001</span></div></aside><main><header className="app-topbar"><button className="menu" onClick={() => setOpen(true)} aria-label="Open navigation">☰</button><div className="top-title"><span>{current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className={`api-state ${apiState}`}><span className={`live-dot ${apiState}`} /> API {apiState}</span><Link className="text-link" to="/">Public collection ↗</Link></div></header><div key={location.pathname} className={`page page-${current.key}`}>{children}</div></main></div></AppShellContext.Provider>
 }
 
 export function ReceiptSummary({ receipt, timestampStatus }: { receipt: Receipt; timestampStatus?: 'VALID' | 'INVALID' | 'MISSING' | 'NOT_REQUIRED' | 'CHECKING' }) { const navigate = useNavigate(); const timestampLabel = timestampStatus === 'NOT_REQUIRED' ? 'TIMESTAMP N/A' : `TIMESTAMP ${timestampStatus ?? (receipt.authorizationEvidence?.timestamp ? 'ATTACHED' : 'N/A')}`; return <article className="receipt-row"><div><div className="receipt-badges"><Status value={receipt.outcome} /><Status value={timestampLabel} small /></div><strong>{receipt.receiptId}</strong><span>{chains[Number(receipt.execution.chainId)] ?? 'Chain ' + receipt.execution.chainId} · {dateTime(receipt.issuedAt)}</span></div><div className="receipt-row-actions"><CodeValue value={receipt.intentHash} /><button className="text-link" onClick={() => navigate('/app/receipts/' + encodeURIComponent(receipt.receiptId))}>View</button></div></article> }

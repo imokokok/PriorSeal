@@ -6,6 +6,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
+import { brotliDecompressSync } from 'node:zlib';
 import { createHttpServer } from '../../src/index.mjs';
 import { authorizationTypedData, buildAuthorization } from '../../src/index.mjs';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -21,7 +22,7 @@ async function serverFor(testContext) {
 async function request(server, path, { method = 'GET', headers = {}, body } = {}) {
   const req = Readable.from(body ? [Buffer.from(body)] : []); Object.assign(req, { method, url: path, headers, socket: { remoteAddress: '127.0.0.1' } });
   const res = new EventEmitter(); res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
-  const done = new Promise((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers, json: () => JSON.parse(res.body), text: () => Buffer.from(res.body ?? '').toString('utf8') };
+  const done = new Promise((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers, buffer: () => Buffer.from(res.body ?? ''), json: () => JSON.parse(res.body), text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
 test('API matches pathnames with query strings and uses idempotency safely', async (t) => {
   const server = await serverFor(t); const options = { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'intent-1' }, body: JSON.stringify(intent) };
@@ -82,9 +83,15 @@ test('signed authorization is accepted before execution and produces a v2 receip
 test('serves the production console and preserves API 404 responses', async (t) => {
   const staticDir = await mkdtemp(join(tmpdir(), 'priorseal-static-'));
   await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>PriorSeal console</title>');
+  await writeFile(join(staticDir, 'app.js'), `globalThis.example = '${'evidence-'.repeat(600)}';`);
+  await writeFile(join(staticDir, 'photo.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   const server = createHttpServer({ staticDir }); t.after(() => server.close());
   const root = await request(server, '/'); const route = await request(server, '/app/receipts'); const missingApi = await request(server, '/v1/missing');
   assert.equal(root.status, 200); assert.match(root.headers['content-type'], /^text\/html/); assert.match(root.text(), /PriorSeal console/);
   assert.equal(route.status, 200); assert.equal(route.text(), root.text());
+  const compressed = await request(server, '/app.js', { headers: { 'accept-encoding': 'br, gzip' } });
+  assert.equal(compressed.headers['content-encoding'], 'br'); assert.match(brotliDecompressSync(compressed.buffer()).toString(), /globalThis\.example/);
+  const image = await request(server, '/photo.jpg'); assert.equal(image.headers['content-type'], 'image/jpeg'); assert.ok(image.headers.etag);
+  const notModified = await request(server, '/photo.jpg', { headers: { 'if-none-match': image.headers.etag } }); assert.equal(notModified.status, 304);
   assert.equal(missingApi.status, 404); assert.equal(missingApi.json().error.code, 'NOT_FOUND');
 });
