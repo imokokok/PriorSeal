@@ -1,63 +1,70 @@
 export const sectionLinks = [
-  ['Collection', 'archive'],
-  ['Provenance', 'provenance'],
-  ['Receipt', 'object'],
-  ['Boundaries', 'boundary'],
+  ['System', 'system'],
+  ['Evidence chain', 'chain'],
+  ['Receipt', 'receipt'],
+  ['Boundaries', 'boundaries'],
 ] as const
 
 export const proofSequence = [
   {
     number: '01',
-    title: 'Define',
-    body: 'Write the exact chain, participants, asset, amount, validity window and constraints before execution.',
+    title: 'Propose',
+    body: 'The agent defines an exact chain, executor, recipient, asset, amount, validity window and optional call constraints.',
   },
   {
     number: '02',
-    title: 'Commit',
-    body: 'Canonicalize that intent into a stable hash that cannot quietly change after the fact.',
+    title: 'Authorize',
+    body: 'A user or organization approves the canonical intent with EIP-712 or ERC-1271 authority.',
   },
   {
     number: '03',
-    title: 'Observe',
-    body: 'Read an identified EVM transaction from the configured chain source, preserving uncertainty and finality.',
+    title: 'Timestamp',
+    body: 'An independent RFC 3161 authority proves the authorization digest existed before execution.',
   },
   {
     number: '04',
-    title: 'Bind',
-    body: 'Compare authorization with observation and explain the result through durable reason codes.',
+    title: 'Observe',
+    body: 'PriorSeal records an identified EVM transaction while preserving source, finality and uncertainty.',
   },
   {
     number: '05',
+    title: 'Bind',
+    body: 'Deterministic rules compare signed authority with observed execution and return durable reason codes.',
+  },
+  {
+    number: '06',
     title: 'Verify',
-    body: 'Issue a signed receipt that can be downloaded and checked independently of PriorSeal.',
+    body: 'The complete evidence chain leaves PriorSeal as a signed receipt that can be checked locally.',
   },
 ] as const
 
 export const audiences = [
   {
     label: 'Agent builders',
-    text: 'Give an automated system explicit limits, then retain a checkable record of what followed.',
+    text: 'Prove that an automated execution stayed inside the authority it was given.',
   },
   {
     label: 'Treasury teams',
-    text: 'Connect a pre-approved instruction to an observed on-chain execution without handing PriorSeal a wallet.',
+    text: 'Retain a portable record connecting organizational approval to one observed EVM transaction.',
   },
   {
     label: 'Auditors',
-    text: 'Inspect signed claims, binding logic and reason codes instead of reconstructing intent from scattered logs.',
+    text: 'Recompute authorization, timing, binding and signatures without trusting the PriorSeal service.',
   },
 ] as const
 
 export const boundaries = [
-  ['A valid receipt proves', 'The issuer signed the claims contained in that receipt.'],
-  ['It does not prove', 'Economic safety, token legitimacy, or that an RPC source is infallible.'],
-  ['PriorSeal never needs', 'Custody of assets, a connected wallet, or transaction-signing keys.'],
+  ['Authority', 'A valid v2 receipt can prove that the controlling account approved the exact canonical intent.'],
+  ['Ordering', 'When RFC 3161 evidence is present, it can prove that the authorization digest existed before execution.'],
+  ['Execution', 'Binding can establish whether the observed EVM transaction matched the signed constraints.'],
+  ['Limit', 'PriorSeal does not establish economic safety, token legitimacy or an infallible view of the chain.'],
 ] as const
 
 export const receiptLines = [
-  ['intentHash', 'sha256:7ce8…d41a'],
-  ['executionHash', 'sha256:921f…8b0c'],
+  ['authorization', 'auth_5e91…c20a'],
+  ['authorizer', 'eip712 / 0x71…09f4'],
+  ['timestamp', 'RFC 3161 / VERIFIED'],
+  ['execution', 'eip155:8453 / 0xa8…d120'],
+  ['binding', 'BOUND / 0 exceptions'],
   ['outcome', 'COMPLETED'],
-  ['binding', 'BOUND'],
-  ['algorithm', 'Ed25519'],
 ] as const
