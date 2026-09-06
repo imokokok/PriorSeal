@@ -3,6 +3,7 @@ WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+COPY src/domain/rfc3161.mjs src/domain/rfc3161.d.mts /app/src/domain/
 RUN npm run build
 
 FROM node:20-alpine
