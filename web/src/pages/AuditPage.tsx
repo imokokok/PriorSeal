@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { AppShell, Empty, PageHeader, ReceiptSummary } from '../components'
 import { downloadJson } from '../lib/download'
 import { chains } from '../lib/format'
-import { verifyTimestampProofOffline, type TimestampProofResult } from '../lib/offline-verify'
+import type { TimestampProofResult } from 'priorseal-sdk/verifier'
 import { getActivity } from '../lib/storage'
 
 export function AuditPage() {
@@ -24,7 +24,7 @@ export function AuditPage() {
 
   useEffect(() => {
     let active = true
-    Promise.all(activity.receipts.map(async (receipt) => [receipt.receiptId, await verifyTimestampProofOffline(receipt)] as const)).then((entries) => { if (active) setTimestampResults(Object.fromEntries(entries)) })
+    import('priorseal-sdk/verifier').then(({ verifyTimestampProofLocally }) => Promise.all(activity.receipts.map(async (receipt) => [receipt.receiptId, await verifyTimestampProofLocally(receipt)] as const))).then((entries) => { if (active) setTimestampResults(Object.fromEntries(entries)) })
     return () => { active = false }
   }, [])
 

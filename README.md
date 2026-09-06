@@ -57,7 +57,7 @@ const evidence = await priorseal.observeExecution({
 })
 ```
 
-The SDK handles typed API calls, wallet authorization, idempotency, timeouts and structured errors. It does not construct, sign or submit transactions. `verifyReceiptRemotely` calls the convenience server verifier; use the existing browser verifier or CLI with a trusted issuer key for independent verification. See [`sdk/README.md`](sdk/README.md) and the console route `/app/sdk`.
+The SDK handles typed API calls, wallet authorization, idempotency, timeouts and structured errors. Import `verifyReceiptLocally` from `priorseal-sdk/verifier` to recompute receipt hashes, policy, binding, RFC 3161 evidence and signatures without sending receipt bytes to PriorSeal. It does not construct, sign or submit transactions. ERC-1271 and EVM anchors are reported as explicit external chain-state requirements. See [`sdk/README.md`](sdk/README.md) and the console route `/app/sdk`.
 
 ## Quality checks
 

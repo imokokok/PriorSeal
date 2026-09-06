@@ -1,6 +1,5 @@
-import type { Intent, KeyEntry, Receipt, VerificationResult } from '../types'
+import type { Intent, KeyEntry, Receipt, TimestampPolicy, VerificationResult } from './types.js'
 import { verifyTypedData } from 'viem'
-import type { TimestampPolicy } from '../types'
 
 const forbidden = new Set(['__proto__', 'prototype', 'constructor'])
 
@@ -68,7 +67,7 @@ export async function verifyTimestampProofOffline(receipt: Receipt): Promise<Tim
   if (!timestamp || !evidence?.authorization || !evidence.acceptance) return { status: 'MISSING', code: 'INVALID_TIMESTAMP_EVIDENCE' }
   try {
     const authorizationHash = await hashJson(evidence.authorization)
-    const { verifyTimestampEvidence } = await import('../../../src/domain/rfc3161.mjs')
+    const { verifyTimestampEvidence } = await import('../../src/domain/rfc3161.mjs')
     const result = await verifyTimestampEvidence(timestamp, new TextEncoder().encode(canonicalize(evidence.authorization)), policy, {
       authorizationHash,
       requestedAt: evidence.acceptance.acceptedAt,
@@ -111,7 +110,7 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (!await verifyPolicyEvidence(authorization, evidence.policy, acceptance.acceptedAt)) return fail('INVALID_POLICY_EVIDENCE')
   const timestampPolicy = evidence.policy.document?.timestampPolicy as TimestampPolicy | undefined
   if (timestampPolicy) {
-    const { verifyTimestampEvidence } = await import('../../../src/domain/rfc3161.mjs')
+    const { verifyTimestampEvidence } = await import('../../src/domain/rfc3161.mjs')
     const timestamped = await verifyTimestampEvidence(evidence.timestamp, new TextEncoder().encode(canonicalize(authorization)), timestampPolicy, { authorizationHash, requestedAt: acceptance.acceptedAt, before: receipt.execution.executedAt ?? receipt.execution.observedAt ?? 0 })
     if (!timestamped.valid) return fail(timestamped.code)
   } else if (evidence.timestamp) return fail('TIMESTAMP_POLICY_MISMATCH')

@@ -1,6 +1,6 @@
 {
   "name": "priorseal-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "TypeScript SDK for PriorSeal verifiable agent authorization and execution evidence.",
   "type": "module",
   "license": "MIT",
@@ -17,10 +17,15 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./verifier": {
+      "types": "./dist/verifier.d.ts",
+      "import": "./dist/verifier.js",
+      "default": "./dist/verifier.js"
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepack": "npm run build"
   },
@@ -31,7 +36,11 @@
     "access": "public"
   },
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "asn1js": "^3.0.6",
+    "esbuild": "^0.25.12",
+    "pkijs": "^3.4.0",
+    "typescript": "^5.8.3",
+    "viem": "2.56.3"
   },
   "repository": {
     "type": "git",

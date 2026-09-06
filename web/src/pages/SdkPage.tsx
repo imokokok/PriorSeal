@@ -51,13 +51,17 @@ const evidence = await priorseal.observeExecution({
   confirmations: 12
 })`
 
-const verificationExample = `const registry = await priorseal.getKeyRegistry()
+const verificationExample = `import { verifyReceiptLocally } from 'priorseal-sdk/verifier'
+
+const registry = await priorseal.getKeyRegistry()
 const receipt = await priorseal.getReceipt(receiptId)
 
-// Convenience server check; independent verification remains local.
-const result = await priorseal.verifyReceiptRemotely(receipt)
+// No receipt bytes are sent back to PriorSeal.
+const result = await verifyReceiptLocally(receipt, {
+  trustedKeys: registry
+})
 
-console.log({ registry, result })`
+console.log(result.valid, result.requiredExternalChecks)`
 
 type Runtime = { state: 'checking' | 'ready' | 'offline'; version?: string; protocols?: number }
 
@@ -77,7 +81,7 @@ export function SdkPage() {
 
     <section className="sdk-hero panel">
       <div className="sdk-package">
-        <p className="eyebrow">PACKAGE / 0.1.0</p>
+        <p className="eyebrow">PACKAGE / 0.2.0</p>
         <h2>priorseal-sdk</h2>
         <p>Universal ESM · Browser and Node.js 20+ · Zero runtime dependencies</p>
         <div className="sdk-install"><code>{install}</code><CopyButton value={install} /></div>
@@ -118,6 +122,7 @@ export function SdkPage() {
           ['getTransparencyEvidence', 'Retrieve the signed log checkpoint and chain'],
           ['getObservationJob', 'Follow automatic finality observation'],
           ['getKeyRegistry', 'Load issuer trust metadata'],
+          ['verifyReceiptLocally', 'Verify receipt evidence without calling PriorSeal'],
           ['verifyReceiptRemotely', 'Run the convenience API verifier'],
           ['health / readiness / version', 'Inspect deployment availability'],
         ].map(([method, description]) => <div key={method}><code>{method}()</code><span>{description}</span></div>)}
@@ -125,7 +130,7 @@ export function SdkPage() {
     </section>
 
     <section className="sdk-verify panel">
-      <div><p className="eyebrow">VERIFICATION</p><h2>Keep independent verification explicit.</h2><p>The SDK labels server verification as a convenience. Use the local browser verifier or CLI with a trusted issuer key when independent assurance matters.</p><div className="sdk-links"><Link className="button primary" to="/app/verify">Open local verifier</Link><Link className="button secondary" to="/app/quickstart">Run quickstart</Link></div></div>
+      <div><p className="eyebrow">VERIFICATION</p><h2>Keep independent verification explicit.</h2><p>The SDK verifier recomputes hashes, policy, binding, timestamps and signatures locally. Receipt bytes never need to return to PriorSeal.</p><div className="sdk-links"><Link className="button primary" to="/app/verify">Open local verifier</Link><Link className="button secondary" to="/app/quickstart">Run quickstart</Link></div></div>
       <div><div className="sdk-code-head"><span>verification.ts</span><CopyButton value={verificationExample} /></div><pre>{verificationExample}</pre></div>
     </section>
 

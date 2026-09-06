@@ -4,18 +4,17 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "npm --prefix ../sdk run build",
     "dev": "vite",
+    "prebuild": "npm --prefix ../sdk run build",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "priorseal-sdk": "file:../sdk",
-    "asn1js": "^3.0.6",
-    "pkijs": "^3.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router-dom": "^7.6.2",
-    "viem": "2.56.3"
+    "react-router-dom": "^7.6.2"
   },
   "devDependencies": {
     "@types/react": "^19.1.8",

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added the `priorseal-sdk/verifier` local-verification entry point for independently checking receipt hashes, policies, bindings, EOA and Ed25519 signatures, RFC 3161 timestamps, witness quorum and transparency chains without calling PriorSeal.
 - Added a zero-runtime-dependency TypeScript SDK for browser and Node.js integrations, wallet authorization, execution observation and evidence retrieval; the console now consumes the SDK and includes a dedicated integration workspace.
 - Added authorization v2, binding principal/authorizer types and agent identity into EIP-712 while retaining v1 verification compatibility.
 - Prevented unrelated transactions from claiming single-use authorizations; executor, chain and transaction nonce now identify a claim candidate.

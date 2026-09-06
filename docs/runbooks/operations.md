@@ -1,6 +1,6 @@
 # Operations runbook
 
-Start locally: `cp .env.example .env.local`, configure only development RPC/key file paths, then run `npm --prefix web ci`, `npm run start:api`, and `npm --prefix web run dev`. Use `GET /health/live` for process liveness and `/health/ready` for dependency readiness.
+Start locally: `cp .env.example .env.local`, configure only development RPC/key file paths, then run `npm ci`, `npm run start:api`, and `npm --prefix web run dev`. Use `GET /health/live` for process liveness and `/health/ready` for dependency readiness.
 
 Before enabling signed authorization in a persistent environment, apply migrations through `006_rfc3161_timestamp.sql`, set a deployment-specific `PRIORSEAL_AUTHORIZATION_AUDIENCE`, and place the strict JSON authorization policy at `PRIORSEAL_POLICY_FILE`. Changing either audience or policy intentionally invalidates authorizations prepared for the previous deployment policy. Keep the policy file under change control and retain each published policy hash with audit evidence. When named identity matters, include entries such as `{ "id": "acme-treasury", "type": "organization", "account": "0x...", "authorizerType": "eip1271" }` in `policy.principals` only after the identity-to-account relationship has been reviewed through your onboarding process.
 
