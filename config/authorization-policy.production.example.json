@@ -8,6 +8,7 @@
   "allowedRecipients": [],
   "maxAmount": "0",
   "maxValiditySeconds": 900,
+  "minConfirmations": 12,
   "timestampPolicy": {
     "schema": "priorseal.timestamp-policy.v1",
     "profile": "digicert-rfc3161-v1",

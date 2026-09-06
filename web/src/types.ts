@@ -14,7 +14,7 @@ export type Execution = {
 }
 export type Binding = { bound: boolean; reasonCodes: string[]; [key: string]: unknown }
 export type Authorization = {
-  schema: 'priorseal.authorization.v1'; domain: string; authorizationId: string; intent: Intent; intentHash: string
+  schema: 'priorseal.authorization.v1' | 'priorseal.authorization.v2'; domain: string; authorizationId: string; intent: Intent; intentHash: string
   principal: { type: 'user' | 'organization'; id: string; account: string }
   authorizer: { type: 'eip712' | 'eip1271'; address: string }
   delegate: { agentId: string; executor: string }

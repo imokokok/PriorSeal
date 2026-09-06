@@ -12,17 +12,38 @@ import { verifyTransparencyEvidence } from './transparency.mjs';
 import { verifyWitnessEvidence } from './witness.mjs';
 import { validateTimestampEvidenceClaims, verifyTimestampEvidence } from './rfc3161.mjs';
 
-export const AUTHORIZATION_SCHEMA = 'priorseal.authorization.v1';
+export const LEGACY_AUTHORIZATION_SCHEMA = 'priorseal.authorization.v1';
+export const AUTHORIZATION_SCHEMA = 'priorseal.authorization.v2';
 export const AUTHORIZATION_RECEIPT_SCHEMA = 'priorseal.authorization-receipt.v1';
-export const AUTHORIZATION_DOMAIN = 'priorseal/authorization/v1';
+export const AUTHORIZATION_DOMAIN = 'priorseal/authorization/v2';
 export const AUTHORIZED_RECEIPT_SCHEMA = 'priorseal.execution-receipt.v2';
 
-const AUTHORIZATION_TYPES = Object.freeze({
+const LEGACY_AUTHORIZATION_TYPES = Object.freeze({
   PriorSealAuthorization: [
     { name: 'intentHash', type: 'bytes32' },
     { name: 'principalId', type: 'string' },
     { name: 'principalAccount', type: 'address' },
     { name: 'authorizer', type: 'address' },
+    { name: 'executor', type: 'address' },
+    { name: 'issuedAt', type: 'uint256' },
+    { name: 'notBefore', type: 'uint256' },
+    { name: 'expiresAt', type: 'uint256' },
+    { name: 'authorizationNonce', type: 'bytes32' },
+    { name: 'maxUses', type: 'uint256' },
+    { name: 'audience', type: 'string' },
+    { name: 'policyHash', type: 'bytes32' },
+  ],
+});
+
+const AUTHORIZATION_TYPES = Object.freeze({
+  PriorSealAuthorization: [
+    { name: 'intentHash', type: 'bytes32' },
+    { name: 'principalType', type: 'string' },
+    { name: 'principalId', type: 'string' },
+    { name: 'principalAccount', type: 'address' },
+    { name: 'authorizerType', type: 'string' },
+    { name: 'authorizer', type: 'address' },
+    { name: 'agentId', type: 'string' },
     { name: 'executor', type: 'address' },
     { name: 'issuedAt', type: 'uint256' },
     { name: 'notBefore', type: 'uint256' },
@@ -56,10 +77,14 @@ export function buildAuthorization(input) {
   const policyHash = String(input.policyHash ?? `0x${'0'.repeat(64)}`).toLowerCase();
   if (!/^0x[0-9a-f]{64}$/.test(policyHash)) throw new PriorSealError('INVALID_AUTHORIZATION', 'policyHash must be a 32-byte hex value');
   const maxUses = uintString(input.maxUses ?? '1', 'maxUses');
-  if (maxUses !== '1') throw new PriorSealError('INVALID_AUTHORIZATION', 'v1 authorizations are single-use and maxUses must be 1');
+  if (maxUses !== '1') throw new PriorSealError('INVALID_AUTHORIZATION', 'authorizations are single-use and maxUses must be 1');
+  const schema = input.schema ?? AUTHORIZATION_SCHEMA;
+  if (![AUTHORIZATION_SCHEMA, LEGACY_AUTHORIZATION_SCHEMA].includes(schema)) throw new PriorSealError('INVALID_AUTHORIZATION', 'authorization schema is not supported');
+  const domain = schema === LEGACY_AUTHORIZATION_SCHEMA ? 'priorseal/authorization/v1' : AUTHORIZATION_DOMAIN;
+  if (input.domain && input.domain !== domain) throw new PriorSealError('INVALID_AUTHORIZATION', 'authorization domain does not match schema');
   const authorization = {
-    schema: AUTHORIZATION_SCHEMA,
-    domain: AUTHORIZATION_DOMAIN,
+    schema,
+    domain,
     intent,
     intentHash: intent.intentHash,
     principal: { type: principalType, id: protocolId(input.principal?.id, 'principal.id'), account: evmAddress(input.principal?.account, 'principal.account') },
@@ -82,16 +107,20 @@ export function buildAuthorization(input) {
 }
 
 export function authorizationTypedData(value) {
-  const authorization = value.schema === AUTHORIZATION_SCHEMA ? value : buildAuthorization(value);
+  const authorization = [AUTHORIZATION_SCHEMA, LEGACY_AUTHORIZATION_SCHEMA].includes(value.schema) ? value : buildAuthorization(value);
+  const legacy = authorization.schema === LEGACY_AUTHORIZATION_SCHEMA;
   return {
-    domain: { name: 'PriorSeal', version: '1', chainId: authorization.intent.chainId },
-    types: AUTHORIZATION_TYPES,
+    domain: { name: 'PriorSeal', version: legacy ? '1' : '2', chainId: authorization.intent.chainId },
+    types: legacy ? LEGACY_AUTHORIZATION_TYPES : AUTHORIZATION_TYPES,
     primaryType: 'PriorSealAuthorization',
     message: {
       intentHash: `0x${authorization.intentHash}`,
+      ...(!legacy ? { principalType: authorization.principal.type } : {}),
       principalId: authorization.principal.id,
       principalAccount: authorization.principal.account,
+      ...(!legacy ? { authorizerType: authorization.authorizer.type } : {}),
       authorizer: authorization.authorizer.address,
+      ...(!legacy ? { agentId: authorization.delegate.agentId } : {}),
       executor: authorization.delegate.executor,
       issuedAt: BigInt(authorization.issuedAt),
       notBefore: BigInt(authorization.notBefore),
@@ -136,13 +165,17 @@ export function signAuthorizationReceipt(receipt, privateKeyPem) {
 }
 
 export function verifyAuthorizationReceipt(receipt, publicKeyPem) {
+  try {
+    assertSafeJson(receipt);
+    assertOnlyFields(receipt, ['schema', 'domain', 'authorizationId', 'authorizationHash', 'intentHash', 'acceptedAt', 'sequence', 'previousEntryHash', 'entryHash', 'status', 'issuer', 'algorithm', 'keyId', 'signature'], 'authorization receipt');
+  } catch { return false; }
   const { signature, ...unsigned } = receipt ?? {};
-  if (!signature || receipt.schema !== AUTHORIZATION_RECEIPT_SCHEMA) return false;
+  if (!signature || receipt.schema !== AUTHORIZATION_RECEIPT_SCHEMA || receipt.domain !== 'priorseal/authorization-receipt/v1' || receipt.status !== 'ACCEPTED' || receipt.algorithm !== 'Ed25519') return false;
   if (receipt.entryHash !== hashJson({ sequence: receipt.sequence, authorizationHash: receipt.authorizationHash, acceptedAt: receipt.acceptedAt, previousEntryHash: receipt.previousEntryHash })) return false;
   try { return verify(null, Buffer.from(canonicalize(unsigned)), createPublicKey(publicKeyPem), Buffer.from(signature, 'base64url')); } catch { return false; }
 }
 
-export function buildAuthorizedReceipt({ authorization, acceptance, policyEvidence = null, timestampEvidence = null, witnessEvidence = null, transparency = null, execution, issuer, keyId = 'default', issuedAt = Math.floor(Date.now() / 1000), verifierVersion = '2.2.0' }) {
+export function buildAuthorizedReceipt({ authorization, acceptance, policyEvidence = null, timestampEvidence = null, witnessEvidence = null, transparency = null, execution, issuer, keyId = 'default', issuedAt = Math.floor(Date.now() / 1000), verifierVersion = '2.3.0' }) {
   const intent = authorization.intent;
   const evidencePolicy = policyEvidence ?? defaultPolicyEvidence(authorization, acceptance.acceptedAt);
   validatePolicyEvidence(authorization, evidencePolicy, acceptance.acceptedAt);
@@ -214,9 +247,19 @@ export function validateAuthorizedReceiptClaims(receipt) {
 
 export async function verifyAuthorizedReceipt(receipt, publicKeyPem, options = {}) {
   const fail = (code) => ({ valid: false, code, outcome: receipt?.outcome, receiptId: receipt?.receiptId });
+  try { assertSafeJson(receipt); } catch { return fail('INVALID_RECEIPT'); }
+  if (!receipt?.signature) return fail('MISSING_SIGNATURE');
+  if (receipt.algorithm !== 'Ed25519') return fail('UNSUPPORTED_ALGORITHM');
   const claims = validateAuthorizedReceiptClaims(receipt);
   if (!claims.valid) return fail(claims.code);
   const acceptance = receipt.authorizationEvidence.acceptance;
+  if (acceptance.domain !== 'priorseal/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519' || acceptance.intentHash !== claims.authorization.intentHash) return fail('INVALID_AUTHORIZATION_RECEIPT');
+  if (acceptance.acceptedAt < claims.authorization.notBefore || acceptance.acceptedAt > claims.authorization.expiresAt || claims.authorization.issuedAt > acceptance.acceptedAt || receipt.issuedAt < acceptance.acceptedAt) return fail('INVALID_AUTHORIZATION_RECEIPT');
+  const key = options.key;
+  if (key && (key.keyId !== receipt.keyId || key.algorithm !== 'Ed25519' || key.status === 'revoked' || key.issuer !== receipt.issuer)) return fail(key.keyId !== receipt.keyId ? 'UNKNOWN_KEY' : 'INVALID_KEY');
+  if (key?.validFrom != null && (acceptance.acceptedAt < key.validFrom || receipt.issuedAt < key.validFrom)) return fail('KEY_NOT_YET_VALID');
+  if (key?.validUntil != null && (acceptance.acceptedAt > key.validUntil || receipt.issuedAt > key.validUntil)) return fail('KEY_EXPIRED');
+  if (options.now !== undefined && receipt.issuedAt > options.now) return fail('NOT_YET_VALID');
   if (acceptance.issuer !== receipt.issuer || acceptance.keyId !== receipt.keyId || !verifyAuthorizationReceipt(acceptance, publicKeyPem)) return fail('INVALID_AUTHORIZATION_RECEIPT');
   const timestampPolicy = receipt.authorizationEvidence.policy?.document?.timestampPolicy;
   if (timestampPolicy) {

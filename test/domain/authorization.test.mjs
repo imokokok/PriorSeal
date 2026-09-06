@@ -15,10 +15,20 @@ async function signedAuthorization(intent = intentInput, nonceByte = '2') {
   return buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
 }
 
-test('EOA authorization proves the signer approved canonical intent fields', async () => {
+test('EOA authorization proves the signer approved canonical intent and agent fields', async () => {
   const authorization = await signedAuthorization();
+  assert.equal(authorization.schema, 'priorseal.authorization.v2');
   assert.equal((await verifyAuthorization(authorization, { now: 1_001 })).valid, true);
   assert.equal((await verifyAuthorization({ ...authorization, delegate: { ...authorization.delegate, executor: `0x${'c'.repeat(40)}` } }, { now: 1_001 })).valid, false);
+  const { authorizationId, ...withoutId } = authorization;
+  const changedAgent = buildAuthorization({ ...withoutId, delegate: { ...authorization.delegate, agentId: 'agent-impersonated' } });
+  assert.equal((await verifyAuthorization(changedAgent, { now: 1_001 })).code, 'INVALID_AUTHORIZATION_SIGNATURE');
+});
+
+test('legacy v1 authorizations remain verifiable', async () => {
+  const current = buildAuthorization({ intent: intentInput, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'legacy-label', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'3'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}`, schema: 'priorseal.authorization.v1', domain: 'priorseal/authorization/v1' });
+  const legacy = buildAuthorization({ ...current, signature: await account.signTypedData(authorizationTypedData(current)) });
+  assert.equal((await verifyAuthorization(legacy, { now: 1_001 })).valid, true);
 });
 
 test('accepted authorization is single-use and produces a self-checking v2 receipt', async () => {
@@ -34,6 +44,9 @@ test('accepted authorization is single-use and produces a self-checking v2 recei
   const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), privateKeyPem);
   assert.equal(receipt.binding.bound, true);
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
+  assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem, { key: { keyId: 'key-1', issuer: 'test', algorithm: 'Ed25519', status: 'revoked', validFrom: null, validUntil: null } })).code, 'INVALID_KEY');
+  assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem, { key: { keyId: 'key-1', issuer: 'test', algorithm: 'Ed25519', status: 'retired', validFrom: 1_050, validUntil: null } })).code, 'KEY_NOT_YET_VALID');
+  assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem, { now: 1_000 })).code, 'NOT_YET_VALID');
   assert.equal((await verifyAuthorizedReceipt({ ...receipt, outcome: 'FAILED' }, publicKeyPem)).code, 'OUTCOME_MISMATCH');
 });
 
@@ -111,4 +124,26 @@ test('required transparency failure does not consume the authorization', async (
   const observer = async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', sender: executor, recipient: intentInput.recipient, asset: intentInput.asset, amount: intentInput.amount, nonce: intentInput.nonce, executedAt: 1_100, observedAt: 1_101, confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED' });
   await assert.rejects(() => observeExecution({ input: { authorizationId: authorization.authorizationId, chainId: 8453, txHash, confirmations: 12 }, store, observer, transparencyProvider: async () => { const error = new Error('anchor required'); error.code = 'TRANSPARENCY_ANCHOR_REQUIRED'; throw error; } }), (error) => error.code === 'TRANSPARENCY_ANCHOR_REQUIRED');
   assert.equal((await store.getAuthorization(authorization.authorizationId)).boundTxHash, null);
+});
+
+test('legacy authorization schemas cannot be newly accepted', async () => {
+  const issuerKeys = generateKeyPairSync('ed25519');
+  const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const draft = buildAuthorization({ intent: { ...intentInput, intentId: 'legacy-issuance' }, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'legacy-label', executor }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'4'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}`, schema: 'priorseal.authorization.v1', domain: 'priorseal/authorization/v1' });
+  const legacy = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
+  await assert.rejects(() => authorizeIntent({ input: legacy, store: createMemoryStore(), privateKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_001_000 }), (error) => error.code === 'INVALID_AUTHORIZATION');
+});
+
+test('authorization nonce uniqueness and atomic acceptance are enforced in memory', async () => {
+  const issuerKeys = generateKeyPairSync('ed25519');
+  const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const store = createMemoryStore();
+  const first = await signedAuthorization({ ...intentInput, intentId: 'nonce-first' }, '5');
+  const second = await signedAuthorization({ ...intentInput, intentId: 'nonce-second' }, '5');
+  await authorizeIntent({ input: first, store, privateKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_001_000 });
+  await assert.rejects(() => authorizeIntent({ input: second, store, privateKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_001_000 }), (error) => error.code === 'AUTHORIZATION_NONCE_REUSED');
+  const before = (await store.listAuthorizationLog()).length;
+  const atomicFailure = await signedAuthorization({ ...intentInput, intentId: 'atomic-failure' }, '6');
+  await assert.rejects(() => store.saveAcceptedAuthorization({ authorization: atomicFailure, acceptedAt: 1_001, createRecord: () => { throw new Error('signing failed'); } }), /signing failed/);
+  assert.equal((await store.listAuthorizationLog()).length, before);
 });

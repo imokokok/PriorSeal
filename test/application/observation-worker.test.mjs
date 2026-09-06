@@ -8,7 +8,7 @@ test('observation worker is idempotent and retries pending observations', async 
   const first = worker.enqueue({ chainId: 8453, txHash: '0x1', confirmations: 2, idempotencyKey: 'same' }); assert.equal(worker.enqueue({ chainId: 8453, txHash: '0x1', idempotencyKey: 'same' }).jobId, first.jobId);
   await worker.runOnce(); assert.equal(worker.get(first.jobId).state, 'RETRY_WAIT'); now += 10; await worker.runOnce(); assert.equal(worker.get(first.jobId).state, 'COMPLETED'); assert.equal(saved.length, 2);
 });
-test('re-observation detects a changed block hash', () => { assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', blockHash: '0xb' }), true); assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', blockHash: '0xa' }), false); });
+test('re-observation detects changed blocks and transactions removed by a reorg', () => { assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', blockHash: '0xb' }), true); assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', status: 'NOT_FOUND', blockHash: null }), true); assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', blockHash: '0xa' }), false); });
 test('persistent worker does not double-count atomically claimed attempts', async () => {
   let saved;
   const store = {

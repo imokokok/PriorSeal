@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added authorization v2, binding principal/authorizer types and agent identity into EIP-712 while retaining v1 verification compatibility.
+- Prevented unrelated transactions from claiming single-use authorizations; executor, chain and transaction nonce now identify a claim candidate.
+- Unified v2 issuer-key status and validity checks across server and browser verification.
+- Made authorization acceptance and observation evidence transactional in PostgreSQL, delayed log insertion until independent ordering evidence succeeds, and detect transactions removed by reorgs.
+- Added policy-enforced confirmation floors, cross-chain asset rejection, authorization-nonce uniqueness, and stricter RPC confirmation/status validation. Fallback RPC sources now prefer pending/mined evidence over stale not-found responses and preserve pending transaction nonces.
+
 - Added EIP-712 and ERC-1271 signed, single-use authorizations that bind a principal, agent executor, canonical intent, validity window, audience and policy hash.
 - Added authorization acceptance receipts, an ordered transparency log with signed checkpoints, optional externally anchored checkpoints, and authorized execution receipt schema v2.
 - Added exact EVM call constraints, post-hoc authorization detection, persistent authorization storage, HTTP preparation/acceptance APIs, and browser wallet signing.

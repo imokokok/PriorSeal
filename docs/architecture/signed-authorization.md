@@ -1,6 +1,6 @@
 # Signed authorization and pre-execution evidence
 
-PriorSeal v2 separates an agent proposal from authority. A draft intent is not authorization. An accepted authorization contains the complete canonical intent, an EIP-712 or ERC-1271 signature, the principal and delegated executor, a validity window, an audience, the active policy hash, and a single-use authorization nonce.
+PriorSeal authorization v2 separates an agent proposal from authority and signs the agent ID, executor, principal type and authorizer type. Legacy authorization v1 remains verifiable but is no longer issued by default. A draft intent is not authorization. An accepted authorization contains the complete canonical intent, an EIP-712 or ERC-1271 signature, the principal and delegated executor, a validity window, an audience, the active policy hash, and a single-use authorization nonce.
 
 Wallet control alone is not a civil-identity proof. Deployments that need a named real user or organization must configure `policy.principals` as a change-controlled identity registry. Each entry binds one reviewed principal ID and type to one EVM account and authorizer type; PriorSeal rejects a signed authorization that does not match it, and the registry is covered by the signed `policyHash`. For organizations, the account should normally be the published Safe/ERC-1271 account rather than an employee wallet.
 
@@ -9,7 +9,7 @@ draft intent → authorizer signature → PriorSeal acceptance → independent R
              → agent execution → EVM observation → v2 execution receipt
 ```
 
-`POST /v1/authorizations/prepare` returns canonical EIP-712 typed data. `POST /v1/authorizations` verifies the signature and active policy before issuing an Ed25519 authorization receipt. `POST /v1/executions/observe` accepts `authorizationId`; the first observed transaction with available execution data binds the authorization, and a different transaction is rejected.
+`POST /v1/authorizations/prepare` returns canonical EIP-712 typed data. `POST /v1/authorizations` verifies the signature and active policy before issuing an Ed25519 authorization receipt. `POST /v1/executions/observe` accepts `authorizationId`; only an observed transaction matching the authorization chain, delegated executor and transaction nonce may claim the authorization; a different claimed transaction is rejected.
 
 The v2 receipt embeds the authorization and acceptance statement. When configured, it also embeds an RFC 3161 response, independently signed witness attestations and/or the signed append-only hash-chain checkpoint. The verifier recomputes the intent hash, authorization hash, execution hash, receipt ID, binding reason codes and outcome before checking signatures.
 

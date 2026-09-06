@@ -4,6 +4,10 @@ import { evaluateAuthorizationPolicy, evaluateIntentPolicy } from '../../src/dom
 const intent = { chainId: 8453, action: 'TRANSFER', asset: 'native', amount: '100', sender: '0xaa', recipient: '0xbb', validUntil: 1100 };
 test('policy permits an allowlisted intent', () => { const result = evaluateIntentPolicy(intent, { policyId: 'treasury-v1', allowedChainIds: [8453], allowedActions: ['TRANSFER'], allowedAssets: ['native'], allowedRecipients: ['0xbb'], maxAmount: '1000', maxValiditySeconds: 200 }, 1000); assert.equal(result.allowed, true); assert.deepEqual(result.reasonCodes, []); });
 test('policy rejects with stable reason codes', () => { const result = evaluateIntentPolicy(intent, { allowedChainIds: [1], allowedRecipients: ['0xcc'], maxAmount: '10' }, 1000); assert.equal(result.allowed, false); assert.deepEqual(result.reasonCodes, ['POLICY_CHAIN_NOT_ALLOWED', 'POLICY_RECIPIENT_NOT_ALLOWED', 'POLICY_AMOUNT_EXCEEDED']); });
+test('policy can require a signed minimum confirmation threshold', () => {
+  assert.deepEqual(evaluateIntentPolicy({ ...intent, constraints: { minConfirmations: 2 } }, { minConfirmations: 12 }, 1000).reasonCodes, ['POLICY_MIN_CONFIRMATIONS_REQUIRED']);
+  assert.equal(evaluateIntentPolicy({ ...intent, constraints: { minConfirmations: 12 } }, { minConfirmations: 12 }, 1000).allowed, true);
+});
 test('authorization policy binds a reviewed principal identity to its account type', () => {
   const account = `0x${'a'.repeat(40)}`;
   const authorization = { intent, principal: { id: 'acme-treasury', type: 'organization', account }, authorizer: { type: 'eip1271' } };

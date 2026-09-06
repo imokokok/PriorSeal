@@ -5,7 +5,7 @@ PriorSeal never holds wallet/transaction signing keys or moves assets. The Ed255
 | Threat | Control |
 | --- | --- |
 | Malicious HTTP caller | size/depth/content-type/field limits, rate limiter port, idempotency conflict detection, safe errors |
-| Faulty or malicious RPC | explicit endpoint configuration, chain-ID and containing-block checks, response validation, per-endpoint retry/fallback; uncertainty remains undetermined |
+| Faulty or malicious RPC | explicit endpoint configuration, chain-ID and containing-block checks, response validation, per-endpoint retry/fallback, and preference for available/mined evidence over a stale endpoint's not-found/pending response; uncertainty remains undetermined |
 | RPC credential disclosure | endpoint URLs remain process-local; evidence stores only `evm-json-rpc:eip155:<chain>:configured-<n>` source identifiers |
 | Receipt tampering/key confusion | canonical payload signature, schema/domain/algorithm/key-ID checks, issuer/key validity checks |
 | Replay | both intent creation and execution observation use bounded Idempotency-Key records with request hashes and a 24-hour TTL |
@@ -13,7 +13,7 @@ PriorSeal never holds wallet/transaction signing keys or moves assets. The Ed255
 | TSA compromise or incorrect clock | The signed policy pins the DigiCert profile; verification pins DigiCert roots, policy OID, Time Stamping EKU, imprint and nonce. Operational monitoring and a reviewed trust-profile release are still required; RFC 3161 is not decentralized consensus. |
 | Witness forgery/collusion | Principal-signed policy binds threshold and distinct Ed25519 keys; duplicate identities/keys and post-execution attestations are rejected. Independence still depends on separate operators, protected keys, and trustworthy clocks; a threshold of colluding operators can lie about time. |
 | Cross-deployment signature reuse | signed authorization audience and EIP-712 chain domain; configure a unique `PRIORSEAL_AUTHORIZATION_AUDIENCE` per trust domain |
-| Reorg | immutable evidence versions, block hash detection, new reorg receipt rather than overwrite |
+| Reorg | immutable evidence versions, changed-block and post-inclusion disappearance detection, new reorg receipt rather than overwrite |
 | Key compromise | file-only local provider, registry status/validity, rotation/revocation runbook; use KMS/HSM adapter in production |
 | DoS/log leakage | bounded bodies, timeout, minimal errors, structured-event injection point; never log key material/auth/body/connection strings |
 | Browser persistence | local-only label, validated bounded storage, export and clear; receipts in localStorage are not server archive |

@@ -19,3 +19,15 @@ test('Postgres idempotency rows can be read and expired rows can be replaced', a
   assert.deepEqual(await store.reserveIdempotency({ scope: 'scope', key: 'key', requestHash: 'new', response: { ok: false }, expiresAt: 3_000 }), { replay: false, response: { ok: false } });
   assert.match(calls[1], /expires_at <= now\(\)/);
 });
+
+test('Postgres observation persistence rolls back the authorization claim with evidence', async () => {
+  const calls = []; let released = false;
+  const client = { async query(sql) { calls.push(sql); if (sql.startsWith('UPDATE authorizations')) return { rows: [{}] }; if (sql.startsWith('INSERT INTO receipts')) throw new Error('receipt insert failed'); return { rows: [] }; }, release() { released = true; } };
+  const pool = { query: async () => ({ rows: [] }), connect: async () => client };
+  const store = createPostgresStore(pool);
+  await assert.rejects(() => store.saveObservationReceipt({ authorizationId: 'auth_1', claimAuthorization: true, observation: { intentHash: 'intent', chainId: 8453, txHash: '0x1', status: 'CONFIRMED', blockNumber: 1, observedAt: 1, finalityState: 'CONFIRMED' }, receipt: { receiptId: 'psr_1', intentHash: 'intent', execution: { txHash: '0x1' }, schema: 'v2', issuer: 'test', keyId: 'k1', outcome: 'COMPLETED', signature: 'sig' } }), /receipt insert failed/);
+  assert.ok(calls.includes('BEGIN'));
+  assert.ok(calls.includes('ROLLBACK'));
+  assert.equal(calls.includes('COMMIT'), false);
+  assert.equal(released, true);
+});

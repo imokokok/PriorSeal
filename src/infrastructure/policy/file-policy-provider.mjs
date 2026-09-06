@@ -8,7 +8,8 @@ export function readPolicyFile(file) {
   if (!file) return null;
   const policy = JSON.parse(readFileSync(file, 'utf8'));
   assertSafeJson(policy);
-  assertOnlyFields(policy, ['policyId', 'principals', 'allowedChainIds', 'allowedActions', 'allowedAssets', 'allowedSenders', 'allowedRecipients', 'maxAmount', 'maxValiditySeconds', 'witnessQuorum', 'timestampPolicy'], 'policy');
+  assertOnlyFields(policy, ['policyId', 'principals', 'allowedChainIds', 'allowedActions', 'allowedAssets', 'allowedSenders', 'allowedRecipients', 'maxAmount', 'maxValiditySeconds', 'minConfirmations', 'witnessQuorum', 'timestampPolicy'], 'policy');
+  if (policy.minConfirmations != null && (!Number.isSafeInteger(policy.minConfirmations) || policy.minConfirmations < 1 || policy.minConfirmations > 10_000)) throw new TypeError('policy.minConfirmations must be an integer between 1 and 10000');
   const witnessQuorum = policy.witnessQuorum ? buildWitnessPolicy(policy.witnessQuorum) : undefined;
   const timestampPolicy = policy.timestampPolicy ? buildTimestampPolicy(policy.timestampPolicy) : undefined;
   if (policy.principals === undefined) return { ...policy, ...(witnessQuorum ? { witnessQuorum } : {}), ...(timestampPolicy ? { timestampPolicy } : {}) };

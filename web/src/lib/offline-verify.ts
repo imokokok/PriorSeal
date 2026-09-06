@@ -87,18 +87,21 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   const authorization = evidence.authorization
   const acceptance = evidence.acceptance
   if (receipt.domain !== 'priorseal/execution-receipt/v2' || receipt.algorithm !== 'Ed25519') return fail('INVALID_DOMAIN')
-  if (authorization.schema !== 'priorseal.authorization.v1' || authorization.domain !== 'priorseal/authorization/v1') return fail('INVALID_AUTHORIZATION')
+  const legacyAuthorization = authorization.schema === 'priorseal.authorization.v1'
+  if (!legacyAuthorization && authorization.schema !== 'priorseal.authorization.v2') return fail('INVALID_AUTHORIZATION')
+  if (authorization.domain !== (legacyAuthorization ? 'priorseal/authorization/v1' : 'priorseal/authorization/v2')) return fail('INVALID_AUTHORIZATION')
   if (authorization.intent.schema !== 'priorseal.intent.v1') return fail('INVALID_AUTHORIZATION')
   if (authorization.principal.account.toLowerCase() !== authorization.authorizer.address.toLowerCase()) return fail('INVALID_AUTHORIZATION')
+  if (!['user', 'organization'].includes(authorization.principal.type) || !authorization.principal.id || !authorization.delegate.agentId) return fail('INVALID_AUTHORIZATION')
   if (!['eip712', 'eip1271'].includes(authorization.authorizer.type) || authorization.maxUses !== '1') return fail('INVALID_AUTHORIZATION')
   if (!/^0x[0-9a-f]{64}$/i.test(authorization.authorizationNonce) || !/^0x[0-9a-f]{64}$/i.test(authorization.policyHash) || !authorization.audience) return fail('INVALID_AUTHORIZATION')
   if (authorization.notBefore < authorization.issuedAt || authorization.expiresAt < authorization.notBefore || authorization.expiresAt > authorization.intent.validUntil) return fail('INVALID_AUTHORIZATION')
   if (acceptance.schema !== 'priorseal.authorization-receipt.v1' || acceptance.domain !== 'priorseal/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519') return fail('INVALID_AUTHORIZATION_RECEIPT')
-  if (acceptance.acceptedAt < authorization.notBefore || acceptance.acceptedAt > authorization.expiresAt || authorization.issuedAt > acceptance.acceptedAt) return fail('INVALID_AUTHORIZATION_RECEIPT')
+  if (acceptance.intentHash !== authorization.intentHash || acceptance.acceptedAt < authorization.notBefore || acceptance.acceptedAt > authorization.expiresAt || authorization.issuedAt > acceptance.acceptedAt || receipt.issuedAt < acceptance.acceptedAt) return fail('INVALID_AUTHORIZATION_RECEIPT')
   if (!key || key.keyId !== receipt.keyId) return fail('UNKNOWN_KEY')
   if (key.algorithm !== 'Ed25519' || key.status === 'revoked' || key.issuer !== receipt.issuer) return fail('INVALID_KEY')
-  if (key.validFrom != null && receipt.issuedAt < key.validFrom) return fail('KEY_NOT_YET_VALID')
-  if (key.validUntil != null && receipt.issuedAt > key.validUntil) return fail('KEY_EXPIRED')
+  if (key.validFrom != null && (acceptance.acceptedAt < key.validFrom || receipt.issuedAt < key.validFrom)) return fail('KEY_NOT_YET_VALID')
+  if (key.validUntil != null && (acceptance.acceptedAt > key.validUntil || receipt.issuedAt > key.validUntil)) return fail('KEY_EXPIRED')
   if (receipt.issuedAt > now) return fail('NOT_YET_VALID')
   if (authorization.intentHash !== await hashJson(stripIntentHash(authorization.intent))) return fail('INTENT_HASH_MISMATCH')
   const expectedAuthorizationId = `auth_${(await hashJson(stripAuthorizationMetadata(authorization))).slice(0, 32)}`
@@ -127,12 +130,14 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (authorization.authorizer.type === 'eip1271') return fail('AUTHORIZATION_REQUIRES_CHAIN_VERIFICATION')
   const authorizationValid = await verifyTypedData({
     address: authorization.authorizer.address as `0x${string}`,
-    domain: { name: 'PriorSeal', version: '1', chainId: Number(authorization.intent.chainId) },
-    types: { PriorSealAuthorization: [
+    domain: { name: 'PriorSeal', version: legacyAuthorization ? '1' : '2', chainId: Number(authorization.intent.chainId) },
+    types: { PriorSealAuthorization: legacyAuthorization ? [
       { name: 'intentHash', type: 'bytes32' }, { name: 'principalId', type: 'string' }, { name: 'principalAccount', type: 'address' }, { name: 'authorizer', type: 'address' }, { name: 'executor', type: 'address' }, { name: 'issuedAt', type: 'uint256' }, { name: 'notBefore', type: 'uint256' }, { name: 'expiresAt', type: 'uint256' }, { name: 'authorizationNonce', type: 'bytes32' }, { name: 'maxUses', type: 'uint256' }, { name: 'audience', type: 'string' }, { name: 'policyHash', type: 'bytes32' },
+    ] : [
+      { name: 'intentHash', type: 'bytes32' }, { name: 'principalType', type: 'string' }, { name: 'principalId', type: 'string' }, { name: 'principalAccount', type: 'address' }, { name: 'authorizerType', type: 'string' }, { name: 'authorizer', type: 'address' }, { name: 'agentId', type: 'string' }, { name: 'executor', type: 'address' }, { name: 'issuedAt', type: 'uint256' }, { name: 'notBefore', type: 'uint256' }, { name: 'expiresAt', type: 'uint256' }, { name: 'authorizationNonce', type: 'bytes32' }, { name: 'maxUses', type: 'uint256' }, { name: 'audience', type: 'string' }, { name: 'policyHash', type: 'bytes32' },
     ] },
     primaryType: 'PriorSealAuthorization',
-    message: { intentHash: `0x${authorization.intentHash}` as `0x${string}`, principalId: authorization.principal.id, principalAccount: authorization.principal.account as `0x${string}`, authorizer: authorization.authorizer.address as `0x${string}`, executor: authorization.delegate.executor as `0x${string}`, issuedAt: BigInt(authorization.issuedAt), notBefore: BigInt(authorization.notBefore), expiresAt: BigInt(authorization.expiresAt), authorizationNonce: authorization.authorizationNonce as `0x${string}`, maxUses: BigInt(authorization.maxUses), audience: authorization.audience, policyHash: authorization.policyHash as `0x${string}` },
+    message: { intentHash: `0x${authorization.intentHash}` as `0x${string}`, ...(!legacyAuthorization ? { principalType: authorization.principal.type } : {}), principalId: authorization.principal.id, principalAccount: authorization.principal.account as `0x${string}`, ...(!legacyAuthorization ? { authorizerType: authorization.authorizer.type } : {}), authorizer: authorization.authorizer.address as `0x${string}`, ...(!legacyAuthorization ? { agentId: authorization.delegate.agentId } : {}), executor: authorization.delegate.executor as `0x${string}`, issuedAt: BigInt(authorization.issuedAt), notBefore: BigInt(authorization.notBefore), expiresAt: BigInt(authorization.expiresAt), authorizationNonce: authorization.authorizationNonce as `0x${string}`, maxUses: BigInt(authorization.maxUses), audience: authorization.audience, policyHash: authorization.policyHash as `0x${string}` },
     signature: authorization.signature as `0x${string}`,
   })
   if (!authorizationValid) return fail('INVALID_AUTHORIZATION_SIGNATURE')
@@ -265,6 +270,7 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
   if (listMisses(policy.allowedRecipients, intent.recipient)) reasons.push('POLICY_RECIPIENT_NOT_ALLOWED')
   if (policy.maxAmount != null && BigInt(intent.amount) > BigInt(String(policy.maxAmount))) reasons.push('POLICY_AMOUNT_EXCEEDED')
   if (policy.maxValiditySeconds != null && intent.validUntil > evaluatedAt + Number(policy.maxValiditySeconds)) reasons.push('POLICY_EXPIRY_TOO_FAR')
+  if (policy.minConfirmations != null && Number(intent.constraints?.minConfirmations ?? 0) < Number(policy.minConfirmations)) reasons.push('POLICY_MIN_CONFIRMATIONS_REQUIRED')
   if (Array.isArray(policy.principals)) {
     const matched = policy.principals.some((value) => {
       const principal = value as Record<string, unknown>

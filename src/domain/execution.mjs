@@ -5,5 +5,6 @@ export function normalizeExecution(input) {
 }
 export function detectReorg(previous, current) {
   if (!previous || !current || previous.txHash !== current.txHash) return false;
+  if (previous.blockHash && current.status === 'NOT_FOUND') return true;
   return Boolean(previous.blockHash && current.blockHash && previous.blockHash !== current.blockHash);
 }

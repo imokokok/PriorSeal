@@ -31,6 +31,33 @@ export function createPostgresStore(pool) {
       } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
     },
     async listAuthorizationLog() { const result = await pool.query('SELECT sequence,authorization_hash,accepted_at,previous_entry_hash,entry_hash FROM authorization_log ORDER BY sequence'); return result.rows.map((row) => ({ sequence: Number(row.sequence), authorizationHash: row.authorization_hash, acceptedAt: Number(row.accepted_at), previousEntryHash: row.previous_entry_hash, entryHash: row.entry_hash })); },
+    async saveAcceptedAuthorization({ authorization, acceptedAt, createRecord }) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('priorseal:authorization-log'))");
+        const existingAuthorization = await client.query('SELECT * FROM authorizations WHERE authorization_id=$1', [authorization.authorizationId]);
+        if (existingAuthorization.rows[0]) { await client.query('COMMIT'); return rowToAuthorization(existingAuthorization.rows[0]); }
+        const existingNonce = await client.query('SELECT authorization_id FROM authorizations WHERE authorization_nonce=$1', [authorization.authorizationNonce]);
+        if (existingNonce.rows[0]) { const error = new Error('Authorization nonce has already been used'); error.code = 'AUTHORIZATION_NONCE_REUSED'; throw error; }
+        const intentResult = await client.query(`INSERT INTO intents (intent_id,intent_hash,schema_version,chain_id,action,sender,recipient,asset,amount,nonce,valid_until,constraints_json,intent_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (intent_id) DO UPDATE SET intent_id=EXCLUDED.intent_id WHERE intents.intent_hash=EXCLUDED.intent_hash RETURNING intent_json`, [authorization.intent.intentId, authorization.intentHash, authorization.intent.schema, authorization.intent.chainId, authorization.intent.action, authorization.intent.sender, authorization.intent.recipient, authorization.intent.asset, authorization.intent.amount, authorization.intent.nonce, authorization.intent.validUntil, authorization.intent.constraints ?? null, authorization.intent]);
+        if (!intentResult.rows[0]) { const error = new Error('DUPLICATE_INTENT'); error.code = 'DUPLICATE_INTENT'; throw error; }
+        const authorizationHash = hashJson(authorization);
+        const existingLog = await client.query('SELECT sequence,authorization_hash,accepted_at,previous_entry_hash,entry_hash FROM authorization_log WHERE authorization_hash=$1', [authorizationHash]);
+        let log;
+        if (existingLog.rows[0]) {
+          const row = existingLog.rows[0]; log = { sequence: Number(row.sequence), authorizationHash: row.authorization_hash, acceptedAt: Number(row.accepted_at), previousEntryHash: row.previous_entry_hash, entryHash: row.entry_hash };
+        } else {
+          const previous = await client.query('SELECT sequence,entry_hash FROM authorization_log ORDER BY sequence DESC LIMIT 1');
+          const sequence = Number(previous.rows[0]?.sequence ?? 0) + 1; const previousEntryHash = previous.rows[0]?.entry_hash ?? null; const entryHash = hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash });
+          await client.query('INSERT INTO authorization_log (sequence,authorization_hash,accepted_at,previous_entry_hash,entry_hash) VALUES ($1,$2,$3,$4,$5)', [sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash]);
+          log = { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash };
+        }
+        const record = createRecord(log); const value = record.authorization;
+        const result = await client.query(`INSERT INTO authorizations (authorization_id,authorization_hash,intent_hash,principal_id,principal_account,authorizer_address,authorizer_type,executor_address,authorization_nonce,expires_at,max_uses,uses,status,bound_tx_hash,authorization_json,acceptance_json,policy_json,witness_evidence_json,timestamp_evidence_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`, [value.authorizationId, hashJson(value), value.intentHash, value.principal.id, value.principal.account, value.authorizer.address, value.authorizer.type, value.delegate.executor, value.authorizationNonce, value.expiresAt, Number(value.maxUses), record.uses, record.status, record.boundTxHash, value, record.acceptance, record.policyEvidence ?? record.policy, record.witnessEvidence ?? null, record.timestampEvidence ?? null]);
+        await client.query('COMMIT'); return rowToAuthorization(result.rows[0]);
+      } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+    },
     async saveAuthorization(record) {
       const value = record.authorization;
       const result = await pool.query(`INSERT INTO authorizations (authorization_id,authorization_hash,intent_hash,principal_id,principal_account,authorizer_address,authorizer_type,executor_address,authorization_nonce,expires_at,max_uses,uses,status,bound_tx_hash,authorization_json,acceptance_json,policy_json,witness_evidence_json,timestamp_evidence_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ON CONFLICT (authorization_id) DO NOTHING RETURNING *`, [value.authorizationId, hashJson(value), value.intentHash, value.principal.id, value.principal.account, value.authorizer.address, value.authorizer.type, value.delegate.executor, value.authorizationNonce, value.expiresAt, Number(value.maxUses), record.uses, record.status, record.boundTxHash, value, record.acceptance, record.policyEvidence ?? record.policy, record.witnessEvidence ?? null, record.timestampEvidence ?? null]);
@@ -43,6 +70,22 @@ export function createPostgresStore(pool) {
       if (result.rows[0]) return { ok: true, record: rowToAuthorization(result.rows[0]) };
       const existing = await pool.query('SELECT authorization_id FROM authorizations WHERE authorization_id=$1', [id]);
       return { ok: false, code: existing.rows[0] ? 'AUTHORIZATION_ALREADY_USED' : 'AUTHORIZATION_NOT_FOUND' };
+    },
+    async saveObservationReceipt({ authorizationId, claimAuthorization, observation, receipt }) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        if (claimAuthorization) {
+          const bound = await client.query(`UPDATE authorizations SET bound_tx_hash=COALESCE(bound_tx_hash,$2),uses=CASE WHEN bound_tx_hash IS NULL THEN 1 ELSE uses END,status='BOUND' WHERE authorization_id=$1 AND (bound_tx_hash IS NULL OR bound_tx_hash=$2) RETURNING *`, [authorizationId, observation.txHash]);
+          if (!bound.rows[0]) {
+            const existing = await client.query('SELECT authorization_id FROM authorizations WHERE authorization_id=$1', [authorizationId]);
+            const error = new Error(existing.rows[0] ? 'Authorization has already been bound to another transaction' : 'Authorization not found'); error.code = existing.rows[0] ? 'AUTHORIZATION_ALREADY_USED' : 'AUTHORIZATION_NOT_FOUND'; throw error;
+          }
+        }
+        await client.query(`INSERT INTO execution_observations (intent_hash,chain_id,tx_hash,status,block_number,observed_at,finality_state,observation_json,observation_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (chain_id,tx_hash,observation_hash) DO NOTHING`, [observation.intentHash ?? null, observation.chainId, observation.txHash, observation.status, observation.blockNumber, observation.observedAt, observation.finalityState, observation, hashJson(observation)]);
+        if (receipt) await client.query('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (receipt_id) DO NOTHING', [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, receipt, receipt.signature ?? null]);
+        await client.query('COMMIT'); return { ok: true };
+      } catch (error) { await client.query('ROLLBACK'); if (error.code === 'AUTHORIZATION_ALREADY_USED' || error.code === 'AUTHORIZATION_NOT_FOUND') return { ok: false, code: error.code }; throw error; } finally { client.release(); }
     },
     async saveReceipt(receipt) { const result = await pool.query('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (receipt_id) DO NOTHING RETURNING receipt_json', [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, receipt, receipt.signature ?? null]); if (result.rows[0]) return result.rows[0].receipt_json; const existing = await pool.query('SELECT receipt_json FROM receipts WHERE receipt_id = $1', [receipt.receiptId]); return existing.rows[0]?.receipt_json; },
     async getReceipt(receiptId) { const result = await pool.query('SELECT receipt_json FROM receipts WHERE receipt_id = $1', [receiptId]); return result.rows[0]?.receipt_json; },

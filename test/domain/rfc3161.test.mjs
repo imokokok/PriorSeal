@@ -57,5 +57,7 @@ test('a timestamp policy fails closed when no TSA provider is configured', async
     issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'2'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${hashJson(policy)}`,
   });
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
-  await assert.rejects(() => authorizeIntent({ input: authorization, store: createMemoryStore({ clock: () => 1_001_000 }), privateKeyPem: issuer, issuer: 'test', keyId: 'key-1', policy, requireTimestamp: true, now: () => 1_001_000 }), (error) => error.code === 'TIMESTAMP_NOT_CONFIGURED');
+  const store = createMemoryStore({ clock: () => 1_001_000 });
+  await assert.rejects(() => authorizeIntent({ input: authorization, store, privateKeyPem: issuer, issuer: 'test', keyId: 'key-1', policy, requireTimestamp: true, now: () => 1_001_000 }), (error) => error.code === 'TIMESTAMP_NOT_CONFIGURED');
+  assert.deepEqual(await store.listAuthorizationLog(), []);
 });

@@ -24,11 +24,14 @@ export async function observeExecution({ input, store, observer, signal, private
     throw new PriorSealError('INVALID_REQUEST', 'chainId must match the intent');
   }
 
+  const requestedConfirmations = input.confirmations ?? 0;
+  if (!Number.isSafeInteger(requestedConfirmations) || requestedConfirmations < 0 || requestedConfirmations > 10_000) throw new PriorSealError('INVALID_REQUEST', 'confirmations must be an integer between 0 and 10000');
+  const confirmations = Math.max(requestedConfirmations, Number(intent.constraints?.minConfirmations ?? 0));
   const previous = store.getObservation ? await store.getObservation(intent.chainId, input.txHash) : null;
   const observed = await observer({
     chainId: intent.chainId,
     txHash: input.txHash,
-    confirmations: input.confirmations,
+    confirmations,
     signal,
   });
   let observation = { ...observed, intentHash: intent.intentHash };
@@ -45,10 +48,7 @@ export async function observeExecution({ input, store, observer, signal, private
     const witnessed = verifyWitnessEvidence(authorizationRecord.witnessEvidence, authorizationRecord.authorization, witnessPolicy, { expectedRequestedAt: authorizationRecord.acceptance.acceptedAt, before: observation.executedAt ?? observation.observedAt });
     if (!witnessed.valid) throw new PriorSealError(witnessed.code, 'A valid pre-execution witness quorum is required', witnessed);
   }
-  if (authorizationRecord && observation.executionDataAvailable !== false && observation.status !== 'NOT_FOUND') {
-    const binding = await store.bindAuthorization(authorizationRecord.authorization.authorizationId, observation.txHash);
-    if (!binding.ok) throw new PriorSealError(binding.code, 'Authorization has already been bound to another transaction');
-  }
+  const claimAuthorization = Boolean(authorizationRecord && canClaimAuthorization(authorizationRecord.authorization, observation));
   const receipt = privateKeyPem
     ? signReceipt(authorizationRecord
       ? buildAuthorizedReceipt({ authorization: authorizationRecord.authorization, acceptance: authorizationRecord.acceptance, policyEvidence: authorizationRecord.policyEvidence, timestampEvidence: authorizationRecord.timestampEvidence, witnessEvidence: authorizationRecord.witnessEvidence, transparency, execution: observation, issuer, keyId, issuedAt: Math.floor(now() / 1000) })
@@ -59,10 +59,24 @@ export async function observeExecution({ input, store, observer, signal, private
     receipt,
     ...(receipt ? { verification: authorizationRecord ? await verifyAuthorizedReceipt(receipt, publicKeyPem, { audience: authorizationAudience, verifyContractSignature }) : verifyReceipt(receipt, publicKeyPem, { keyId }) } : {}),
   };
-  const result = await reserveIdempotentResponse({ scope: 'observe-execution', key: idempotencyKey, request: input, requestHash: idempotency.requestHash, response, store, now });
-  if (!result.replay) {
+  if (store.saveObservationReceipt) {
+    const committed = await store.saveObservationReceipt({ authorizationId: authorizationRecord?.authorization.authorizationId, claimAuthorization, observation, receipt });
+    if (!committed.ok) throw new PriorSealError(committed.code, 'Authorization has already been bound to another transaction');
+  } else {
+    if (claimAuthorization) {
+      const binding = await store.bindAuthorization(authorizationRecord.authorization.authorizationId, observation.txHash);
+      if (!binding.ok) throw new PriorSealError(binding.code, 'Authorization has already been bound to another transaction');
+    }
     await store.saveObservation(observation);
     if (receipt) await store.saveReceipt(receipt);
   }
-  return result;
+  return reserveIdempotentResponse({ scope: 'observe-execution', key: idempotencyKey, request: input, requestHash: idempotency.requestHash, response, store, now });
+}
+
+export function canClaimAuthorization(authorization, observation) {
+  if (!authorization || !observation || observation.executionDataAvailable === false) return false;
+  if (!['PENDING', 'CONFIRMED', 'REVERTED', 'REORGED'].includes(observation.status)) return false;
+  return Number(observation.chainId) === Number(authorization.intent.chainId)
+    && String(observation.sender ?? '').toLowerCase() === authorization.delegate.executor
+    && String(observation.nonce ?? '') === String(authorization.intent.nonce);
 }
