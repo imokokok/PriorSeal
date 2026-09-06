@@ -13,11 +13,11 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: runproof
+      POSTGRES_USER: priorseal
       POSTGRES_PASSWORD: development-only-change-me
-      POSTGRES_DB: runproof
+      POSTGRES_DB: priorseal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U runproof -d runproof"]
+      test: ["CMD-SHELL", "pg_isready -U priorseal -d priorseal"]
       interval: 5s
       timeout: 3s
       retries: 10

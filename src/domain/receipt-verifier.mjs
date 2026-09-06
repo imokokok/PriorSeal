@@ -5,9 +5,9 @@ export function verifyReceipt(receipt, publicKeyPem, options = {}) {
   const fail = (code) => ({ valid: false, code, outcome: receipt?.outcome, receiptId: receipt?.receiptId });
   try { assertSafeJson(receipt); } catch { return fail('INVALID_RECEIPT'); }
   if (!receipt?.signature) return fail('MISSING_SIGNATURE');
-  if (receipt.schema !== 'runproof.execution-receipt.v1') return fail('UNSUPPORTED_SCHEMA');
+  if (receipt.schema !== 'priorseal.execution-receipt.v1') return fail('UNSUPPORTED_SCHEMA');
   if (receipt.algorithm !== 'Ed25519') return fail('UNSUPPORTED_ALGORITHM');
-  if (receipt.domain !== 'runproof/execution-receipt/v1') return fail('INVALID_DOMAIN');
+  if (receipt.domain !== 'priorseal/execution-receipt/v1') return fail('INVALID_DOMAIN');
   if (options.keyId && receipt.keyId !== options.keyId) return fail('UNKNOWN_KEY');
   if (options.key && (options.key.algorithm !== 'Ed25519' || options.key.status === 'revoked' || options.key.issuer !== receipt.issuer)) return fail('INVALID_KEY');
   if (options.now !== undefined && options.key?.validFrom != null && receipt.issuedAt < options.key.validFrom) return fail('KEY_NOT_YET_VALID');

@@ -30,7 +30,7 @@ const execution = {
   amount: intent.amount,
 };
 
-const unsignedReceipt = buildReceipt({ intent, execution, issuer: 'runproof-example-attester' });
+const unsignedReceipt = buildReceipt({ intent, execution, issuer: 'priorseal-example-attester' });
 const receipt = signReceipt(unsignedReceipt, privateKeyPem);
 
 await mkdir(new URL('./receipt-artifacts/', import.meta.url), { recursive: true });
@@ -38,7 +38,7 @@ await writeFile(new URL('./receipt-artifacts/private-key.pem', import.meta.url),
 await writeFile(new URL('./receipt-artifacts/public-key.pem', import.meta.url), publicKeyPem);
 await writeFile(new URL('./receipt-artifacts/receipt.json', import.meta.url), `${JSON.stringify(receipt, null, 2)}\n`);
 
-console.log('RunProof receipt example complete');
+console.log('PriorSeal receipt example complete');
 console.log(`Intent hash: ${intent.intentHash}`);
 console.log(`Receipt ID:  ${receipt.receiptId}`);
 console.log(`Outcome:     ${receipt.outcome}`);

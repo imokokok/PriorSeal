@@ -11,7 +11,7 @@ const executor = `0x${'a'.repeat(40)}`;
 const intentInput = { intentId: 'authorized-intent-1', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender: executor, recipient: `0x${'b'.repeat(40)}`, validUntil: 2_000, nonce: '7' };
 
 async function signedAuthorization(intent = intentInput, nonceByte = '2') {
-  const draft = buildAuthorization({ intent, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${nonceByte.repeat(64)}`, maxUses: '1', audience: 'runproof', policyHash: `0x${'0'.repeat(64)}` });
+  const draft = buildAuthorization({ intent, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${nonceByte.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}` });
   return buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
 }
 
@@ -72,7 +72,7 @@ test('execution outside the narrower authorization window never completes', asyn
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
-  const draft = buildAuthorization({ intent: { ...intentInput, intentId: 'authorization-window-1' }, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 1_200, authorizationNonce: `0x${'d'.repeat(64)}`, maxUses: '1', audience: 'runproof', policyHash: `0x${'0'.repeat(64)}` });
+  const draft = buildAuthorization({ intent: { ...intentInput, intentId: 'authorization-window-1' }, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 1_200, authorizationNonce: `0x${'d'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}` });
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
   const store = createMemoryStore({ clock: () => 1_001_000 });
   const accepted = await authorizeIntent({ input: authorization, store, privateKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_001_000 });
@@ -88,7 +88,7 @@ test('v2 receipt embeds and verifies the principal identity policy snapshot', as
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
   const policy = { policyId: 'identity-v1', principals: [{ id: 'verified-user', type: 'user', account: account.address, authorizerType: 'eip712' }], allowedChainIds: [8453] };
-  const draft = buildAuthorization({ intent: { ...intentInput, intentId: 'identity-policy-1' }, principal: { type: 'user', id: 'verified-user', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'f'.repeat(64)}`, maxUses: '1', audience: 'runproof', policyHash: `0x${hashJson(policy)}` });
+  const draft = buildAuthorization({ intent: { ...intentInput, intentId: 'identity-policy-1' }, principal: { type: 'user', id: 'verified-user', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'f'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${hashJson(policy)}` });
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
   const store = createMemoryStore({ clock: () => 1_001_000 });
   const accepted = await authorizeIntent({ input: authorization, store, privateKeyPem, issuer: 'test', keyId: 'key-1', policy, now: () => 1_001_000 });

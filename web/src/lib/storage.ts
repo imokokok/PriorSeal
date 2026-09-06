@@ -1,8 +1,8 @@
 import type { AuthorizationRecord, Intent, LocalActivity, Receipt, Execution } from '../types'
 
-const key = 'runproof.local-session.v3'
-const previousKey = 'runproof.local-session.v2'
-const legacyKey = 'runproof.local-session.v1'
+const key = 'priorseal.local-session.v3'
+const previousKey = 'priorseal.local-session.v2'
+const legacyKey = 'priorseal.local-session.v1'
 const empty = (): LocalActivity => ({ intents: [], authorizations: [], receipts: [], observations: [] })
 function valid(value: unknown): value is LocalActivity { if (!value || typeof value !== 'object') return false; const item = value as Partial<LocalActivity>; return Array.isArray(item.intents) && Array.isArray(item.receipts) && Array.isArray(item.observations) }
 export function getActivity(): LocalActivity {
@@ -20,7 +20,7 @@ export const session = {
   saveAuthorization(record: AuthorizationRecord) { const activity = getActivity(); save({ ...activity, authorizations: newest(activity.authorizations, record, (x) => x.authorization.authorizationId === record.authorization.authorizationId) }) },
   saveReceipt(receipt: Receipt) { const activity = getActivity(); if (activity.receipts.some((item) => item.receiptId === receipt.receiptId)) return; save({ ...activity, receipts: newest(activity.receipts, receipt, (x) => x.receiptId === receipt.receiptId) }) },
   saveObservation(observation: Execution) { const activity = getActivity(); save({ ...activity, observations: newest(activity.observations, observation, (x) => x.chainId === observation.chainId && x.txHash === observation.txHash && x.blockHash === observation.blockHash && x.observedAt === observation.observedAt) }) },
-  export() { return JSON.stringify({ schema: 'runproof.local-session.v3', exportedAt: new Date().toISOString(), activity: getActivity() }, null, 2) },
+  export() { return JSON.stringify({ schema: 'priorseal.local-session.v3', exportedAt: new Date().toISOString(), activity: getActivity() }, null, 2) },
   clear() { try { localStorage.removeItem(key); localStorage.removeItem(previousKey); localStorage.removeItem(legacyKey) } catch { /* Storage is best effort. */ } },
   getActivity
 }

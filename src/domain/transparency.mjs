@@ -1,7 +1,7 @@
 import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { canonicalize, hashJson } from './hashing.mjs';
 
-export const TRANSPARENCY_CHECKPOINT_SCHEMA = 'runproof.transparency-checkpoint.v1';
+export const TRANSPARENCY_CHECKPOINT_SCHEMA = 'priorseal.transparency-checkpoint.v1';
 
 export function buildTransparencyEvidence({ entries, acceptance, issuer, keyId, privateKeyPem, issuedAt, anchor = null }) {
   const acceptedIndex = entries.findIndex((entry) => entry.sequence === acceptance.sequence && entry.entryHash === acceptance.entryHash);
@@ -16,7 +16,7 @@ export function buildTransparencyEvidence({ entries, acceptance, issuer, keyId, 
       verifiedAnchor = anchor;
     }
   }
-  const checkpoint = { schema: TRANSPARENCY_CHECKPOINT_SCHEMA, domain: 'runproof/transparency-checkpoint/v1', size: checkpointEntries.length, headEntryHash: checkpointEntries.at(-1)?.entryHash ?? null, issuedAt, issuer, algorithm: 'Ed25519', keyId, anchor: verifiedAnchor };
+  const checkpoint = { schema: TRANSPARENCY_CHECKPOINT_SCHEMA, domain: 'priorseal/transparency-checkpoint/v1', size: checkpointEntries.length, headEntryHash: checkpointEntries.at(-1)?.entryHash ?? null, issuedAt, issuer, algorithm: 'Ed25519', keyId, anchor: verifiedAnchor };
   const signedCheckpoint = privateKeyPem ? { ...checkpoint, signature: sign(null, Buffer.from(canonicalize(checkpoint)), createPrivateKey(privateKeyPem)).toString('base64url') } : checkpoint;
   return { checkpoint: signedCheckpoint, chain: checkpointEntries.slice(acceptedIndex) };
 }

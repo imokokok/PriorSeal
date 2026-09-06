@@ -1,5 +1,5 @@
 import { canonicalize, hashJson } from '../../domain/hashing.mjs';
-import { RunProofError } from '../../domain/errors.mjs';
+import { PriorSealError } from '../../domain/errors.mjs';
 import { DIGICERT_RFC3161_URL, buildTimestampEvidence, createTimestampRequest, verifyTimestampEvidence } from '../../domain/rfc3161.mjs';
 
 export function createDigiCertTimestampProvider({ fetchImpl = globalThis.fetch, timeoutMs = 10_000 } = {}) {
@@ -18,17 +18,17 @@ export function createDigiCertTimestampProvider({ fetchImpl = globalThis.fetch, 
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
-      throw new RunProofError('TIMESTAMP_SERVICE_UNAVAILABLE', `DigiCert timestamp request failed: ${safeReason(error)}`);
+      throw new PriorSealError('TIMESTAMP_SERVICE_UNAVAILABLE', `DigiCert timestamp request failed: ${safeReason(error)}`);
     }
-    if (!response.ok) throw new RunProofError('TIMESTAMP_SERVICE_UNAVAILABLE', `DigiCert timestamp service returned HTTP ${response.status}`);
+    if (!response.ok) throw new PriorSealError('TIMESTAMP_SERVICE_UNAVAILABLE', `DigiCert timestamp service returned HTTP ${response.status}`);
     const contentType = response.headers?.get?.('content-type')?.split(';')[0]?.trim()?.toLowerCase();
-    if (contentType && contentType !== 'application/timestamp-reply') throw new RunProofError('INVALID_TIMESTAMP_RESPONSE', 'DigiCert returned an unexpected content type');
+    if (contentType && contentType !== 'application/timestamp-reply') throw new PriorSealError('INVALID_TIMESTAMP_RESPONSE', 'DigiCert returned an unexpected content type');
     const body = new Uint8Array(await response.arrayBuffer());
-    if (!body.length || body.length > 128 * 1024) throw new RunProofError('INVALID_TIMESTAMP_RESPONSE', 'DigiCert returned an invalid timestamp response size');
+    if (!body.length || body.length > 128 * 1024) throw new PriorSealError('INVALID_TIMESTAMP_RESPONSE', 'DigiCert returned an invalid timestamp response size');
     const authorizationHash = hashJson(authorization);
     const evidence = await buildTimestampEvidence({ response: body, authorizationHash, requestedAt: acceptance.acceptedAt, nonce: request.nonce });
     const verified = await verifyTimestampEvidence(evidence, data, policy, { authorizationHash, requestedAt: acceptance.acceptedAt });
-    if (!verified.valid) throw new RunProofError(verified.code, 'DigiCert timestamp response could not be verified');
+    if (!verified.valid) throw new PriorSealError(verified.code, 'DigiCert timestamp response could not be verified');
     return evidence;
   };
 }

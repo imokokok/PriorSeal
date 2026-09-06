@@ -1,8 +1,8 @@
 import * as asn1js from 'asn1js';
 import { AlgorithmIdentifier, Certificate, CryptoEngine, MessageImprint, PKIStatus, SignedData, TSTInfo, TimeStampReq, TimeStampResp, setEngine } from 'pkijs';
 
-export const RFC3161_POLICY_SCHEMA = 'runproof.timestamp-policy.v1';
-export const RFC3161_EVIDENCE_SCHEMA = 'runproof.rfc3161-evidence.v1';
+export const RFC3161_POLICY_SCHEMA = 'priorseal.timestamp-policy.v1';
+export const RFC3161_EVIDENCE_SCHEMA = 'priorseal.rfc3161-evidence.v1';
 export const DIGICERT_RFC3161_PROFILE = 'digicert-rfc3161-v1';
 export const DIGICERT_RFC3161_URL = 'http://timestamp.digicert.com';
 export const DIGICERT_POLICY_OID = '2.16.840.1.114412.7.1';
@@ -50,7 +50,7 @@ export async function buildTimestampEvidence({ response, authorizationHash, requ
   const responseHash = await sha256Hex(bytes, cryptoProvider);
   return {
     schema: RFC3161_EVIDENCE_SCHEMA,
-    domain: 'runproof/rfc3161-evidence/v1',
+    domain: 'priorseal/rfc3161-evidence/v1',
     profile: DIGICERT_RFC3161_PROFILE,
     tsaUrl,
     authorizationHash,
@@ -106,7 +106,7 @@ export async function verifyTimestampEvidence(evidence, data, policy, { authoriz
 export function validateTimestampEvidenceClaims(evidence, policy, { authorizationHash, requestedAt, before } = {}) {
   try {
     const normalizedPolicy = buildTimestampPolicy(policy);
-    if (!evidence || evidence.schema !== RFC3161_EVIDENCE_SCHEMA || evidence.domain !== 'runproof/rfc3161-evidence/v1') return invalid('INVALID_TIMESTAMP_EVIDENCE');
+    if (!evidence || evidence.schema !== RFC3161_EVIDENCE_SCHEMA || evidence.domain !== 'priorseal/rfc3161-evidence/v1') return invalid('INVALID_TIMESTAMP_EVIDENCE');
     if (evidence.profile !== normalizedPolicy.profile || evidence.tsaUrl !== DIGICERT_RFC3161_URL || evidence.digestAlgorithm !== 'SHA-256') return invalid('INVALID_TIMESTAMP_PROFILE');
     if (evidence.authorizationHash !== authorizationHash || evidence.requestedAt !== requestedAt) return invalid('TIMESTAMP_AUTHORIZATION_MISMATCH');
     if (!Number.isSafeInteger(evidence.timestamp) || evidence.timestamp < requestedAt - normalizedPolicy.maxClockSkewSeconds || evidence.timestamp > requestedAt + normalizedPolicy.maxClockSkewSeconds) return invalid('TIMESTAMP_CLOCK_SKEW');
@@ -152,7 +152,7 @@ function certificateFingerprint(certificate) {
 }
 
 function configureEngine(crypto) {
-  setEngine('runproof-rfc3161', crypto, new CryptoEngine({ name: 'runproof-rfc3161', crypto, subtle: crypto.subtle }));
+  setEngine('priorseal-rfc3161', crypto, new CryptoEngine({ name: 'priorseal-rfc3161', crypto, subtle: crypto.subtle }));
 }
 
 function requireCrypto(value) {

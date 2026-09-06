@@ -63,7 +63,7 @@ test('signed authorization is accepted before execution and produces a v2 receip
   const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
   const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);
   const executionIntent = { ...intent, intentId: 'intent-authorized-api', sender: account.address.toLowerCase(), validUntil: 2_000 };
-  const draft = buildAuthorization({ intent: executionIntent, principal: { type: 'organization', id: 'org-test', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-test', executor: account.address }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'2'.repeat(64)}`, maxUses: '1', audience: 'runproof', policyHash: `0x${'0'.repeat(64)}` });
+  const draft = buildAuthorization({ intent: executionIntent, principal: { type: 'organization', id: 'org-test', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-test', executor: account.address }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'2'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}` });
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
   const txHash = `0x${'5'.repeat(64)}`;
   const server = createHttpServer({ privateKeyPem, publicKeyPem, now: () => 1_001_000, observer: async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_100, observedAt: 1_101, sender: account.address.toLowerCase(), recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'test' }) });
@@ -73,18 +73,18 @@ test('signed authorization is accepted before execution and produces a v2 receip
   const authorizationId = accepted.json().authorization.authorizationId;
   const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ authorizationId, chainId: 8453, txHash, confirmations: 12 }) });
   assert.equal(observed.status, 200);
-  assert.equal(observed.json().receipt.schema, 'runproof.execution-receipt.v2');
+  assert.equal(observed.json().receipt.schema, 'priorseal.execution-receipt.v2');
   assert.equal(observed.json().receipt.binding.bound, true);
   assert.equal(observed.json().verification.valid, true);
   const verified = await request(server, '/v1/receipts/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receipt: observed.json().receipt }) });
   assert.equal(verified.json().result.valid, true);
 });
 test('serves the production console and preserves API 404 responses', async (t) => {
-  const staticDir = await mkdtemp(join(tmpdir(), 'runproof-static-'));
-  await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>RunProof console</title>');
+  const staticDir = await mkdtemp(join(tmpdir(), 'priorseal-static-'));
+  await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>PriorSeal console</title>');
   const server = createHttpServer({ staticDir }); t.after(() => server.close());
   const root = await request(server, '/'); const route = await request(server, '/app/receipts'); const missingApi = await request(server, '/v1/missing');
-  assert.equal(root.status, 200); assert.match(root.headers['content-type'], /^text\/html/); assert.match(root.text(), /RunProof console/);
+  assert.equal(root.status, 200); assert.match(root.headers['content-type'], /^text\/html/); assert.match(root.text(), /PriorSeal console/);
   assert.equal(route.status, 200); assert.equal(route.text(), root.text());
   assert.equal(missingApi.status, 404); assert.equal(missingApi.json().error.code, 'NOT_FOUND');
 });

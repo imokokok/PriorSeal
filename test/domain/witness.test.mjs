@@ -32,7 +32,7 @@ function keys() {
 
 function witnessPolicy(entries) {
   return {
-    schema: 'runproof.witness-policy.v1',
+    schema: 'priorseal.witness-policy.v1',
     threshold: 2,
     maxClockSkewSeconds: 60,
     witnesses: entries.map((entry, index) => ({ witnessId: `witness-${index + 1}`, keyId: 'key-1', algorithm: 'Ed25519', publicKey: entry.publicKey })),
@@ -43,7 +43,7 @@ test('2-of-3 witness evidence is portable and rejects duplicate or mutated attes
   const witnessKeys = [keys(), keys(), keys()];
   const policy = witnessPolicy(witnessKeys);
   const authorization = { authorizationId: 'auth_test', intentHash: '1'.repeat(64), issuedAt: 1_000, expiresAt: 2_000 };
-  const request = witnessRequestForAuthorization(authorization, { requester: 'runproof-test', requestedAt: 1_001 });
+  const request = witnessRequestForAuthorization(authorization, { requester: 'priorseal-test', requestedAt: 1_001 });
   const attestations = witnessKeys.slice(0, 2).map((entry, index) => signWitnessAttestation(buildWitnessAttestation({ request, witnessId: `witness-${index + 1}`, keyId: 'key-1', observedAt: 1_002 + index }), entry.privateKey));
   const evidence = buildWitnessEvidence({ request, attestations, policy });
   assert.equal(verifyWitnessEvidence(evidence, authorization, policy, { expectedRequestedAt: 1_001, before: 1_100 }).valid, true);
@@ -56,7 +56,7 @@ test('HTTP witness nodes collect a verified quorum and replay the same request s
   const policy = witnessPolicy(witnessKeys);
   const servers = witnessKeys.map((entry, index) => createWitnessHttpServer({ witnessId: `witness-${index + 1}`, keyId: 'key-1', privateKeyPem: entry.privateKey, publicKeyPem: entry.publicKey, bearerToken: 'secret', now: () => 1_002_000 }));
   const endpoints = servers.map((_, index) => ({ witnessId: `witness-${index + 1}`, url: `http://witness-${index + 1}.test`, bearerToken: 'secret' }));
-  const provider = createHttpWitnessProvider({ policy, endpoints, requester: 'runproof-test', fetchImpl: async (url, options) => invokeServer(servers[Number(new URL(url).hostname.match(/\d+/)[0]) - 1], new URL(url).pathname, options) });
+  const provider = createHttpWitnessProvider({ policy, endpoints, requester: 'priorseal-test', fetchImpl: async (url, options) => invokeServer(servers[Number(new URL(url).hostname.match(/\d+/)[0]) - 1], new URL(url).pathname, options) });
   const authorization = { authorizationId: 'auth_http_test', intentHash: '2'.repeat(64), issuedAt: 1_000, expiresAt: 2_000 };
   const acceptance = { acceptedAt: 1_001 };
   const first = await provider({ authorization, acceptance });
@@ -87,7 +87,7 @@ test('signed authorization policy binds witness keys and receipt verification en
   const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);
   const executor = `0x${'a'.repeat(40)}`;
   const intent = { intentId: 'witnessed-intent-1', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender: executor, recipient: `0x${'b'.repeat(40)}`, validUntil: 2_000, nonce: '1' };
-  const draft = buildAuthorization({ intent, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'9'.repeat(64)}`, maxUses: '1', audience: 'runproof', policyHash: `0x${hashJson(policy)}` });
+  const draft = buildAuthorization({ intent, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'9'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${hashJson(policy)}` });
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
   const witnessProvider = async ({ authorization: value, acceptance }) => {
     const request = witnessRequestForAuthorization(value, { requester: 'test', requestedAt: acceptance.acceptedAt });

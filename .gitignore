@@ -2,7 +2,7 @@ node_modules/
 .env
 .env.local
 .env.*.local
-.runproof/
+.priorseal/
 web/dist/
 examples/receipt-artifacts/
 *.log

@@ -3,19 +3,19 @@ pragma solidity ^0.8.24;
 
 /// @notice Reference Safe module for authorization-enforced execution.
 /// @dev This contract has not been audited. Do not enable it on a production Safe.
-interface IRunProofSafe {
+interface IPriorSealSafe {
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4);
     function execTransactionFromModule(address to, uint256 value, bytes calldata data, uint8 operation) external returns (bool success);
 }
 
-contract RunProofAuthorizationModule {
+contract PriorSealAuthorizationModule {
     bytes4 private constant EIP1271_MAGIC_VALUE = 0x1626ba7e;
     bytes32 private constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 private constant INTENT_TYPEHASH = keccak256("AuthorizedCall(address executor,address to,uint256 value,bytes32 dataHash,uint256 notBefore,uint256 validUntil,bytes32 nonce)");
-    bytes32 private constant NAME_HASH = keccak256("RunProof Authorization Module");
+    bytes32 private constant NAME_HASH = keccak256("PriorSeal Authorization Module");
     bytes32 private constant VERSION_HASH = keccak256("1");
 
-    IRunProofSafe public immutable safe;
+    IPriorSealSafe public immutable safe;
     mapping(bytes32 nonce => bool consumed) public consumedNonces;
 
     struct AuthorizedCall {
@@ -32,7 +32,7 @@ contract RunProofAuthorizationModule {
 
     constructor(address safeAddress) {
         require(safeAddress != address(0), "SAFE_REQUIRED");
-        safe = IRunProofSafe(safeAddress);
+        safe = IPriorSealSafe(safeAddress);
     }
 
     function executeAuthorized(AuthorizedCall calldata intent, bytes calldata data, bytes calldata safeSignature) external returns (bool success) {

@@ -8,7 +8,7 @@ import { createPostgresStore } from '../infrastructure/persistence/postgres-stor
 import { createRpcClient } from '../infrastructure/blockchain/evm/rpc-client.mjs';
 import { getRpcUrls } from '../infrastructure/blockchain/evm/chains.mjs';
 import { erc1271CallData } from '../domain/authorization.mjs';
-import { RunProofError } from '../domain/errors.mjs';
+import { PriorSealError } from '../domain/errors.mjs';
 import { readPolicyFile } from '../infrastructure/policy/file-policy-provider.mjs';
 import { createObservationWorker } from '../application/observations/observation-worker.mjs';
 import { observeExecution } from '../application/observations/observe-execution.mjs';
@@ -53,7 +53,7 @@ const verifyContractSignature = async ({ authorization, digest, signature }) => 
 if (publicKeyPem) registry.add({ issuer: config.issuer, keyId: config.keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null });
 const transparencyProvider = store && privateKeyPem ? async (acceptance) => {
   const evidence = buildTransparencyEvidence({ entries: await store.listAuthorizationLog(), acceptance, issuer: config.issuer, keyId: config.keyId, privateKeyPem, issuedAt: Math.floor(Date.now() / 1000), anchor: await loadTransparencyAnchor() });
-  if (config.requireExternalAnchor && !evidence.checkpoint.anchor) throw new RunProofError('TRANSPARENCY_ANCHOR_REQUIRED', 'A verified external anchor covering this authorization is required before execution');
+  if (config.requireExternalAnchor && !evidence.checkpoint.anchor) throw new PriorSealError('TRANSPARENCY_ANCHOR_REQUIRED', 'A verified external anchor covering this authorization is required before execution');
   return evidence;
 } : null;
 const worker = store ? createObservationWorker({ store, observe: async (input) => (await observeExecution({ input, store, observer: observeEvm, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response.observation, saveObservation: (observation) => store.saveObservation(observation) }) : null;

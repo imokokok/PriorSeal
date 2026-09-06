@@ -1,7 +1,7 @@
 {
-  "schema": "runproof.witness-endpoints.v1",
+  "schema": "priorseal.witness-endpoints.v1",
   "endpoints": [
-    { "witnessId": "runproof", "url": "https://witness.runproof.example", "bearerToken": "REPLACE_FROM_SECRET_MANAGER" },
+    { "witnessId": "priorseal", "url": "https://witness.priorseal.example", "bearerToken": "REPLACE_FROM_SECRET_MANAGER" },
     { "witnessId": "customer", "url": "https://witness.customer.example", "bearerToken": "REPLACE_FROM_SECRET_MANAGER" },
     { "witnessId": "auditor", "url": "https://witness.auditor.example", "bearerToken": "REPLACE_FROM_SECRET_MANAGER" }
   ]

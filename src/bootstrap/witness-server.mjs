@@ -6,15 +6,15 @@ import { createPostgresWitnessStore } from '../infrastructure/witness/postgres-w
 import { createWitnessHttpServer } from '../interfaces/http/create-witness-http-server.mjs';
 
 const { Pool } = pg;
-const environment = process.env.RUNPROOF_ENVIRONMENT ?? 'development';
+const environment = process.env.PRIORSEAL_ENVIRONMENT ?? 'development';
 const port = integer(process.env.PORT ?? '3101', 'PORT', 1, 65_535);
-const witnessId = required(process.env.RUNPROOF_WITNESS_ID, 'RUNPROOF_WITNESS_ID');
-const keyId = required(process.env.RUNPROOF_WITNESS_KEY_ID, 'RUNPROOF_WITNESS_KEY_ID');
-const privateKeyFile = required(process.env.RUNPROOF_WITNESS_PRIVATE_KEY_FILE, 'RUNPROOF_WITNESS_PRIVATE_KEY_FILE');
-const publicKeyFile = required(process.env.RUNPROOF_WITNESS_PUBLIC_KEY_FILE, 'RUNPROOF_WITNESS_PUBLIC_KEY_FILE');
+const witnessId = required(process.env.PRIORSEAL_WITNESS_ID, 'PRIORSEAL_WITNESS_ID');
+const keyId = required(process.env.PRIORSEAL_WITNESS_KEY_ID, 'PRIORSEAL_WITNESS_KEY_ID');
+const privateKeyFile = required(process.env.PRIORSEAL_WITNESS_PRIVATE_KEY_FILE, 'PRIORSEAL_WITNESS_PRIVATE_KEY_FILE');
+const publicKeyFile = required(process.env.PRIORSEAL_WITNESS_PUBLIC_KEY_FILE, 'PRIORSEAL_WITNESS_PUBLIC_KEY_FILE');
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (environment === 'production' && !databaseUrl) throw new TypeError('Production witness requires DATABASE_URL');
-if (environment === 'production' && !process.env.RUNPROOF_WITNESS_BEARER_TOKEN) throw new TypeError('Production witness requires RUNPROOF_WITNESS_BEARER_TOKEN');
+if (environment === 'production' && !process.env.PRIORSEAL_WITNESS_BEARER_TOKEN) throw new TypeError('Production witness requires PRIORSEAL_WITNESS_BEARER_TOKEN');
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
 const keys = createFileKeyProvider({ privateKeyFile, publicKeyFile });
 const privateKeyPem = keys.getPrivateKey();
@@ -31,8 +31,8 @@ const server = createWitnessHttpServer({
   privateKeyPem,
   publicKeyPem,
   ...(pool ? { store: createPostgresWitnessStore(pool) } : {}),
-  bearerToken: process.env.RUNPROOF_WITNESS_BEARER_TOKEN,
-  maxRequestAgeSeconds: integer(process.env.RUNPROOF_WITNESS_MAX_REQUEST_AGE_SECONDS ?? '300', 'RUNPROOF_WITNESS_MAX_REQUEST_AGE_SECONDS', 1, 3600),
+  bearerToken: process.env.PRIORSEAL_WITNESS_BEARER_TOKEN,
+  maxRequestAgeSeconds: integer(process.env.PRIORSEAL_WITNESS_MAX_REQUEST_AGE_SECONDS ?? '300', 'PRIORSEAL_WITNESS_MAX_REQUEST_AGE_SECONDS', 1, 3600),
 });
 server.listen(port, () => console.log(JSON.stringify({ level: 'info', event: 'witness.started', witnessId, port, storage: pool ? 'postgresql' : 'memory' })));
 

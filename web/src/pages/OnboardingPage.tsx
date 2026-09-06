@@ -15,7 +15,7 @@ export function OnboardingPage() {
   }, [])
 
   const steps = [
-    { title: 'Sign and timestamp a bounded intent', done: activity.authorizations.length > 0, copy: 'Choose exact constraints, authorize them with EIP-712, then let RunProof obtain the independent RFC 3161 timestamp.', action: '/app/intents/new', label: 'Sign intent' },
+    { title: 'Sign and timestamp a bounded intent', done: activity.authorizations.length > 0, copy: 'Choose exact constraints, authorize them with EIP-712, then let PriorSeal obtain the independent RFC 3161 timestamp.', action: '/app/intents/new', label: 'Sign intent' },
     { title: 'Observe one transaction', done: activity.observations.length > 0, copy: 'Submit an EVM transaction hash. Pending and unavailable results remain explicitly uncertain.', action: '/app/observe', label: 'Observe execution' },
     { title: 'Inspect and verify evidence', done: activity.receipts.length > 0, copy: 'Recompute authorization, DigiCert timestamp, hashes, binding and issuer signatures locally.', action: activity.receipts[0] ? `/app/receipts/${encodeURIComponent(activity.receipts[0].receiptId)}` : '/app/verify', label: activity.receipts.length ? 'Open receipt' : 'Open verifier' },
   ]

@@ -21,7 +21,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     return data as T
   } catch (caught) {
     if (caught instanceof DOMException && caught.name === 'AbortError') {
-      const error = new Error('The API did not respond within 15 seconds. Check that the RunProof API is running.') as ApiError
+      const error = new Error('The API did not respond within 15 seconds. Check that the PriorSeal API is running.') as ApiError
       error.code = 'REQUEST_TIMEOUT'; throw error
     }
     throw caught
@@ -36,5 +36,5 @@ export const api = {
   observe: (input: { intentId?: string; authorizationId?: string; chainId: number; txHash: string; confirmations: number }) => request<{ observation: Execution; receipt: Receipt | null; verification?: VerificationResult }>('/v1/executions/observe', { method: 'POST', body: JSON.stringify(input) }),
   receipt: (id: string) => request<Receipt>(`/v1/receipts/${encodeURIComponent(id)}`),
   verify: (receipt: Receipt) => request<{ convenienceEndpoint: true; independentVerification: string; result: VerificationResult }>('/v1/receipts/verify', { method: 'POST', body: JSON.stringify({ receipt }) }),
-  keys: () => request<KeyRegistry>('/.well-known/runproof-keys.json')
+  keys: () => request<KeyRegistry>('/.well-known/priorseal-keys.json')
 }

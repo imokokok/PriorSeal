@@ -1,6 +1,6 @@
 # Threat model
 
-RunProof never holds wallet/transaction signing keys or moves assets. The Ed25519 issuer key signs only evidence statements.
+PriorSeal never holds wallet/transaction signing keys or moves assets. The Ed25519 issuer key signs only evidence statements.
 
 | Threat | Control |
 | --- | --- |
@@ -12,7 +12,7 @@ RunProof never holds wallet/transaction signing keys or moves assets. The Ed2551
 | False or post-hoc authorization | EIP-712/ERC-1271 authorizer signature, optional reviewed `policy.principals` identity mapping, complete embedded intent, issuer acceptance time, ordered hash-chain entry, single-use nonce, executor binding; use RFC 3161, a separately operated witness quorum, an external checkpoint anchor, or a Safe module when issuer-independent ordering is required |
 | TSA compromise or incorrect clock | The signed policy pins the DigiCert profile; verification pins DigiCert roots, policy OID, Time Stamping EKU, imprint and nonce. Operational monitoring and a reviewed trust-profile release are still required; RFC 3161 is not decentralized consensus. |
 | Witness forgery/collusion | Principal-signed policy binds threshold and distinct Ed25519 keys; duplicate identities/keys and post-execution attestations are rejected. Independence still depends on separate operators, protected keys, and trustworthy clocks; a threshold of colluding operators can lie about time. |
-| Cross-deployment signature reuse | signed authorization audience and EIP-712 chain domain; configure a unique `RUNPROOF_AUTHORIZATION_AUDIENCE` per trust domain |
+| Cross-deployment signature reuse | signed authorization audience and EIP-712 chain domain; configure a unique `PRIORSEAL_AUTHORIZATION_AUDIENCE` per trust domain |
 | Reorg | immutable evidence versions, block hash detection, new reorg receipt rather than overwrite |
 | Key compromise | file-only local provider, registry status/validity, rotation/revocation runbook; use KMS/HSM adapter in production |
 | DoS/log leakage | bounded bodies, timeout, minimal errors, structured-event injection point; never log key material/auth/body/connection strings |

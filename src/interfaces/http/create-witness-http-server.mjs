@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { attestAuthorization } from '../../application/witnesses/attest-authorization.mjs';
-import { RunProofError } from '../../domain/errors.mjs';
+import { PriorSealError } from '../../domain/errors.mjs';
 import { createMemoryWitnessStore } from '../../infrastructure/witness/memory-witness-store.mjs';
 import { createMemoryRateLimiter } from './rate-limiter.mjs';
 import { readJsonBody, requestPath } from './request-parser.mjs';
@@ -20,15 +20,15 @@ export function createWitnessHttpServer({ witnessId, keyId = 'default', privateK
       const path = requestPath(req);
       if (req.method === 'GET' && path === '/health/live') return respond(200, { status: 'ok', requestId });
       if (req.method === 'GET' && path === '/health/ready') return respond(200, { status: 'ready', storage: await store.health(), requestId });
-      if (req.method === 'GET' && path === '/.well-known/runproof-witness-key.json') return respond(200, { schema: 'runproof.witness-key.v1', witnessId, keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, requestId }, { 'cache-control': 'public, max-age=300' });
-      if (req.method !== 'POST' || path !== '/v1/witness/attest') throw new RunProofError('NOT_FOUND', 'Route not found');
-      if (!authorized(req.headers.authorization, bearerToken)) throw new RunProofError('UNAUTHORIZED', 'Witness credentials are invalid');
-      if (!rateLimiter.allow(req.socket.remoteAddress ?? 'unknown', now())) throw new RunProofError('RATE_LIMITED', 'Too many requests');
+      if (req.method === 'GET' && path === '/.well-known/priorseal-witness-key.json') return respond(200, { schema: 'priorseal.witness-key.v1', witnessId, keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, requestId }, { 'cache-control': 'public, max-age=300' });
+      if (req.method !== 'POST' || path !== '/v1/witness/attest') throw new PriorSealError('NOT_FOUND', 'Route not found');
+      if (!authorized(req.headers.authorization, bearerToken)) throw new PriorSealError('UNAUTHORIZED', 'Witness credentials are invalid');
+      if (!rateLimiter.allow(req.socket.remoteAddress ?? 'unknown', now())) throw new PriorSealError('RATE_LIMITED', 'Too many requests');
       const body = await readJsonBody(req, maxBodyBytes, controller.signal);
       const result = await attestAuthorization({ input: body, witnessId, keyId, privateKeyPem, store, now, maxRequestAgeSeconds });
       return respond(result.replay ? 200 : 201, { attestation: result.attestation, requestId }, result.replay ? { 'idempotency-replayed': 'true' } : {});
     } catch (error) {
-      const code = controller.signal.aborted ? 'REQUEST_TIMEOUT' : error instanceof RunProofError ? error.code : error?.code ?? 'INTERNAL_ERROR';
+      const code = controller.signal.aborted ? 'REQUEST_TIMEOUT' : error instanceof PriorSealError ? error.code : error?.code ?? 'INTERNAL_ERROR';
       const status = ERROR_STATUS[code] ?? 500;
       logger?.error?.({ event: 'witness.request_failed', requestId, code, status });
       return respond(status, errorBody(code, status === 500 ? 'Internal server error' : error.message, requestId));

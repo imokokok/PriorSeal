@@ -29,7 +29,7 @@ export const proofSequence = [
   {
     number: '05',
     title: 'Verify',
-    body: 'Issue a signed receipt that can be downloaded and checked independently of RunProof.',
+    body: 'Issue a signed receipt that can be downloaded and checked independently of PriorSeal.',
   },
 ] as const
 
@@ -40,7 +40,7 @@ export const audiences = [
   },
   {
     label: 'Treasury teams',
-    text: 'Connect a pre-approved instruction to an observed on-chain execution without handing RunProof a wallet.',
+    text: 'Connect a pre-approved instruction to an observed on-chain execution without handing PriorSeal a wallet.',
   },
   {
     label: 'Auditors',
@@ -51,7 +51,7 @@ export const audiences = [
 export const boundaries = [
   ['A valid receipt proves', 'The issuer signed the claims contained in that receipt.'],
   ['It does not prove', 'Economic safety, token legitimacy, or that an RPC source is infallible.'],
-  ['RunProof never needs', 'Custody of assets, a connected wallet, or transaction-signing keys.'],
+  ['PriorSeal never needs', 'Custody of assets, a connected wallet, or transaction-signing keys.'],
 ] as const
 
 export const receiptLines = [

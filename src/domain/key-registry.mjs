@@ -1,4 +1,4 @@
-export const KEY_REGISTRY_SCHEMA = 'runproof.keys.v1';
+export const KEY_REGISTRY_SCHEMA = 'priorseal.keys.v1';
 
 export function createKeyRegistry(entries = []) {
   const keys = new Map();

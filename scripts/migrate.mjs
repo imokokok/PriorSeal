@@ -14,7 +14,7 @@ const pool = new Pool({ connectionString });
 const client = await pool.connect();
 
 try {
-  await client.query("SELECT pg_advisory_lock(hashtext('runproof:migrations'))");
+  await client.query("SELECT pg_advisory_lock(hashtext('priorseal:migrations'))");
   await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())');
   for (const name of files) {
     const sql = await readFile(join(migrationsDirectory.pathname, name), 'utf8');
@@ -36,7 +36,7 @@ try {
     }
   }
 } finally {
-  await client.query("SELECT pg_advisory_unlock(hashtext('runproof:migrations'))").catch(() => {});
+  await client.query("SELECT pg_advisory_unlock(hashtext('priorseal:migrations'))").catch(() => {});
   client.release();
   await pool.end();
 }

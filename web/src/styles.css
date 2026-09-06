@@ -74,11 +74,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .side-top { display: flex; align-items: center; justify-content: space-between; padding-bottom: 26px; border-bottom: 1px solid rgba(247,245,239,.2); }
 .logo { width: max-content; display: inline-flex; align-items: center; gap: 12px; }
 .logo-symbol { width: 40px; height: 40px; flex: 0 0 auto; }
-.runproof-mark { width: 100%; height: 100%; display: block; overflow: visible; }
-.runproof-mark-blue, .runproof-mark-ink { fill: none; stroke-width: 7; stroke-linecap: square; stroke-linejoin: bevel; }
-.runproof-mark-blue { stroke: var(--blue); }
-.runproof-mark-ink { stroke: currentColor; }
-.runproof-mark-proof { fill: var(--copper); }
+.priorseal-mark { width: 100%; height: 100%; display: block; overflow: visible; }
+.priorseal-mark-blue, .priorseal-mark-ink { fill: none; stroke-width: 7; stroke-linecap: square; stroke-linejoin: bevel; }
+.priorseal-mark-blue { stroke: var(--blue); }
+.priorseal-mark-ink { stroke: currentColor; }
+.priorseal-mark-proof { fill: var(--copper); }
 .logo-type { display: grid; font-size: 16px; font-weight: 650; letter-spacing: -.03em; }
 .logo-type small { margin-top: 3px; color: #a9a69f; font: 8px "JetBrains Mono", monospace; letter-spacing: .13em; text-transform: uppercase; }
 

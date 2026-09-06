@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { RunProofError } from '../../domain/errors.mjs';
+import { PriorSealError } from '../../domain/errors.mjs';
 import { buildWitnessEvidence, buildWitnessPolicy, verifyWitnessAttestation, witnessRequestForAuthorization } from '../../domain/witness.mjs';
 import { assertOnlyFields, assertSafeJson } from '../../shared/safe-json.mjs';
 
@@ -9,7 +9,7 @@ export function readWitnessEndpoints(file, { requireHttps = false } = {}) {
   try { input = JSON.parse(readFileSync(file, 'utf8')); } catch (error) { throw new TypeError(`Unable to read witness endpoints: ${error.message}`); }
   assertSafeJson(input);
   assertOnlyFields(input, ['schema', 'endpoints'], 'witness endpoints');
-  if (input.schema !== 'runproof.witness-endpoints.v1' || !Array.isArray(input.endpoints)) throw new TypeError('Witness endpoint file must use runproof.witness-endpoints.v1');
+  if (input.schema !== 'priorseal.witness-endpoints.v1' || !Array.isArray(input.endpoints)) throw new TypeError('Witness endpoint file must use priorseal.witness-endpoints.v1');
   const endpoints = input.endpoints.map((entry, index) => {
     assertOnlyFields(entry, ['witnessId', 'url', 'bearerToken'], `witness endpoint ${index}`);
     let url;
@@ -53,7 +53,7 @@ export function createHttpWitnessProvider({ policy, endpoints, requester, fetchI
     const attestations = results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
     if (attestations.length < normalizedPolicy.threshold) {
       const failures = results.map((result, index) => result.status === 'rejected' ? { witnessId: normalizedPolicy.witnesses[index].witnessId, reason: safeReason(result.reason) } : null).filter(Boolean);
-      throw new RunProofError('WITNESS_QUORUM_UNAVAILABLE', `Only ${attestations.length} of ${normalizedPolicy.threshold} required witness signatures were collected`, { threshold: normalizedPolicy.threshold, collected: attestations.length, failures });
+      throw new PriorSealError('WITNESS_QUORUM_UNAVAILABLE', `Only ${attestations.length} of ${normalizedPolicy.threshold} required witness signatures were collected`, { threshold: normalizedPolicy.threshold, collected: attestations.length, failures });
     }
     return buildWitnessEvidence({ request, attestations, policy: normalizedPolicy });
   };

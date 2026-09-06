@@ -2,10 +2,10 @@ import pg from 'pg';
 import { encodeFunctionData, isAddress } from 'viem';
 
 const { Pool } = pg;
-const contract = process.env.RUNPROOF_ANCHOR_CONTRACT;
-const chainId = Number(process.env.RUNPROOF_ANCHOR_CHAIN_ID);
-if (!isAddress(contract ?? '')) throw new TypeError('RUNPROOF_ANCHOR_CONTRACT must be configured');
-if (!Number.isSafeInteger(chainId) || chainId < 1) throw new TypeError('RUNPROOF_ANCHOR_CHAIN_ID must be configured');
+const contract = process.env.PRIORSEAL_ANCHOR_CONTRACT;
+const chainId = Number(process.env.PRIORSEAL_ANCHOR_CHAIN_ID);
+if (!isAddress(contract ?? '')) throw new TypeError('PRIORSEAL_ANCHOR_CONTRACT must be configured');
+if (!Number.isSafeInteger(chainId) || chainId < 1) throw new TypeError('PRIORSEAL_ANCHOR_CHAIN_ID must be configured');
 const connectionString = secureConnectionString(process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL);
 if (!connectionString) throw new TypeError('DATABASE_URL_UNPOOLED is required');
 

@@ -38,10 +38,10 @@ export async function verifyReceiptOffline(receipt: Receipt, key: KeyEntry, now 
   try {
     if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) return fail('INVALID_RECEIPT')
     if (!receipt.signature) return fail('MISSING_SIGNATURE')
-    if (receipt.schema === 'runproof.execution-receipt.v2') return await verifyAuthorizedReceiptOffline(receipt, key, now)
-    if (receipt.schema !== 'runproof.execution-receipt.v1') return fail('UNSUPPORTED_SCHEMA')
+    if (receipt.schema === 'priorseal.execution-receipt.v2') return await verifyAuthorizedReceiptOffline(receipt, key, now)
+    if (receipt.schema !== 'priorseal.execution-receipt.v1') return fail('UNSUPPORTED_SCHEMA')
     if (receipt.algorithm !== 'Ed25519') return fail('UNSUPPORTED_ALGORITHM')
-    if (receipt.domain !== 'runproof/execution-receipt/v1') return fail('INVALID_DOMAIN')
+    if (receipt.domain !== 'priorseal/execution-receipt/v1') return fail('INVALID_DOMAIN')
     if (!key || key.keyId !== receipt.keyId) return fail('UNKNOWN_KEY')
     if (key.algorithm !== 'Ed25519' || key.status === 'revoked' || key.issuer !== receipt.issuer) return fail('INVALID_KEY')
     if (key.validFrom != null && receipt.issuedAt < key.validFrom) return fail('KEY_NOT_YET_VALID')
@@ -86,14 +86,14 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (!evidence?.authorization || !evidence.acceptance) return fail('MISSING_AUTHORIZATION_EVIDENCE')
   const authorization = evidence.authorization
   const acceptance = evidence.acceptance
-  if (receipt.domain !== 'runproof/execution-receipt/v2' || receipt.algorithm !== 'Ed25519') return fail('INVALID_DOMAIN')
-  if (authorization.schema !== 'runproof.authorization.v1' || authorization.domain !== 'runproof/authorization/v1') return fail('INVALID_AUTHORIZATION')
-  if (authorization.intent.schema !== 'runproof.intent.v1') return fail('INVALID_AUTHORIZATION')
+  if (receipt.domain !== 'priorseal/execution-receipt/v2' || receipt.algorithm !== 'Ed25519') return fail('INVALID_DOMAIN')
+  if (authorization.schema !== 'priorseal.authorization.v1' || authorization.domain !== 'priorseal/authorization/v1') return fail('INVALID_AUTHORIZATION')
+  if (authorization.intent.schema !== 'priorseal.intent.v1') return fail('INVALID_AUTHORIZATION')
   if (authorization.principal.account.toLowerCase() !== authorization.authorizer.address.toLowerCase()) return fail('INVALID_AUTHORIZATION')
   if (!['eip712', 'eip1271'].includes(authorization.authorizer.type) || authorization.maxUses !== '1') return fail('INVALID_AUTHORIZATION')
   if (!/^0x[0-9a-f]{64}$/i.test(authorization.authorizationNonce) || !/^0x[0-9a-f]{64}$/i.test(authorization.policyHash) || !authorization.audience) return fail('INVALID_AUTHORIZATION')
   if (authorization.notBefore < authorization.issuedAt || authorization.expiresAt < authorization.notBefore || authorization.expiresAt > authorization.intent.validUntil) return fail('INVALID_AUTHORIZATION')
-  if (acceptance.schema !== 'runproof.authorization-receipt.v1' || acceptance.domain !== 'runproof/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519') return fail('INVALID_AUTHORIZATION_RECEIPT')
+  if (acceptance.schema !== 'priorseal.authorization-receipt.v1' || acceptance.domain !== 'priorseal/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519') return fail('INVALID_AUTHORIZATION_RECEIPT')
   if (acceptance.acceptedAt < authorization.notBefore || acceptance.acceptedAt > authorization.expiresAt || authorization.issuedAt > acceptance.acceptedAt) return fail('INVALID_AUTHORIZATION_RECEIPT')
   if (!key || key.keyId !== receipt.keyId) return fail('UNKNOWN_KEY')
   if (key.algorithm !== 'Ed25519' || key.status === 'revoked' || key.issuer !== receipt.issuer) return fail('INVALID_KEY')
@@ -127,11 +127,11 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (authorization.authorizer.type === 'eip1271') return fail('AUTHORIZATION_REQUIRES_CHAIN_VERIFICATION')
   const authorizationValid = await verifyTypedData({
     address: authorization.authorizer.address as `0x${string}`,
-    domain: { name: 'RunProof', version: '1', chainId: Number(authorization.intent.chainId) },
-    types: { RunProofAuthorization: [
+    domain: { name: 'PriorSeal', version: '1', chainId: Number(authorization.intent.chainId) },
+    types: { PriorSealAuthorization: [
       { name: 'intentHash', type: 'bytes32' }, { name: 'principalId', type: 'string' }, { name: 'principalAccount', type: 'address' }, { name: 'authorizer', type: 'address' }, { name: 'executor', type: 'address' }, { name: 'issuedAt', type: 'uint256' }, { name: 'notBefore', type: 'uint256' }, { name: 'expiresAt', type: 'uint256' }, { name: 'authorizationNonce', type: 'bytes32' }, { name: 'maxUses', type: 'uint256' }, { name: 'audience', type: 'string' }, { name: 'policyHash', type: 'bytes32' },
     ] },
-    primaryType: 'RunProofAuthorization',
+    primaryType: 'PriorSealAuthorization',
     message: { intentHash: `0x${authorization.intentHash}` as `0x${string}`, principalId: authorization.principal.id, principalAccount: authorization.principal.account as `0x${string}`, authorizer: authorization.authorizer.address as `0x${string}`, executor: authorization.delegate.executor as `0x${string}`, issuedAt: BigInt(authorization.issuedAt), notBefore: BigInt(authorization.notBefore), expiresAt: BigInt(authorization.expiresAt), authorizationNonce: authorization.authorizationNonce as `0x${string}`, maxUses: BigInt(authorization.maxUses), audience: authorization.audience, policyHash: authorization.policyHash as `0x${string}` },
     signature: authorization.signature as `0x${string}`,
   })
@@ -139,7 +139,7 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   const expectedBinding = bindingFor(authorization.intent, receipt.execution, authorization.delegate.executor, acceptance.acceptedAt, authorization.notBefore, authorization.expiresAt)
   if (canonicalize(expectedBinding) !== canonicalize(receipt.binding) || canonicalize(expectedBinding.reasonCodes) !== canonicalize(receipt.reasonCodes)) return fail('BINDING_MISMATCH')
   if (outcomeFor(authorization.intent, receipt.execution, expectedBinding) !== receipt.outcome) return fail('OUTCOME_MISMATCH')
-  const expectedReceiptId = `rpr_${(await hashJson({ authorizationHash, executionHash: receipt.executionHash, issuer: receipt.issuer, keyId: receipt.keyId })).slice(0, 32)}`
+  const expectedReceiptId = `psr_${(await hashJson({ authorizationHash, executionHash: receipt.executionHash, issuer: receipt.issuer, keyId: receipt.keyId })).slice(0, 32)}`
   if (receipt.receiptId !== expectedReceiptId) return fail('RECEIPT_ID_MISMATCH')
   if (!await verifyEd25519(receipt, key.publicKey)) return fail('INVALID_SIGNATURE')
   return { valid: true, code: 'OK', outcome: receipt.outcome, receiptId: receipt.receiptId, authorizationId: authorization.authorizationId }
@@ -214,18 +214,18 @@ async function verifyTransparency(evidence: NonNullable<Receipt['authorizationEv
 }
 
 async function verifyWitnessEvidence(evidence: NonNullable<Receipt['authorizationEvidence']>['witnesses'], authorization: NonNullable<Receipt['authorizationEvidence']>['authorization'], acceptedAt: number, executedAt: number, inputPolicy: Record<string, unknown>) {
-  if (!evidence || evidence.schema !== 'runproof.witness-evidence.v1' || evidence.domain !== 'runproof/witness-evidence/v1') return false
-  if (inputPolicy.schema !== 'runproof.witness-policy.v1' || !Array.isArray(inputPolicy.witnesses)) return false
+  if (!evidence || evidence.schema !== 'priorseal.witness-evidence.v1' || evidence.domain !== 'priorseal/witness-evidence/v1') return false
+  if (inputPolicy.schema !== 'priorseal.witness-policy.v1' || !Array.isArray(inputPolicy.witnesses)) return false
   const witnesses = inputPolicy.witnesses as { witnessId: string; keyId: string; algorithm: string; publicKey: string }[]
   const threshold = Number(inputPolicy.threshold)
   const maxClockSkewSeconds = Number(inputPolicy.maxClockSkewSeconds ?? 60)
   if (!Number.isSafeInteger(threshold) || threshold < 2 || threshold > witnesses.length || !Number.isSafeInteger(maxClockSkewSeconds)) return false
   if (new Set(witnesses.map((entry) => entry.witnessId)).size !== witnesses.length) return false
   if (new Set(witnesses.map((entry) => pemFingerprint(entry.publicKey))).size !== witnesses.length) return false
-  const policy = { schema: 'runproof.witness-policy.v1', threshold, maxClockSkewSeconds, witnesses: witnesses.map((entry) => ({ witnessId: entry.witnessId, keyId: entry.keyId, algorithm: entry.algorithm, publicKey: entry.publicKey.trim() })) }
+  const policy = { schema: 'priorseal.witness-policy.v1', threshold, maxClockSkewSeconds, witnesses: witnesses.map((entry) => ({ witnessId: entry.witnessId, keyId: entry.keyId, algorithm: entry.algorithm, publicKey: entry.publicKey.trim() })) }
   if (evidence.policyHash !== await hashJson(policy)) return false
   const request = evidence.request
-  if (request.schema !== 'runproof.witness-request.v1' || request.domain !== 'runproof/witness-request/v1') return false
+  if (request.schema !== 'priorseal.witness-request.v1' || request.domain !== 'priorseal/witness-request/v1') return false
   if (request.authorizationId !== authorization.authorizationId || request.authorizationHash !== await hashJson(authorization) || request.intentHash !== authorization.intentHash || request.requestedAt !== acceptedAt || request.expiresAt !== authorization.expiresAt) return false
   if (request.requestedAt < authorization.issuedAt || request.requestedAt > authorization.expiresAt) return false
   const requestHash = await hashJson(request)
@@ -233,7 +233,7 @@ async function verifyWitnessEvidence(evidence: NonNullable<Receipt['authorizatio
   for (const attestation of evidence.attestations ?? []) {
     const witness = witnesses.find((entry) => entry.witnessId === attestation.witnessId)
     if (!witness || validWitnesses.has(witness.witnessId) || witness.algorithm !== 'Ed25519') continue
-    if (attestation.schema !== 'runproof.witness-attestation.v1' || attestation.domain !== 'runproof/witness-attestation/v1' || attestation.algorithm !== 'Ed25519') continue
+    if (attestation.schema !== 'priorseal.witness-attestation.v1' || attestation.domain !== 'priorseal/witness-attestation/v1' || attestation.algorithm !== 'Ed25519') continue
     if (attestation.keyId !== witness.keyId || attestation.requestHash !== requestHash || attestation.authorizationId !== request.authorizationId || attestation.authorizationHash !== request.authorizationHash || attestation.intentHash !== request.intentHash || attestation.expiresAt !== request.expiresAt) continue
     if (!Number.isSafeInteger(attestation.observedAt) || attestation.observedAt < request.requestedAt - maxClockSkewSeconds || attestation.observedAt > request.expiresAt || attestation.observedAt > executedAt) continue
     if (await verifyEd25519(attestation, witness.publicKey)) validWitnesses.add(witness.witnessId)
@@ -246,7 +246,7 @@ function pemFingerprint(publicKey: string) {
 }
 
 async function verifyPolicyEvidence(authorization: NonNullable<Receipt['authorizationEvidence']>['authorization'], evidence: NonNullable<Receipt['authorizationEvidence']>['policy'], evaluatedAt: number) {
-  if (!evidence || evidence.schema !== 'runproof.policy-evidence.v1') return false
+  if (!evidence || evidence.schema !== 'priorseal.policy-evidence.v1') return false
   const expectedHash = evidence.document ? `0x${await hashJson(evidence.document)}` : `0x${'0'.repeat(64)}`
   if (evidence.policyHash !== authorization.policyHash || evidence.policyHash !== expectedHash) return false
   const expected = evaluatePolicy(authorization, evidence.document, evaluatedAt)

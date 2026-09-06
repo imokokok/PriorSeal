@@ -18,7 +18,7 @@ export function createPostgresStore(pool) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await client.query("SELECT pg_advisory_xact_lock(hashtext('runproof:authorization-log'))");
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('priorseal:authorization-log'))");
         const existing = await client.query('SELECT sequence,authorization_hash,accepted_at,previous_entry_hash,entry_hash FROM authorization_log WHERE authorization_hash=$1', [authorizationHash]);
         if (existing.rows[0]) { await client.query('COMMIT'); const row = existing.rows[0]; return { sequence: Number(row.sequence), authorizationHash: row.authorization_hash, acceptedAt: Number(row.accepted_at), previousEntryHash: row.previous_entry_hash, entryHash: row.entry_hash }; }
         const previous = await client.query('SELECT sequence,entry_hash FROM authorization_log ORDER BY sequence DESC LIMIT 1');
@@ -64,4 +64,4 @@ export function createPostgresStore(pool) {
 }
 
 function rowToJob(row) { return { jobId: row.job_id, idempotencyKey: row.idempotency_key, input: row.input_json, state: row.state, attempts: row.attempts, nextAttemptAt: new Date(row.next_attempt_at).getTime(), observation: row.observation_json, error: row.error_json, createdAt: new Date(row.created_at).getTime() }; }
-function rowToAuthorization(row) { return { authorization: row.authorization_json, acceptance: row.acceptance_json, policy: row.policy_json?.result ?? row.policy_json, policyEvidence: row.policy_json?.schema === 'runproof.policy-evidence.v1' ? row.policy_json : undefined, ...(row.timestamp_evidence_json ? { timestampEvidence: row.timestamp_evidence_json } : {}), ...(row.witness_evidence_json ? { witnessEvidence: row.witness_evidence_json } : {}), status: row.status, boundTxHash: row.bound_tx_hash, uses: row.uses }; }
+function rowToAuthorization(row) { return { authorization: row.authorization_json, acceptance: row.acceptance_json, policy: row.policy_json?.result ?? row.policy_json, policyEvidence: row.policy_json?.schema === 'priorseal.policy-evidence.v1' ? row.policy_json : undefined, ...(row.timestamp_evidence_json ? { timestampEvidence: row.timestamp_evidence_json } : {}), ...(row.witness_evidence_json ? { witnessEvidence: row.witness_evidence_json } : {}), status: row.status, boundTxHash: row.bound_tx_hash, uses: row.uses }; }

@@ -6,7 +6,7 @@ import test from 'node:test';
 import { createFileKeyProvider } from '../../src/infrastructure/keys/file-key-provider.mjs';
 
 test('normalizes literal newline escapes in secret-store PEM files', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'runproof-key-provider-'));
+  const directory = mkdtempSync(join(tmpdir(), 'priorseal-key-provider-'));
   const privatePath = join(directory, 'private.pem');
   const publicPath = join(directory, 'public.pem');
   try {

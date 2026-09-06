@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @notice Publishes externally ordered RunProof hash-chain checkpoints.
+/// @notice Publishes externally ordered PriorSeal hash-chain checkpoints.
 /// @dev Reference implementation only; ownership and deployment must be reviewed.
-contract RunProofTransparencyAnchor {
+contract PriorSealTransparencyAnchor {
     address public owner;
     address public pendingOwner;
     uint256 public latestSize;

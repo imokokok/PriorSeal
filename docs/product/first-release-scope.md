@@ -1,10 +1,10 @@
-# RunProof first-release product scope
+# PriorSeal first-release product scope
 
 ## Primary user
 
 The first release serves agent builders and treasury engineering teams that need a portable, independently verifiable statement connecting a pre-authorized intent to an observed EVM execution.
 
-Auditors are the primary evidence consumer. They do not need wallet access and should be able to inspect a downloaded receipt or evidence bundle without trusting the RunProof HTTP verification endpoint.
+Auditors are the primary evidence consumer. They do not need wallet access and should be able to inspect a downloaded receipt or evidence bundle without trusting the PriorSeal HTTP verification endpoint.
 
 ## Core journey
 
@@ -28,9 +28,9 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 
 - A new user can understand and complete the evidence flow in under three minutes when API, RPC and issuer signing are configured.
 - Pending, unavailable, reverted, insufficient-finality and reorg states cannot be mistaken for a completed proof.
-- Every signed receipt can be downloaded and checked outside the RunProof service.
+- Every signed receipt can be downloaded and checked outside the PriorSeal service.
 - A completed v2 receipt proves the EIP-712 authorizer signed the exact canonical intent and, in RFC 3161 mode, that an independent TSA timestamped it before the observed block time.
-- Product copy consistently states what RunProof proves and does not prove.
+- Product copy consistently states what PriorSeal proves and does not prove.
 
 ## Explicit non-goals
 

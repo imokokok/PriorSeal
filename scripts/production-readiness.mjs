@@ -6,7 +6,7 @@ import { createRpcClient } from '../src/infrastructure/blockchain/evm/rpc-client
 import { getRpcUrls, SUPPORTED_CHAINS } from '../src/infrastructure/blockchain/evm/chains.mjs';
 import { readWitnessEndpoints } from '../src/infrastructure/witness/http-witness-client.mjs';
 
-if (process.env.RUNPROOF_ENVIRONMENT !== 'production') throw new TypeError('Set RUNPROOF_ENVIRONMENT=production before running the production readiness check');
+if (process.env.PRIORSEAL_ENVIRONMENT !== 'production') throw new TypeError('Set PRIORSEAL_ENVIRONMENT=production before running the production readiness check');
 const config = loadRuntimeConfig();
 const policy = readPolicyFile(config.policyFile);
 if (!policy?.principals?.length) throw new TypeError('Production policy must contain at least one reviewed principal');

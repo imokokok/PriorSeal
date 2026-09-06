@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import solc from 'solc';
 
-const names = ['RunProofAuthorizationModule.sol', 'RunProofTransparencyAnchor.sol'];
+const names = ['PriorSealAuthorizationModule.sol', 'PriorSealTransparencyAnchor.sol'];
 const sources = Object.fromEntries(await Promise.all(names.map(async (name) => [name, { content: await readFile(new URL(`../contracts/${name}`, import.meta.url), 'utf8') }])));
 const output = JSON.parse(solc.compile(JSON.stringify({ language: 'Solidity', sources, settings: { outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object'] } } } })));
 const errors = (output.errors ?? []).filter((entry) => entry.severity === 'error');
@@ -12,7 +12,7 @@ if (errors.length) {
   const contracts = Object.values(output.contracts ?? {}).flatMap((file) => Object.keys(file));
   console.log(`Compiled ${contracts.length} Solidity contracts/interfaces.`);
   if (process.argv.includes('--write')) {
-    const directory = new URL('../.runproof/contracts/', import.meta.url);
+    const directory = new URL('../.priorseal/contracts/', import.meta.url);
     await mkdir(directory, { recursive: true });
     for (const file of Object.values(output.contracts ?? {})) {
       for (const [name, artifact] of Object.entries(file)) {

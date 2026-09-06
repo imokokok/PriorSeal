@@ -1,5 +1,5 @@
 {
-  "name": "runproof",
+  "name": "priorseal",
   "version": "0.1.0",
   "private": true,
   "description": "Independently verifiable on-chain execution evidence for agents.",

@@ -5,14 +5,14 @@ import { createRpcClient } from '../src/infrastructure/blockchain/evm/rpc-client
 import { getRpcUrls } from '../src/infrastructure/blockchain/evm/chains.mjs';
 import { verifyTransparencyAnchor } from '../src/infrastructure/transparency/file-anchor-provider.mjs';
 
-const chainId = Number(process.env.RUNPROOF_ANCHOR_CHAIN_ID);
-const contract = process.env.RUNPROOF_ANCHOR_CONTRACT;
-const txHash = process.env.RUNPROOF_ANCHOR_TX_HASH;
-const confirmations = Number(process.env.RUNPROOF_ANCHOR_CONFIRMATIONS ?? 12);
-if (!Number.isSafeInteger(chainId) || chainId < 1) throw new TypeError('RUNPROOF_ANCHOR_CHAIN_ID must be configured');
-if (!isAddress(contract ?? '')) throw new TypeError('RUNPROOF_ANCHOR_CONTRACT must be configured');
-if (!/^0x[0-9a-fA-F]{64}$/.test(txHash ?? '')) throw new TypeError('RUNPROOF_ANCHOR_TX_HASH must be configured');
-if (!Number.isSafeInteger(confirmations) || confirmations < 1) throw new TypeError('RUNPROOF_ANCHOR_CONFIRMATIONS must be a positive integer');
+const chainId = Number(process.env.PRIORSEAL_ANCHOR_CHAIN_ID);
+const contract = process.env.PRIORSEAL_ANCHOR_CONTRACT;
+const txHash = process.env.PRIORSEAL_ANCHOR_TX_HASH;
+const confirmations = Number(process.env.PRIORSEAL_ANCHOR_CONFIRMATIONS ?? 12);
+if (!Number.isSafeInteger(chainId) || chainId < 1) throw new TypeError('PRIORSEAL_ANCHOR_CHAIN_ID must be configured');
+if (!isAddress(contract ?? '')) throw new TypeError('PRIORSEAL_ANCHOR_CONTRACT must be configured');
+if (!/^0x[0-9a-fA-F]{64}$/.test(txHash ?? '')) throw new TypeError('PRIORSEAL_ANCHOR_TX_HASH must be configured');
+if (!Number.isSafeInteger(confirmations) || confirmations < 1) throw new TypeError('PRIORSEAL_ANCHOR_CONFIRMATIONS must be a positive integer');
 const rpcUrls = getRpcUrls(chainId) ?? [];
 if (!rpcUrls.length) throw new TypeError('The anchor chain RPC must be configured');
 
@@ -36,7 +36,7 @@ for (const url of rpcUrls) {
   }
 }
 if (!evidence) throw new TypeError('Anchor transaction could not be verified');
-const output = resolve(process.env.RUNPROOF_TRANSPARENCY_ANCHOR_FILE ?? '.runproof/transparency-anchor.json');
+const output = resolve(process.env.PRIORSEAL_TRANSPARENCY_ANCHOR_FILE ?? '.priorseal/transparency-anchor.json');
 await mkdir(dirname(output), { recursive: true });
 await writeFile(output, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o644 });
 console.log(`Verified anchor record written to ${output}`);

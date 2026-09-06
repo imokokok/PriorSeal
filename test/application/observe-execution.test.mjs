@@ -16,7 +16,7 @@ test('observation is idempotent, linked to its intent, signed, and reorg-aware',
   const intent = buildIntent({ intentId: 'observe-1', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2_000, nonce: '0' });
   await store.saveIntent(intent);
   let calls = 0;
-  const observer = async () => ({ schema: 'runproof.execution-observation.v1', chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 900, observedAt: 1_000 + calls, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: '0', confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED', blockNumber: 10, blockHash: `0x${(++calls === 1 ? 'c' : 'd').repeat(64)}`, observationSource: 'evm-json-rpc:eip155:8453:configured-1' });
+  const observer = async () => ({ schema: 'priorseal.execution-observation.v1', chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 900, observedAt: 1_000 + calls, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: '0', confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED', blockNumber: 10, blockHash: `0x${(++calls === 1 ? 'c' : 'd').repeat(64)}`, observationSource: 'evm-json-rpc:eip155:8453:configured-1' });
   const options = { input: { intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 }, store, observer, privateKeyPem, publicKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_000_000 };
 
   const first = await observeExecution({ ...options, idempotencyKey: 'observation-1' });
