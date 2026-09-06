@@ -1,5 +1,5 @@
 {
-  "name": "@priorseal/sdk",
+  "name": "priorseal-sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for PriorSeal verifiable agent authorization and execution evidence.",
   "type": "module",

@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom'
 import { AppShell, CopyButton, Notice, PageHeader, Status } from '../components'
 import { api } from '../lib/api'
 
-const install = 'npm install @priorseal/sdk'
+const install = 'npm install priorseal-sdk'
 
-const browserExample = `import { createPriorSealClient } from '@priorseal/sdk'
+const browserExample = `import { createPriorSealClient } from 'priorseal-sdk'
 
 const priorseal = createPriorSealClient({
   baseUrl: 'https://priorseal.example'
@@ -30,7 +30,7 @@ const evidence = await priorseal.observeExecution({
 
 console.log(evidence.receipt)`
 
-const nodeExample = `import { createPriorSealClient } from '@priorseal/sdk'
+const nodeExample = `import { createPriorSealClient } from 'priorseal-sdk'
 
 const priorseal = createPriorSealClient({
   baseUrl: process.env.PRIORSEAL_URL
@@ -78,7 +78,7 @@ export function SdkPage() {
     <section className="sdk-hero panel">
       <div className="sdk-package">
         <p className="eyebrow">PACKAGE / 0.1.0</p>
-        <h2>@priorseal/sdk</h2>
+        <h2>priorseal-sdk</h2>
         <p>Universal ESM · Browser and Node.js 20+ · Zero runtime dependencies</p>
         <div className="sdk-install"><code>{install}</code><CopyButton value={install} /></div>
       </div>

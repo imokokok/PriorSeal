@@ -33,14 +33,14 @@ npm run verify:receipt -- /path/to/receipt.json /path/to/public-key.pem
 
 ## TypeScript SDK
 
-The zero-runtime-dependency `@priorseal/sdk` package is the supported browser and Node.js 20+ integration surface:
+The zero-runtime-dependency `priorseal-sdk` package is the supported browser and Node.js 20+ integration surface:
 
 ```bash
-npm install @priorseal/sdk
+npm install priorseal-sdk
 ```
 
 ```ts
-import { createPriorSealClient } from '@priorseal/sdk'
+import { createPriorSealClient } from 'priorseal-sdk'
 
 const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.example' })
 const { accepted } = await priorseal.authorizeWithWallet({

@@ -1,13 +1,13 @@
-# @priorseal/sdk
+# priorseal-sdk
 
 Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install @priorseal/sdk
+npm install priorseal-sdk
 ```
 
 ```ts
-import { createPriorSealClient } from '@priorseal/sdk'
+import { createPriorSealClient } from 'priorseal-sdk'
 
 const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.example' })
 
