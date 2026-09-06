@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { PriorSealMark } from '../brand'
+import { openStoragePreferences } from '../lib/storage'
 import { loadConsole } from '../route-loaders'
 import archive800 from '../assets/images/priorseal-archive-800.jpg'
 import archive1200 from '../assets/images/priorseal-archive-1200.jpg'
@@ -71,11 +72,11 @@ export function LandingPage() {
         <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-nav__entry" to="/app">Open console <span>↗</span></Link>
       </header>
 
-      <main>
+      <main id="main-content">
         <section className="museum-hero">
           <div className="museum-hero__copy">
             <p className="museum-kicker"><span>PRIORSEAL</span> / EVIDENCE INSTITUTION 001</p>
-            <h1>Authority,<br /><em>before action.</em></h1>
+            <h1 data-route-heading tabIndex={-1}>Authority,<br /><em>before action.</em></h1>
             <p className="museum-hero__statement">A verifiable record connecting what a person or organization authorized to what an autonomous agent actually executed onchain.</p>
             <div className="museum-actions">
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Authorize an intent <span>→</span></Link>
@@ -186,7 +187,7 @@ export function LandingPage() {
             <h2>Make authority<br />inspectable.</h2>
             <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/sdk">Use the SDK <span>↗</span></Link></div>
           </div>
-          <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for EVM agents.</span><span>© {new Date().getFullYear()}</span></footer>
+          <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for EVM agents.</span><span><button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
         </section>
       </main>
     </div>

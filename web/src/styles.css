@@ -440,3 +440,72 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* Accessibility, privacy controls and public documents */
+.sr-only { width: 1px; height: 1px; position: absolute; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.skip-link { position: fixed; z-index: 200; top: 10px; left: 10px; padding: 11px 15px; color: var(--porcelain); background: var(--ink); border: 2px solid var(--porcelain); transform: translateY(-160%); }
+.skip-link:focus { transform: translateY(0); }
+[data-route-heading]:focus { outline: none; }
+.button.danger { color: var(--porcelain); background: var(--red); border-color: var(--red); }
+.button.danger:hover { background: #72251f; border-color: #72251f; }
+.sidebar-backdrop { position: fixed; z-index: 29; inset: 0; display: none; background: rgba(11, 11, 10, .52); border: 0; cursor: default; }
+.side-privacy { width: max-content; min-height: 36px; margin-top: 12px; padding: 0; color: #cda9b1; background: transparent; border: 0; border-bottom: 1px solid currentColor; font: 600 12px "JetBrains Mono", monospace; }
+.side-privacy:hover { color: white; }
+
+.privacy-panel { width: min(940px, calc(100vw - 32px)); max-height: calc(100vh - 32px); position: fixed; z-index: 100; left: 50%; bottom: 16px; transform: translateX(-50%); padding: 28px; overflow: auto; display: grid; grid-template-columns: minmax(0,1fr) minmax(260px,.55fr); gap: 32px; color: var(--ink); background: var(--porcelain); border: 1px solid var(--ink); border-top: 6px solid var(--wine); box-shadow: 0 22px 70px rgba(0,0,0,.24); }
+.privacy-kicker { margin: 0 0 9px; color: var(--wine); font: 650 11px "JetBrains Mono", monospace; letter-spacing: .11em; }
+.privacy-panel h2 { margin: 0; font: 400 32px/1.05 "Iowan Old Style", Baskerville, Georgia, serif; }
+.privacy-panel__copy > p:not(.privacy-kicker,.privacy-current) { max-width: 660px; margin: 13px 0 8px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.privacy-panel__copy > a { display: inline-block; margin-top: 6px; color: var(--wine); font-size: 13px; text-decoration: underline; }
+.privacy-current { margin: 12px 0 0; font-size: 13px; }
+.privacy-panel__actions { position: relative; display: grid; align-content: center; gap: 9px; }
+.privacy-panel__actions > .button { width: 100%; }
+.privacy-clear { margin-top: 6px; }
+.privacy-close { width: 38px; height: 38px; position: absolute; top: -17px; right: -17px; color: var(--ink); background: transparent; border: 0; font-size: 26px; }
+.privacy-confirm { margin-top: 5px; padding: 13px; color: var(--red); background: #f5e7e4; border: 1px solid var(--red); font-size: 12px; line-height: 1.5; }
+.privacy-confirm > div { margin-top: 10px; display: flex; gap: 7px; }
+.privacy-confirm .button { min-height: 38px; flex: 1; font-size: 12px; }
+
+.public-document { min-height: 100vh; color: var(--ink); background: var(--stone); }
+.public-document__nav { min-height: 86px; padding: 0 clamp(22px, 4.8vw, 82px); display: flex; align-items: center; justify-content: space-between; background: var(--porcelain); border-bottom: 1px solid var(--ink); }
+.public-document__nav > a:last-child { color: var(--wine); font: 600 13px "JetBrains Mono", monospace; }
+.public-document > article { width: min(920px, calc(100% - 40px)); margin: 0 auto; padding: clamp(70px,9vw,130px) 0 70px; }
+.public-document h1 { max-width: 760px; margin: 0; font: 400 clamp(55px,8vw,94px)/.95 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.055em; }
+.public-document__lede { max-width: 770px; margin: 27px 0 58px; color: var(--graphite); font-size: 19px; line-height: 1.65; }
+.public-document article section { padding: 28px 0; border-top: 1px solid var(--rule); }
+.public-document article section:last-of-type { border-bottom: 1px solid var(--rule); }
+.public-document article h2 { margin: 0 0 12px; font: 400 31px "Iowan Old Style", Baskerville, Georgia, serif; }
+.public-document article section p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.72; }
+.public-document article section p + p, .public-document article section p + .button { margin-top: 15px; }
+.public-document article footer { padding-top: 28px; display: flex; justify-content: space-between; gap: 20px; color: var(--muted); font-size: 13px; }
+.public-document article footer a { color: var(--wine); text-decoration: underline; }
+
+@media (max-width: 980px) {
+  .sidebar-backdrop { display: block; }
+  .sidebar { z-index: 30; }
+  .sidebar nav a { min-height: 44px; }
+  .menu, .mobile-close { min-width: 44px; min-height: 44px; }
+}
+
+@media (max-width: 720px) {
+  .copy-button { min-height: 40px; }
+  .privacy-panel { width: calc(100vw - 20px); bottom: 10px; padding: 22px 18px; grid-template-columns: 1fr; gap: 20px; }
+  .privacy-panel h2 { font-size: 29px; }
+  .privacy-close { top: -13px; right: -8px; }
+  .public-document__nav { min-height: 72px; padding: 0 18px; }
+  .public-document__nav .logo-type small { display: none; }
+  .public-document > article { width: calc(100% - 36px); padding-top: 62px; }
+  .public-document h1 { font-size: clamp(49px,15vw,68px); }
+  .public-document__lede { margin-bottom: 45px; font-size: 17px; }
+  .public-document article footer { flex-direction: column; }
+}
+.loading { padding: 28px; align-content: center; gap: 18px; }
+.loading > span:first-child { text-align: center; }
+.loading-lines { width: min(520px,80%); display: grid; gap: 9px; }
+.loading-lines i { height: 10px; display: block; background: linear-gradient(90deg,var(--rule-soft),var(--porcelain),var(--rule-soft)); background-size: 200% 100%; animation: loading-sheen 1.2s linear infinite; }
+.loading-lines i:nth-child(2) { width: 82%; }
+.loading-lines i:nth-child(3) { width: 64%; }
+@keyframes loading-sheen { to { background-position: -200% 0; } }
+.retry-action { margin-top: 14px; }
+
+.retry-button { margin-top: 16px; }

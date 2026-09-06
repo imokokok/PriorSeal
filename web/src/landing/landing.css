@@ -242,3 +242,6 @@
   .priorseal-museum *, .priorseal-museum *::before, .priorseal-museum *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   .motion-ready .priorseal-museum [data-reveal] { opacity: 1; transform: none; }
 }
+
+.museum-footer-link { padding: 3px 0; color: inherit; background: transparent; border: 0; border-bottom: 1px solid currentColor; font-size: inherit; }
+.museum-footer-link:hover { color: white; }

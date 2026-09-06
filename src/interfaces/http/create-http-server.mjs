@@ -31,11 +31,12 @@ export function createHttpServer({ store = createMemoryStore(), issuer = 'priors
     try {
       if (req.method === 'OPTIONS') return res.writeHead(204, cors).end();
       if (!['GET', 'POST'].includes(req.method ?? '')) return respond(405, errorBody('METHOD_NOT_ALLOWED', 'Method not allowed', requestId), { allow: 'GET, POST, OPTIONS' });
+      if (req.method === 'GET' && path === '/health/live') return respond(200, { status: 'ok', requestId });
+      if (req.method === 'GET' && path === '/health/ready') return respond(200, { status: 'ready', storage: store.health ? await store.health() : 'unknown', requestId });
+      if (req.method === 'GET' && serveStaticAsset && await serveStaticAsset({ pathname: path, req, res })) return;
       if (!rateLimiter.allow(requester(req, trustProxy), now())) return respond(429, errorBody('RATE_LIMITED', 'Too many requests', requestId), { 'retry-after': '60' });
       const body = req.method === 'POST' ? await readJsonBody(req, maxBodyBytes, controller.signal) : {};
       if (controller.signal.aborted) throw new PriorSealError('REQUEST_TIMEOUT', 'Request timed out');
-      if (req.method === 'GET' && path === '/health/live') return respond(200, { status: 'ok', requestId });
-      if (req.method === 'GET' && path === '/health/ready') return respond(200, { status: 'ready', storage: store.health ? await store.health() : 'unknown', requestId });
       if (req.method === 'GET' && path === '/v1/version') return respond(200, { service: 'priorseal', version, protocol: ['priorseal.intent.v1', 'priorseal.authorization.v1', 'priorseal.authorization.v2', 'priorseal.rfc3161-evidence.v1', 'priorseal.witness-attestation.v1', 'priorseal.execution-receipt.v1', 'priorseal.execution-receipt.v2'], requestId });
       if (req.method === 'GET' && path === '/openapi/v1.json') return respond(200, OPENAPI, { 'cache-control': 'public, max-age=300' });
       if (req.method === 'POST' && path === '/v1/intents') {
@@ -67,7 +68,6 @@ export function createHttpServer({ store = createMemoryStore(), issuer = 'priors
       if (match) { const receipt = await store.getReceipt(decodeURIComponent(match[1])); if (!receipt) throw new PriorSealError('RECEIPT_NOT_FOUND', 'Receipt not found'); return respond(200, receipt); }
       if (req.method === 'POST' && path === '/v1/receipts/verify') { assertOnlyFields(body, ['receipt'], 'verification request'); const entry = keyRegistry.get(body.receipt?.keyId); const result = !entry ? { valid: false, code: 'UNKNOWN_KEY' } : body.receipt?.schema === 'priorseal.execution-receipt.v2' ? await verifyAuthorizedReceipt(body.receipt, entry.publicKey, { audience: authorizationAudience, verifyContractSignature, key: entry, now: Math.floor(now() / 1000) }) : verifyReceipt(body.receipt, entry.publicKey, { keyId: entry.keyId, now: Math.floor(now() / 1000), key: entry }); return respond(200, { convenienceEndpoint: true, independentVerification: 'Use the local verifier; do not trust this API response alone.', result, requestId }); }
       if (req.method === 'GET' && path === '/.well-known/priorseal-keys.json') return respond(200, { schema: 'priorseal.keys.v1', issuer, keys: keyRegistry.list(), verifierVersion: '2.3.0', schemaVersions: ['priorseal.execution-receipt.v1', 'priorseal.execution-receipt.v2', 'priorseal.authorization.v1', 'priorseal.authorization.v2', 'priorseal.rfc3161-evidence.v1'], requestId }, { 'cache-control': 'public, max-age=300' });
-      if (req.method === 'GET' && serveStaticAsset && await serveStaticAsset({ pathname: path, req, res })) return;
       throw new PriorSealError('NOT_FOUND', 'Route not found');
     } catch (error) {
       const code = controller.signal.aborted ? 'REQUEST_TIMEOUT' : error instanceof PriorSealError ? error.code : error?.code || 'INTERNAL_ERROR'; const status = ERROR_STATUS[code] ?? 500;

@@ -8,3 +8,6 @@ sdk/dist/
 examples/receipt-artifacts/
 *.log
 .neon
+test-results/
+playwright-report/
+blob-report/

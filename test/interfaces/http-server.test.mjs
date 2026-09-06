@@ -85,7 +85,8 @@ test('serves the production console and preserves API 404 responses', async (t) 
   await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>PriorSeal console</title>');
   await writeFile(join(staticDir, 'app.js'), `globalThis.example = '${'evidence-'.repeat(600)}';`);
   await writeFile(join(staticDir, 'photo.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
-  const server = createHttpServer({ staticDir }); t.after(() => server.close());
+  let rateLimitChecks = 0;
+  const server = createHttpServer({ staticDir, rateLimiter: { allow() { rateLimitChecks += 1; return true; } } }); t.after(() => server.close());
   const root = await request(server, '/'); const route = await request(server, '/app/receipts'); const missingApi = await request(server, '/v1/missing');
   assert.equal(root.status, 200); assert.match(root.headers['content-type'], /^text\/html/); assert.match(root.text(), /PriorSeal console/);
   assert.equal(route.status, 200); assert.equal(route.text(), root.text());
@@ -93,5 +94,5 @@ test('serves the production console and preserves API 404 responses', async (t) 
   assert.equal(compressed.headers['content-encoding'], 'br'); assert.match(brotliDecompressSync(compressed.buffer()).toString(), /globalThis\.example/);
   const image = await request(server, '/photo.jpg'); assert.equal(image.headers['content-type'], 'image/jpeg'); assert.ok(image.headers.etag);
   const notModified = await request(server, '/photo.jpg', { headers: { 'if-none-match': image.headers.etag } }); assert.equal(notModified.status, 304);
-  assert.equal(missingApi.status, 404); assert.equal(missingApi.json().error.code, 'NOT_FOUND');
+  assert.equal(missingApi.status, 404); assert.equal(missingApi.json().error.code, 'NOT_FOUND'); assert.equal(rateLimitChecks, 1);
 });
