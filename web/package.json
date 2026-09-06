@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@priorseal/sdk": "file:../sdk",
     "asn1js": "^3.0.6",
     "pkijs": "^3.4.0",
     "react": "^19.1.0",

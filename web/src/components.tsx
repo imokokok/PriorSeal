@@ -36,9 +36,10 @@ const nav = [
   { index: '04', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence' },
   { index: '05', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence' },
   { index: '06', key: 'verify', label: 'Verify receipt', to: '/app/verify', group: 'Evidence' },
-  { index: '07', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Developers' },
-  { index: '08', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Developers' },
-  { index: '09', key: 'api', label: 'API reference', to: '/app/api', group: 'Developers' },
+  { index: '07', key: 'sdk', label: 'SDK integration', to: '/app/sdk', group: 'Developers' },
+  { index: '08', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Developers' },
+  { index: '09', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Developers' },
+  { index: '10', key: 'api', label: 'API reference', to: '/app/api', group: 'Developers' },
 ]
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)

@@ -7,12 +7,13 @@
   "scripts": {
     "example:receipt": "node examples/create-signed-receipt.mjs",
     "verify:receipt": "node examples/verify-signed-receipt.mjs",
-    "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage",
+    "sdk:build": "npm --prefix sdk run build",
+    "test": "npm run sdk:build && node --test",
+    "test:coverage": "npm run sdk:build && node --test --experimental-test-coverage",
     "lint": "node scripts/quality.mjs lint",
     "format:check": "node scripts/quality.mjs format",
     "typecheck": "node scripts/quality.mjs typecheck",
-    "build": "npm --prefix web run build",
+    "build": "npm run sdk:build && npm --prefix web run build",
     "contracts:check": "node scripts/compile-contracts.mjs",
     "contracts:build": "node scripts/compile-contracts.mjs --write",
     "anchor:prepare": "node --env-file=.env.local scripts/prepare-transparency-anchor.mjs",
@@ -28,7 +29,8 @@
     "node": ">=20"
   },
   "workspaces": [
-    "web"
+    "web",
+    "sdk"
   ],
   "dependencies": {
     "asn1js": "^3.0.6",

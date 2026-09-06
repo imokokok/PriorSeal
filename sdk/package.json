@@ -1,0 +1,52 @@
+{
+  "name": "@priorseal/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for PriorSeal verifiable agent authorization and execution evidence.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imokokok/PriorSeal.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/imokokok/PriorSeal#readme",
+  "bugs": {
+    "url": "https://github.com/imokokok/PriorSeal/issues"
+  },
+  "keywords": [
+    "ai-agent",
+    "authorization",
+    "eip-712",
+    "execution-evidence",
+    "evm"
+  ]
+}

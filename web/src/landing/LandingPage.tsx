@@ -57,7 +57,7 @@ export function LandingPage() {
         <InstitutionMark />
         <nav aria-label="Homepage navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}
-          <Link to="/app/api">Documentation</Link>
+          <Link to="/app/sdk">SDK</Link>
         </nav>
         <Link className="museum-nav__entry" to="/app">Open console <span>↗</span></Link>
       </header>
@@ -175,7 +175,7 @@ export function LandingPage() {
           <div data-reveal>
             <p className="museum-kicker">PRIORSEAL / AUTHORIZATION EVIDENCE</p>
             <h2>Make authority<br />inspectable.</h2>
-            <div className="museum-actions"><Link className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/app/api">Read the API <span>↗</span></Link></div>
+            <div className="museum-actions"><Link className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/app/sdk">Use the SDK <span>↗</span></Link></div>
           </div>
           <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for EVM agents.</span><span>© {new Date().getFullYear()}</span></footer>
         </section>

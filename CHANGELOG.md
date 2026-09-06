@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a zero-runtime-dependency TypeScript SDK for browser and Node.js integrations, wallet authorization, execution observation and evidence retrieval; the console now consumes the SDK and includes a dedicated integration workspace.
 - Added authorization v2, binding principal/authorizer types and agent identity into EIP-712 while retaining v1 verification compatibility.
 - Prevented unrelated transactions from claiming single-use authorizations; executor, chain and transaction nonce now identify a claim candidate.
 - Unified v2 issuer-key status and validity checks across server and browser verification.

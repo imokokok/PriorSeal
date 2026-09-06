@@ -4,6 +4,7 @@ node_modules/
 .env.*.local
 .priorseal/
 web/dist/
+sdk/dist/
 examples/receipt-artifacts/
 *.log
 .neon

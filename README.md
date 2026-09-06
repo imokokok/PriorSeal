@@ -13,7 +13,7 @@ It does not custody assets, operate wallets, or hold transaction-signing keys. A
 Requires Node 20+. In a clean checkout:
 
 ```bash
-npm --prefix web ci
+npm ci
 cp .env.example .env.local
 # Set development-only PRIORSEAL_* key-file paths and a configured RPC endpoint in .env.local.
 npm run start:api
@@ -31,12 +31,40 @@ npm run verify:receipt
 npm run verify:receipt -- /path/to/receipt.json /path/to/public-key.pem
 ```
 
+## TypeScript SDK
+
+The zero-runtime-dependency `@priorseal/sdk` package is the supported browser and Node.js 20+ integration surface:
+
+```bash
+npm install @priorseal/sdk
+```
+
+```ts
+import { createPriorSealClient } from '@priorseal/sdk'
+
+const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.example' })
+const { accepted } = await priorseal.authorizeWithWallet({
+  intent,
+  principal: { type: 'user', id: 'user:42' },
+  delegate: { agentId: 'agent:treasury', executor: intent.sender }
+}, window.ethereum)
+
+const evidence = await priorseal.observeExecution({
+  authorizationId: accepted.authorization.authorizationId,
+  chainId: Number(intent.chainId),
+  txHash,
+  confirmations: 12
+})
+```
+
+The SDK handles typed API calls, wallet authorization, idempotency, timeouts and structured errors. It does not construct, sign or submit transactions. `verifyReceiptRemotely` calls the convenience server verifier; use the existing browser verifier or CLI with a trusted issuer key for independent verification. See [`sdk/README.md`](sdk/README.md) and the console route `/app/sdk`.
+
 ## Quality checks
 
 ```bash
-npm run check          # JS syntax lint, diff format check, web typecheck, tests, web build
+npm run check          # JS syntax lint, SDK/web typecheck, tests, SDK/web build
 npm run test:coverage
-npm --prefix web audit --omit=dev
+npm run audit
 ```
 
 The API contract is at `/openapi/v1.json`. Operational endpoints are `/health/live`, `/health/ready`, and `/v1/version`. The default console uses signed `priorseal.authorization.v2` authorizations; it binds the principal and authorizer types, agent ID and executor into EIP-712. Legacy authorization v1 remains verification-only, and `POST /v1/intents` remains a deprecated compatibility path for unsigned receipt v1 evidence.
