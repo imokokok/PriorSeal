@@ -29,6 +29,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  health: () => request<{ status: string; requestId?: string }>('/health/live'),
+  readiness: () => request<{ status: string; storage?: string; requestId?: string }>('/health/ready'),
   createIntent: (intent: Intent) => request<{ intent: Intent; intentHash: string; policy: { allowed: boolean; reasonCodes: string[]; policyId: string | null } }>('/v1/intents', { method: 'POST', body: JSON.stringify(intent) }),
   prepareAuthorization: (authorization: Omit<Authorization, 'schema' | 'domain' | 'authorizationId' | 'intentHash' | 'signature' | 'policyHash'> & { policyHash?: string }) => request<{ authorization: Authorization; typedData: Record<string, unknown> }>('/v1/authorizations/prepare', { method: 'POST', body: JSON.stringify(authorization) }),
   authorize: (authorization: Authorization) => request<{ authorization: Authorization; acceptance: AuthorizationReceipt; policyEvidence?: PolicyEvidence; timestampEvidence?: TimestampEvidence; witnessEvidence?: WitnessEvidence; policy: { allowed: boolean; reasonCodes: string[]; policyId: string | null } }>('/v1/authorizations', { method: 'POST', body: JSON.stringify(authorization) }),
