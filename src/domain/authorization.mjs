@@ -280,7 +280,7 @@ function verifyEd25519Statement(statement, publicKeyPem) {
 }
 
 function stripIntentHash(intent) { const { intentHash, ...unsigned } = intent; return unsigned; }
-function stripIntentMetadata(intent) { const { schema, intentHash, ...input } = intent ?? {}; return input; }
+function stripIntentMetadata(intent) { const { intentHash, ...input } = intent ?? {}; return input; }
 function defaultPolicyEvidence(authorization, evaluatedAt) {
   if (authorization.policyHash !== `0x${'0'.repeat(64)}`) throw new PriorSealError('MISSING_POLICY_EVIDENCE', 'A non-default policy must be embedded in an authorized receipt');
   return { schema: 'priorseal.policy-evidence.v1', policyHash: authorization.policyHash, document: null, result: { allowed: true, reasonCodes: [], policyId: null, evaluatedAt } };

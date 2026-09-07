@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added `priorseal.intent.v2` with the `priorseal.execution-profile.exact-call.v1` profile for swap/router and other multi-transfer contract calls. Exact-call binding uses the signed chain, executor, nonce, call target, calldata hash, native value, time window and finality constraints instead of guessing semantics from Transfer logs.
 - Added the `priorseal-sdk/verifier` local-verification entry point for independently checking receipt hashes, policies, bindings, EOA and Ed25519 signatures, RFC 3161 timestamps, witness quorum and transparency chains without calling PriorSeal.
 - Added a zero-runtime-dependency TypeScript SDK for browser and Node.js integrations, wallet authorization, execution observation and evidence retrieval; the console now consumes the SDK and includes a dedicated integration workspace.
 - Added authorization v2, binding principal/authorizer types and agent identity into EIP-712 while retaining v1 verification compatibility.

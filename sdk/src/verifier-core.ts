@@ -89,7 +89,10 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   const legacyAuthorization = authorization.schema === 'priorseal.authorization.v1'
   if (!legacyAuthorization && authorization.schema !== 'priorseal.authorization.v2') return fail('INVALID_AUTHORIZATION')
   if (authorization.domain !== (legacyAuthorization ? 'priorseal/authorization/v1' : 'priorseal/authorization/v2')) return fail('INVALID_AUTHORIZATION')
-  if (authorization.intent.schema !== 'priorseal.intent.v1') return fail('INVALID_AUTHORIZATION')
+  if (!['priorseal.intent.v1', 'priorseal.intent.v2'].includes(authorization.intent.schema ?? '')) return fail('INVALID_AUTHORIZATION')
+  const exactCall = authorization.intent.schema === 'priorseal.intent.v2'
+  if (exactCall && (authorization.intent.executionProfile !== 'priorseal.execution-profile.exact-call.v1' || authorization.intent.action !== 'CONTRACT_CALL' || authorization.intent.nonce == null || authorization.intent.callTarget == null || authorization.intent.calldataHash == null || authorization.intent.transactionValue == null)) return fail('INVALID_AUTHORIZATION')
+  if (!exactCall && authorization.intent.executionProfile != null) return fail('INVALID_AUTHORIZATION')
   if (authorization.principal.account.toLowerCase() !== authorization.authorizer.address.toLowerCase()) return fail('INVALID_AUTHORIZATION')
   if (!['user', 'organization'].includes(authorization.principal.type) || !authorization.principal.id || !authorization.delegate.agentId) return fail('INVALID_AUTHORIZATION')
   if (!['eip712', 'eip1271'].includes(authorization.authorizer.type) || authorization.maxUses !== '1') return fail('INVALID_AUTHORIZATION')
@@ -162,13 +165,14 @@ function stripAuthorizationMetadata(authorization: NonNullable<Receipt['authoriz
 function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['authorization']['intent'], execution: Receipt['execution'], executor: string, acceptedAt: number, authorizationNotBefore: number, authorizationExpiresAt: number) {
   const reasons: string[] = []
   const same = (left: unknown, right: unknown) => String(left ?? '').toLowerCase() === String(right ?? '').toLowerCase()
+  const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1'
   if (execution.executionDataAvailable === false) reasons.push('EXECUTION_UNAVAILABLE')
   if (Number(execution.chainId) !== Number(intent.chainId)) reasons.push('CHAIN_MISMATCH')
   if (!same(execution.action, intent.action)) reasons.push('ACTION_MISMATCH')
   if (!same(execution.sender, intent.sender)) reasons.push('SENDER_MISMATCH')
-  if (!same(execution.recipient, intent.recipient)) reasons.push('RECIPIENT_MISMATCH')
-  if (!same(execution.asset, intent.asset)) reasons.push('ASSET_MISMATCH')
-  if (String(execution.amount ?? '') !== String(intent.amount)) reasons.push('AMOUNT_MISMATCH')
+  if (!exactCall && !same(execution.recipient, intent.recipient)) reasons.push('RECIPIENT_MISMATCH')
+  if (!exactCall && !same(execution.asset, intent.asset)) reasons.push('ASSET_MISMATCH')
+  if (!exactCall && String(execution.amount ?? '') !== String(intent.amount)) reasons.push('AMOUNT_MISMATCH')
   if (execution.nonce != null && String(execution.nonce) !== String(intent.nonce ?? '0')) reasons.push('NONCE_MISMATCH')
   if (intent.callTarget != null && !same(execution.target, intent.callTarget)) reasons.push('CALL_TARGET_MISMATCH')
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push('CALLDATA_MISMATCH')
@@ -176,7 +180,7 @@ function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
   if ((execution.executedAt ?? execution.observedAt ?? 0) > intent.validUntil) reasons.push('OUTSIDE_TIME_WINDOW')
   if (intent.constraints?.minConfirmations != null && Number(execution.confirmations ?? 0) < intent.constraints.minConfirmations) reasons.push('INSUFFICIENT_FINALITY')
   if (intent.constraints?.maxGasUsed != null && BigInt(execution.gasUsed ?? 0) > BigInt(intent.constraints.maxGasUsed)) reasons.push('GAS_LIMIT_EXCEEDED')
-  if (Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push('AMBIGUOUS_TRANSFER')
+  if (!exactCall && Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push('AMBIGUOUS_TRANSFER')
   if (!same(execution.sender, executor)) reasons.push('EXECUTOR_MISMATCH')
   const executedAt = execution.executedAt ?? execution.observedAt ?? 0
   if (acceptedAt > executedAt) reasons.push('AUTHORIZATION_AFTER_EXECUTION')

@@ -37,7 +37,7 @@ export function createHttpServer({ store = createMemoryStore(), issuer = 'priors
       if (!rateLimiter.allow(requester(req, trustProxy), now())) return respond(429, errorBody('RATE_LIMITED', 'Too many requests', requestId), { 'retry-after': '60' });
       const body = req.method === 'POST' ? await readJsonBody(req, maxBodyBytes, controller.signal) : {};
       if (controller.signal.aborted) throw new PriorSealError('REQUEST_TIMEOUT', 'Request timed out');
-      if (req.method === 'GET' && path === '/v1/version') return respond(200, { service: 'priorseal', version, protocol: ['priorseal.intent.v1', 'priorseal.authorization.v1', 'priorseal.authorization.v2', 'priorseal.rfc3161-evidence.v1', 'priorseal.witness-attestation.v1', 'priorseal.execution-receipt.v1', 'priorseal.execution-receipt.v2'], requestId });
+      if (req.method === 'GET' && path === '/v1/version') return respond(200, { service: 'priorseal', version, protocol: ['priorseal.intent.v1', 'priorseal.intent.v2', 'priorseal.execution-profile.exact-call.v1', 'priorseal.authorization.v1', 'priorseal.authorization.v2', 'priorseal.rfc3161-evidence.v1', 'priorseal.witness-attestation.v1', 'priorseal.execution-receipt.v1', 'priorseal.execution-receipt.v2'], requestId });
       if (req.method === 'GET' && path === '/openapi/v1.json') return respond(200, OPENAPI, { 'cache-control': 'public, max-age=300' });
       if (req.method === 'POST' && path === '/v1/intents') {
         const result = await createIntent({ input: body, idempotencyKey: req.headers['idempotency-key'], store, policy, now });

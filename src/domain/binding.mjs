@@ -12,13 +12,14 @@ export const BINDING_CODES = Object.freeze({
 const same = (a, b) => String(a ?? '').toLowerCase() === String(b ?? '').toLowerCase();
 export function bindIntentExecution(intent, execution, now = execution.observedAt ?? Math.floor(Date.now() / 1000)) {
   const reasons = [];
+  const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1';
   if (execution?.executionDataAvailable === false) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
   if (execution.chainId !== intent.chainId) reasons.push(BINDING_CODES.CHAIN_MISMATCH);
   if (!same(execution.action, intent.action)) reasons.push(BINDING_CODES.ACTION_MISMATCH);
   if (!same(execution.sender, intent.sender)) reasons.push(BINDING_CODES.SENDER_MISMATCH);
-  if (!same(execution.recipient, intent.recipient)) reasons.push(BINDING_CODES.RECIPIENT_MISMATCH);
-  if (!same(execution.asset, intent.asset)) reasons.push(BINDING_CODES.ASSET_MISMATCH);
-  if (String(execution.amount ?? '') !== String(intent.amount)) reasons.push(BINDING_CODES.AMOUNT_MISMATCH);
+  if (!exactCall && !same(execution.recipient, intent.recipient)) reasons.push(BINDING_CODES.RECIPIENT_MISMATCH);
+  if (!exactCall && !same(execution.asset, intent.asset)) reasons.push(BINDING_CODES.ASSET_MISMATCH);
+  if (!exactCall && String(execution.amount ?? '') !== String(intent.amount)) reasons.push(BINDING_CODES.AMOUNT_MISMATCH);
   if (execution.nonce != null && String(execution.nonce) !== String(intent.nonce)) reasons.push(BINDING_CODES.NONCE_MISMATCH);
   if (intent.callTarget != null && !same(execution.target, intent.callTarget)) reasons.push(BINDING_CODES.CALL_TARGET_MISMATCH);
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
@@ -30,6 +31,6 @@ export function bindIntentExecution(intent, execution, now = execution.observedA
   const constraints = intent.constraints ?? {};
   if (constraints.minConfirmations != null && Number(execution.confirmations ?? 0) < Number(constraints.minConfirmations)) reasons.push(BINDING_CODES.INSUFFICIENT_FINALITY);
   if (constraints.maxGasUsed != null && BigInt(execution.gasUsed ?? 0) > BigInt(constraints.maxGasUsed)) reasons.push(BINDING_CODES.GAS_LIMIT_EXCEEDED);
-  if (Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push(BINDING_CODES.AMBIGUOUS_TRANSFER);
+  if (!exactCall && Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push(BINDING_CODES.AMBIGUOUS_TRANSFER);
   return { bound: reasons.length === 0, reasonCodes: [...new Set(reasons)] };
 }

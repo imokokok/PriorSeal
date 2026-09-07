@@ -66,6 +66,53 @@ test('exact-call constraints are signed and calldata mismatch prevents completio
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
 });
 
+test('exact-call profile completes despite multi-transfer swap logs when exact transaction bytes match', async () => {
+  const issuerKeys = generateKeyPairSync('ed25519');
+  const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
+  const router = `0x${'c'.repeat(40)}`;
+  const calldataHash = `0x${'5'.repeat(64)}`;
+  const exactIntent = {
+    ...intentInput,
+    schema: 'priorseal.intent.v2',
+    executionProfile: 'priorseal.execution-profile.exact-call.v1',
+    intentId: 'insight-swap-exact-call',
+    action: 'CONTRACT_CALL',
+    recipient: router,
+    callTarget: router,
+    calldataHash,
+    transactionValue: '0',
+  };
+  const authorization = await signedAuthorization(exactIntent, '7');
+  const store = createMemoryStore({ clock: () => 1_001_000 });
+  const accepted = await authorizeIntent({ input: authorization, store, privateKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_001_000 });
+  const execution = {
+    chainId: 8453,
+    txHash: `0x${'8'.repeat(64)}`,
+    status: 'CONFIRMED',
+    action: 'CONTRACT_CALL',
+    sender: executor,
+    recipient: `0x${'d'.repeat(40)}`,
+    target: router,
+    calldataHash,
+    nativeValue: '0',
+    asset: 'eip155:8453/erc20:0x2222222222222222222222222222222222222222',
+    amount: '999',
+    nonce: intentInput.nonce,
+    executedAt: 1_100,
+    observedAt: 1_101,
+    confirmations: 12,
+    gasUsed: '180000',
+    transfers: [{}, {}, {}],
+    finalityState: 'CONFIRMED',
+  };
+  const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), privateKeyPem);
+  assert.equal(receipt.binding.bound, true);
+  assert.equal(receipt.outcome, 'COMPLETED');
+  assert.deepEqual(receipt.reasonCodes, []);
+  assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
+});
+
 test('authorization accepted after execution is preserved as evidence but never marked completed', async () => {
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });

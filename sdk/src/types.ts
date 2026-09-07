@@ -1,7 +1,8 @@
 export type ChainId = 1 | 8453 | 42161
 
 export type Intent = {
-  schema?: string
+  schema?: 'priorseal.intent.v1' | 'priorseal.intent.v2'
+  executionProfile?: 'priorseal.execution-profile.exact-call.v1'
   intentId: string
   intentHash?: string
   chainId: ChainId | string
