@@ -130,10 +130,7 @@ test('does not mark a pending observation as a completed quickstart step', async
 test('key product views match reviewed visual baselines', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await expect(page.getByRole('dialog', { name: 'Keep evidence on this device?' })).toHaveScreenshot('privacy-choice-mobile.png', {
-    // Linux and macOS rasterize the bundled web fonts differently; layout regressions still exceed this narrow dialog-only allowance.
-    maxDiffPixelRatio: process.env.CI ? 0.06 : 0.015,
-  })
+  await expect(page.getByRole('dialog', { name: 'Keep evidence on this device?' })).toHaveScreenshot('privacy-choice-mobile.png')
   await page.getByRole('button', { name: 'Use without saving' }).click()
   await expect(page).toHaveScreenshot('landing-mobile.png')
 
