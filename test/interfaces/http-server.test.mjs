@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { brotliDecompressSync } from 'node:zlib';
 import { createHttpServer } from '../../src/index.mjs';
-import { authorizationTypedData, buildAuthorization } from '../../src/index.mjs';
+import { authorizationTypedData, buildAuthorization, hashJson } from '../../src/index.mjs';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const sender = `0x${'a'.repeat(40)}`;
@@ -56,7 +56,28 @@ test('observation writes honor Idempotency-Key and return a signed linked receip
   assert.deepEqual(fetched.json(), issued);
   assert.ok(fetched.headers['x-request-id']);
   const verified = await request(server, '/v1/receipts/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receipt: fetched.json() }) });
+  const bundled = await request(server, `/v1/receipts/${issued.receiptId}/bundle`);
+  assert.equal(bundled.status, 200);
+  const bundle = bundled.json();
+  assert.equal(bundle.schema, 'priorseal.verification-bundle.v1');
+  assert.deepEqual(bundle.receipt, issued);
+  assert.equal(bundle.keyRegistry.keys[0].keyId, 'default');
+  assert.equal(bundle.trust.model, 'PIN_ISSUER_KEY_OUT_OF_BAND');
+  const { bundleHash, ...unsignedBundle } = bundle;
+  assert.equal(bundleHash, hashJson(unsignedBundle));
   assert.equal(verified.json().result.valid, true);
+});
+test('pending observations return a durable job handle', async (t) => {
+  const txHash = `0x${'7'.repeat(64)}`;
+  const queued = { jobId: 'job-pending-1', state: 'QUEUED', attempts: 0, input: { intentId: intent.intentId, chainId: 8453, txHash }, observation: null, result: null, error: null };
+  const observationWorker = { async enqueuePersistent() { return queued; }, async get() { return queued; } };
+  const server = createHttpServer({ observationWorker, observer: async () => ({ chainId: 8453, txHash, status: 'PENDING', action: 'TRANSFER', sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 0, transfers: [], finalityState: 'PENDING' }) });
+  t.after(() => server.close());
+  await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
+  const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 }) });
+  assert.equal(observed.status, 200);
+  assert.equal(observed.json().observationJob.jobId, 'job-pending-1');
+  assert.equal(observed.json().observation.status, 'PENDING');
 });
 test('signed authorization is accepted before execution and produces a v2 receipt', async (t) => {
   const keys = generateKeyPairSync('ed25519');

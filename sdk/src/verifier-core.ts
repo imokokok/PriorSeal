@@ -27,7 +27,7 @@ function publicKeyBytes(pem: string) {
   return decodeBase64(encoded)
 }
 
-async function hashJson(value: unknown) {
+export async function hashJson(value: unknown) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalize(value)))
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
@@ -91,8 +91,8 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (authorization.domain !== (legacyAuthorization ? 'priorseal/authorization/v1' : 'priorseal/authorization/v2')) return fail('INVALID_AUTHORIZATION')
   if (!['priorseal.intent.v1', 'priorseal.intent.v2'].includes(authorization.intent.schema ?? '')) return fail('INVALID_AUTHORIZATION')
   const exactCall = authorization.intent.schema === 'priorseal.intent.v2'
-  if (exactCall && (authorization.intent.executionProfile !== 'priorseal.execution-profile.exact-call.v1' || authorization.intent.action !== 'CONTRACT_CALL' || authorization.intent.nonce == null || authorization.intent.callTarget == null || authorization.intent.calldataHash == null || authorization.intent.transactionValue == null)) return fail('INVALID_AUTHORIZATION')
-  if (!exactCall && authorization.intent.executionProfile != null) return fail('INVALID_AUTHORIZATION')
+  if (exactCall && (authorization.intent.executionProfile !== 'priorseal.execution-profile.exact-call.v1' || authorization.intent.action !== 'CONTRACT_CALL' || authorization.intent.nonce == null || authorization.intent.callTarget == null || authorization.intent.calldataHash == null || authorization.intent.transactionValue == null || !validContextCommitments(authorization.intent.contextCommitments))) return fail('INVALID_AUTHORIZATION')
+  if (!exactCall && (authorization.intent.executionProfile != null || authorization.intent.contextCommitments != null)) return fail('INVALID_AUTHORIZATION')
   if (authorization.principal.account.toLowerCase() !== authorization.authorizer.address.toLowerCase()) return fail('INVALID_AUTHORIZATION')
   if (!['user', 'organization'].includes(authorization.principal.type) || !authorization.principal.id || !authorization.delegate.agentId) return fail('INVALID_AUTHORIZATION')
   if (!['eip712', 'eip1271'].includes(authorization.authorizer.type) || authorization.maxUses !== '1') return fail('INVALID_AUTHORIZATION')
@@ -187,6 +187,18 @@ function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
   if (executedAt < authorizationNotBefore || executedAt > authorizationExpiresAt) reasons.push('OUTSIDE_AUTHORIZATION_WINDOW')
   const reasonCodes = [...new Set(reasons)]
   return { bound: reasonCodes.length === 0, reasonCodes }
+}
+
+function validContextCommitments(value: Intent['contextCommitments']) {
+  if (value == null) return true
+  if (!Array.isArray(value) || value.length < 1 || value.length > 16) return false
+  const keys: string[] = []
+  for (const entry of value) {
+    if (!entry || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(entry.namespace) || !['keccak256', 'sha256'].includes(entry.algorithm) || !/^0x[0-9a-f]{64}$/.test(entry.digest)) return false
+    if (Object.keys(entry).sort().join(',') !== 'algorithm,digest,namespace') return false
+    keys.push(`${entry.namespace}:${entry.algorithm}:${entry.digest}`)
+  }
+  return keys.every((key, index) => index === 0 || keys[index - 1] < key)
 }
 
 function outcomeFor(intent: NonNullable<Receipt['authorizationEvidence']>['authorization']['intent'], execution: Receipt['execution'], binding: { bound: boolean }) {

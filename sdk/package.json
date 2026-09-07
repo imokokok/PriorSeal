@@ -35,12 +35,14 @@
   "publishConfig": {
     "access": "public"
   },
+  "dependencies": {
+    "viem": "2.56.3"
+  },
   "devDependencies": {
     "asn1js": "^3.0.6",
     "esbuild": "^0.25.12",
     "pkijs": "^3.4.0",
-    "typescript": "^5.8.3",
-    "viem": "2.56.3"
+    "typescript": "^5.8.3"
   },
   "repository": {
     "type": "git",

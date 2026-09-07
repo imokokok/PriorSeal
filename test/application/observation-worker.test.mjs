@@ -20,3 +20,16 @@ test('persistent worker does not double-count atomically claimed attempts', asyn
   assert.equal(saved.attempts, 1);
   assert.equal(saved.state, 'RETRY_WAIT');
 });
+test('observation worker preserves the final receipt result for resumable clients', async () => {
+  const receipt = { receiptId: 'psr-final' };
+  const worker = createObservationWorker({
+    observe: async () => ({ observation: { status: 'CONFIRMED', txHash: '0x1' }, receipt, verification: { valid: true, code: 'OK' } }),
+    saveObservation: async () => {},
+  });
+  const job = worker.enqueue({ chainId: 8453, txHash: '0x1' });
+  await worker.runOnce();
+  const completed = worker.get(job.jobId);
+  assert.equal(completed.state, 'COMPLETED');
+  assert.equal(completed.result.receipt.receiptId, 'psr-final');
+  assert.equal(completed.result.verification.valid, true);
+});

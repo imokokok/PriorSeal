@@ -33,7 +33,7 @@ npm run verify:receipt -- /path/to/receipt.json /path/to/public-key.pem
 
 ## TypeScript SDK
 
-The zero-runtime-dependency `priorseal-sdk` package is the supported browser and Node.js 20+ integration surface:
+The typed `priorseal-sdk` package is the supported browser and Node.js 20+ integration surface:
 
 ```bash
 npm install priorseal-sdk
@@ -57,7 +57,7 @@ const evidence = await priorseal.observeExecution({
 })
 ```
 
-The SDK handles typed API calls, wallet authorization, idempotency, timeouts and structured errors. Import `verifyReceiptLocally` from `priorseal-sdk/verifier` to recompute receipt hashes, policy, binding, RFC 3161 evidence and signatures without sending receipt bytes to PriorSeal. It does not construct, sign or submit transactions. ERC-1271 and EVM anchors are reported as explicit external chain-state requirements. See [`sdk/README.md`](sdk/README.md) and the console route `/app/sdk`.
+The SDK handles typed API calls, exact-call intent construction, wallet authorization, durable observation polling, idempotency, timeouts and structured errors. Import `verifyReceiptLocally` or `verifyVerificationBundleLocally` from `priorseal-sdk/verifier` to verify evidence without sending receipt bytes to PriorSeal. It does not sign or submit transactions. ERC-1271 and EVM anchors are reported as explicit external chain-state requirements. See [`sdk/README.md`](sdk/README.md) and the console route `/app/sdk`.
 
 ## Quality checks
 
@@ -75,7 +75,9 @@ The API contract is at `/openapi/v1.json`. Operational endpoints are `/health/li
 
 V2 verification recomputes the intent, authorization and execution hashes, binding reason codes, outcome and receipt ID before checking the authorizer, acceptance and issuer signatures. Browser-local verification supports EIP-712 EOAs. ERC-1271 verification is contract-state dependent: the default server checks current state through a configured EVM source, while strong historical verification requires an archive-state check, module event, or a future account-state proof profile.
 
-For swaps, routers and other calls that emit several token transfers, use `priorseal.intent.v2` with `executionProfile: "priorseal.execution-profile.exact-call.v1"`. It requires an explicit transaction nonce, call target, calldata hash and native value. Binding then verifies the exact transaction envelope, execution time and finality without guessing business semantics from `Transfer` logs; systems such as an external swap verifier can independently attest fill amounts and price quality.
+For swaps, routers and other calls that emit several token transfers, use `priorseal.intent.v2` with `executionProfile: "priorseal.execution-profile.exact-call.v1"`. It requires an explicit transaction nonce, call target, calldata hash and native value. Optional `contextCommitments` bind up to 16 namespaced SHA-256 or Keccak-256 digests—such as quote proofs, policy decisions or approvals—without teaching PriorSeal their business semantics. Binding verifies the exact transaction envelope, execution time and finality without guessing from `Transfer` logs.
+
+Pending observations return a durable `observationJob`; callers can resume by job ID or use `observeExecutionUntilFinal`. `GET /v1/receipts/{receiptId}/bundle` exports the receipt, key-discovery snapshot and an integrity hash. Bundle verification still requires a trusted issuer key pinned outside the bundle; an attacker-controlled bundle cannot establish its own trust root.
 
 The simplest Gas-free ordering mode is `rfc3161`. PriorSeal sends only the SHA-256 imprint of the canonical authorization to DigiCert's RFC 3161 TSA, verifies the returned CMS signature, timestamping certificate usage, certificate path, pinned DigiCert roots, policy OID and nonce, then stores the complete response. The signed `timestampPolicy` makes this requirement part of the principal-approved policy hash. The final receipt carries `priorseal.rfc3161-evidence.v1`, which both server and browser verifiers reject if it was changed or timestamped after execution. No wallet, contract, witness deployment or Gas is required.
 
@@ -95,7 +97,7 @@ Production mode is fail-closed. Set `PRIORSEAL_ENVIRONMENT=production`; startup 
 
 ## Persistence and operations
 
-Neon is the production persistence backend. `DATABASE_URL` is the pooled application connection and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. Apply migrations through `006_rfc3161_timestamp.sql`; they establish authorization, timestamp and witness evidence storage, durable intents, observation versions, idempotency records, and at-least-once worker jobs. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
+Neon is the production persistence backend. `DATABASE_URL` is the pooled application connection and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. Apply migrations through `007_observation_job_results.sql`; they establish authorization, timestamp and witness evidence storage, durable intents, observation versions, idempotency records, and recoverable at-least-once worker results. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
 
 For a local container environment:
 

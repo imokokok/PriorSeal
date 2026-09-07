@@ -1,11 +1,13 @@
 export type ChainId = 1 | 8453 | 42161
 
+export type ContextCommitment = { namespace: string; algorithm: 'keccak256' | 'sha256'; digest: string }
+
 export type Intent = {
   schema?: 'priorseal.intent.v1' | 'priorseal.intent.v2'
   executionProfile?: 'priorseal.execution-profile.exact-call.v1'
   intentId: string
   intentHash?: string
-  chainId: ChainId | string
+  chainId: number | string
   action: string
   asset: string
   amount: string
@@ -16,6 +18,7 @@ export type Intent = {
   callTarget?: string
   calldataHash?: string
   transactionValue?: string
+  contextCommitments?: ContextCommitment[]
   constraints?: { minConfirmations?: number; maxGasUsed?: string }
 }
 
@@ -140,6 +143,14 @@ export type Receipt = {
 export type VerificationResult = { valid: boolean; code: string; outcome?: string; receiptId?: string; authorizationId?: string }
 export type KeyEntry = { issuer: string; keyId: string; algorithm: string; publicKey: string; status: string; validFrom: number | null; validUntil: number | null }
 export type KeyRegistry = { schema: string; issuer: string; keys: KeyEntry[]; verifierVersion?: string; schemaVersions?: string[] }
+export type VerificationBundle = {
+  schema: 'priorseal.verification-bundle.v1'
+  receipt: Receipt
+  keyRegistry: KeyRegistry
+  assembledAt: number
+  trust: { model: 'PIN_ISSUER_KEY_OUT_OF_BAND'; notice: string }
+  bundleHash: string
+}
 
 export type PrepareAuthorizationInput = Omit<Authorization, 'schema' | 'domain' | 'authorizationId' | 'intentHash' | 'signature' | 'policyHash'> & { policyHash?: string }
 export type ObserveExecutionInput = { intentId?: string; authorizationId?: string; chainId: number; txHash: string; confirmations?: number }
@@ -164,7 +175,11 @@ export type WalletAuthorizationInput = {
 
 export type PreparedAuthorization = { authorization: Authorization; typedData: Record<string, unknown>; requestId?: string }
 export type AcceptedAuthorization = { authorization: Authorization; acceptance: AuthorizationReceipt; policyEvidence?: PolicyEvidence; timestampEvidence?: TimestampEvidence; witnessEvidence?: WitnessEvidence; policy: { allowed: boolean; reasonCodes: string[]; policyId: string | null }; requestId?: string }
-export type ObservationResult = { observation: Execution; receipt: Receipt | null; verification?: VerificationResult; requestId?: string }
+export type ObservationResult = { observation: Execution; receipt: Receipt | null; verification?: VerificationResult; observationJob?: ObservationJob; requestId?: string }
+
+export type ExactCallTransaction = { chainId: ChainId | number; from: string; to: string; data: `0x${string}`; value?: bigint | number | string; nonce: bigint | number | string }
+export type ExactCallIntentInput = { transaction: ExactCallTransaction; intentId: string; asset: string; amount: bigint | number | string; validUntil: number; contextCommitments?: ContextCommitment[]; constraints?: Intent['constraints'] }
+export type ExactCallWalletAuthorizationInput = ExactCallIntentInput & { principal: { type: 'user' | 'organization'; id: string }; agentId: string; account?: string; issuedAt?: number; notBefore?: number; expiresAt?: number; authorizationNonce?: string; audience?: string }
 export type ObservationJob = {
   jobId: string
   input: ObserveExecutionInput
@@ -173,5 +188,7 @@ export type ObservationJob = {
   createdAt: number
   nextAttemptAt: number
   observation: Execution | null
+  result?: ObservationResult | null
   error: { code: string; message: string } | null
 }
+export type WaitForObservationOptions = RequestOptions & { pollIntervalMs?: number; timeoutMs?: number }

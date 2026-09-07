@@ -7,14 +7,14 @@ export function createObservationWorker({ observe, saveObservation, store = null
   const jobs = new Map();
   async function enqueuePersistent(input) {
     if (!store?.enqueueJob) return enqueue(input);
-    const { idempotencyKey, ...workInput } = input; const now = clock(); const job = { jobId: randomUUID(), idempotencyKey: idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`, input: workInput, state: 'QUEUED', attempts: 0, createdAt: now, nextAttemptAt: now, observation: null, error: null };
+    const { idempotencyKey, ...workInput } = input; const now = clock(); const job = { jobId: randomUUID(), idempotencyKey: idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`, input: workInput, state: 'QUEUED', attempts: 0, createdAt: now, nextAttemptAt: now, observation: null, result: null, error: null };
     return store.enqueueJob(job);
   }
   function enqueue(input) {
     const { idempotencyKey, ...workInput } = input; const key = idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`;
     const existing = [...jobs.values()].find((job) => job.key === key);
     if (existing) return existing;
-    const job = { jobId: randomUUID(), key, input: workInput, state: 'QUEUED', attempts: 0, createdAt: clock(), nextAttemptAt: clock(), observation: null, error: null };
+    const job = { jobId: randomUUID(), key, input: workInput, state: 'QUEUED', attempts: 0, createdAt: clock(), nextAttemptAt: clock(), observation: null, result: null, error: null };
     jobs.set(job.jobId, job); return job;
   }
   async function runOnce() {
@@ -24,7 +24,7 @@ export function createObservationWorker({ observe, saveObservation, store = null
       job.state = 'RUNNING'; if (!persistentClaims) job.attempts += 1;
       try {
         const previous = job.observation ?? (store?.getObservation ? await store.getObservation(job.input.chainId, job.input.txHash) : null);
-        const observation = await observe(job.input); if (detectReorg(previous, observation)) observation.status = 'REORGED', observation.finalityState = 'REORGED', observation.previousBlockHash = previous.blockHash; job.observation = observation; await saveObservation(observation);
+        const observed = await observe(job.input); const result = observed?.observation ? observed : null; const observation = result?.observation ?? observed; if (detectReorg(previous, observation)) observation.status = 'REORGED', observation.finalityState = 'REORGED', observation.previousBlockHash = previous.blockHash; job.observation = observation; job.result = result ? { ...result, observation } : null; await saveObservation(observation);
         if (retryable.has(observation.status) && job.attempts < maxAttempts) { job.state = 'RETRY_WAIT'; job.nextAttemptAt = nextRetry(job.attempts); }
         else { job.state = observation.status === 'CONFIRMED' || observation.status === 'REVERTED' ? 'COMPLETED' : 'UNDETERMINED'; }
       } catch (error) {

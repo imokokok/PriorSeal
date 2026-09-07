@@ -18,7 +18,7 @@ const flow = await priorseal.authorizeWithWallet({
   delegate: { agentId: 'agent:treasury', executor: intent.sender },
 }, window.ethereum)
 
-const evidence = await priorseal.observeExecution({
+const evidence = await priorseal.observeExecutionUntilFinal({
   authorizationId: flow.accepted.authorization.authorizationId,
   chainId: Number(intent.chainId),
   txHash,
@@ -45,28 +45,28 @@ The verifier performs no network requests. It recomputes canonical intent, autho
 
 `verifyReceiptRemotely` remains available as a convenience API call, but it is not independent verification.
 
+Portable bundles are available with `getVerificationBundle(receiptId)`. Verify them with `verifyVerificationBundleLocally(bundle, { trustedKeys })`; `trustedKeys` must come from an independently pinned source, never from `bundle.keyRegistry` alone.
+
 ## Exact contract calls
 
 Use intent v2 when an integration already constructs the exact transaction and another system owns its business semantics:
 
 ```ts
-const intent = {
-  schema: 'priorseal.intent.v2',
-  executionProfile: 'priorseal.execution-profile.exact-call.v1',
+import { buildExactCallIntent } from 'priorseal-sdk'
+
+const intent = buildExactCallIntent({
+  transaction: { chainId: 8453, from: executor, to: router, data, value: 0n, nonce: 17n },
   intentId: 'swap-42',
-  chainId: 8453,
-  action: 'CONTRACT_CALL',
   asset: 'eip155:8453/erc20:0x…',
-  amount: '1000000',
-  sender: executor,
-  recipient: router,
+  amount: 1000000n,
   validUntil,
-  nonce: '17',
-  callTarget: router,
-  calldataHash,
-  transactionValue: '0',
   constraints: { minConfirmations: 12 },
-}
+  contextCommitments: [{
+    namespace: 'example.quote-approval.v1',
+    algorithm: 'keccak256',
+    digest: quoteApprovalDigest,
+  }],
+})
 ```
 
-The profile binds chain, executor, nonce, target, calldata, native value, time and finality. It intentionally ignores transfer-log recipient/asset/amount matching and transfer-count ambiguity, so a swap-specific verifier can grade fills without PriorSeal pretending to understand router semantics.
+The profile binds chain, executor, nonce, target, calldata, native value, time, finality and any namespaced external context digests. It intentionally ignores transfer-log recipient/asset/amount matching and transfer-count ambiguity, so a swap-specific verifier can grade fills without PriorSeal pretending to understand router semantics.

@@ -3,6 +3,7 @@ import type {
   Authorization,
   AuthorizationRecord,
   Eip1193Provider,
+  ExactCallWalletAuthorizationInput,
   Intent,
   KeyRegistry,
   ObservationJob,
@@ -14,8 +15,11 @@ import type {
   Receipt,
   RequestOptions,
   VerificationResult,
+  VerificationBundle,
   WalletAuthorizationInput,
+  WaitForObservationOptions,
 } from './types.js'
+import { buildExactCallIntent } from './exact-call.js'
 
 export type PriorSealClientOptions = {
   baseUrl?: string
@@ -117,12 +121,42 @@ export class PriorSealClient {
     return this.observationJob(jobId, options)
   }
 
+  async waitForObservationJob(jobId: string, options: WaitForObservationOptions = {}) {
+    const pollIntervalMs = options.pollIntervalMs ?? 1_000
+    const timeoutMs = options.timeoutMs ?? 120_000
+    if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 10) throw new TypeError('pollIntervalMs must be an integer of at least 10')
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) throw new TypeError('timeoutMs must be a positive integer')
+    const startedAt = Date.now()
+    while (true) {
+      const job = await this.observationJob(jobId, options)
+      if (['COMPLETED', 'UNDETERMINED', 'FAILED'].includes(job.state)) return job
+      if (Date.now() - startedAt >= timeoutMs) throw new PriorSealApiError(`Observation job did not finish within ${timeoutMs}ms`, { code: 'OBSERVATION_WAIT_TIMEOUT' })
+      await abortableDelay(Math.min(pollIntervalMs, Math.max(1, timeoutMs - (Date.now() - startedAt))), options.signal)
+    }
+  }
+
+  async observeExecutionUntilFinal(input: ObserveExecutionInput, options: WaitForObservationOptions = {}) {
+    const initial = await this.observeExecution(input, options)
+    if (!initial.observationJob) return initial
+    const job = await this.waitForObservationJob(initial.observationJob.jobId, options)
+    if (job.result) return { ...job.result, observationJob: job }
+    return { ...initial, observation: job.observation ?? initial.observation, observationJob: job }
+  }
+
   receipt(id: string, options?: RequestOptions) {
     return this.request<Receipt>(`/v1/receipts/${encodeURIComponent(id)}`, {}, options)
   }
 
   getReceipt(id: string, options?: RequestOptions) {
     return this.receipt(id, options)
+  }
+
+  verificationBundle(id: string, options?: RequestOptions) {
+    return this.request<VerificationBundle>(`/v1/receipts/${encodeURIComponent(id)}/bundle`, {}, options)
+  }
+
+  getVerificationBundle(id: string, options?: RequestOptions) {
+    return this.verificationBundle(id, options)
   }
 
   verify(receipt: Receipt, options?: RequestOptions) {
@@ -162,6 +196,21 @@ export class PriorSealClient {
     if (typeof signature !== 'string' || !signature.startsWith('0x')) throw new PriorSealApiError('The wallet did not return an EVM signature', { code: 'WALLET_SIGNATURE_UNAVAILABLE' })
     const accepted = await this.authorize({ ...prepared.authorization, signature }, options)
     return { account, signature, prepared, accepted }
+  }
+
+  authorizeExactCallWithWallet(input: ExactCallWalletAuthorizationInput, provider: Eip1193Provider, options?: RequestOptions) {
+    const intent = buildExactCallIntent(input)
+    return this.authorizeWithWallet({
+      intent,
+      principal: input.principal,
+      delegate: { agentId: input.agentId, executor: intent.sender },
+      account: input.account,
+      issuedAt: input.issuedAt,
+      notBefore: input.notBefore,
+      expiresAt: input.expiresAt,
+      authorizationNonce: input.authorizationNonce,
+      audience: input.audience,
+    }, provider, options)
   }
 
   private async request<T>(path: string, init: RequestInit, options: RequestOptions = {}): Promise<T> {
@@ -222,4 +271,14 @@ function requireCrypto() {
 
 function safeJson(value: string): unknown {
   try { return JSON.parse(value) } catch { throw new PriorSealApiError('PriorSeal API returned invalid JSON', { code: 'INVALID_RESPONSE' }) }
+}
+
+function abortableDelay(milliseconds: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(new PriorSealApiError('PriorSeal request was aborted', { code: 'REQUEST_ABORTED' }))
+    const timer = setTimeout(done, milliseconds)
+    function done() { signal?.removeEventListener('abort', aborted); resolve() }
+    function aborted() { clearTimeout(timer); signal?.removeEventListener('abort', aborted); reject(new PriorSealApiError('PriorSeal request was aborted', { code: 'REQUEST_ABORTED' })) }
+    signal?.addEventListener('abort', aborted, { once: true })
+  })
 }

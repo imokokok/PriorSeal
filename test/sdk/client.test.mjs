@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PriorSealApiError, createPriorSealClient, generateAuthorizationNonce } from '../../sdk/dist/index.js';
+import { PriorSealApiError, buildExactCallIntent, createPriorSealClient, generateAuthorizationNonce } from '../../sdk/dist/index.js';
+import { keccak256 } from 'viem';
 
 function response(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -70,4 +71,39 @@ test('SDK wallet helper prepares, signs and accepts an authorization', async () 
   assert.equal(requests.length, 2);
   assert.equal(requests[1].body.signature, '0xsigned');
   assert.match(generateAuthorizationNonce(), /^0x[0-9a-f]{64}$/);
+});
+
+test('SDK builds canonical exact-call intents with external context commitments', () => {
+  const data = '0x1234';
+  const intent = buildExactCallIntent({
+    transaction: { chainId: 8453, from: `0x${'a'.repeat(40)}`, to: `0x${'b'.repeat(40)}`, data, value: 0n, nonce: 7n },
+    intentId: 'exact-sdk-1',
+    asset: `eip155:8453/erc20:0x${'c'.repeat(40)}`,
+    amount: 1_000_000n,
+    validUntil: 2_000_000_000,
+    contextCommitments: [
+      { namespace: 'treasury.approval.v1', algorithm: 'sha256', digest: `0x${'2'.repeat(64)}` },
+      { namespace: 'insight.pretrade-pair.v1', algorithm: 'keccak256', digest: `0x${'1'.repeat(64)}` },
+    ],
+  });
+  assert.equal(intent.calldataHash, keccak256(data));
+  assert.equal(intent.transactionValue, '0');
+  assert.equal(intent.nonce, '7');
+  assert.deepEqual(intent.contextCommitments.map((entry) => entry.namespace), ['insight.pretrade-pair.v1', 'treasury.approval.v1']);
+});
+
+test('SDK waits for a durable observation job and returns its final receipt', async () => {
+  let polls = 0;
+  const receipt = { receiptId: 'psr-final', execution: { status: 'CONFIRMED' } };
+  const client = createPriorSealClient({ fetch: async (url) => {
+    if (String(url).endsWith('/v1/executions/observe')) return response({ observation: { chainId: 8453, txHash: '0x1', status: 'PENDING' }, receipt: null, observationJob: { jobId: 'job-1', state: 'QUEUED' } });
+    polls += 1;
+    return polls === 1
+      ? response({ jobId: 'job-1', state: 'RETRY_WAIT', attempts: 1, input: {}, observation: { status: 'PENDING' }, result: null, error: null })
+      : response({ jobId: 'job-1', state: 'COMPLETED', attempts: 2, input: {}, observation: { status: 'CONFIRMED' }, result: { observation: { chainId: 8453, txHash: '0x1', status: 'CONFIRMED' }, receipt, verification: { valid: true, code: 'OK' } }, error: null });
+  } });
+  const result = await client.observeExecutionUntilFinal({ authorizationId: 'auth-1', chainId: 8453, txHash: '0x1' }, { pollIntervalMs: 10, timeoutMs: 100 });
+  assert.equal(result.receipt.receiptId, 'psr-final');
+  assert.equal(result.observation.status, 'CONFIRMED');
+  assert.equal(result.observationJob.state, 'COMPLETED');
 });

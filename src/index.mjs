@@ -16,3 +16,4 @@ export { createHttpWitnessProvider, readWitnessEndpoints } from './infrastructur
 export { createWitnessHttpServer } from './interfaces/http/create-witness-http-server.mjs';
 export { buildTimestampPolicy, createTimestampRequest, buildTimestampEvidence, validateTimestampEvidenceClaims, verifyTimestampEvidence, DIGICERT_RFC3161_PROFILE, DIGICERT_RFC3161_URL } from './domain/rfc3161.mjs';
 export { createDigiCertTimestampProvider } from './infrastructure/timestamp/digicert-rfc3161-client.mjs';
+export { buildVerificationBundle, VERIFICATION_BUNDLE_SCHEMA, VERIFICATION_BUNDLE_TRUST } from './domain/verification-bundle.mjs';

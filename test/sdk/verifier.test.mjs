@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
-import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildIntent, buildReceipt, createMemoryStore } from '../../src/index.mjs';
+import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildIntent, buildReceipt, buildVerificationBundle, createMemoryStore } from '../../src/index.mjs';
 import { signReceipt } from '../../src/domain/receipt.mjs';
-import { verifyReceiptLocally } from '../../sdk/dist/verifier.js';
+import { verifyReceiptLocally, verifyVerificationBundleLocally } from '../../sdk/dist/verifier.js';
 
 function issuerKeys() {
   const keys = generateKeyPairSync('ed25519');
@@ -30,6 +30,12 @@ test('SDK verifier validates a v1 receipt locally and detects mutations', async 
   assert.equal(verified.verificationScope, 'LOCAL_COMPLETE');
   assert.deepEqual(verified.requiredExternalChecks, []);
   assert.equal((await verifyReceiptLocally({ ...receipt, executionHash: 'changed' }, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'EXECUTION_HASH_MISMATCH');
+  const bundle = buildVerificationBundle({ receipt, keyRegistry: { schema: 'priorseal.keys.v1', issuer: 'test', keys: [trustedKey(keys.publicKey)] }, assembledAt: 1_101 });
+  assert.equal((await verifyVerificationBundleLocally(bundle, { now: 1_200 })).code, 'UNKNOWN_KEY');
+  assert.equal((await verifyVerificationBundleLocally(bundle, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).valid, true);
+  const tampered = structuredClone(bundle);
+  tampered.receipt.execution.status = 'REVERTED';
+  assert.equal((await verifyVerificationBundleLocally(tampered, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'BUNDLE_HASH_MISMATCH');
 });
 
 test('SDK verifier independently validates authorization v2, policy, binding and signatures', async () => {
@@ -72,6 +78,7 @@ test('SDK verifier independently validates exact-call receipts with multi-transf
     callTarget: router,
     calldataHash,
     transactionValue: '0',
+    contextCommitments: [{ namespace: 'insight.pretrade-pair.v1', algorithm: 'keccak256', digest: `0x${'8'.repeat(64)}` }],
   };
   const draft = buildAuthorization({ intent, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'insight:swap-agent', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'9'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}` });
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
@@ -82,6 +89,9 @@ test('SDK verifier independently validates exact-call receipts with multi-transf
   assert.equal(verified.valid, true);
   assert.equal(verified.code, 'OK');
   assert.equal(receipt.outcome, 'COMPLETED');
+  const contextMutated = structuredClone(receipt);
+  contextMutated.authorizationEvidence.authorization.intent.contextCommitments[0].digest = `0x${'7'.repeat(64)}`;
+  assert.equal((await verifyReceiptLocally(contextMutated, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'INTENT_HASH_MISMATCH');
 });
 
 test('SDK verifier reports chain-state requirements without making network calls', async () => {

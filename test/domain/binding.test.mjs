@@ -25,8 +25,13 @@ test('exact-call profile binds transaction bytes instead of ambiguous transfer s
     callTarget,
     calldataHash,
     transactionValue: '0',
+    contextCommitments: [
+      { namespace: 'treasury.approval.v1', algorithm: 'sha256', digest: `0x${'2'.repeat(64)}` },
+      { namespace: 'insight.pretrade-pair.v1', algorithm: 'keccak256', digest: `0x${'1'.repeat(64)}` },
+    ],
     constraints: { minConfirmations: 3 },
   });
+  assert.deepEqual(exact.contextCommitments.map((entry) => entry.namespace), ['insight.pretrade-pair.v1', 'treasury.approval.v1']);
   const observed = {
     ...execution,
     sender: exact.sender,
@@ -48,6 +53,10 @@ test('exact-call profile binds transaction bytes instead of ambiguous transfer s
   );
   assert.throws(
     () => buildIntent({ ...exactInput, calldataHash, action: 'contract_call' }),
+    (error) => error.code === 'INVALID_INTENT'
+  );
+  assert.throws(
+    () => buildIntent({ ...intent, contextCommitments: [{ namespace: 'legacy.context', algorithm: 'sha256', digest: `0x${'3'.repeat(64)}` }] }),
     (error) => error.code === 'INVALID_INTENT'
   );
 });
