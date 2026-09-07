@@ -65,6 +65,7 @@ The SDK handles typed API calls, exact-call intent construction, wallet authoriz
 npm run check          # JS syntax lint, SDK/web typecheck, tests, SDK/web build
 npm run test:coverage
 npm run audit
+npm run release:check  # full gate including browser E2E, coverage and production-dependency audit
 ```
 
 The API contract is at `/openapi/v1.json`. Operational endpoints are `/health/live`, `/health/ready`, and `/v1/version`. The default console uses signed `priorseal.authorization.v2` authorizations; it binds the principal and authorizer types, agent ID and executor into EIP-712. Legacy authorization v1 remains verification-only, and `POST /v1/intents` remains a deprecated compatibility path for unsigned receipt v1 evidence.

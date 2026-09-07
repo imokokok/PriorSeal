@@ -21,6 +21,7 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     port: 3001,
     issuer: 'issuer-1',
     keyId: 'key-1',
+    buildVersion: 'dev',
     authorizationAudience: 'priorseal',
     privateKeyFile: '/run/secrets/private.pem',
     publicKeyFile: '/run/secrets/public.pem',
@@ -49,7 +50,7 @@ test('runtime configuration rejects ambiguous or invalid values before startup',
 
 test('production runtime fails closed unless security dependencies are explicit', () => {
   const base = {
-    PRIORSEAL_ENVIRONMENT: 'production', PRIORSEAL_ISSUER: 'priorseal-prod', PRIORSEAL_KEY_ID: 'prod-1',
+    PRIORSEAL_ENVIRONMENT: 'production', PRIORSEAL_ISSUER: 'priorseal-prod', PRIORSEAL_KEY_ID: 'prod-1', PRIORSEAL_BUILD_VERSION: '0.2.0',
     PRIORSEAL_AUTHORIZATION_AUDIENCE: 'priorseal.example.com', PRIORSEAL_PRIVATE_KEY_FILE: '/private.pem', PRIORSEAL_PUBLIC_KEY_FILE: '/public.pem',
     PRIORSEAL_POLICY_FILE: '/policy.json', PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR: 'true', PRIORSEAL_CORS_ORIGINS: 'https://priorseal.example.com',
     DATABASE_URL: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full', DATABASE_URL_UNPOOLED: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
@@ -62,4 +63,6 @@ test('production runtime fails closed unless security dependencies are explicit'
   const timestamped = loadRuntimeConfig({ ...base, PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR: 'false', PRIORSEAL_PREEXECUTION_PROOF_MODE: 'rfc3161' });
   assert.equal(timestamped.preExecutionProofMode, 'rfc3161');
   assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_CORS_ORIGINS: 'http://localhost:5173' }), /non-localhost/);
+  assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_KEY_ID: 'default' }), /deployment-specific PRIORSEAL_KEY_ID/);
+  assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_BUILD_VERSION: 'dev' }), /PRIORSEAL_BUILD_VERSION/);
 });

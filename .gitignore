@@ -11,3 +11,4 @@ examples/receipt-artifacts/
 test-results/
 playwright-report/
 blob-report/
+coverage/

@@ -5,6 +5,7 @@ import { readPolicyFile } from '../src/infrastructure/policy/file-policy-provide
 import { createRpcClient } from '../src/infrastructure/blockchain/evm/rpc-client.mjs';
 import { getRpcUrls, SUPPORTED_CHAINS } from '../src/infrastructure/blockchain/evm/chains.mjs';
 import { readWitnessEndpoints } from '../src/infrastructure/witness/http-witness-client.mjs';
+import { assertProductionSchema } from '../src/bootstrap/production-schema.mjs';
 
 if (process.env.PRIORSEAL_ENVIRONMENT !== 'production') throw new TypeError('Set PRIORSEAL_ENVIRONMENT=production before running the production readiness check');
 const config = loadRuntimeConfig();
@@ -22,13 +23,7 @@ if ((privateKeyStat.mode & 0o077) !== 0) throw new TypeError('Issuer private key
 
 const pool = new pg.Pool({ connectionString: config.databaseDirectUrl });
 try {
-  const migrations = await pool.query('SELECT name FROM schema_migrations ORDER BY name');
-  if (!migrations.rows.some((row) => row.name === '006_rfc3161_timestamp.sql')) throw new TypeError('RFC 3161 timestamp migration is not applied');
-  const requiredTables = config.preExecutionProofMode === 'witness-quorum' ? ['authorization_log', 'authorizations', 'witness_attestations'] : ['authorization_log', 'authorizations'];
-  const tables = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY($1)", [requiredTables]);
-  if (tables.rowCount !== requiredTables.length) throw new TypeError('Required authorization evidence tables are missing');
-  const timestampColumn = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='authorizations' AND column_name='timestamp_evidence_json'");
-  if (timestampColumn.rowCount !== 1) throw new TypeError('RFC 3161 timestamp evidence column is missing');
+  await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode });
 } finally {
   await pool.end();
 }
@@ -43,4 +38,4 @@ for (const chainId of Object.keys(SUPPORTED_CHAINS).map(Number)) {
   verifiedChains.push(chainId);
 }
 if (!verifiedChains.length) throw new TypeError('At least one production RPC must be configured');
-console.log(JSON.stringify({ ready: true, databaseMigration: '006_rfc3161_timestamp.sql', reviewedPrincipals: policy.principals.length, verifiedChains, preExecutionProofMode: config.preExecutionProofMode, timestampProfile: policy.timestampPolicy?.profile ?? null, witnessThreshold: policy.witnessQuorum?.threshold ?? null, externalAnchorRequired: config.requireExternalAnchor }));
+console.log(JSON.stringify({ ready: true, buildVersion: config.buildVersion, databaseMigration: '007_observation_job_results.sql', reviewedPrincipals: policy.principals.length, verifiedChains, preExecutionProofMode: config.preExecutionProofMode, timestampProfile: policy.timestampPolicy?.profile ?? null, witnessThreshold: policy.witnessQuorum?.threshold ?? null, externalAnchorRequired: config.requireExternalAnchor }));

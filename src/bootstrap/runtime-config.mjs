@@ -23,6 +23,7 @@ export function loadRuntimeConfig(environment = process.env) {
     port: portValue(environment.PORT),
     issuer: identifierValue(environment.PRIORSEAL_ISSUER, 'PRIORSEAL_ISSUER', 'priorseal-local'),
     keyId: identifierValue(environment.PRIORSEAL_KEY_ID, 'PRIORSEAL_KEY_ID', 'default'),
+    buildVersion: identifierValue(environment.PRIORSEAL_BUILD_VERSION, 'PRIORSEAL_BUILD_VERSION', 'dev'),
     authorizationAudience: identifierValue(environment.PRIORSEAL_AUTHORIZATION_AUDIENCE, 'PRIORSEAL_AUTHORIZATION_AUDIENCE', 'priorseal'),
     privateKeyFile,
     publicKeyFile,
@@ -70,6 +71,8 @@ function environmentValue(value) {
 function validateProductionConfig(config) {
   if (!config.databaseUrl || !config.databaseDirectUrl) throw new TypeError('Production requires DATABASE_URL and DATABASE_URL_UNPOOLED');
   if (!config.privateKeyFile || !config.publicKeyFile) throw new TypeError('Production requires issuer signing key files');
+  if (config.keyId === 'default') throw new TypeError('Production requires a deployment-specific PRIORSEAL_KEY_ID');
+  if (config.buildVersion === 'dev') throw new TypeError('Production requires PRIORSEAL_BUILD_VERSION');
   if (!config.policyFile) throw new TypeError('Production requires PRIORSEAL_POLICY_FILE');
   if (config.issuer === 'priorseal-local' || config.authorizationAudience === 'priorseal') throw new TypeError('Production requires deployment-specific issuer and authorization audience values');
   if (config.preExecutionProofMode === 'issuer') throw new TypeError('Production requires rfc3161, witness-quorum, or evm-anchor pre-execution proof');

@@ -4,7 +4,7 @@ import { AppShell, CodeValue, CopyButton, Empty, Field, LoadingState, Notice, Pa
 import { api } from './lib/api'
 import { chains, dateTime, fromUnix, reasonText, short, toUnix, verificationText } from './lib/format'
 import { activityChangeEvent, getActivity, getStoragePreference, session, storagePreferenceEvent } from './lib/storage'
-import type { ApiError, AuthorizationRecord, Execution, Intent, KeyEntry, KeyRegistry, Receipt, VerificationResult } from './types'
+import type { ApiError, AuthorizationRecord, Execution, Intent, KeyEntry, KeyRegistry, ObservationJob, ObservationResult, Receipt, VerificationResult } from './types'
 import { AuditPage } from './pages/AuditPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { SdkPage } from './pages/SdkPage'
@@ -97,9 +97,72 @@ function CreateIntent() {
 function IntentPreview({ intent }: { intent: Intent }) { return <aside className="preview panel"><div className="panel-head"><div><h2>Intent preview</h2><p>Canonical fields before authorization</p></div><Status value="DRAFT" small /></div><dl><dt>Chain</dt><dd>{chains[Number(intent.chainId)] ?? intent.chainId}</dd><dt>Action</dt><dd>{intent.action || '—'}</dd><dt>Asset</dt><dd><CodeValue value={intent.asset} /></dd><dt>Amount</dt><dd className="mono">{intent.amount || '—'}</dd><dt>Executor</dt><dd><CodeValue value={intent.sender} /></dd><dt>Recipient</dt><dd><CodeValue value={intent.recipient} /></dd><dt>Expires</dt><dd>{dateTime(intent.validUntil)}</dd></dl><Notice tone="info" title="Authorization signature only">Signing approves these constraints. It does not submit or broadcast a transaction.</Notice></aside> }
 
 function Observe() {
- const activity = getActivity(); const [authorizationId, setAuthorizationId] = useState(activity.authorizations[0]?.authorization.authorizationId ?? ''); const [txHash, setTxHash] = useState(''); const [confirmations, setConfirmations] = useState('12'); const [result, setResult] = useState<{ observation: Execution; receipt: Receipt | null } | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const navigate = useNavigate(); const selected = activity.authorizations.find((candidate) => candidate.authorization.authorizationId === authorizationId); const linkedIntent = selected?.authorization.intent
- async function submit(event: FormEvent) { event.preventDefault(); setError(''); if (!authorizationId || !/^0x[a-fA-F0-9]{64}$/.test(txHash)) { setError('Choose an accepted authorization and enter a valid transaction hash.'); return } const chainId = Number(linkedIntent?.chainId ?? 0); if (![1, 8453, 42161].includes(chainId)) { setError('The authorization must use Ethereum, Base, or Arbitrum.'); return } setBusy(true); try { const observed = await api.observe({ authorizationId, chainId, txHash, confirmations: Number(confirmations) || 0 }); session.saveObservation(observed.observation); if (observed.receipt) session.saveReceipt(observed.receipt); setResult(observed) } catch (caught) { setError(errorMessage(caught)) } finally { setBusy(false) } }
- return <AppShell><PageHeader eyebrow="EXECUTION" title="Observe execution">Only accepted, signed authorizations are shown. A single authorization cannot be bound to two different transactions.</PageHeader><div className="form-layout"><form className="panel intent-form" onSubmit={submit} aria-busy={busy}>{error && <Notice tone="danger" title="Observation could not be completed">{error}</Notice>}<Field label="Signed authorization"><select value={authorizationId} onChange={(e) => setAuthorizationId(e.target.value)}><option value="">Choose an accepted authorization</option>{activity.authorizations.map((record) => <option key={record.authorization.authorizationId} value={record.authorization.authorizationId}>{record.authorization.authorizationId} · {chains[Number(record.authorization.intent.chainId)]}</option>)}</select></Field>{!activity.authorizations.length && <Notice tone="warning" title="No signed authorization">Create and sign an intent before observing execution.</Notice>}<Field label="Transaction hash"><input className="mono" value={txHash} onChange={(e) => setTxHash(e.target.value)} placeholder="0x…" /></Field><Field label="Required confirmations"><input type="number" min="0" value={confirmations} onChange={(e) => setConfirmations(e.target.value)} /></Field><div className="form-footer"><span>The authorization becomes single-use when bound to a transaction.</span><button className="button primary" disabled={busy || !selected}>{busy ? 'Observing…' : 'Observe authorized execution →'}</button></div></form><aside className="preview panel"><div className="panel-head"><div><h2>Signed authority</h2><p>User-approved execution constraints</p></div></div>{selected && linkedIntent ? <div className="intent-mini"><dl><dt>Authorizer</dt><dd><CodeValue value={selected.authorization.authorizer.address} /></dd><dt>Agent</dt><dd>{selected.authorization.delegate.agentId}</dd><dt>Executor</dt><dd><CodeValue value={selected.authorization.delegate.executor} /></dd><dt>Asset</dt><dd><CodeValue value={linkedIntent.asset} /></dd><dt>Amount</dt><dd>{linkedIntent.amount}</dd><dt>Expires</dt><dd>{dateTime(selected.authorization.expiresAt)}</dd></dl></div> : <Empty title="Select an authorization">Only cryptographically signed authorizations can enter the v2 evidence flow.</Empty>}</aside></div>{result && <section className="panel observation-result"><div className="panel-head"><div><h2>Observation result</h2><p>Information returned by the configured chain observer.</p></div><Status value={result.observation.status} /></div><ExecutionDetails execution={result.observation} />{result.receipt ? <div className="result-banner"><div><Status value="AUTHORIZED RECEIPT" /><strong>A v2 authorization-bound receipt was issued.</strong></div><button className="button primary" onClick={() => navigate('/app/receipts/' + encodeURIComponent(result.receipt!.receiptId))}>Open receipt detail →</button></div> : <Notice tone="warning" title="No receipt issued">Issuer signing is unavailable.</Notice>}</section>}</AppShell>
+ const activity = getActivity()
+ const resumableJob = activity.observationJobs.find((job) => !['COMPLETED', 'UNDETERMINED', 'FAILED'].includes(job.state))
+ const [authorizationId, setAuthorizationId] = useState(resumableJob?.input.authorizationId ?? activity.authorizations[0]?.authorization.authorizationId ?? '')
+ const [txHash, setTxHash] = useState(resumableJob?.input.txHash ?? '')
+ const [confirmations, setConfirmations] = useState(String(resumableJob?.input.confirmations ?? 12))
+ const [result, setResult] = useState<ObservationResult | null>(() => resumableJob?.result ?? (resumableJob?.observation ? { observation: resumableJob.observation, receipt: null, observationJob: resumableJob } : null))
+ const [job, setJob] = useState<ObservationJob | null>(resumableJob ?? null)
+ const [busy, setBusy] = useState(false)
+ const [error, setError] = useState('')
+ const navigate = useNavigate()
+ const selected = activity.authorizations.find((candidate) => candidate.authorization.authorizationId === authorizationId)
+ const linkedIntent = selected?.authorization.intent
+ const jobPending = Boolean(job && !['COMPLETED', 'UNDETERMINED', 'FAILED'].includes(job.state))
+
+ function saveResult(observed: ObservationResult) {
+  session.saveObservation(observed.observation)
+  if (observed.receipt) session.saveReceipt(observed.receipt)
+  if (observed.observationJob) session.saveObservationJob(observed.observationJob)
+  setResult(observed)
+ }
+
+ async function resumeJob(jobId: string, signal?: AbortSignal) {
+  setBusy(true)
+  setError('')
+  try {
+   const completed = await api.waitForObservationJob(jobId, { signal, timeoutMs: 120_000 })
+   session.saveObservationJob(completed)
+   setJob(completed)
+   if (completed.result) saveResult({ ...completed.result, observationJob: completed })
+   else if (completed.observation) saveResult({ observation: completed.observation, receipt: null, observationJob: completed })
+  } catch (caught) {
+   if (!signal?.aborted) setError(errorMessage(caught))
+  } finally {
+   if (!signal?.aborted) setBusy(false)
+  }
+ }
+
+ useEffect(() => {
+  if (!resumableJob) return
+  const controller = new AbortController()
+  void resumeJob(resumableJob.jobId, controller.signal)
+  return () => controller.abort()
+ }, [resumableJob?.jobId])
+
+ async function submit(event: FormEvent) {
+  event.preventDefault()
+  setError('')
+  if (!authorizationId || !/^0x[a-fA-F0-9]{64}$/.test(txHash)) { setError('Choose an accepted authorization and enter a valid transaction hash.'); return }
+  const chainId = Number(linkedIntent?.chainId ?? 0)
+  if (![1, 8453, 42161].includes(chainId)) { setError('The authorization must use Ethereum, Base, or Arbitrum.'); return }
+  setBusy(true)
+  try {
+   const observed = await api.observe({ authorizationId, chainId, txHash, confirmations: Number(confirmations) || 0 })
+   saveResult(observed)
+   if (observed.observationJob) {
+   setJob(observed.observationJob)
+   session.saveObservationJob(observed.observationJob)
+   }
+  } catch (caught) {
+   setError(errorMessage(caught))
+  } finally {
+   setBusy(false)
+  }
+ }
+
+ return <AppShell><PageHeader eyebrow="EXECUTION" title="Observe execution">Only accepted, signed authorizations are shown. A single authorization cannot be bound to two different transactions.</PageHeader><div className="form-layout"><form className="panel intent-form" onSubmit={submit} aria-busy={busy}>{error && <Notice tone="danger" title="Observation could not be completed">{error}</Notice>}<Field label="Signed authorization"><select value={authorizationId} onChange={(e) => setAuthorizationId(e.target.value)}><option value="">Choose an accepted authorization</option>{activity.authorizations.map((record) => <option key={record.authorization.authorizationId} value={record.authorization.authorizationId}>{record.authorization.authorizationId} · {chains[Number(record.authorization.intent.chainId)]}</option>)}</select></Field>{!activity.authorizations.length && <Notice tone="warning" title="No signed authorization">Create and sign an intent before observing execution.</Notice>}<Field label="Transaction hash"><input className="mono" value={txHash} onChange={(e) => setTxHash(e.target.value)} placeholder="0x…" /></Field><Field label="Required confirmations"><input type="number" min="0" value={confirmations} onChange={(e) => setConfirmations(e.target.value)} /></Field><div className="form-footer"><span>The authorization becomes single-use when bound to a transaction.</span><button className="button primary" disabled={busy || !selected}>{busy ? 'Waiting for finality…' : 'Observe authorized execution →'}</button></div></form><aside className="preview panel"><div className="panel-head"><div><h2>Signed authority</h2><p>User-approved execution constraints</p></div></div>{selected && linkedIntent ? <div className="intent-mini"><dl><dt>Authorizer</dt><dd><CodeValue value={selected.authorization.authorizer.address} /></dd><dt>Agent</dt><dd>{selected.authorization.delegate.agentId}</dd><dt>Executor</dt><dd><CodeValue value={selected.authorization.delegate.executor} /></dd><dt>Asset</dt><dd><CodeValue value={linkedIntent.asset} /></dd><dt>Amount</dt><dd>{linkedIntent.amount}</dd><dt>Expires</dt><dd>{dateTime(selected.authorization.expiresAt)}</dd></dl></div> : <Empty title="Select an authorization">Only cryptographically signed authorizations can enter the v2 evidence flow.</Empty>}</aside></div>{result && <section className="panel observation-result"><div className="panel-head"><div><h2>Observation result</h2><p>Information returned by the configured chain observer.</p></div><Status value={jobPending ? job!.state : result.observation.status} /></div><ExecutionDetails execution={result.observation} />{jobPending ? <Notice tone="info" title="Observation continues in the background">PriorSeal is waiting for the requested finality. Job {job!.jobId} is saved on this device and resumes automatically after a refresh.{!busy && <button className="text-link" onClick={() => void resumeJob(job!.jobId)}>Check again</button>}</Notice> : result.receipt ? <div className="result-banner"><div><Status value="AUTHORIZED RECEIPT" /><strong>A v2 authorization-bound receipt was issued.</strong></div><button className="button primary" onClick={() => navigate('/app/receipts/' + encodeURIComponent(result.receipt!.receiptId))}>Open receipt detail →</button></div> : job?.state === 'FAILED' ? <Notice tone="danger" title="Observation job failed">{job.error?.message ?? 'The background observer could not complete this job.'} You can safely submit the same authorization and transaction again.</Notice> : ['PENDING', 'NOT_FOUND', 'RPC_ERROR'].includes(result.observation.status) ? <Notice tone="warning" title="No final receipt yet">The execution did not reach a final, verifiable state. Its uncertainty is preserved and no completed proof was issued.</Notice> : <Notice tone="warning" title="Receipt unavailable">The observation reached a terminal state, but the API did not issue a signed receipt. Check issuer signing and server logs.</Notice>}</section>}</AppShell>
 }
 function ExecutionDetails({ execution }: { execution: Execution }) { const rows: [string, string | number | null | undefined][] = [['Chain', chains[Number(execution.chainId)] ?? String(execution.chainId)], ['Action', execution.action], ['Block', execution.blockNumber ?? '—'], ['Block hash', execution.blockHash], ['Executed at', execution.executedAt ? dateTime(execution.executedAt) : '—'], ['Observed at', execution.observedAt ? dateTime(execution.observedAt) : '—'], ['Sender', execution.sender], ['Recipient', execution.recipient], ['Call target', execution.target], ['Calldata hash', execution.calldataHash], ['Asset', execution.asset], ['Amount', execution.amount], ['Transaction value', execution.nativeValue], ['Gas used', execution.gasUsed], ['Fee', execution.fee], ['Confirmations', execution.confirmations], ['Finality', execution.finalityState], ['Source', execution.observationSource], ['Data availability', execution.executionDataAvailable ? 'Available' : 'Unavailable']]; return <dl className="data-grid">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{typeof value === 'string' && (value.startsWith('0x') || value.includes(':')) ? <CodeValue value={value} /> : String(value ?? '—')}</dd></div>)}</dl> }
 function Receipts() {

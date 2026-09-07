@@ -20,7 +20,7 @@ const checks = await Promise.all([
   measurement(/^index-.*\.js$/, 'application entry', { raw: 250_000, gzip: 80_000 }),
   measurement(/^LandingPage-.*\.js$/, 'landing route', { raw: 20_000, gzip: 6_000 }),
   measurement(/^brand-.*\.js$/, 'brand shared chunk', { raw: 2_000, gzip: 1_000 }),
-  measurement(/^App-.*\.js$/, 'console route', { raw: 90_000, gzip: 25_500 }),
+  measurement(/^App-.*\.js$/, 'console route', { raw: 92_000, gzip: 26_500 }),
   measurement(/^verifier-.*\.js$/, 'offline verifier', { raw: 520_000, gzip: 130_000 }),
 ]);
 

@@ -1,17 +1,16 @@
-import type { AuthorizationRecord, Intent, LocalActivity, Receipt, Execution } from '../types'
+import type { AuthorizationRecord, Intent, LocalActivity, ObservationJob, Receipt, Execution } from '../types'
 
 export type StoragePreference = 'granted' | 'denied'
 
-const key = 'priorseal.local-session.v3'
-const previousKey = 'priorseal.local-session.v2'
-const legacyKey = 'priorseal.local-session.v1'
+const key = 'priorseal.local-session.v4'
+const previousKeys = ['priorseal.local-session.v3', 'priorseal.local-session.v2', 'priorseal.local-session.v1']
 const preferenceKey = 'priorseal.storage-preference.v1'
 const preferenceMaxAge = 180 * 24 * 60 * 60 * 1000
 export const storagePreferenceEvent = 'priorseal:storage-preference'
 export const activityChangeEvent = 'priorseal:activity-change'
 export const openStoragePreferencesEvent = 'priorseal:open-storage-preferences'
 
-const empty = (): LocalActivity => ({ intents: [], authorizations: [], receipts: [], observations: [] })
+const empty = (): LocalActivity => ({ intents: [], authorizations: [], receipts: [], observations: [], observationJobs: [] })
 let memoryActivity = empty()
 
 function valid(value: unknown): value is LocalActivity {
@@ -26,12 +25,13 @@ function normalize(activity: LocalActivity): LocalActivity {
     authorizations: Array.isArray(activity.authorizations) ? activity.authorizations.slice(0, 50) : [],
     receipts: activity.receipts.filter((receipt) => typeof receipt?.receiptId === 'string').slice(0, 50),
     observations: activity.observations.slice(0, 50),
+    observationJobs: Array.isArray(activity.observationJobs) ? activity.observationJobs.filter((job) => typeof job?.jobId === 'string').slice(0, 50) : [],
   }
 }
 
 function readStoredActivity(): LocalActivity {
   try {
-    const stored = localStorage.getItem(key) ?? localStorage.getItem(previousKey) ?? localStorage.getItem(legacyKey)
+    const stored = localStorage.getItem(key) ?? previousKeys.map((candidate) => localStorage.getItem(candidate)).find(Boolean)
     if (!stored) return empty()
     const activity = JSON.parse(stored)
     return valid(activity) ? normalize(activity) : empty()
@@ -64,6 +64,7 @@ function mergeActivity(primary: LocalActivity, secondary: LocalActivity): LocalA
     authorizations: dedupe(primary.authorizations, secondary.authorizations, (item) => item.authorization.authorizationId),
     receipts: dedupe(primary.receipts, secondary.receipts, (item) => item.receiptId),
     observations: dedupe(primary.observations, secondary.observations, (item) => [item.chainId, item.txHash, item.blockHash, item.observedAt].join(':')),
+    observationJobs: dedupe(primary.observationJobs, secondary.observationJobs, (item) => item.jobId),
   }
 }
 
@@ -104,7 +105,7 @@ export function getActivity(): LocalActivity {
   if (getStoragePreference() !== 'granted') return memoryActivity
   const activity = readStoredActivity()
   try {
-    if (!localStorage.getItem(key) && (localStorage.getItem(previousKey) || localStorage.getItem(legacyKey))) persist(activity)
+    if (!localStorage.getItem(key) && previousKeys.some((candidate) => localStorage.getItem(candidate))) persist(activity)
   } catch { /* Migration is best effort. */ }
   return activity
 }
@@ -125,10 +126,11 @@ export const session = {
   saveAuthorization(record: AuthorizationRecord) { const activity = getActivity(); save({ ...activity, authorizations: newest(activity.authorizations, record, (item) => item.authorization.authorizationId === record.authorization.authorizationId) }) },
   saveReceipt(receipt: Receipt) { const activity = getActivity(); if (activity.receipts.some((item) => item.receiptId === receipt.receiptId)) return; save({ ...activity, receipts: newest(activity.receipts, receipt, (item) => item.receiptId === receipt.receiptId) }) },
   saveObservation(observation: Execution) { const activity = getActivity(); save({ ...activity, observations: newest(activity.observations, observation, (item) => item.chainId === observation.chainId && item.txHash === observation.txHash && item.blockHash === observation.blockHash && item.observedAt === observation.observedAt) }) },
-  export() { return JSON.stringify({ schema: 'priorseal.local-session.v3', exportedAt: new Date().toISOString(), activity: getActivity() }, null, 2) },
+  saveObservationJob(job: ObservationJob) { const activity = getActivity(); save({ ...activity, observationJobs: newest(activity.observationJobs, job, (item) => item.jobId === job.jobId) }) },
+  export() { return JSON.stringify({ schema: 'priorseal.local-session.v4', exportedAt: new Date().toISOString(), activity: getActivity() }, null, 2) },
   clear() {
     memoryActivity = empty()
-    try { localStorage.removeItem(key); localStorage.removeItem(previousKey); localStorage.removeItem(legacyKey) } catch { /* Storage is best effort. */ }
+    try { localStorage.removeItem(key); previousKeys.forEach((candidate) => localStorage.removeItem(candidate)) } catch { /* Storage is best effort. */ }
     emit(activityChangeEvent)
   },
   getActivity,
