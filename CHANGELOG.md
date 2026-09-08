@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added the Cloudflare Workers production adapter with static assets, Hyperdrive-backed Neon access, queue-driven observation processing, scheduled recovery, custom-domain routes, fail-closed schema checks, repeatable no-spend production smoke tests, and a production runbook.
 - Added generic namespaced context commitments to exact-call intents, an official exact-call/wallet SDK flow, durable final observation results with resume/poll helpers, and portable verification bundles that require an out-of-band trusted issuer key.
 - Added `priorseal.intent.v2` with the `priorseal.execution-profile.exact-call.v1` profile for swap/router and other multi-transfer contract calls. Exact-call binding uses the signed chain, executor, nonce, call target, calldata hash, native value, time window and finality constraints instead of guessing semantics from Transfer logs.
 - Added the `priorseal-sdk/verifier` local-verification entry point for independently checking receipt hashes, policies, bindings, EOA and Ed25519 signatures, RFC 3161 timestamps, witness quorum and transparency chains without calling PriorSeal.

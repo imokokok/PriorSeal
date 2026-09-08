@@ -14,11 +14,14 @@ export function createDigiCertTimestampProvider({ fetchImpl = globalThis.fetch, 
         method: 'POST',
         headers: { accept: 'application/timestamp-reply', 'content-type': 'application/timestamp-query' },
         body: request.body,
-        redirect: 'error',
+        redirect: 'manual',
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       throw new PriorSealError('TIMESTAMP_SERVICE_UNAVAILABLE', `DigiCert timestamp request failed: ${safeReason(error)}`);
+    }
+    if (response.redirected || (response.status >= 300 && response.status < 400) || response.type === 'opaqueredirect') {
+      throw new PriorSealError('TIMESTAMP_SERVICE_UNAVAILABLE', 'DigiCert timestamp service returned a redirect');
     }
     if (!response.ok) throw new PriorSealError('TIMESTAMP_SERVICE_UNAVAILABLE', `DigiCert timestamp service returned HTTP ${response.status}`);
     const contentType = response.headers?.get?.('content-type')?.split(';')[0]?.trim()?.toLowerCase();

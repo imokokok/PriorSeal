@@ -7,6 +7,11 @@ export function readWitnessEndpoints(file, { requireHttps = false } = {}) {
   if (!file) return null;
   let input;
   try { input = JSON.parse(readFileSync(file, 'utf8')); } catch (error) { throw new TypeError(`Unable to read witness endpoints: ${error.message}`); }
+  return parseWitnessEndpoints(input, { requireHttps });
+}
+
+export function parseWitnessEndpoints(input, { requireHttps = false } = {}) {
+  if (input == null) return null;
   assertSafeJson(input);
   assertOnlyFields(input, ['schema', 'endpoints'], 'witness endpoints');
   if (input.schema !== 'priorseal.witness-endpoints.v1' || !Array.isArray(input.endpoints)) throw new TypeError('Witness endpoint file must use priorseal.witness-endpoints.v1');

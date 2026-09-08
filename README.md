@@ -98,7 +98,9 @@ Production mode is fail-closed. Set `PRIORSEAL_ENVIRONMENT=production`; startup 
 
 ## Persistence and operations
 
-Neon is the production persistence backend. `DATABASE_URL` is the pooled application connection and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. Apply migrations through `007_observation_job_results.sql`; they establish authorization, timestamp and witness evidence storage, durable intents, observation versions, idempotency records, and recoverable at-least-once worker results. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
+Neon is the production persistence backend. The Cloudflare Worker reaches it through Hyperdrive; local Node operation uses `DATABASE_URL`, and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. Apply migrations through `007_observation_job_results.sql`; they establish authorization, timestamp and witness evidence storage, durable intents, observation versions, idempotency records, and recoverable at-least-once worker results. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
+
+The production web console and API run together on Cloudflare Workers. Static assets are served from `web/dist`, API and health paths run Worker-first, Hyperdrive provides the PostgreSQL connection, Cloudflare Queues dispatch durable observation jobs, and the minute cron recovers work that was persisted before a queue delivery. The production domains are `https://priorseal.xyz` and `https://www.priorseal.xyz`; `https://priorseal.priorseal.workers.dev` remains available for deployment diagnostics. Validate the bundle with `npm run worker:check`, deploy with `npm run worker:deploy`, and run the no-spend production check with `npm run production:smoke`. Add the durable pending/retry check with `npm run production:smoke:pending`. Store every value named by `secrets.required` in Worker Secrets, never in Git. See the [Cloudflare runbook](docs/runbooks/cloudflare.md).
 
 For a local container environment:
 
@@ -110,7 +112,7 @@ Mount issuer key files read-only outside the image and inject production configu
 
 ## Architecture
 
-PriorSeal is a modular monolith with explicit dependency direction: `domain` contains pure protocol rules, `application` coordinates use cases, `infrastructure` implements persistence/blockchain/key adapters, `interfaces` exposes HTTP, and `bootstrap` wires runtime configuration. `src/index.mjs` is the stable local library surface; callers should not import internal paths. This intentionally avoids premature microservices, queues, ORM, and cloud lock-in. The Phase 0 audit, risk matrix, and target architecture are in [docs/architecture/phase-0-audit.md](docs/architecture/phase-0-audit.md). Design decisions are recorded under [docs/adr](docs/adr).
+PriorSeal is a modular monolith with explicit dependency direction: `domain` contains pure protocol rules, `application` coordinates use cases, `infrastructure` implements persistence/blockchain/key adapters, `interfaces` exposes HTTP, and `bootstrap` wires runtime configuration. `src/index.mjs` is the stable local library surface; callers should not import internal paths. The Cloudflare adapter adds managed queue delivery and scheduling at the deployment edge without splitting the protocol into microservices or changing the durable PostgreSQL job contract. The Phase 0 audit, risk matrix, and target architecture are in [docs/architecture/phase-0-audit.md](docs/architecture/phase-0-audit.md). Design decisions are recorded under [docs/adr](docs/adr).
 
 ## License
 

@@ -1,0 +1,66 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "priorseal",
+  "main": "./src/bootstrap/cloudflare-worker.mjs",
+  "compatibility_date": "2026-09-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    { "pattern": "priorseal.xyz", "custom_domain": true },
+    { "pattern": "www.priorseal.xyz", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "./web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/v1/*", "/health/*", "/.well-known/*", "/openapi/*"]
+  },
+  "placement": { "mode": "smart" },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  },
+  "vars": {
+    "PRIORSEAL_ENVIRONMENT": "production",
+    "PRIORSEAL_ISSUER": "priorseal.xyz",
+    "PRIORSEAL_KEY_ID": "production-1",
+    "PRIORSEAL_BUILD_VERSION": "cloudflare-2026-09-08",
+    "PRIORSEAL_AUTHORIZATION_AUDIENCE": "priorseal.xyz",
+    "PRIORSEAL_PREEXECUTION_PROOF_MODE": "rfc3161",
+    "PRIORSEAL_CORS_ORIGINS": "https://priorseal.xyz,https://www.priorseal.xyz",
+    "PRIORSEAL_TRUST_PROXY": "true"
+  },
+  "secrets": {
+    "required": [
+      "PRIORSEAL_PRIVATE_KEY_PEM",
+      "PRIORSEAL_PUBLIC_KEY_PEM",
+      "PRIORSEAL_POLICY_JSON",
+      "PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS",
+      "PRIORSEAL_RPC_ETHEREUM",
+      "PRIORSEAL_RPC_BASE",
+      "PRIORSEAL_RPC_ARBITRUM"
+    ]
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "f6c475a02da44a868caf997dbcf00785"
+    }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "OBSERVATION_QUEUE", "queue": "priorseal-observations" }
+    ],
+    "consumers": [
+      {
+        "queue": "priorseal-observations",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 10
+      }
+    ]
+  },
+  "triggers": { "crons": ["* * * * *"] }
+}

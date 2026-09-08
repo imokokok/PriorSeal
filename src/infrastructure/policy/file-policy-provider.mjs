@@ -6,7 +6,11 @@ import { buildTimestampPolicy } from '../../domain/rfc3161.mjs';
 
 export function readPolicyFile(file) {
   if (!file) return null;
-  const policy = JSON.parse(readFileSync(file, 'utf8'));
+  return parsePolicyDocument(JSON.parse(readFileSync(file, 'utf8')));
+}
+
+export function parsePolicyDocument(policy) {
+  if (policy == null) return null;
   assertSafeJson(policy);
   assertOnlyFields(policy, ['policyId', 'principals', 'allowedChainIds', 'allowedActions', 'allowedAssets', 'allowedSenders', 'allowedRecipients', 'maxAmount', 'maxValiditySeconds', 'minConfirmations', 'witnessQuorum', 'timestampPolicy'], 'policy');
   if (policy.minConfirmations != null && (!Number.isSafeInteger(policy.minConfirmations) || policy.minConfirmations < 1 || policy.minConfirmations > 10_000)) throw new TypeError('policy.minConfirmations must be an integer between 1 and 10000');

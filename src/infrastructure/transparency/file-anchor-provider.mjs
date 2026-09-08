@@ -6,7 +6,11 @@ const ANCHOR_ABI = [{ type: 'function', name: 'anchor', stateMutability: 'nonpay
 
 export function readTransparencyAnchor(file) {
   if (!file) return null;
-  const anchor = JSON.parse(readFileSync(file, 'utf8'));
+  return parseTransparencyAnchor(JSON.parse(readFileSync(file, 'utf8')));
+}
+
+export function parseTransparencyAnchor(anchor) {
+  if (anchor == null) return null;
   assertSafeJson(anchor);
   assertOnlyFields(anchor, ['type', 'chainId', 'contract', 'txHash', 'blockNumber', 'anchoredAt', 'size', 'headEntryHash'], 'transparency anchor');
   if (anchor.type !== 'eip155' || !Number.isSafeInteger(anchor.chainId) || !/^0x[0-9a-fA-F]{40}$/.test(anchor.contract) || !/^0x[0-9a-fA-F]{64}$/.test(anchor.txHash) || !Number.isSafeInteger(anchor.blockNumber) || !Number.isSafeInteger(anchor.anchoredAt) || !Number.isSafeInteger(anchor.size) || !/^[0-9a-f]{64}$/.test(anchor.headEntryHash)) throw new TypeError('Transparency anchor file is invalid');
