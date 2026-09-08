@@ -11,7 +11,7 @@ import { SdkPage } from './pages/SdkPage'
 
 const makeId = () => 'intent_' + crypto.randomUUID().replaceAll('-', '').slice(0, 16)
 const futureInput = () => fromUnix(Math.floor(Date.now() / 1000) + 86400)
-const blankIntent = (): Intent => ({ intentId: makeId(), chainId: 8453, action: 'Transfer', asset: 'eip155:8453/native', amount: '', sender: '', recipient: '', validUntil: Math.floor(Date.now() / 1000) + 86400, nonce: '0', constraints: { minConfirmations: 12 } })
+const blankIntent = (): Intent => ({ intentId: makeId(), chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '', sender: '', recipient: '', validUntil: Math.floor(Date.now() / 1000) + 86400, nonce: '0', constraints: { minConfirmations: 12 } })
 const errorMessage = (error: unknown) => { const e = error as ApiError; return (e.code ? e.code + ': ' : '') + (e.message ?? 'Something went wrong.') }
 const download = (value: unknown, filename: string) => { const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename; link.click(); URL.revokeObjectURL(link.href) }
 

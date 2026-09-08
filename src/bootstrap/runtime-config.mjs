@@ -18,6 +18,7 @@ export function loadRuntimeConfig(environment = process.env) {
   }
 
   const preExecutionProofMode = proofModeValue(environment.PRIORSEAL_PREEXECUTION_PROOF_MODE, environment.PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR, runtimeEnvironment);
+  const allowSelfAssertedPrincipals = booleanValue(environment.PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS, 'PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS', false);
   const config = {
     environment: runtimeEnvironment,
     port: portValue(environment.PORT),
@@ -32,6 +33,7 @@ export function loadRuntimeConfig(environment = process.env) {
     transparencyAnchorFile,
     witnessEndpointsFile,
     preExecutionProofMode,
+    allowSelfAssertedPrincipals,
     requireExternalAnchor: preExecutionProofMode === 'evm-anchor',
     databaseUrl: databaseUrl(environment.DATABASE_URL, 'DATABASE_URL'),
     databaseDirectUrl: databaseUrl(environment.DATABASE_URL_UNPOOLED, 'DATABASE_URL_UNPOOLED'),

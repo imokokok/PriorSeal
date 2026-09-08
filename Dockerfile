@@ -15,6 +15,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY src ./src
+COPY config/authorization-policy.public-beta.json ./config/authorization-policy.public-beta.json
 COPY --from=web-build /app/web/dist ./web/dist
 RUN addgroup -S priorseal && adduser -S -G priorseal priorseal
 USER priorseal

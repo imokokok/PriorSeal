@@ -30,6 +30,7 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     transparencyAnchorFile: undefined,
     witnessEndpointsFile: undefined,
     preExecutionProofMode: 'issuer',
+    allowSelfAssertedPrincipals: false,
     requireExternalAnchor: false,
     databaseUrl: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
     databaseDirectUrl: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
@@ -62,6 +63,8 @@ test('production runtime fails closed unless security dependencies are explicit'
   assert.equal(witnessed.preExecutionProofMode, 'witness-quorum');
   const timestamped = loadRuntimeConfig({ ...base, PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR: 'false', PRIORSEAL_PREEXECUTION_PROOF_MODE: 'rfc3161' });
   assert.equal(timestamped.preExecutionProofMode, 'rfc3161');
+  assert.equal(timestamped.allowSelfAssertedPrincipals, false);
+  assert.equal(loadRuntimeConfig({ ...base, PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR: 'false', PRIORSEAL_PREEXECUTION_PROOF_MODE: 'rfc3161', PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS: 'true' }).allowSelfAssertedPrincipals, true);
   assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_CORS_ORIGINS: 'http://localhost:5173' }), /non-localhost/);
   assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_KEY_ID: 'default' }), /deployment-specific PRIORSEAL_KEY_ID/);
   assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_BUILD_VERSION: 'dev' }), /PRIORSEAL_BUILD_VERSION/);
