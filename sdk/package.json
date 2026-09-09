@@ -1,6 +1,6 @@
 {
   "name": "priorseal-sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "TypeScript SDK for PriorSeal verifiable agent authorization and execution evidence.",
   "type": "module",
   "license": "MIT",
