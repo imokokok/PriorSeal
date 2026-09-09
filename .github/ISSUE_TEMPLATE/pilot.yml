@@ -1,6 +1,8 @@
 name: Design-partner pilot
 description: Propose a focused PriorSeal integration around one EVM execution path.
 title: "pilot: "
+labels:
+  - pilot
 body:
   - type: markdown
     attributes:

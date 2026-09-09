@@ -1,6 +1,8 @@
 name: Integration proposal
 description: Propose an SDK, wallet, policy, risk, or infrastructure integration.
 title: "integration: "
+labels:
+  - integration
 body:
   - type: textarea
     id: problem
