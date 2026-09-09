@@ -26,7 +26,7 @@
     "PRIORSEAL_ENVIRONMENT": "production",
     "PRIORSEAL_ISSUER": "priorseal.xyz",
     "PRIORSEAL_KEY_ID": "production-1",
-    "PRIORSEAL_BUILD_VERSION": "cloudflare-2026-09-08",
+    "PRIORSEAL_BUILD_VERSION": "cloudflare-2026-09-10",
     "PRIORSEAL_AUTHORIZATION_AUDIENCE": "priorseal.xyz",
     "PRIORSEAL_PREEXECUTION_PROOF_MODE": "rfc3161",
     "PRIORSEAL_CORS_ORIGINS": "https://priorseal.xyz,https://www.priorseal.xyz",

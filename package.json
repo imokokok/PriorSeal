@@ -2,7 +2,16 @@
   "name": "priorseal",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Independently verifiable on-chain execution evidence for agents.",
+  "homepage": "https://priorseal.xyz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imokokok/PriorSeal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/imokokok/PriorSeal/issues"
+  },
   "type": "module",
   "scripts": {
     "example:receipt": "node examples/create-signed-receipt.mjs",
@@ -36,7 +45,7 @@
     "worker:deploy": "npm run build && wrangler deploy"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "workspaces": [
     "web",

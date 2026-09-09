@@ -1,0 +1,25 @@
+name: Integration proposal
+description: Propose an SDK, wallet, policy, risk, or infrastructure integration.
+title: "integration: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Integration problem
+      description: Which product or workflow should exchange evidence with PriorSeal?
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Proposed boundary
+      description: Which system owns execution and business semantics, and which commitments or receipt fields should connect the systems?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Verifiable outcome
+      description: What should an independent verifier be able to establish?
+    validations:
+      required: true

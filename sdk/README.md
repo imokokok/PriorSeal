@@ -11,7 +11,7 @@ npm install priorseal-sdk
 ```ts
 import { createPriorSealClient } from 'priorseal-sdk'
 
-const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.example' })
+const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.xyz' })
 const flow = await priorseal.authorizeWithWallet({
   intent,
   principal: { type: 'user', id: 'user:42' },

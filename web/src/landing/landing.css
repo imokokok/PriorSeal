@@ -158,6 +158,7 @@
 
 .museum-closing { min-height: 760px; padding: clamp(110px, 12vw, 180px) clamp(26px, 7vw, 118px) 120px; position: relative; display: grid; align-items: center; color: var(--gallery); background: #171715; }
 .museum-closing h2 { margin-top: 28px; font-size: clamp(72px, 9vw, 148px); }
+.museum-closing__statement { max-width: 760px; margin: 30px 0 0; color: #aaa89f; font-size: clamp(16px, 1.4vw, 20px); line-height: 1.65; }
 .museum-closing .museum-button--light { color: var(--ink) !important; background: var(--gallery); border-color: var(--gallery); }
 .museum-closing .museum-button--light:hover { background: #d9d5ca; border-color: #d9d5ca; }
 .museum-closing > footer { position: absolute; left: clamp(26px, 4.8vw, 82px); right: clamp(26px, 4.8vw, 82px); bottom: 28px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; color: #96938a; font-size: 12px; }
@@ -243,5 +244,5 @@
   .motion-ready .priorseal-museum [data-reveal] { opacity: 1; transform: none; }
 }
 
-.museum-footer-link { padding: 3px 0; color: inherit; background: transparent; border: 0; border-bottom: 1px solid currentColor; font-size: inherit; }
+.museum-footer-link { padding: 3px 0; color: inherit; background: transparent; border: 0; border-bottom: 1px solid currentColor; font: inherit; }
 .museum-footer-link:hover { color: white; }

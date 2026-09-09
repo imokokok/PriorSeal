@@ -29,10 +29,10 @@ function PhotoCredit({ children, href }: { children: string; href: string }) {
 
 function ReceiptRecord() {
   return (
-    <article className="digital-record" aria-label="Example PriorSeal v2 execution receipt">
+    <article className="digital-record" aria-label="Example PriorSeal v3 execution receipt">
       <header>
         <span>PRIORSEAL / EXECUTION RECEIPT</span>
-        <strong>V2 / FINAL</strong>
+        <strong>V3 / FINAL</strong>
       </header>
       <div className="digital-record__identity">
         <p>Receipt ID</p>
@@ -68,6 +68,7 @@ export function LandingPage() {
         <nav aria-label="Homepage navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}
           <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/sdk">SDK</Link>
+          <a href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
         <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-nav__entry" to="/app">Open console <span>↗</span></Link>
       </header>
@@ -183,11 +184,12 @@ export function LandingPage() {
 
         <section className="museum-closing">
           <div data-reveal>
-            <p className="museum-kicker">PRIORSEAL / AUTHORIZATION EVIDENCE</p>
-            <h2>Make authority<br />inspectable.</h2>
-            <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/sdk">Use the SDK <span>↗</span></Link></div>
+            <p className="museum-kicker">DESIGN PARTNERS / EVM AGENTS</p>
+            <h2>Build one real<br />evidence flow.</h2>
+            <p className="museum-closing__statement">We are working with agent, treasury, wallet and policy teams to connect one bounded execution path to portable, independently verifiable evidence.</p>
+            <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/sdk">Review the SDK <span>↗</span></Link></div>
           </div>
-          <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for EVM agents.</span><span><button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
+          <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for EVM agents.</span><span><a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
         </section>
       </main>
     </div>

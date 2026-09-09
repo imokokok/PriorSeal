@@ -8,7 +8,7 @@ const install = 'npm install priorseal-sdk'
 const browserExample = `import { createPriorSealClient } from 'priorseal-sdk'
 
 const priorseal = createPriorSealClient({
-  baseUrl: 'https://priorseal.example'
+  baseUrl: 'https://priorseal.xyz'
 })
 
 const { accepted } = await priorseal.authorizeWithWallet({
@@ -81,9 +81,9 @@ export function SdkPage() {
 
     <section className="sdk-hero panel">
       <div className="sdk-package">
-        <p className="eyebrow">PACKAGE / 0.2.0</p>
+        <p className="eyebrow">PACKAGE / {__PRIORSEAL_SDK_VERSION__}</p>
         <h2>priorseal-sdk</h2>
-        <p>Universal ESM · Browser and Node.js 20+ · Zero runtime dependencies</p>
+        <p>Universal ESM · Browser and Node.js 20+ · Typed client and local verifier</p>
         <div className="sdk-install"><code>{install}</code><CopyButton value={install} /></div>
       </div>
       <div className="sdk-runtime">

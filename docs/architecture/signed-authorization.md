@@ -6,7 +6,7 @@ Wallet control alone is not a civil-identity proof. Deployments that need a name
 
 ```text
 draft intent → authorizer signature → PriorSeal acceptance → independent RFC 3161 timestamp
-             → agent execution → EVM observation → v2 execution receipt
+             → agent execution → EVM observation → v3 execution receipt
 ```
 
 `POST /v1/authorizations/prepare` returns canonical EIP-712 typed data. `POST /v1/authorizations` verifies the signature and active policy before issuing an Ed25519 authorization receipt. `POST /v1/executions/observe` accepts `authorizationId`; only an observed transaction matching the authorization chain, delegated executor and transaction nonce may claim the authorization; a different claimed transaction is rejected.

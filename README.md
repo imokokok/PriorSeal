@@ -1,5 +1,11 @@
 # PriorSeal
 
+[![CI](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml/badge.svg)](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
+[![MIT License](https://img.shields.io/badge/license-MIT-151513.svg)](LICENSE)
+
+[Live console](https://priorseal.xyz/app) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [OpenAPI](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
+
 PriorSeal creates portable evidence connecting user or organization authority to an agent's observed EVM execution:
 
 ```text
@@ -10,7 +16,7 @@ It does not custody assets, operate wallets, or hold transaction-signing keys. A
 
 ## Quick start
 
-Requires Node 20+. In a clean checkout:
+Repository development and deployment require Node 22+. The published SDK supports Node 20+ and modern browsers. In a clean checkout:
 
 ```bash
 npm ci
@@ -42,7 +48,7 @@ npm install priorseal-sdk
 ```ts
 import { createPriorSealClient } from 'priorseal-sdk'
 
-const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.example' })
+const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.xyz' })
 const { accepted } = await priorseal.authorizeWithWallet({
   intent,
   principal: { type: 'user', id: 'user:42' },
@@ -113,6 +119,12 @@ Mount issuer key files read-only outside the image and inject production configu
 ## Architecture
 
 PriorSeal is a modular monolith with explicit dependency direction: `domain` contains pure protocol rules, `application` coordinates use cases, `infrastructure` implements persistence/blockchain/key adapters, `interfaces` exposes HTTP, and `bootstrap` wires runtime configuration. `src/index.mjs` is the stable local library surface; callers should not import internal paths. The Cloudflare adapter adds managed queue delivery and scheduling at the deployment edge without splitting the protocol into microservices or changing the durable PostgreSQL job contract. The Phase 0 audit, risk matrix, and target architecture are in [docs/architecture/phase-0-audit.md](docs/architecture/phase-0-audit.md). Design decisions are recorded under [docs/adr](docs/adr).
+
+## Work with PriorSeal
+
+PriorSeal is looking for design partners building EVM agents, treasury automation, wallets, policy or risk systems, and transaction infrastructure. A pilot connects one bounded execution path to PriorSeal and tests whether an independent reviewer can reproduce the authorization, timing, execution and compliance result from the exported evidence.
+
+Read the [collaboration guide](COLLABORATING.md) for the suggested two-week pilot, integration boundary and success criteria, or [open a pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Technical contributions can start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

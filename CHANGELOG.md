@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a design-partner collaboration guide, structured GitHub pilot/integration requests, and direct website, SDK, OpenAPI and source links.
+- Kept the console's SDK version synchronized with the published package, corrected the production API example and upgraded the self-contained receipt example to authorization-bound receipt v3.
+- Standardized repository development and release checks on Node.js 22 while retaining Node.js 20+ support for SDK consumers.
 - Added SDK support for matching namespaced external assessment commitments while preserving PriorSeal's evidence-only, non-enforcement boundary.
 - Added the Cloudflare Workers production adapter with static assets, Hyperdrive-backed Neon access, queue-driven observation processing, scheduled recovery, custom-domain routes, fail-closed schema checks, repeatable no-spend production smoke tests, and a production runbook.
 - Added generic namespaced context commitments to exact-call intents, an official exact-call/wallet SDK flow, durable final observation results with resume/poll helpers, and portable verification bundles that require an out-of-band trusted issuer key.
