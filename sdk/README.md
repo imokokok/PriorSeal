@@ -52,7 +52,7 @@ Portable bundles are available with `getVerificationBundle(receiptId)`. Verify t
 Use intent v2 when an integration already constructs the exact transaction and another system owns its business semantics:
 
 ```ts
-import { buildExactCallIntent } from 'priorseal-sdk'
+import { buildExactCallIntent, matchContextCommitment } from 'priorseal-sdk'
 
 const intent = buildExactCallIntent({
   transaction: { chainId: 8453, from: executor, to: router, data, value: 0n, nonce: 17n },
@@ -67,6 +67,18 @@ const intent = buildExactCallIntent({
     digest: quoteApprovalDigest,
   }],
 })
+
+const assessmentReference = matchContextCommitment(intent, {
+  namespace: 'example.quote-approval.v1',
+  algorithm: 'keccak256',
+  digest: quoteApprovalDigest,
+})
 ```
 
 The profile binds chain, executor, nonce, target, calldata, native value, time, finality and any namespaced external context digests. It intentionally ignores transfer-log recipient/asset/amount matching and transfer-count ambiguity, so a swap-specific verifier can grade fills without PriorSeal pretending to understand router semantics.
+
+`matchContextCommitment` only confirms that the expected external digest is
+present in the intent. Verify the containing authorization or receipt separately
+to establish who approved it. The external system remains authoritative for the
+digest's business meaning and may treat it as an advisory recommendation rather
+than an execution permission.
