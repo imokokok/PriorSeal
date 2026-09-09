@@ -26,6 +26,24 @@ export function matchContextCommitment(
   return { matched: false, code: 'CONTEXT_COMMITMENT_DIGEST_MISMATCH', commitment: null }
 }
 
+/**
+ * Strict variant for composition layers that require one unambiguous reference
+ * per namespace. PriorSeal still treats the referenced content as opaque.
+ */
+export function matchUniqueContextCommitment(
+  intent: Pick<Intent, 'contextCommitments'>,
+  expected: ContextCommitment,
+): ContextCommitmentMatch {
+  const normalized = normalize(expected)
+  const sameNamespace = (intent.contextCommitments ?? []).filter(
+    (entry) => normalize(entry).namespace === normalized.namespace,
+  )
+  if (sameNamespace.length > 1) {
+    return { matched: false, code: 'CONTEXT_COMMITMENT_AMBIGUOUS', commitment: null }
+  }
+  return matchContextCommitment(intent, normalized)
+}
+
 function normalize(commitment: ContextCommitment): ContextCommitment {
   const namespace = commitment?.namespace?.trim()
   const algorithm = commitment?.algorithm

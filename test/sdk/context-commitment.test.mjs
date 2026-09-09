@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { matchContextCommitment } from '../../sdk/dist/index.js'
+import { matchContextCommitment, matchUniqueContextCommitment } from '../../sdk/dist/index.js'
 
 const insight = {
   namespace: 'insight.pretrade-pair.v1',
@@ -36,4 +36,17 @@ test('distinguishes missing, algorithm, and digest mismatches', () => {
     ).code,
     'CONTEXT_COMMITMENT_DIGEST_MISMATCH',
   )
+})
+
+test('strict matching rejects an ambiguous namespace without interpreting it', () => {
+  const intent = {
+    contextCommitments: [insight, { ...insight, digest: `0x${'b'.repeat(64)}` }],
+  }
+
+  assert.equal(matchContextCommitment(intent, insight).code, 'OK')
+  assert.deepEqual(matchUniqueContextCommitment(intent, insight), {
+    matched: false,
+    code: 'CONTEXT_COMMITMENT_AMBIGUOUS',
+    commitment: null,
+  })
 })

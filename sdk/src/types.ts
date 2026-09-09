@@ -3,7 +3,7 @@ export type ChainId = 1 | 8453 | 42161
 export type ContextCommitment = { namespace: string; algorithm: 'keccak256' | 'sha256'; digest: string }
 export type ContextCommitmentMatch = {
   matched: boolean
-  code: 'OK' | 'CONTEXT_COMMITMENT_MISSING' | 'CONTEXT_COMMITMENT_ALGORITHM_MISMATCH' | 'CONTEXT_COMMITMENT_DIGEST_MISMATCH'
+  code: 'OK' | 'CONTEXT_COMMITMENT_MISSING' | 'CONTEXT_COMMITMENT_AMBIGUOUS' | 'CONTEXT_COMMITMENT_ALGORITHM_MISMATCH' | 'CONTEXT_COMMITMENT_DIGEST_MISMATCH'
   commitment: ContextCommitment | null
 }
 
