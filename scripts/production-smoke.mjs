@@ -149,7 +149,10 @@ if (runPendingFlow) {
       txHash: `0x${'f'.repeat(64)}`,
       confirmations: 12,
     }, `smoke-pending-observe-${pendingSuffix}`)).body;
-    assert(observed.receipt?.outcome === 'UNDETERMINED', 'Pending execution was incorrectly classified');
+    const expectedOutcome = observed.observation?.status === 'PENDING' ? 'PENDING' : 'UNDETERMINED';
+    assert(observed.receipt?.outcome === expectedOutcome, 'Non-final execution was incorrectly classified');
+    assert(observed.receipt?.compliance?.status === 'NOT_ASSESSABLE', 'Non-final execution was incorrectly assessed for compliance');
+    assert(observed.authorizationAssociation !== 'FINAL', 'Non-final execution incorrectly claimed the authorization');
     assert(observed.observationJob?.jobId, 'Pending execution did not return a durable job');
     receiptId = observed.receipt.receiptId;
     job = observed.observationJob;

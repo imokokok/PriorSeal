@@ -55,6 +55,8 @@ export type Execution = {
 }
 
 export type Binding = { bound: boolean; reasonCodes: string[]; [key: string]: unknown }
+export type ComplianceStatus = 'COMPLIANT' | 'NON_COMPLIANT' | 'NOT_ASSESSABLE'
+export type ComplianceAssessment = { schema: 'priorseal.compliance-assessment.v1'; status: ComplianceStatus; reasonCodes: string[] }
 
 export type Authorization = {
   schema: 'priorseal.authorization.v1' | 'priorseal.authorization.v2'
@@ -130,6 +132,8 @@ export type Receipt = {
   issuedAt: number
   validUntil: number
   outcome: string
+  executionStatus?: ExecutionStatus
+  compliance?: ComplianceAssessment
   reasonCodes: string[]
   binding: Binding
   algorithm: string
@@ -140,7 +144,7 @@ export type Receipt = {
   authorizationEvidence?: { authorization: Authorization; acceptance: AuthorizationReceipt; policy: PolicyEvidence; timestamp?: TimestampEvidence; witnesses?: WitnessEvidence; transparency?: TransparencyEvidence }
 }
 
-export type VerificationResult = { valid: boolean; code: string; outcome?: string; receiptId?: string; authorizationId?: string }
+export type VerificationResult = { valid: boolean; code: string; outcome?: string; executionStatus?: ExecutionStatus; complianceStatus?: ComplianceStatus; receiptId?: string; authorizationId?: string }
 export type KeyEntry = { issuer: string; keyId: string; algorithm: string; publicKey: string; status: string; validFrom: number | null; validUntil: number | null }
 export type KeyRegistry = { schema: string; issuer: string; keys: KeyEntry[]; verifierVersion?: string; schemaVersions?: string[] }
 export type VerificationBundle = {
@@ -175,7 +179,7 @@ export type WalletAuthorizationInput = {
 
 export type PreparedAuthorization = { authorization: Authorization; typedData: Record<string, unknown>; requestId?: string }
 export type AcceptedAuthorization = { authorization: Authorization; acceptance: AuthorizationReceipt; policyEvidence?: PolicyEvidence; timestampEvidence?: TimestampEvidence; witnessEvidence?: WitnessEvidence; policy: { allowed: boolean; reasonCodes: string[]; policyId: string | null }; requestId?: string }
-export type ObservationResult = { observation: Execution; receipt: Receipt | null; verification?: VerificationResult; observationJob?: ObservationJob; requestId?: string }
+export type ObservationResult = { observation: Execution; receipt: Receipt | null; authorizationAssociation?: 'CANDIDATE' | 'FINAL' | 'UNRELATED'; verification?: VerificationResult; observationJob?: ObservationJob; requestId?: string }
 
 export type ExactCallTransaction = { chainId: ChainId | number; from: string; to: string; data: `0x${string}`; value?: bigint | number | string; nonce: bigint | number | string }
 export type ExactCallIntentInput = { transaction: ExactCallTransaction; intentId: string; asset: string; amount: bigint | number | string; validUntil: number; contextCommitments?: ContextCommitment[]; constraints?: Intent['constraints'] }

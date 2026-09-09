@@ -38,7 +38,7 @@ test('SDK verifier validates a v1 receipt locally and detects mutations', async 
   assert.equal((await verifyVerificationBundleLocally(tampered, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'BUNDLE_HASH_MISMATCH');
 });
 
-test('SDK verifier independently validates authorization v2, policy, binding and signatures', async () => {
+test('SDK verifier independently validates authorization-bound receipt v3, policy, compliance and signatures', async () => {
   const keys = issuerKeys();
   const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);
   const executor = `0x${'a'.repeat(40)}`;
@@ -51,6 +51,8 @@ test('SDK verifier independently validates authorization v2, policy, binding and
   const verified = await verifyReceiptLocally(receipt, { trustedKeys: [trustedKey(keys.publicKey)], now: 1_200 });
   assert.equal(verified.valid, true);
   assert.equal(verified.code, 'OK');
+  assert.equal(verified.executionStatus, 'CONFIRMED');
+  assert.equal(verified.complianceStatus, 'COMPLIANT');
   assert.equal(verified.authorizationId, authorization.authorizationId);
   const mutated = structuredClone(receipt);
   mutated.authorizationEvidence.authorization.delegate.agentId = 'agent-impersonated';
@@ -89,6 +91,7 @@ test('SDK verifier independently validates exact-call receipts with multi-transf
   assert.equal(verified.valid, true);
   assert.equal(verified.code, 'OK');
   assert.equal(receipt.outcome, 'COMPLETED');
+  assert.equal(receipt.compliance.status, 'COMPLIANT');
   const contextMutated = structuredClone(receipt);
   contextMutated.authorizationEvidence.authorization.intent.contextCommitments[0].digest = `0x${'7'.repeat(64)}`;
   assert.equal((await verifyReceiptLocally(contextMutated, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'INTENT_HASH_MISMATCH');

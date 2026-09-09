@@ -153,7 +153,7 @@ export function LandingPage() {
             <div className="museum-section-id"><span>04</span><p>Receipt</p></div>
             <p className="museum-kicker">THE PORTABLE RECORD</p>
             <h2>Built to be<br />examined.</h2>
-            <p>A v2 receipt carries the signed authorization, policy result, independent time evidence, observed execution, binding decision and issuer signature in one document.</p>
+            <p>A v3 receipt carries signed authority, independent time evidence, observed execution and a separately recomputable compliance decision in one document.</p>
             <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Open the local verifier <span>↗</span></Link>
           </div>
           <div className="receipt-gallery__record" data-reveal>

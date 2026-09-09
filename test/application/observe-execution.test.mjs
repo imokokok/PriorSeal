@@ -36,19 +36,41 @@ test('observation is idempotent, linked to its intent, signed, and reorg-aware',
   assert.equal((await store.getReceipt(first.response.receipt.receiptId)).receiptId, first.response.receipt.receiptId);
 });
 
-test('unrelated transactions cannot claim a single-use authorization', async () => {
+test('pending transactions remain candidates and only final correlated execution claims authorization', async () => {
   const store = createMemoryStore();
   const authorization = buildAuthorization({ intent: { intentId: 'claim-safe', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2_000, nonce: '4' }, principal: { type: 'user', id: 'user-1', account: `0x${'c'.repeat(40)}` }, authorizer: { type: 'eip712', address: `0x${'c'.repeat(40)}` }, delegate: { agentId: 'agent-1', executor: sender }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'8'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}`, signature: '0x01' });
   await store.saveIntent(authorization.intent);
-  await store.saveAuthorization({ authorization, acceptance: { acceptedAt: 1_001 }, policyEvidence: { document: null }, status: 'ACCEPTED', boundTxHash: null, uses: 0 });
+  await store.saveAuthorization({ authorization, acceptance: { acceptedAt: 1_001 }, policyEvidence: { schema: 'priorseal.policy-evidence.v1', policyHash: authorization.policyHash, document: null, result: { allowed: true, reasonCodes: [], policyId: null, evaluatedAt: 1_001 } }, status: 'ACCEPTED', boundTxHash: null, uses: 0 });
   const hostileHash = `0x${'9'.repeat(64)}`;
   await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: hostileHash }, store, observer: async () => ({ chainId: 8453, txHash: hostileHash, status: 'PENDING', executionDataAvailable: true, sender: `0x${'d'.repeat(40)}`, nonce: '4', observedAt: 1_002 }) });
   assert.equal((await store.getAuthorization(authorization.authorizationId)).status, 'ACCEPTED');
   const expectedHash = `0x${'7'.repeat(64)}`;
   await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: expectedHash }, store, observer: async () => ({ chainId: 8453, txHash: expectedHash, status: 'PENDING', executionDataAvailable: true, sender, nonce: '4', observedAt: 1_003 }) });
+  const candidate = await store.getAuthorization(authorization.authorizationId);
+  assert.equal(candidate.status, 'ACCEPTED');
+  assert.equal(candidate.boundTxHash, null);
+  const replacementHash = `0x${'6'.repeat(64)}`;
+  const final = await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: replacementHash }, store, observer: async () => ({ chainId: 8453, txHash: replacementHash, status: 'CONFIRMED', executionDataAvailable: true, action: 'TRANSFER', sender, recipient, asset: authorization.intent.asset, amount: authorization.intent.amount, nonce: '4', executedAt: 1_004, observedAt: 1_005, confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED' }) });
+  assert.equal(final.response.authorizationAssociation, 'FINAL');
   const claimed = await store.getAuthorization(authorization.authorizationId);
   assert.equal(claimed.status, 'BOUND');
-  assert.equal(claimed.boundTxHash, expectedHash);
+  assert.equal(claimed.boundTxHash, replacementHash);
+});
+
+test('pending candidate reports non-assessable compliance without consuming authorization', async () => {
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
+  const authorization = buildAuthorization({ intent: { intentId: 'pending-candidate', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2_000, nonce: '5' }, principal: { type: 'user', id: 'user-1', account: `0x${'c'.repeat(40)}` }, authorizer: { type: 'eip712', address: `0x${'c'.repeat(40)}` }, delegate: { agentId: 'agent-1', executor: sender }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'5'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}`, signature: '0x01' });
+  const store = createMemoryStore();
+  await store.saveIntent(authorization.intent);
+  await store.saveAuthorization({ authorization, acceptance: { acceptedAt: 1_001 }, policyEvidence: { schema: 'priorseal.policy-evidence.v1', policyHash: authorization.policyHash, document: null, result: { allowed: true, reasonCodes: [], policyId: null, evaluatedAt: 1_001 } }, status: 'ACCEPTED', boundTxHash: null, uses: 0 });
+  const pendingHash = `0x${'5'.repeat(64)}`;
+  const result = await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: pendingHash }, store, observer: async () => ({ chainId: 8453, txHash: pendingHash, status: 'PENDING', executionDataAvailable: true, action: 'TRANSFER', sender, recipient, asset: authorization.intent.asset, amount: authorization.intent.amount, nonce: '5', observedAt: 1_002, finalityState: 'PENDING' }), privateKeyPem, publicKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_002_000 });
+  assert.equal(result.response.authorizationAssociation, 'CANDIDATE');
+  assert.equal(result.response.receipt.compliance.status, 'NOT_ASSESSABLE');
+  assert.deepEqual(result.response.receipt.compliance.reasonCodes, ['EXECUTION_PENDING']);
+  assert.equal((await store.getAuthorization(authorization.authorizationId)).boundTxHash, null);
 });
 
 test('signed confirmation constraints cannot be relaxed by the observer request', async () => {

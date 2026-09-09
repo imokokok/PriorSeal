@@ -54,7 +54,7 @@ export const audiences = [
 ] as const
 
 export const boundaries = [
-  ['Authority', 'A valid v2 receipt can prove that the controlling account approved the exact canonical intent.'],
+  ['Authority', 'A valid v3 receipt can prove that the controlling account approved the exact canonical intent.'],
   ['Ordering', 'When RFC 3161 evidence is present, it can prove that the authorization digest existed before execution.'],
   ['Execution', 'Binding can establish whether the observed EVM transaction matched the signed constraints.'],
   ['Limit', 'PriorSeal does not establish economic safety, token legitimacy or an infallible view of the chain.'],

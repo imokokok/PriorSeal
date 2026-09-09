@@ -48,7 +48,8 @@ export async function observeExecution({ input, store, observer, signal, private
     const witnessed = verifyWitnessEvidence(authorizationRecord.witnessEvidence, authorizationRecord.authorization, witnessPolicy, { expectedRequestedAt: authorizationRecord.acceptance.acceptedAt, before: observation.executedAt ?? observation.observedAt });
     if (!witnessed.valid) throw new PriorSealError(witnessed.code, 'A valid pre-execution witness quorum is required', witnessed);
   }
-  const claimAuthorization = Boolean(authorizationRecord && canClaimAuthorization(authorizationRecord.authorization, observation));
+  const authorizationAssociation = authorizationRecord ? classifyAuthorizationAssociation(authorizationRecord.authorization, observation) : null;
+  const claimAuthorization = authorizationAssociation === 'FINAL';
   const receipt = privateKeyPem
     ? signReceipt(authorizationRecord
       ? buildAuthorizedReceipt({ authorization: authorizationRecord.authorization, acceptance: authorizationRecord.acceptance, policyEvidence: authorizationRecord.policyEvidence, timestampEvidence: authorizationRecord.timestampEvidence, witnessEvidence: authorizationRecord.witnessEvidence, transparency, execution: observation, issuer, keyId, issuedAt: Math.floor(now() / 1000) })
@@ -57,6 +58,7 @@ export async function observeExecution({ input, store, observer, signal, private
   const response = {
     observation,
     receipt,
+    ...(authorizationAssociation ? { authorizationAssociation } : {}),
     ...(receipt ? { verification: authorizationRecord ? await verifyAuthorizedReceipt(receipt, publicKeyPem, { audience: authorizationAudience, verifyContractSignature }) : verifyReceipt(receipt, publicKeyPem, { keyId }) } : {}),
   };
   if (store.saveObservationReceipt) {
@@ -74,9 +76,16 @@ export async function observeExecution({ input, store, observer, signal, private
 }
 
 export function canClaimAuthorization(authorization, observation) {
-  if (!authorization || !observation || observation.executionDataAvailable === false) return false;
-  if (!['PENDING', 'CONFIRMED', 'REVERTED', 'REORGED'].includes(observation.status)) return false;
-  return Number(observation.chainId) === Number(authorization.intent.chainId)
+  return classifyAuthorizationAssociation(authorization, observation) === 'FINAL';
+}
+
+export function classifyAuthorizationAssociation(authorization, observation) {
+  if (!authorization || !observation || observation.executionDataAvailable === false) return 'UNRELATED';
+  const correlated = Number(observation.chainId) === Number(authorization.intent.chainId)
     && String(observation.sender ?? '').toLowerCase() === authorization.delegate.executor
     && String(observation.nonce ?? '') === String(authorization.intent.nonce);
+  if (!correlated) return 'UNRELATED';
+  if (['CONFIRMED', 'REVERTED'].includes(observation.status)) return 'FINAL';
+  if (observation.status === 'PENDING') return 'CANDIDATE';
+  return 'UNRELATED';
 }

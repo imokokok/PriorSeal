@@ -79,7 +79,7 @@ test('pending observations return a durable job handle', async (t) => {
   assert.equal(observed.json().observationJob.jobId, 'job-pending-1');
   assert.equal(observed.json().observation.status, 'PENDING');
 });
-test('signed authorization is accepted before execution and produces a v2 receipt', async (t) => {
+test('signed authorization is accepted before execution and produces a v3 compliance receipt', async (t) => {
   const keys = generateKeyPairSync('ed25519');
   const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
@@ -95,7 +95,9 @@ test('signed authorization is accepted before execution and produces a v2 receip
   const authorizationId = accepted.json().authorization.authorizationId;
   const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ authorizationId, chainId: 8453, txHash, confirmations: 12 }) });
   assert.equal(observed.status, 200);
-  assert.equal(observed.json().receipt.schema, 'priorseal.execution-receipt.v2');
+  assert.equal(observed.json().receipt.schema, 'priorseal.execution-receipt.v3');
+  assert.equal(observed.json().receipt.executionStatus, 'CONFIRMED');
+  assert.equal(observed.json().receipt.compliance.status, 'COMPLIANT');
   assert.equal(observed.json().receipt.binding.bound, true);
   assert.equal(observed.json().verification.valid, true);
   const verified = await request(server, '/v1/receipts/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receipt: observed.json().receipt }) });

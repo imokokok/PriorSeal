@@ -33,11 +33,11 @@ export async function hashJson(value: unknown) {
 }
 
 export async function verifyReceiptOffline(receipt: Receipt, key: KeyEntry, now = Math.floor(Date.now() / 1000)): Promise<VerificationResult> {
-  const fail = (code: string): VerificationResult => ({ valid: false, code, outcome: receipt?.outcome, receiptId: receipt?.receiptId })
+  const fail = (code: string): VerificationResult => ({ valid: false, code, ...receiptResultFields(receipt) })
   try {
     if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) return fail('INVALID_RECEIPT')
     if (!receipt.signature) return fail('MISSING_SIGNATURE')
-    if (receipt.schema === 'priorseal.execution-receipt.v2') return await verifyAuthorizedReceiptOffline(receipt, key, now)
+    if (['priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3'].includes(receipt.schema)) return await verifyAuthorizedReceiptOffline(receipt, key, now)
     if (receipt.schema !== 'priorseal.execution-receipt.v1') return fail('UNSUPPORTED_SCHEMA')
     if (receipt.algorithm !== 'Ed25519') return fail('UNSUPPORTED_ALGORITHM')
     if (receipt.domain !== 'priorseal/execution-receipt/v1') return fail('INVALID_DOMAIN')
@@ -50,7 +50,7 @@ export async function verifyReceiptOffline(receipt: Receipt, key: KeyEntry, now 
     const { signature, ...unsigned } = receipt
     const imported = await crypto.subtle.importKey('spki', publicKeyBytes(key.publicKey), { name: 'Ed25519' }, false, ['verify'])
     const valid = await crypto.subtle.verify({ name: 'Ed25519' }, imported, decodeBase64(signature), new TextEncoder().encode(canonicalize(unsigned)))
-    return valid ? { valid: true, code: 'OK', outcome: receipt.outcome, receiptId: receipt.receiptId } : fail('INVALID_SIGNATURE')
+    return valid ? { valid: true, code: 'OK', ...receiptResultFields(receipt) } : fail('INVALID_SIGNATURE')
   } catch (error) {
     if (error instanceof DOMException && error.name === 'NotSupportedError') return fail('UNSUPPORTED_CRYPTO')
     return fail('INVALID_RECEIPT')
@@ -80,12 +80,13 @@ export async function verifyTimestampProofOffline(receipt: Receipt): Promise<Tim
 }
 
 async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, now: number): Promise<VerificationResult> {
-  const fail = (code: string): VerificationResult => ({ valid: false, code, outcome: receipt?.outcome, receiptId: receipt?.receiptId })
+  const fail = (code: string): VerificationResult => ({ valid: false, code, ...receiptResultFields(receipt) })
   const evidence = receipt.authorizationEvidence
   if (!evidence?.authorization || !evidence.acceptance) return fail('MISSING_AUTHORIZATION_EVIDENCE')
   const authorization = evidence.authorization
   const acceptance = evidence.acceptance
-  if (receipt.domain !== 'priorseal/execution-receipt/v2' || receipt.algorithm !== 'Ed25519') return fail('INVALID_DOMAIN')
+  const receiptV3 = receipt.schema === 'priorseal.execution-receipt.v3'
+  if (receipt.domain !== (receiptV3 ? 'priorseal/execution-receipt/v3' : 'priorseal/execution-receipt/v2') || receipt.algorithm !== 'Ed25519') return fail('INVALID_DOMAIN')
   const legacyAuthorization = authorization.schema === 'priorseal.authorization.v1'
   if (!legacyAuthorization && authorization.schema !== 'priorseal.authorization.v2') return fail('INVALID_AUTHORIZATION')
   if (authorization.domain !== (legacyAuthorization ? 'priorseal/authorization/v1' : 'priorseal/authorization/v2')) return fail('INVALID_AUTHORIZATION')
@@ -145,11 +146,18 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (!authorizationValid) return fail('INVALID_AUTHORIZATION_SIGNATURE')
   const expectedBinding = bindingFor(authorization.intent, receipt.execution, authorization.delegate.executor, acceptance.acceptedAt, authorization.notBefore, authorization.expiresAt)
   if (canonicalize(expectedBinding) !== canonicalize(receipt.binding) || canonicalize(expectedBinding.reasonCodes) !== canonicalize(receipt.reasonCodes)) return fail('BINDING_MISMATCH')
-  if (outcomeFor(authorization.intent, receipt.execution, expectedBinding) !== receipt.outcome) return fail('OUTCOME_MISMATCH')
-  const expectedReceiptId = `psr_${(await hashJson({ authorizationHash, executionHash: receipt.executionHash, issuer: receipt.issuer, keyId: receipt.keyId })).slice(0, 32)}`
+  const expectedOutcome = receiptV3 ? executionOutcomeFor(receipt.execution) : outcomeFor(authorization.intent, receipt.execution, expectedBinding)
+  if (expectedOutcome !== receipt.outcome) return fail('OUTCOME_MISMATCH')
+  if (receiptV3) {
+    if (receipt.executionStatus !== receipt.execution.status) return fail('EXECUTION_STATUS_MISMATCH')
+    const compliance = complianceFor(authorization, receipt.execution, expectedBinding)
+    if (canonicalize(compliance) !== canonicalize(receipt.compliance)) return fail('COMPLIANCE_MISMATCH')
+  }
+  const receiptIdentity = { authorizationHash, executionHash: receipt.executionHash, issuer: receipt.issuer, keyId: receipt.keyId }
+  const expectedReceiptId = `psr_${(await hashJson(receiptV3 ? { schema: receipt.schema, ...receiptIdentity } : receiptIdentity)).slice(0, 32)}`
   if (receipt.receiptId !== expectedReceiptId) return fail('RECEIPT_ID_MISMATCH')
   if (!await verifyEd25519(receipt, key.publicKey)) return fail('INVALID_SIGNATURE')
-  return { valid: true, code: 'OK', outcome: receipt.outcome, receiptId: receipt.receiptId, authorizationId: authorization.authorizationId }
+  return { valid: true, code: 'OK', ...receiptResultFields(receipt), authorizationId: authorization.authorizationId }
 }
 
 function stripIntentHash(intent: Intent) {
@@ -209,6 +217,33 @@ function outcomeFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
   if (execution.status !== 'CONFIRMED' || !binding.bound) return 'UNDETERMINED'
   if ((execution.executedAt ?? execution.observedAt ?? 0) > intent.validUntil) return 'EXPIRED'
   return 'COMPLETED'
+}
+
+function executionOutcomeFor(execution: Receipt['execution']) {
+  if (execution.status === 'REORGED' || execution.finalityState === 'REORGED') return 'REORGED'
+  if (execution.status === 'PENDING') return 'PENDING'
+  if (execution.status === 'REVERTED') return 'FAILED'
+  if (execution.status === 'CONFIRMED') return 'COMPLETED'
+  return 'UNDETERMINED'
+}
+
+function complianceFor(authorization: NonNullable<Receipt['authorizationEvidence']>['authorization'], execution: Receipt['execution'], binding: { bound: boolean; reasonCodes: string[] }) {
+  const assessment = (status: 'COMPLIANT' | 'NON_COMPLIANT' | 'NOT_ASSESSABLE', reasonCodes: string[]) => ({ schema: 'priorseal.compliance-assessment.v1', status, reasonCodes })
+  if (execution.executionDataAvailable === false) return assessment('NOT_ASSESSABLE', ['EXECUTION_UNAVAILABLE'])
+  if (execution.status === 'REORGED' || execution.finalityState === 'REORGED') return assessment('NOT_ASSESSABLE', ['EXECUTION_REORGED'])
+  if (execution.status === 'PENDING') return assessment('NOT_ASSESSABLE', ['EXECUTION_PENDING'])
+  if (execution.status === 'NOT_FOUND') return assessment('NOT_ASSESSABLE', ['EXECUTION_NOT_FOUND'])
+  if (['RPC_ERROR', 'UNSUPPORTED_CHAIN'].includes(execution.status) || !['CONFIRMED', 'REVERTED'].includes(execution.status)) return assessment('NOT_ASSESSABLE', ['EXECUTION_UNAVAILABLE'])
+  const correlationReasons: string[] = []
+  if (Number(execution.chainId) !== Number(authorization.intent.chainId)) correlationReasons.push('CHAIN_MISMATCH')
+  if (String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor.toLowerCase()) correlationReasons.push('EXECUTOR_MISMATCH')
+  if (String(execution.nonce ?? '') !== String(authorization.intent.nonce)) correlationReasons.push('NONCE_MISMATCH')
+  if (correlationReasons.length) return assessment('NOT_ASSESSABLE', correlationReasons)
+  return binding.bound ? assessment('COMPLIANT', []) : assessment('NON_COMPLIANT', [...binding.reasonCodes])
+}
+
+function receiptResultFields(receipt: Receipt) {
+  return { outcome: receipt?.outcome, executionStatus: receipt?.executionStatus ?? receipt?.execution?.status, complianceStatus: receipt?.compliance?.status, receiptId: receipt?.receiptId }
 }
 
 async function verifyEd25519(statement: object & { signature?: string }, publicKey: string) {

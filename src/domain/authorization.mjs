@@ -11,12 +11,14 @@ import { evmAddress, protocolId, uintString, unixSeconds } from './values.mjs';
 import { verifyTransparencyEvidence } from './transparency.mjs';
 import { verifyWitnessEvidence } from './witness.mjs';
 import { validateTimestampEvidenceClaims, verifyTimestampEvidence } from './rfc3161.mjs';
+import { assessCompliance, classifyExecutionOutcome } from './compliance.mjs';
 
 export const LEGACY_AUTHORIZATION_SCHEMA = 'priorseal.authorization.v1';
 export const AUTHORIZATION_SCHEMA = 'priorseal.authorization.v2';
 export const AUTHORIZATION_RECEIPT_SCHEMA = 'priorseal.authorization-receipt.v1';
 export const AUTHORIZATION_DOMAIN = 'priorseal/authorization/v2';
-export const AUTHORIZED_RECEIPT_SCHEMA = 'priorseal.execution-receipt.v2';
+export const LEGACY_AUTHORIZED_RECEIPT_SCHEMA = 'priorseal.execution-receipt.v2';
+export const AUTHORIZED_RECEIPT_SCHEMA = 'priorseal.execution-receipt.v3';
 
 const LEGACY_AUTHORIZATION_TYPES = Object.freeze({
   PriorSealAuthorization: [
@@ -175,7 +177,8 @@ export function verifyAuthorizationReceipt(receipt, publicKeyPem) {
   try { return verify(null, Buffer.from(canonicalize(unsigned)), createPublicKey(publicKeyPem), Buffer.from(signature, 'base64url')); } catch { return false; }
 }
 
-export function buildAuthorizedReceipt({ authorization, acceptance, policyEvidence = null, timestampEvidence = null, witnessEvidence = null, transparency = null, execution, issuer, keyId = 'default', issuedAt = Math.floor(Date.now() / 1000), verifierVersion = '2.3.0' }) {
+export function buildAuthorizedReceipt({ authorization, acceptance, policyEvidence = null, timestampEvidence = null, witnessEvidence = null, transparency = null, execution, issuer, keyId = 'default', issuedAt = Math.floor(Date.now() / 1000), verifierVersion, schema = AUTHORIZED_RECEIPT_SCHEMA }) {
+  if (![AUTHORIZED_RECEIPT_SCHEMA, LEGACY_AUTHORIZED_RECEIPT_SCHEMA].includes(schema)) throw new PriorSealError('UNSUPPORTED_SCHEMA', 'Authorized receipt schema is not supported');
   const intent = authorization.intent;
   const evidencePolicy = policyEvidence ?? defaultPolicyEvidence(authorization, acceptance.acceptedAt);
   validatePolicyEvidence(authorization, evidencePolicy, acceptance.acceptedAt);
@@ -197,20 +200,27 @@ export function buildAuthorizedReceipt({ authorization, acceptance, policyEviden
   const binding = { bound: baseBinding.bound && !executorMismatch && !authorizationAfterExecution && !outsideAuthorizationWindow, reasonCodes: [...new Set([...baseBinding.reasonCodes, ...(executorMismatch ? ['EXECUTOR_MISMATCH'] : []), ...(authorizationAfterExecution ? ['AUTHORIZATION_AFTER_EXECUTION'] : []), ...(outsideAuthorizationWindow ? ['OUTSIDE_AUTHORIZATION_WINDOW'] : [])])] };
   const executionHash = hashJson(execution);
   const authorizationHash = hashJson(authorization);
-  const outcome = executorMismatch || authorizationAfterExecution || outsideAuthorizationWindow ? 'UNDETERMINED' : classifyOutcome(intent, execution);
+  const legacy = schema === LEGACY_AUTHORIZED_RECEIPT_SCHEMA;
+  const outcome = legacy
+    ? executorMismatch || authorizationAfterExecution || outsideAuthorizationWindow ? 'UNDETERMINED' : classifyOutcome(intent, execution)
+    : classifyExecutionOutcome(execution);
   const reasonCodes = binding.reasonCodes;
-  const unsigned = { schema: AUTHORIZED_RECEIPT_SCHEMA, domain: 'priorseal/execution-receipt/v2', receiptId: '', intentHash: intent.intentHash, authorizationHash, executionHash, authorizationEvidence: { authorization, acceptance, policy: evidencePolicy, ...(timestampEvidence ? { timestamp: timestampEvidence } : {}), ...(witnessEvidence ? { witnesses: witnessEvidence } : {}), ...(transparency ? { transparency } : {}) }, execution, issuer, issuedAt, validUntil: intent.validUntil, outcome, reasonCodes, binding, algorithm: 'Ed25519', keyId, verifierVersion };
+  const compliance = legacy ? null : assessCompliance({ authorization, execution, binding });
+  const unsigned = { schema, domain: legacy ? 'priorseal/execution-receipt/v2' : 'priorseal/execution-receipt/v3', receiptId: '', intentHash: intent.intentHash, authorizationHash, executionHash, authorizationEvidence: { authorization, acceptance, policy: evidencePolicy, ...(timestampEvidence ? { timestamp: timestampEvidence } : {}), ...(witnessEvidence ? { witnesses: witnessEvidence } : {}), ...(transparency ? { transparency } : {}) }, execution, ...(!legacy ? { executionStatus: execution.status, compliance } : {}), issuer, issuedAt, validUntil: intent.validUntil, outcome, reasonCodes, binding, algorithm: 'Ed25519', keyId, verifierVersion: verifierVersion ?? (legacy ? '2.4.0' : '3.0.0') };
   unsigned.receiptId = authorizedReceiptId(unsigned);
   return unsigned;
 }
 
 export function authorizedReceiptId(receipt) {
-  return `psr_${hashJson({ authorizationHash: receipt.authorizationHash, executionHash: receipt.executionHash, issuer: receipt.issuer, keyId: receipt.keyId }).slice(0, 32)}`;
+  const identity = { authorizationHash: receipt.authorizationHash, executionHash: receipt.executionHash, issuer: receipt.issuer, keyId: receipt.keyId };
+  return `psr_${hashJson(receipt.schema === AUTHORIZED_RECEIPT_SCHEMA ? { schema: receipt.schema, ...identity } : identity).slice(0, 32)}`;
 }
 
 export function validateAuthorizedReceiptClaims(receipt) {
   try {
-    if (receipt?.schema !== AUTHORIZED_RECEIPT_SCHEMA || receipt.domain !== 'priorseal/execution-receipt/v2') return invalid('UNSUPPORTED_SCHEMA');
+    if (![AUTHORIZED_RECEIPT_SCHEMA, LEGACY_AUTHORIZED_RECEIPT_SCHEMA].includes(receipt?.schema)) return invalid('UNSUPPORTED_SCHEMA');
+    const legacy = receipt.schema === LEGACY_AUTHORIZED_RECEIPT_SCHEMA;
+    if (receipt.domain !== (legacy ? 'priorseal/execution-receipt/v2' : 'priorseal/execution-receipt/v3')) return invalid('INVALID_DOMAIN');
     const authorization = buildAuthorization(receipt.authorizationEvidence?.authorization);
     const acceptance = receipt.authorizationEvidence?.acceptance;
     if (!acceptance || acceptance.authorizationId !== authorization.authorizationId) return invalid('AUTHORIZATION_RECEIPT_MISMATCH');
@@ -239,14 +249,22 @@ export function validateAuthorizedReceiptClaims(receipt) {
     const binding = { bound: baseBinding.bound && !executorMismatch && !authorizationAfterExecution && !outsideAuthorizationWindow, reasonCodes: [...new Set([...baseBinding.reasonCodes, ...(executorMismatch ? ['EXECUTOR_MISMATCH'] : []), ...(authorizationAfterExecution ? ['AUTHORIZATION_AFTER_EXECUTION'] : []), ...(outsideAuthorizationWindow ? ['OUTSIDE_AUTHORIZATION_WINDOW'] : [])])] };
     if (hashJson(binding) !== hashJson(receipt.binding)) return invalid('BINDING_MISMATCH');
     if (hashJson(binding.reasonCodes) !== hashJson(receipt.reasonCodes)) return invalid('REASON_CODES_MISMATCH');
-    const expectedOutcome = executorMismatch || authorizationAfterExecution || outsideAuthorizationWindow ? 'UNDETERMINED' : classifyOutcome(authorization.intent, receipt.execution);
+    const expectedOutcome = legacy
+      ? executorMismatch || authorizationAfterExecution || outsideAuthorizationWindow ? 'UNDETERMINED' : classifyOutcome(authorization.intent, receipt.execution)
+      : classifyExecutionOutcome(receipt.execution);
     if (expectedOutcome !== receipt.outcome) return invalid('OUTCOME_MISMATCH');
+    if (!legacy) {
+      if (receipt.executionStatus !== receipt.execution.status) return invalid('EXECUTION_STATUS_MISMATCH');
+      const compliance = assessCompliance({ authorization, execution: receipt.execution, binding });
+      if (hashJson(compliance) !== hashJson(receipt.compliance)) return invalid('COMPLIANCE_MISMATCH');
+    }
     return { valid: true, code: 'OK', authorization };
   } catch (error) { return invalid(error.code ?? 'INVALID_RECEIPT'); }
 }
 
 export async function verifyAuthorizedReceipt(receipt, publicKeyPem, options = {}) {
-  const fail = (code) => ({ valid: false, code, outcome: receipt?.outcome, receiptId: receipt?.receiptId });
+  const resultFields = () => ({ outcome: receipt?.outcome, executionStatus: receipt?.executionStatus ?? receipt?.execution?.status, complianceStatus: receipt?.compliance?.status, receiptId: receipt?.receiptId });
+  const fail = (code) => ({ valid: false, code, ...resultFields() });
   try { assertSafeJson(receipt); } catch { return fail('INVALID_RECEIPT'); }
   if (!receipt?.signature) return fail('MISSING_SIGNATURE');
   if (receipt.algorithm !== 'Ed25519') return fail('UNSUPPORTED_ALGORITHM');
@@ -270,7 +288,7 @@ export async function verifyAuthorizedReceipt(receipt, publicKeyPem, options = {
   const authorizationResult = await verifyAuthorization(claims.authorization, { now: acceptance.acceptedAt, audience: options.audience ?? 'priorseal', verifyContractSignature: options.verifyContractSignature });
   if (!authorizationResult.valid) return fail(authorizationResult.code);
   if (!verifyEd25519Statement(receipt, publicKeyPem)) return fail('INVALID_SIGNATURE');
-  return { valid: true, code: 'OK', outcome: receipt.outcome, receiptId: receipt.receiptId, authorizationId: claims.authorization.authorizationId };
+  return { valid: true, code: 'OK', ...resultFields(), authorizationId: claims.authorization.authorizationId };
 }
 
 function verifyEd25519Statement(statement, publicKeyPem) {

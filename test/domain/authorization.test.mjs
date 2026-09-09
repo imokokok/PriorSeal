@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
-import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, createMemoryStore, hashJson, verifyAuthorization, verifyAuthorizedReceipt } from '../../src/index.mjs';
+import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, createMemoryStore, hashJson, LEGACY_AUTHORIZED_RECEIPT_SCHEMA, verifyAuthorization, verifyAuthorizedReceipt } from '../../src/index.mjs';
 import { signReceipt } from '../../src/domain/receipt.mjs';
 import { observeExecution } from '../../src/application/observations/observe-execution.mjs';
 
@@ -31,7 +31,7 @@ test('legacy v1 authorizations remain verifiable', async () => {
   assert.equal((await verifyAuthorization(legacy, { now: 1_001 })).valid, true);
 });
 
-test('accepted authorization is single-use and produces a self-checking v2 receipt', async () => {
+test('accepted authorization is single-use and produces a self-checking v3 receipt while v2 remains verifiable', async () => {
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
@@ -42,15 +42,23 @@ test('accepted authorization is single-use and produces a self-checking v2 recei
   assert.equal((await store.bindAuthorization(authorization.authorizationId, execution.txHash)).ok, true);
   assert.equal((await store.bindAuthorization(authorization.authorizationId, `0x${'4'.repeat(64)}`)).code, 'AUTHORIZATION_ALREADY_USED');
   const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), privateKeyPem);
+  assert.equal(receipt.schema, 'priorseal.execution-receipt.v3');
+  assert.equal(receipt.executionStatus, 'CONFIRMED');
+  assert.equal(receipt.compliance.status, 'COMPLIANT');
   assert.equal(receipt.binding.bound, true);
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem, { key: { keyId: 'key-1', issuer: 'test', algorithm: 'Ed25519', status: 'revoked', validFrom: null, validUntil: null } })).code, 'INVALID_KEY');
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem, { key: { keyId: 'key-1', issuer: 'test', algorithm: 'Ed25519', status: 'retired', validFrom: 1_050, validUntil: null } })).code, 'KEY_NOT_YET_VALID');
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem, { now: 1_000 })).code, 'NOT_YET_VALID');
   assert.equal((await verifyAuthorizedReceipt({ ...receipt, outcome: 'FAILED' }, publicKeyPem)).code, 'OUTCOME_MISMATCH');
+  const legacy = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101, schema: LEGACY_AUTHORIZED_RECEIPT_SCHEMA }), privateKeyPem);
+  assert.equal(legacy.schema, 'priorseal.execution-receipt.v2');
+  assert.equal(legacy.compliance, undefined);
+  assert.equal((await verifyAuthorizedReceipt(legacy, publicKeyPem)).valid, true);
+  assert.notEqual(legacy.receiptId, receipt.receiptId);
 });
 
-test('exact-call constraints are signed and calldata mismatch prevents completion', async () => {
+test('exact-call mismatch is signed as confirmed non-compliance', async () => {
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
@@ -62,7 +70,25 @@ test('exact-call constraints are signed and calldata mismatch prevents completio
   const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), privateKeyPem);
   assert.equal(receipt.binding.bound, false);
   assert.deepEqual(receipt.reasonCodes, ['CALLDATA_MISMATCH']);
-  assert.equal(receipt.outcome, 'UNDETERMINED');
+  assert.equal(receipt.outcome, 'COMPLETED');
+  assert.deepEqual(receipt.compliance, { schema: 'priorseal.compliance-assessment.v1', status: 'NON_COMPLIANT', reasonCodes: ['CALLDATA_MISMATCH'] });
+  assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
+  const changedAssessment = structuredClone(receipt);
+  changedAssessment.compliance.status = 'COMPLIANT';
+  assert.equal((await verifyAuthorizedReceipt(changedAssessment, publicKeyPem)).code, 'COMPLIANCE_MISMATCH');
+});
+
+test('a final but unrelated transaction is not assessable rather than evidence of breach', async () => {
+  const issuerKeys = generateKeyPairSync('ed25519');
+  const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
+  const authorization = await signedAuthorization(intentInput, '9');
+  const store = createMemoryStore({ clock: () => 1_001_000 });
+  const accepted = await authorizeIntent({ input: authorization, store, privateKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_001_000 });
+  const execution = { chainId: 8453, txHash: `0x${'9'.repeat(64)}`, status: 'CONFIRMED', action: 'TRANSFER', sender: `0x${'d'.repeat(40)}`, recipient: intentInput.recipient, asset: intentInput.asset, amount: intentInput.amount, nonce: intentInput.nonce, executedAt: 1_100, observedAt: 1_101, confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED' };
+  const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), privateKeyPem);
+  assert.equal(receipt.outcome, 'COMPLETED');
+  assert.deepEqual(receipt.compliance, { schema: 'priorseal.compliance-assessment.v1', status: 'NOT_ASSESSABLE', reasonCodes: ['EXECUTOR_MISMATCH'] });
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
 });
 
@@ -109,11 +135,12 @@ test('exact-call profile completes despite multi-transfer swap logs when exact t
   const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), privateKeyPem);
   assert.equal(receipt.binding.bound, true);
   assert.equal(receipt.outcome, 'COMPLETED');
+  assert.equal(receipt.compliance.status, 'COMPLIANT');
   assert.deepEqual(receipt.reasonCodes, []);
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
 });
 
-test('authorization accepted after execution is preserved as evidence but never marked completed', async () => {
+test('authorization accepted after execution is preserved as explicit non-compliance evidence', async () => {
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
@@ -124,11 +151,12 @@ test('authorization accepted after execution is preserved as evidence but never 
   const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_201 }), privateKeyPem);
   assert.equal(receipt.binding.bound, false);
   assert.ok(receipt.reasonCodes.includes('AUTHORIZATION_AFTER_EXECUTION'));
-  assert.equal(receipt.outcome, 'UNDETERMINED');
+  assert.equal(receipt.outcome, 'COMPLETED');
+  assert.equal(receipt.compliance.status, 'NON_COMPLIANT');
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
 });
 
-test('execution outside the narrower authorization window never completes', async () => {
+test('execution outside the narrower authorization window is non-compliant', async () => {
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
@@ -139,11 +167,12 @@ test('execution outside the narrower authorization window never completes', asyn
   const execution = { chainId: 8453, txHash: `0x${'e'.repeat(64)}`, status: 'CONFIRMED', action: 'TRANSFER', sender: executor, recipient: intentInput.recipient, asset: intentInput.asset, amount: intentInput.amount, nonce: intentInput.nonce, executedAt: 1_300, observedAt: 1_301, confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED' };
   const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_301 }), privateKeyPem);
   assert.deepEqual(receipt.reasonCodes, ['OUTSIDE_AUTHORIZATION_WINDOW']);
-  assert.equal(receipt.outcome, 'UNDETERMINED');
+  assert.equal(receipt.outcome, 'COMPLETED');
+  assert.equal(receipt.compliance.status, 'NON_COMPLIANT');
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
 });
 
-test('v2 receipt embeds and verifies the principal identity policy snapshot', async () => {
+test('v3 receipt embeds and verifies the principal identity policy snapshot', async () => {
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });

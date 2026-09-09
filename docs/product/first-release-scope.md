@@ -12,7 +12,7 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 2. Have the controlling EVM account sign the canonical EIP-712 authorization.
 3. Register the authorization and receive a signed acceptance plus independent RFC 3161 timestamp.
 4. Observe an explicitly identified EVM transaction against the single-use authorization.
-5. Download the v2 receipt and independently recompute authorization, binding and signatures.
+5. Download the v3 receipt and independently recompute authorization, execution status, compliance and signatures.
 
 ## Product vocabulary
 
@@ -29,7 +29,7 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 - A new user can understand and complete the evidence flow in under three minutes when API, RPC and issuer signing are configured.
 - Pending, unavailable, reverted, insufficient-finality and reorg states cannot be mistaken for a completed proof.
 - Every signed receipt can be downloaded and checked outside the PriorSeal service.
-- A completed v2 receipt proves the EIP-712 authorizer signed the exact canonical intent and, in RFC 3161 mode, that an independent TSA timestamped it before the observed block time.
+- A valid v3 receipt separately proves the signed evidence and reports whether a final correlated execution complied with the exact canonical intent; in RFC 3161 mode it also proves that an independent TSA timestamped the authorization before the observed block time.
 - Product copy consistently states what PriorSeal proves and does not prove.
 
 ## Explicit non-goals
