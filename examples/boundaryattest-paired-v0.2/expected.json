@@ -1,0 +1,13 @@
+{
+  "schema": "priorseal.boundaryattest-paired-fixture.v1",
+  "boundaryAttestUpstreamCommit": "1f4ca92072589783bf7a08d8262833abcd8ddccf",
+  "commitmentInput": "RFC8785-JCS(claim)",
+  "namespace": "boundaryattest.jcs-claim.v0.2",
+  "algorithm": "sha256",
+  "digest": "0xdc7c6316b8f74655d25a9a83ca45393d383c1b3e1a2f1ccbc97ac3faf0498011",
+  "expectedReceiptVersion": "0.2",
+  "expectedActionRefPrefix": "tool-call:payments.transfer:",
+  "expectedSubjectActionType": "payments.transfer",
+  "maxEvidenceAgeSecondsAtAuthorization": 300,
+  "maxFutureSkewSecondsAtAuthorization": 30
+}

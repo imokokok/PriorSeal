@@ -15,6 +15,7 @@
   "type": "module",
   "scripts": {
     "example:receipt": "node examples/create-signed-receipt.mjs",
+    "example:boundaryattest-paired": "npm run sdk:build && node examples/boundaryattest-paired-v0.2/verify.mjs",
     "verify:receipt": "node examples/verify-signed-receipt.mjs",
     "sdk:build": "npm --prefix sdk run build",
     "test": "npm run sdk:build && node --test test/**/*.test.mjs",

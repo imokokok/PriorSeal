@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a synthetic BoundaryAttest v0.2 paired fixture that independently verifies both trust domains, binds the RFC 8785/JCS claim digest through an exact-call context commitment, and exercises freshness, replay, digest, signature, and signer-key failures.
 - Added a design-partner collaboration guide, structured GitHub pilot/integration requests, and direct website, SDK, OpenAPI and source links.
 - Kept the console's SDK version synchronized with the published package, corrected the production API example and upgraded the self-contained receipt example to authorization-bound receipt v3.
 - Standardized repository development and release checks on Node.js 22 while retaining Node.js 20+ support for SDK consumers.

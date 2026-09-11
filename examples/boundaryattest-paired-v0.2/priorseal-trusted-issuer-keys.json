@@ -1,0 +1,15 @@
+{
+  "schema": "priorseal.keys.v1",
+  "issuer": "priorseal.boundaryattest-fixture",
+  "keys": [
+    {
+      "issuer": "priorseal.boundaryattest-fixture",
+      "keyId": "example-ed25519-1",
+      "algorithm": "Ed25519",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAjk+dCOCp/deaEeUtw0ifWbL2+sxWPIWpx+fwnut6CSI=\n-----END PUBLIC KEY-----\n",
+      "status": "active",
+      "validFrom": null,
+      "validUntil": null
+    }
+  ]
+}
