@@ -6,9 +6,11 @@ test('BoundaryAttest paired fixture passes the documented positive and negative 
   const results = await runFixtureChecks({ log: () => {} });
   assert.deepEqual(results.map((result) => result.code), [
     'OK',
-    'EXTERNAL_EVENT_REPLAYED',
+    'EXTERNAL_EXPORT_REPLAYED',
     'CONTEXT_COMMITMENT_DIGEST_MISMATCH',
-    'STALE_EXTERNAL_EVIDENCE',
+    'STALE_EXTERNAL_EXPORT',
+    'STALE_EXTERNAL_DECISION',
+    'EXTERNAL_DECISION_REPLAYED',
     'INVALID_BOUNDARYATTEST_SIGNATURE',
     'BOUNDARYATTEST_KEY_ID_MISMATCH',
   ]);
