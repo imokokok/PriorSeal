@@ -46,6 +46,8 @@ test('runtime configuration rejects ambiguous or invalid values before startup',
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_TRUST_PROXY: 'yes' }), /true or false/);
   assert.throws(() => loadRuntimeConfig({ DATABASE_URL: 'https://db.example' }), /PostgreSQL/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ENVIRONMENT: 'live' }), /development, test, or production/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_POLICY_FILE: '/policy.json', PRIORSEAL_POLICY_JSON: '{}' }), /file or inline JSON/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_KEY_REGISTRY_FILE: '/keys.json', PRIORSEAL_KEY_REGISTRY_JSON: '{"schema":"priorseal.keys.v1","keys":[]}' }), /file or inline JSON/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ENVIRONMENT: 'production' }), /Production requires/);
 });
 

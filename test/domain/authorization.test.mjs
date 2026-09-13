@@ -31,6 +31,25 @@ test('legacy v1 authorizations remain verifiable', async () => {
   assert.equal((await verifyAuthorization(legacy, { now: 1_001 })).valid, true);
 });
 
+test('new issuance rejects contradictory executor identity without changing historical verification', async () => {
+  const mismatchedIntent = { ...intentInput, intentId: 'executor-mismatch', sender: `0x${'b'.repeat(40)}` };
+  const authorization = await signedAuthorization(mismatchedIntent, '8');
+  assert.equal((await verifyAuthorization(authorization, { now: 1_001 })).valid, true);
+  const issuerKeys = generateKeyPairSync('ed25519');
+  await assert.rejects(
+    () => authorizeIntent({ input: authorization, store: createMemoryStore(), privateKeyPem: issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' }), issuer: 'test', keyId: 'key-1', now: () => 1_001_000 }),
+    (error) => error.code === 'INVALID_AUTHORIZATION',
+  );
+});
+
+test('ERC-1271 verifier availability failures remain distinguishable from invalid signatures', async () => {
+  const safe = `0x${'c'.repeat(40)}`;
+  const authorization = buildAuthorization({ intent: intentInput, principal: { type: 'organization', id: 'org-1', account: safe }, authorizer: { type: 'eip1271', address: safe }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'a'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}`, signature: '0x01' });
+  const unavailable = await verifyAuthorization(authorization, { now: 1_001, verifyContractSignature: async () => { const error = new Error('RPC unavailable'); error.code = 'AUTHORIZATION_VERIFIER_UNAVAILABLE'; throw error; } });
+  assert.equal(unavailable.code, 'AUTHORIZATION_VERIFIER_UNAVAILABLE');
+  assert.equal((await verifyAuthorization(authorization, { now: 1_001, verifyContractSignature: async () => false })).code, 'INVALID_AUTHORIZATION_SIGNATURE');
+});
+
 test('accepted authorization is single-use and produces a self-checking v3 receipt while v2 remains verifiable', async () => {
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });

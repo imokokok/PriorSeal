@@ -1,4 +1,4 @@
-import { AUTHORIZATION_SCHEMA, buildAuthorization, buildAuthorizationReceipt, signAuthorizationReceipt, verifyAuthorization } from '../../domain/authorization.mjs';
+import { AUTHORIZATION_SCHEMA, assertIssuableAuthorization, buildAuthorization, buildAuthorizationReceipt, signAuthorizationReceipt, verifyAuthorization } from '../../domain/authorization.mjs';
 import { PriorSealError } from '../../domain/errors.mjs';
 import { canonicalize, hashJson } from '../../domain/hashing.mjs';
 import { evaluateAuthorizationPolicy, evaluateNewIntentPolicyCompatibility } from '../../domain/intent-policy.mjs';
@@ -13,7 +13,7 @@ export async function authorizeIntent({ input, idempotencyKey, store, privateKey
   if (!privateKeyPem) throw new PriorSealError('ISSUER_NOT_CONFIGURED', 'Issuer signing is required to accept an authorization');
   assertIssuableIntentInput(input?.intent);
   const acceptedAt = Math.floor(now() / 1000);
-  const authorization = buildAuthorization(input);
+  const authorization = assertIssuableAuthorization(buildAuthorization(input));
   if (authorization.schema !== AUTHORIZATION_SCHEMA) throw new PriorSealError('INVALID_AUTHORIZATION', 'Legacy authorization schemas are verification-only');
   const verification = await verifyAuthorization(authorization, { now: acceptedAt, audience, verifyContractSignature });
   if (!verification.valid) throw new PriorSealError(verification.code, 'Authorization signature could not be accepted');

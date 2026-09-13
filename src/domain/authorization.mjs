@@ -149,7 +149,14 @@ export async function verifyAuthorization(value, { now = Math.floor(Date.now() /
       ? Boolean(verifyContractSignature && await verifyContractSignature({ authorization, digest: hashTypedData(typedData), signature: authorization.signature }))
       : await verifyTypedData({ ...typedData, address: authorization.authorizer.address, signature: authorization.signature });
     return valid ? { valid: true, code: 'OK', authorization } : invalid(authorization.authorizer.type === 'eip1271' && !verifyContractSignature ? 'AUTHORIZATION_VERIFIER_UNAVAILABLE' : 'INVALID_AUTHORIZATION_SIGNATURE');
-  } catch { return invalid('INVALID_AUTHORIZATION_SIGNATURE'); }
+  } catch (error) { return invalid(error?.code === 'AUTHORIZATION_VERIFIER_UNAVAILABLE' ? error.code : 'INVALID_AUTHORIZATION_SIGNATURE'); }
+}
+
+/** New issuance rejects contradictory execution identities while historical
+ * authorization and receipt verification remains representation-compatible. */
+export function assertIssuableAuthorization(authorization) {
+  if (authorization.delegate.executor !== authorization.intent.sender) throw new PriorSealError('INVALID_AUTHORIZATION', 'delegate.executor must match intent.sender for new authorizations');
+  return authorization;
 }
 
 export function erc1271CallData(digest, signature) {

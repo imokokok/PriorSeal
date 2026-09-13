@@ -10,6 +10,10 @@ New exact-call authorizations fail closed with `POLICY_EXACT_CALL_SEMANTICS_UNSU
 
 New intent issuance accepts a single `chainId`; the unused legacy `chainIds` input is rejected. `constraints.minConfirmations` must be a JSON number. Historical signed artifacts continue to be verified according to their original schemas and bytes.
 
+New intent and authorization issuance requires an explicit transaction `nonce` and requires `delegate.executor` to equal `intent.sender`, because the observed EVM transaction has one sender that must satisfy both bindings. Historical receipts remain verification-compatible. Authorization preparation evaluates the active principal and intent policy before returning wallet-signable EIP-712 data; acceptance evaluates it again against the current policy and acceptance time.
+
+ERC-1271 organization authorization remains chain-state dependent. The server verifies `eth_chainId` on each configured endpoint before trusting `isValidSignature`; wrong-chain or unavailable endpoints produce `AUTHORIZATION_VERIFIER_UNAVAILABLE`, while a completed same-chain call returning a non-magic value produces `INVALID_AUTHORIZATION_SIGNATURE`.
+
 Standalone witnesses expose `POST /v1/witness/attest`, public liveness/readiness endpoints, and `GET /.well-known/priorseal-witness-key.json`. A successful attestation response is idempotent for the canonical request hash. Clients must trust the witness public key from the principal-signed authorization policy, not a key learned only from the same HTTP response.
 
 `Idempotency-Key` is optional for compatibility and strongly recommended for writes. Reuse with the same request body returns the original result; reuse with different content returns `IDEMPOTENCY_CONFLICT`. Records expire after 24 hours.

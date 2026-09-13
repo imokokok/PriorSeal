@@ -8,7 +8,7 @@ import { PriorSealError } from '../../domain/errors.mjs';
 import { assertOnlyFields } from '../../shared/safe-json.mjs';
 import { createIntent } from '../../application/intents/create-intent.mjs';
 import { authorizeIntent } from '../../application/authorizations/authorize-intent.mjs';
-import { AUTHORIZATION_SCHEMA, authorizationTypedData, buildAuthorization, verifyAuthorizedReceipt } from '../../domain/authorization.mjs';
+import { AUTHORIZATION_SCHEMA, assertIssuableAuthorization, authorizationTypedData, buildAuthorization, verifyAuthorizedReceipt } from '../../domain/authorization.mjs';
 import { observeExecution } from '../../application/observations/observe-execution.mjs';
 import { createMemoryRateLimiter } from './rate-limiter.mjs';
 import { readJsonBody, requestPath } from './request-parser.mjs';
@@ -17,7 +17,7 @@ import { hashJson } from '../../domain/hashing.mjs';
 import { createStaticAssetHandler } from './static-assets.mjs';
 import { buildVerificationBundle } from '../../domain/verification-bundle.mjs';
 import { assertIssuableIntentInput } from '../../domain/intent.mjs';
-import { evaluateNewIntentPolicyCompatibility } from '../../domain/intent-policy.mjs';
+import { evaluateAuthorizationPolicy, evaluateNewIntentPolicyCompatibility } from '../../domain/intent-policy.mjs';
 
 const ERROR_STATUS = Object.freeze({ INVALID_JSON: 400, INVALID_REQUEST: 400, UNKNOWN_FIELD: 400, DANGEROUS_JSON_KEY: 400, JSON_TOO_DEEP: 400, INVALID_INTENT: 400, INVALID_AUTHORIZATION: 400, MISSING_AUTHORIZATION_SIGNATURE: 400, INVALID_AUTHORIZATION_SIGNATURE: 400, AUTHORIZATION_AUDIENCE_MISMATCH: 400, AUTHORIZATION_NOT_YET_VALID: 400, AUTHORIZATION_ISSUED_IN_FUTURE: 400, AUTHORIZATION_POLICY_MISMATCH: 409, AUTHORIZATION_EXPIRED: 410, AUTHORIZATION_ALREADY_USED: 409, AUTHORIZATION_NONCE_REUSED: 409, INVALID_TIMESTAMP_EVIDENCE: 400, INVALID_TIMESTAMP_PROFILE: 400, TIMESTAMP_POLICY_MISMATCH: 409, TIMESTAMP_AUTHORIZATION_MISMATCH: 409, TIMESTAMP_RESPONSE_HASH_MISMATCH: 409, TIMESTAMP_METADATA_MISMATCH: 409, INVALID_TIMESTAMP_POLICY: 400, TIMESTAMP_CLOCK_SKEW: 409, TIMESTAMP_AFTER_EXECUTION: 409, INVALID_TIMESTAMP_SIGNATURE: 409, INVALID_TIMESTAMP_CERTIFICATE_USAGE: 409, UNTRUSTED_TIMESTAMP_ROOT: 409, TIMESTAMP_SERVICE_UNAVAILABLE: 503, TIMESTAMP_NOT_CONFIGURED: 503, INVALID_TIMESTAMP_RESPONSE: 502, INVALID_WITNESS_POLICY: 400, INVALID_WITNESS_EVIDENCE: 400, WITNESS_POLICY_MISMATCH: 409, WITNESS_AUTHORIZATION_MISMATCH: 409, WITNESS_ACCEPTANCE_MISMATCH: 409, WITNESS_QUORUM_NOT_MET: 409, WITNESS_QUORUM_UNAVAILABLE: 503, WITNESS_NOT_CONFIGURED: 503, TRANSPARENCY_ANCHOR_REQUIRED: 409, INVALID_CHAIN_ID: 400, INVALID_TX_HASH: 400, INVALID_ADDRESS: 400, INVALID_ASSET: 400, INVALID_UINT: 400, INVALID_TIME: 400, INVALID_IDENTIFIER: 400, INVALID_CONSTRAINT: 400, INVALID_IDEMPOTENCY_KEY: 400, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, IDEMPOTENCY_CONFLICT: 409, POLICY_REJECTED: 403, INTENT_NOT_FOUND: 404, AUTHORIZATION_NOT_FOUND: 404, RECEIPT_NOT_FOUND: 404, NOT_FOUND: 404, REQUEST_TIMEOUT: 504, ISSUER_NOT_CONFIGURED: 503, AUTHORIZATION_VERIFIER_UNAVAILABLE: 503, RPC_NOT_CONFIGURED: 503, RPC_TIMEOUT: 503, RPC_FAILURE: 503 });
 
@@ -48,10 +48,15 @@ export function createHttpServer({ store = createMemoryStore(), issuer = 'priors
       }
       if (req.method === 'POST' && path === '/v1/authorizations/prepare') {
         assertIssuableIntentInput(body?.intent);
-        const authorization = buildAuthorization({ ...body, audience: authorizationAudience, policyHash: policy ? `0x${hashJson(policy)}` : `0x${'0'.repeat(64)}` });
+        const preparedAt = Math.floor(now() / 1000);
+        const authorization = assertIssuableAuthorization(buildAuthorization({ ...body, audience: authorizationAudience, policyHash: policy ? `0x${hashJson(policy)}` : `0x${'0'.repeat(64)}` }));
         if (authorization.schema !== AUTHORIZATION_SCHEMA) throw new PriorSealError('INVALID_AUTHORIZATION', 'Legacy authorization schemas are verification-only');
+        if (authorization.issuedAt > preparedAt) throw new PriorSealError('AUTHORIZATION_ISSUED_IN_FUTURE', 'Authorization issuedAt cannot be in the future');
+        if (preparedAt > authorization.expiresAt) throw new PriorSealError('AUTHORIZATION_EXPIRED', 'Authorization has already expired');
         const compatibility = evaluateNewIntentPolicyCompatibility(authorization.intent, policy ?? {});
         if (!compatibility.allowed) throw new PriorSealError('POLICY_REJECTED', 'Authorization policy cannot enforce descriptive exact-call semantics', compatibility);
+        const policyResult = policy ? evaluateAuthorizationPolicy(authorization, policy, preparedAt) : { allowed: true, reasonCodes: [], policyId: null, evaluatedAt: preparedAt };
+        if (!policyResult.allowed) throw new PriorSealError('POLICY_REJECTED', 'Authorization rejected by policy before signing', policyResult);
         const typedData = jsonSafe(authorizationTypedData(authorization));
         return respond(200, { authorization, typedData, requestId });
       }

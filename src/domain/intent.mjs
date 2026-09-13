@@ -15,6 +15,7 @@ const required = ['intentId', 'chainId', 'action', 'asset', 'amount', 'sender', 
  */
 export function assertIssuableIntentInput(input) {
   if (input?.chainIds !== undefined) throw new PriorSealError('INVALID_INTENT', 'chainIds is not supported for new intents; use chainId');
+  if (input?.nonce == null) throw new PriorSealError('INVALID_INTENT', 'nonce is required for new intents');
   if (input?.constraints?.minConfirmations != null && typeof input.constraints.minConfirmations !== 'number') throw new PriorSealError('INVALID_CONSTRAINT', 'minConfirmations must be a JSON number');
   return input;
 }

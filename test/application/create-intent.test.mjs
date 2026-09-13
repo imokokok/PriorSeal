@@ -12,6 +12,7 @@ const input = {
   sender: `0x${'a'.repeat(40)}`,
   recipient: `0x${'b'.repeat(40)}`,
   validUntil: 2_000_000_000,
+  nonce: '7',
 };
 
 test('create intent coordinates policy, persistence, and idempotent replay', async () => {
@@ -52,6 +53,8 @@ test('create intent rejects misleading exact-call semantic policy constraints', 
 
 test('new intent issuance rejects legacy multi-chain and ambiguous constraint representations', async () => {
   const store = createMemoryStore();
+  const { nonce, ...withoutNonce } = input;
+  await assert.rejects(() => createIntent({ input: withoutNonce, store }), (error) => error.code === 'INVALID_INTENT');
   await assert.rejects(() => createIntent({ input: { ...input, chainIds: [1, 8453] }, store }), (error) => error.code === 'INVALID_INTENT');
   await assert.rejects(() => createIntent({ input: { ...input, constraints: { minConfirmations: '12' } }, store }), (error) => error.code === 'INVALID_CONSTRAINT');
 });

@@ -27,6 +27,10 @@ export function loadRuntimeConfig(environment = process.env) {
     throw new TypeError('PRIORSEAL_PRIVATE_KEY_PEM and PRIORSEAL_PUBLIC_KEY_PEM must be configured together');
   }
   if (privateKeyFile && privateKeyPem) throw new TypeError('Configure issuer keys as files or inline PEM secrets, not both');
+  if (keyRegistryFile && keyRegistryJson) throw new TypeError('Configure the key registry as a file or inline JSON, not both');
+  if (policyFile && policyJson) throw new TypeError('Configure the authorization policy as a file or inline JSON, not both');
+  if (transparencyAnchorFile && transparencyAnchorJson) throw new TypeError('Configure the transparency anchor as a file or inline JSON, not both');
+  if (witnessEndpointsFile && witnessEndpointsJson) throw new TypeError('Configure witness endpoints as a file or inline JSON, not both');
 
   const preExecutionProofMode = proofModeValue(environment.PRIORSEAL_PREEXECUTION_PROOF_MODE, environment.PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR, runtimeEnvironment);
   const allowSelfAssertedPrincipals = booleanValue(environment.PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS, 'PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS', false);

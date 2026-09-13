@@ -60,6 +60,24 @@ test('authorization preparation rejects unsupported intent and exact-call policy
   assert.equal(misleadingPolicy.json().error.code, 'POLICY_REJECTED');
   assert.deepEqual(misleadingPolicy.json().error.details.reasonCodes, ['POLICY_EXACT_CALL_SEMANTICS_UNSUPPORTED']);
 });
+test('authorization preparation rejects policy violations and contradictory execution identities before signing', async (t) => {
+  const account = `0x${'c'.repeat(40)}`;
+  const base = { intent, principal: { type: 'user', id: 'unapproved-user', account }, authorizer: { type: 'eip712', address: account }, delegate: { agentId: 'agent-test', executor: sender }, issuedAt: 1_000, expiresAt: intent.validUntil, authorizationNonce: `0x${'6'.repeat(64)}`, maxUses: '1' };
+  const server = createHttpServer({ policy: { principals: [{ id: 'approved-user', type: 'user', account, authorizerType: 'eip712' }], allowedChainIds: [8453] } });
+  t.after(() => server.close());
+  const headers = { 'content-type': 'application/json' };
+  const disallowed = await request(server, '/v1/authorizations/prepare', { method: 'POST', headers, body: JSON.stringify(base) });
+  assert.equal(disallowed.status, 403);
+  assert.deepEqual(disallowed.json().error.details.reasonCodes, ['POLICY_PRINCIPAL_NOT_ALLOWED']);
+  const approved = { ...base, principal: { ...base.principal, id: 'approved-user' } };
+  const contradictory = await request(server, '/v1/authorizations/prepare', { method: 'POST', headers, body: JSON.stringify({ ...approved, delegate: { ...approved.delegate, executor: recipient } }) });
+  assert.equal(contradictory.status, 400);
+  assert.equal(contradictory.json().error.code, 'INVALID_AUTHORIZATION');
+  const { nonce, ...intentWithoutNonce } = intent;
+  const missingNonce = await request(server, '/v1/authorizations/prepare', { method: 'POST', headers, body: JSON.stringify({ ...approved, intent: intentWithoutNonce }) });
+  assert.equal(missingNonce.status, 400);
+  assert.equal(missingNonce.json().error.code, 'INVALID_INTENT');
+});
 test('observation writes honor Idempotency-Key and return a signed linked receipt', async (t) => {
   const keys = generateKeyPairSync('ed25519');
   const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });

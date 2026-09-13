@@ -3,22 +3,22 @@ import { resolve } from 'node:path';
 import { createHttpServer } from '../interfaces/http/create-http-server.mjs';
 import { createKeyRegistry } from '../domain/key-registry.mjs';
 import { createFileKeyProvider } from '../infrastructure/keys/file-key-provider.mjs';
-import { readFileKeyRegistry } from '../infrastructure/keys/file-key-registry.mjs';
+import { parseKeyRegistryDocument, readFileKeyRegistry } from '../infrastructure/keys/file-key-registry.mjs';
 import { createPostgresStore } from '../infrastructure/persistence/postgres-store.mjs';
 import { createRpcClient } from '../infrastructure/blockchain/evm/rpc-client.mjs';
 import { getRpcUrls } from '../infrastructure/blockchain/evm/chains.mjs';
-import { erc1271CallData } from '../domain/authorization.mjs';
 import { PriorSealError } from '../domain/errors.mjs';
-import { readPolicyFile } from '../infrastructure/policy/file-policy-provider.mjs';
+import { parsePolicyDocument, readPolicyFile } from '../infrastructure/policy/file-policy-provider.mjs';
 import { createObservationWorker } from '../application/observations/observation-worker.mjs';
 import { observeExecution } from '../application/observations/observe-execution.mjs';
 import { observeEvm } from '../infrastructure/blockchain/evm/observer.mjs';
-import { readTransparencyAnchor, verifyTransparencyAnchor } from '../infrastructure/transparency/file-anchor-provider.mjs';
+import { parseTransparencyAnchor, readTransparencyAnchor, verifyTransparencyAnchor } from '../infrastructure/transparency/file-anchor-provider.mjs';
 import { buildTransparencyEvidence } from '../domain/transparency.mjs';
-import { createHttpWitnessProvider, readWitnessEndpoints } from '../infrastructure/witness/http-witness-client.mjs';
+import { createHttpWitnessProvider, parseWitnessEndpoints, readWitnessEndpoints } from '../infrastructure/witness/http-witness-client.mjs';
 import { createDigiCertTimestampProvider } from '../infrastructure/timestamp/digicert-rfc3161-client.mjs';
 import { loadRuntimeConfig } from './runtime-config.mjs';
 import { assertProductionSchema } from './production-schema.mjs';
+import { createContractSignatureVerifier } from '../infrastructure/blockchain/evm/contract-signature-verifier.mjs';
 
 const { Pool } = pg;
 const config = loadRuntimeConfig();
@@ -26,32 +26,23 @@ const pool = config.databaseUrl ? new Pool({ connectionString: config.databaseUr
 if (config.environment === 'production') await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode });
 const store = pool ? createPostgresStore(pool) : undefined;
 const keyProvider = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
-const privateKeyPem = keyProvider.getPrivateKey();
-const publicKeyPem = keyProvider.getPublicKey();
-const registry = createKeyRegistry(readFileKeyRegistry(config.keyRegistryFile));
-const policy = readPolicyFile(config.policyFile);
+const privateKeyPem = config.privateKeyPem ?? keyProvider.getPrivateKey();
+const publicKeyPem = config.publicKeyPem ?? keyProvider.getPublicKey();
+const registry = createKeyRegistry(config.keyRegistryJson ? parseKeyRegistryDocument(config.keyRegistryJson) : readFileKeyRegistry(config.keyRegistryFile));
+const policy = config.policyJson ? parsePolicyDocument(config.policyJson) : readPolicyFile(config.policyFile);
 if (config.environment === 'production' && !config.allowSelfAssertedPrincipals && !policy?.principals?.length) throw new TypeError('Production policy must contain at least one reviewed principal or explicitly allow self-asserted principals');
 if (config.preExecutionProofMode === 'witness-quorum' && !policy?.witnessQuorum) throw new TypeError('Witness-quorum mode requires witnessQuorum in the signed authorization policy');
 if (config.preExecutionProofMode === 'rfc3161' && !policy?.timestampPolicy) throw new TypeError('RFC 3161 mode requires timestampPolicy in the signed authorization policy');
-const witnessEndpoints = readWitnessEndpoints(config.witnessEndpointsFile, { requireHttps: config.environment === 'production' });
+const witnessEndpoints = config.witnessEndpointsJson ? parseWitnessEndpoints(config.witnessEndpointsJson, { requireHttps: config.environment === 'production' }) : readWitnessEndpoints(config.witnessEndpointsFile, { requireHttps: config.environment === 'production' });
 const witnessProvider = config.preExecutionProofMode === 'witness-quorum' ? createHttpWitnessProvider({ policy: policy.witnessQuorum, endpoints: witnessEndpoints, requester: config.issuer }) : null;
 const timestampProvider = config.preExecutionProofMode === 'rfc3161' ? createDigiCertTimestampProvider() : null;
 const rpcClient = createRpcClient();
 const loadTransparencyAnchor = async () => {
-  const candidate = readTransparencyAnchor(config.transparencyAnchorFile);
+  const candidate = config.transparencyAnchorJson ? parseTransparencyAnchor(config.transparencyAnchorJson) : readTransparencyAnchor(config.transparencyAnchorFile);
   return verifyTransparencyAnchor(candidate, { rpcClient, rpcUrls: getRpcUrls(candidate?.chainId) ?? [] });
 };
-if (config.transparencyAnchorFile) await loadTransparencyAnchor();
-const verifyContractSignature = async ({ authorization, digest, signature }) => {
-  const urls = getRpcUrls(authorization.intent.chainId) ?? [];
-  for (const url of urls) {
-    try {
-      const result = await rpcClient.call(url, 'eth_call', [{ to: authorization.authorizer.address, data: erc1271CallData(digest, signature) }, 'latest']);
-      if (String(result).slice(0, 10).toLowerCase() === '0x1626ba7e') return true;
-    } catch { /* Try the next explicitly configured source. */ }
-  }
-  return false;
-};
+if (config.transparencyAnchorFile || config.transparencyAnchorJson) await loadTransparencyAnchor();
+const verifyContractSignature = createContractSignatureVerifier({ rpcClient, rpcUrls: (chainId) => getRpcUrls(chainId) ?? [] });
 if (publicKeyPem) registry.add({ issuer: config.issuer, keyId: config.keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null });
 const transparencyProvider = store && privateKeyPem ? async (acceptance) => {
   const evidence = buildTransparencyEvidence({ entries: await store.listAuthorizationLog(), acceptance, issuer: config.issuer, keyId: config.keyId, privateKeyPem, issuedAt: Math.floor(Date.now() / 1000), anchor: await loadTransparencyAnchor() });

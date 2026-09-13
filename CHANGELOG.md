@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened user and organization authorization issuance by requiring an explicit transaction nonce, rejecting contradictory intent-sender/delegated-executor identities, and evaluating the active policy before wallet signing.
+- Made ERC-1271 verification establish every RPC endpoint's chain identity and distinguish unavailable chain state from an invalid contract signature.
+- Kept Node and Cloudflare startup behavior aligned for file-backed and inline policy, key-registry, witness-endpoint, transparency-anchor, and issuer-key configuration; ambiguous dual sources now fail startup.
 - Made authorization policies fail closed on malformed allowlists and invalid numeric limits, rejected misleading transfer-semantic limits for new exact-call authorizations, and preserved partner-owned context-commitment semantics.
 - Hardened new intent issuance against the unused `chainIds` field and ambiguous string confirmation thresholds while retaining historical receipt verification.
 - Expanded the console's pre-sign review to show canonical advanced constraints and require an explicit transaction nonce; clarified that its optional call fields remain v1 constraints rather than the router-oriented exact-call v2 profile.
