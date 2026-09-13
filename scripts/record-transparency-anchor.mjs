@@ -29,7 +29,7 @@ for (const url of rpcUrls) {
     const block = await rpcClient.call(url, 'eth_getBlockByNumber', [receipt.blockNumber, false]);
     const decoded = decodeFunctionData({ abi: anchorAbi(), data: transaction.input ?? transaction.data });
     evidence = { type: 'eip155', chainId, contract: contract.toLowerCase(), txHash: txHash.toLowerCase(), blockNumber, anchoredAt: Number(BigInt(block.timestamp)), size: Number(decoded.args[0]), headEntryHash: String(decoded.args[1]).slice(2).toLowerCase() };
-    await verifyTransparencyAnchor(evidence, { rpcClient, rpcUrls: [url] });
+    await verifyTransparencyAnchor(evidence, { rpcClient, rpcUrls: [url], minConfirmations: confirmations });
     break;
   } catch (error) {
     if (String(error.message).includes('fewer than')) throw error;

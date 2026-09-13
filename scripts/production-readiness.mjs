@@ -6,6 +6,7 @@ import { createRpcClient } from '../src/infrastructure/blockchain/evm/rpc-client
 import { getRpcUrls, SUPPORTED_CHAINS } from '../src/infrastructure/blockchain/evm/chains.mjs';
 import { parseWitnessEndpoints, readWitnessEndpoints } from '../src/infrastructure/witness/http-witness-client.mjs';
 import { assertProductionSchema } from '../src/bootstrap/production-schema.mjs';
+import { parseTransparencyAnchor, readTransparencyAnchor, verifyTransparencyAnchor } from '../src/infrastructure/transparency/file-anchor-provider.mjs';
 
 if (process.env.PRIORSEAL_ENVIRONMENT !== 'production') throw new TypeError('Set PRIORSEAL_ENVIRONMENT=production before running the production readiness check');
 const config = loadRuntimeConfig();
@@ -42,4 +43,9 @@ for (const chainId of Object.keys(SUPPORTED_CHAINS).map(Number)) {
   verifiedChains.push(chainId);
 }
 if (!verifiedChains.length) throw new TypeError('At least one production RPC must be configured');
-console.log(JSON.stringify({ ready: true, buildVersion: config.buildVersion, databaseMigration: '007_observation_job_results.sql', principalMode: config.allowSelfAssertedPrincipals ? 'self-asserted' : 'reviewed-registry', reviewedPrincipals: policy.principals?.length ?? 0, verifiedChains, preExecutionProofMode: config.preExecutionProofMode, timestampProfile: policy.timestampPolicy?.profile ?? null, witnessThreshold: policy.witnessQuorum?.threshold ?? null, externalAnchorRequired: config.requireExternalAnchor }));
+let verifiedAnchor = null;
+if (config.preExecutionProofMode === 'evm-anchor') {
+  const candidate = config.transparencyAnchorJson ? parseTransparencyAnchor(config.transparencyAnchorJson) : readTransparencyAnchor(config.transparencyAnchorFile);
+  verifiedAnchor = await verifyTransparencyAnchor(candidate, { rpcClient, rpcUrls: getRpcUrls(candidate.chainId) ?? [], minConfirmations: config.anchorConfirmations });
+}
+console.log(JSON.stringify({ ready: true, buildVersion: config.buildVersion, databaseMigration: '007_observation_job_results.sql', principalMode: config.allowSelfAssertedPrincipals ? 'self-asserted' : 'reviewed-registry', reviewedPrincipals: policy.principals?.length ?? 0, verifiedChains, preExecutionProofMode: config.preExecutionProofMode, timestampProfile: policy.timestampPolicy?.profile ?? null, witnessThreshold: policy.witnessQuorum?.threshold ?? null, externalAnchorRequired: config.requireExternalAnchor, anchorConfirmations: config.anchorConfirmations, verifiedAnchorTxHash: verifiedAnchor?.txHash ?? null }));

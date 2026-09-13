@@ -37,15 +37,16 @@ export async function observeExecution({ input, store, observer, signal, private
   let observation = { ...observed, intentHash: intent.intentHash };
   if (detectReorg(previous, observation)) observation = { ...observation, status: 'REORGED', finalityState: 'REORGED', previousBlockHash: previous.blockHash };
 
-  const transparency = authorizationRecord && transparencyProvider ? await transparencyProvider(authorizationRecord.acceptance) : null;
+  const executionTime = observation.executedAt ?? observation.observedAt;
+  const transparency = authorizationRecord && transparencyProvider ? await transparencyProvider(authorizationRecord.acceptance, { before: executionTime }) : null;
   const timestampPolicy = authorizationRecord?.policyEvidence?.document?.timestampPolicy;
   if (timestampPolicy) {
-    const timestamped = await verifyTimestampEvidence(authorizationRecord.timestampEvidence, new TextEncoder().encode(canonicalize(authorizationRecord.authorization)), timestampPolicy, { authorizationHash: hashJson(authorizationRecord.authorization), requestedAt: authorizationRecord.acceptance.acceptedAt, before: observation.executedAt ?? observation.observedAt });
+    const timestamped = await verifyTimestampEvidence(authorizationRecord.timestampEvidence, new TextEncoder().encode(canonicalize(authorizationRecord.authorization)), timestampPolicy, { authorizationHash: hashJson(authorizationRecord.authorization), requestedAt: authorizationRecord.acceptance.acceptedAt, before: executionTime });
     if (!timestamped.valid) throw new PriorSealError(timestamped.code, 'Valid pre-execution RFC 3161 evidence is required', timestamped);
   }
   const witnessPolicy = authorizationRecord?.policyEvidence?.document?.witnessQuorum;
   if (witnessPolicy) {
-    const witnessed = verifyWitnessEvidence(authorizationRecord.witnessEvidence, authorizationRecord.authorization, witnessPolicy, { expectedRequestedAt: authorizationRecord.acceptance.acceptedAt, before: observation.executedAt ?? observation.observedAt });
+    const witnessed = verifyWitnessEvidence(authorizationRecord.witnessEvidence, authorizationRecord.authorization, witnessPolicy, { expectedRequestedAt: authorizationRecord.acceptance.acceptedAt, before: executionTime });
     if (!witnessed.valid) throw new PriorSealError(witnessed.code, 'A valid pre-execution witness quorum is required', witnessed);
   }
   const authorizationAssociation = authorizationRecord ? classifyAuthorizationAssociation(authorizationRecord.authorization, observation) : null;

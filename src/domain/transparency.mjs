@@ -1,14 +1,16 @@
 import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { canonicalize, hashJson } from './hashing.mjs';
+import { PriorSealError } from './errors.mjs';
 
 export const TRANSPARENCY_CHECKPOINT_SCHEMA = 'priorseal.transparency-checkpoint.v1';
 
-export function buildTransparencyEvidence({ entries, acceptance, issuer, keyId, privateKeyPem, issuedAt, anchor = null }) {
+export function buildTransparencyEvidence({ entries, acceptance, issuer, keyId, privateKeyPem, issuedAt, anchor = null, before }) {
   const acceptedIndex = entries.findIndex((entry) => entry.sequence === acceptance.sequence && entry.entryHash === acceptance.entryHash);
   if (acceptedIndex < 0) throw new TypeError('Authorization acceptance is not present in the transparency log');
   let checkpointEntries = entries;
   let verifiedAnchor = null;
   if (anchor) {
+    if (before !== undefined && anchor.anchoredAt > before) throw new PriorSealError('TRANSPARENCY_AFTER_EXECUTION', 'Transparency anchor must precede execution');
     const anchorEntry = entries[Number(anchor.size) - 1];
     if (!anchorEntry || anchorEntry.entryHash !== anchor.headEntryHash) throw new TypeError('Configured transparency anchor does not match the local log');
     if (Number(anchor.size) > acceptedIndex) {
@@ -21,7 +23,7 @@ export function buildTransparencyEvidence({ entries, acceptance, issuer, keyId, 
   return { checkpoint: signedCheckpoint, chain: checkpointEntries.slice(acceptedIndex) };
 }
 
-export function verifyTransparencyEvidence(evidence, acceptance, publicKeyPem) {
+export function verifyTransparencyEvidence(evidence, acceptance, publicKeyPem, { before } = {}) {
   const checkpoint = evidence?.checkpoint;
   const chain = evidence?.chain;
   if (!checkpoint?.signature || checkpoint.schema !== TRANSPARENCY_CHECKPOINT_SCHEMA || !Array.isArray(chain) || !chain.length) return false;
@@ -32,7 +34,7 @@ export function verifyTransparencyEvidence(evidence, acceptance, publicKeyPem) {
     if (index > 0 && (entry.sequence !== chain[index - 1].sequence + 1 || entry.previousEntryHash !== chain[index - 1].entryHash)) return false;
   }
   if (chain.at(-1).entryHash !== checkpoint.headEntryHash || chain.at(-1).sequence !== checkpoint.size) return false;
-  if (checkpoint.anchor && (checkpoint.anchor.size !== checkpoint.size || checkpoint.anchor.headEntryHash !== checkpoint.headEntryHash)) return false;
+  if (checkpoint.anchor && (checkpoint.anchor.size !== checkpoint.size || checkpoint.anchor.headEntryHash !== checkpoint.headEntryHash || (before !== undefined && checkpoint.anchor.anchoredAt > before))) return false;
   const { signature, ...unsigned } = checkpoint;
   try { return verify(null, Buffer.from(canonicalize(unsigned)), createPublicKey(publicKeyPem), Buffer.from(signature, 'base64url')); } catch { return false; }
 }

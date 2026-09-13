@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Enforce EVM transparency-anchor chain identity, configured finality, and pre-execution ordering before issuing or validating an execution receipt.
+- Require production `evm-anchor` deployments to configure a verifiable anchor and include that check in production readiness.
+
 - Hardened user and organization authorization issuance by requiring an explicit transaction nonce, rejecting contradictory intent-sender/delegated-executor identities, and evaluating the active policy before wallet signing.
 - Made ERC-1271 verification establish every RPC endpoint's chain identity and distinguish unavailable chain state from an invalid contract signature.
 - Kept Node and Cloudflare startup behavior aligned for file-backed and inline policy, key-registry, witness-endpoint, transparency-anchor, and issuer-key configuration; ambiguous dual sources now fail startup.

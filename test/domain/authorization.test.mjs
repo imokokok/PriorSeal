@@ -217,7 +217,9 @@ test('required transparency failure does not consume the authorization', async (
   await authorizeIntent({ input: authorization, store, privateKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_001_000 });
   const txHash = `0x${'4'.repeat(64)}`;
   const observer = async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', sender: executor, recipient: intentInput.recipient, asset: intentInput.asset, amount: intentInput.amount, nonce: intentInput.nonce, executedAt: 1_100, observedAt: 1_101, confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED' });
-  await assert.rejects(() => observeExecution({ input: { authorizationId: authorization.authorizationId, chainId: 8453, txHash, confirmations: 12 }, store, observer, transparencyProvider: async () => { const error = new Error('anchor required'); error.code = 'TRANSPARENCY_ANCHOR_REQUIRED'; throw error; } }), (error) => error.code === 'TRANSPARENCY_ANCHOR_REQUIRED');
+  let before;
+  await assert.rejects(() => observeExecution({ input: { authorizationId: authorization.authorizationId, chainId: 8453, txHash, confirmations: 12 }, store, observer, transparencyProvider: async (_acceptance, options) => { before = options.before; const error = new Error('anchor required'); error.code = 'TRANSPARENCY_ANCHOR_REQUIRED'; throw error; } }), (error) => error.code === 'TRANSPARENCY_ANCHOR_REQUIRED');
+  assert.equal(before, 1_100);
   assert.equal((await store.getAuthorization(authorization.authorizationId)).boundTxHash, null);
 });
 

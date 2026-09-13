@@ -20,6 +20,7 @@ export function loadRuntimeConfig(environment = process.env) {
   const transparencyAnchorJson = optionalJson(environment.PRIORSEAL_TRANSPARENCY_ANCHOR_JSON, 'PRIORSEAL_TRANSPARENCY_ANCHOR_JSON');
   const witnessEndpointsFile = optionalValue(environment.PRIORSEAL_WITNESS_ENDPOINTS_FILE);
   const witnessEndpointsJson = optionalJson(environment.PRIORSEAL_WITNESS_ENDPOINTS_JSON, 'PRIORSEAL_WITNESS_ENDPOINTS_JSON');
+  const anchorConfirmations = confirmationValue(environment.PRIORSEAL_ANCHOR_CONFIRMATIONS);
   if (Boolean(privateKeyFile) !== Boolean(publicKeyFile)) {
     throw new TypeError('PRIORSEAL_PRIVATE_KEY_FILE and PRIORSEAL_PUBLIC_KEY_FILE must be configured together');
   }
@@ -56,6 +57,7 @@ export function loadRuntimeConfig(environment = process.env) {
     preExecutionProofMode,
     allowSelfAssertedPrincipals,
     requireExternalAnchor: preExecutionProofMode === 'evm-anchor',
+    anchorConfirmations,
     databaseUrl: databaseUrl(environment.DATABASE_URL, 'DATABASE_URL'),
     databaseDirectUrl: databaseUrl(environment.DATABASE_URL_UNPOOLED, 'DATABASE_URL_UNPOOLED'),
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
@@ -119,6 +121,7 @@ function validateProductionConfig(config) {
   if (config.issuer === 'priorseal-local' || config.authorizationAudience === 'priorseal') throw new TypeError('Production requires deployment-specific issuer and authorization audience values');
   if (config.preExecutionProofMode === 'issuer') throw new TypeError('Production requires rfc3161, witness-quorum, or evm-anchor pre-execution proof');
   if (config.preExecutionProofMode === 'witness-quorum' && !config.witnessEndpointsFile && !config.witnessEndpointsJson) throw new TypeError('Production witness-quorum mode requires witness endpoints');
+  if (config.preExecutionProofMode === 'evm-anchor' && !config.transparencyAnchorFile && !config.transparencyAnchorJson) throw new TypeError('Production evm-anchor mode requires a transparency anchor');
   if (!config.corsOrigins.length || config.corsOrigins.some((origin) => new URL(origin).hostname === 'localhost')) throw new TypeError('Production requires at least one non-localhost CORS origin');
 }
 
@@ -137,6 +140,12 @@ function portValue(value) {
     throw new TypeError('PORT must be an integer between 1 and 65535');
   }
   return port;
+}
+
+function confirmationValue(value) {
+  const confirmations = Number(optionalValue(value) ?? 12);
+  if (!Number.isSafeInteger(confirmations) || confirmations < 1 || confirmations > 10_000) throw new TypeError('PRIORSEAL_ANCHOR_CONFIRMATIONS must be an integer between 1 and 10000');
+  return confirmations;
 }
 
 function identifierValue(value, name, fallback) {

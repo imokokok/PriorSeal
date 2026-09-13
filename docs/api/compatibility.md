@@ -14,6 +14,8 @@ New intent and authorization issuance requires an explicit transaction `nonce` a
 
 ERC-1271 organization authorization remains chain-state dependent. The server verifies `eth_chainId` on each configured endpoint before trusting `isValidSignature`; wrong-chain or unavailable endpoints produce `AUTHORIZATION_VERIFIER_UNAVAILABLE`, while a completed same-chain call returning a non-magic value produces `INVALID_AUTHORIZATION_SIGNATURE`.
 
+EVM transparency anchors retain the existing evidence shape. New issuance and current verifiers additionally require the anchor RPC to report the declared chain, require the configured confirmation floor, and reject an anchor whose block timestamp is later than the observed execution block. Historical receipts with correctly ordered anchors remain compatible; an incorrectly post-execution anchor is no longer accepted as pre-execution evidence.
+
 Standalone witnesses expose `POST /v1/witness/attest`, public liveness/readiness endpoints, and `GET /.well-known/priorseal-witness-key.json`. A successful attestation response is idempotent for the canonical request hash. Clients must trust the witness public key from the principal-signed authorization policy, not a key learned only from the same HTTP response.
 
 `Idempotency-Key` is optional for compatibility and strongly recommended for writes. Reuse with the same request body returns the original result; reuse with different content returns `IDEMPOTENCY_CONFLICT`. Records expire after 24 hours.

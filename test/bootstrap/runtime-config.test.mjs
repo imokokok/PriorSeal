@@ -32,6 +32,7 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     preExecutionProofMode: 'issuer',
     allowSelfAssertedPrincipals: false,
     requireExternalAnchor: false,
+    anchorConfirmations: 12,
     databaseUrl: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
     databaseDirectUrl: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
     corsOrigins: ['https://console.example'],
@@ -55,10 +56,14 @@ test('production runtime fails closed unless security dependencies are explicit'
   const base = {
     PRIORSEAL_ENVIRONMENT: 'production', PRIORSEAL_ISSUER: 'priorseal-prod', PRIORSEAL_KEY_ID: 'prod-1', PRIORSEAL_BUILD_VERSION: '0.2.0',
     PRIORSEAL_AUTHORIZATION_AUDIENCE: 'priorseal.example.com', PRIORSEAL_PRIVATE_KEY_FILE: '/private.pem', PRIORSEAL_PUBLIC_KEY_FILE: '/public.pem',
-    PRIORSEAL_POLICY_FILE: '/policy.json', PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR: 'true', PRIORSEAL_CORS_ORIGINS: 'https://priorseal.example.com',
+    PRIORSEAL_POLICY_FILE: '/policy.json', PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR: 'true', PRIORSEAL_TRANSPARENCY_ANCHOR_FILE: '/anchor.json', PRIORSEAL_CORS_ORIGINS: 'https://priorseal.example.com',
     DATABASE_URL: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full', DATABASE_URL_UNPOOLED: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
   };
   assert.equal(loadRuntimeConfig(base).environment, 'production');
+  const { PRIORSEAL_TRANSPARENCY_ANCHOR_FILE: _anchor, ...withoutAnchor } = base;
+  assert.throws(() => loadRuntimeConfig(withoutAnchor), /requires a transparency anchor/);
+  assert.equal(loadRuntimeConfig({ ...base, PRIORSEAL_ANCHOR_CONFIRMATIONS: '24' }).anchorConfirmations, 24);
+  assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_ANCHOR_CONFIRMATIONS: '0' }), /ANCHOR_CONFIRMATIONS/);
   assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR: 'false' }), /PREEXECUTION_PROOF_MODE/);
   const witnessed = loadRuntimeConfig({ ...base, PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR: 'false', PRIORSEAL_PREEXECUTION_PROOF_MODE: 'witness-quorum', PRIORSEAL_WITNESS_ENDPOINTS_FILE: '/witnesses.json' });
   assert.equal(witnessed.requireExternalAnchor, false);

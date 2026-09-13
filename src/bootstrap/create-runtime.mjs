@@ -44,13 +44,13 @@ export async function createPriorSealRuntime({ config, environment = process.env
     const rpcUrls = (chainId) => getRpcUrls(chainId, environment) ?? [];
     const loadTransparencyAnchor = async () => {
       const candidate = config.transparencyAnchorJson ? parseTransparencyAnchor(config.transparencyAnchorJson) : readTransparencyAnchor(config.transparencyAnchorFile);
-      return verifyTransparencyAnchor(candidate, { rpcClient, rpcUrls: rpcUrls(candidate?.chainId) });
+      return verifyTransparencyAnchor(candidate, { rpcClient, rpcUrls: rpcUrls(candidate?.chainId), minConfirmations: config.anchorConfirmations });
     };
     if (config.transparencyAnchorFile || config.transparencyAnchorJson) await loadTransparencyAnchor();
     const verifyContractSignature = createContractSignatureVerifier({ rpcClient, rpcUrls });
     if (publicKeyPem) registry.add({ issuer: config.issuer, keyId: config.keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null });
-    const transparencyProvider = store && privateKeyPem ? async (acceptance) => {
-      const evidence = buildTransparencyEvidence({ entries: await store.listAuthorizationLog(), acceptance, issuer: config.issuer, keyId: config.keyId, privateKeyPem, issuedAt: Math.floor(Date.now() / 1000), anchor: await loadTransparencyAnchor() });
+    const transparencyProvider = store && privateKeyPem ? async (acceptance, { before } = {}) => {
+      const evidence = buildTransparencyEvidence({ entries: await store.listAuthorizationLog(), acceptance, issuer: config.issuer, keyId: config.keyId, privateKeyPem, issuedAt: Math.floor(Date.now() / 1000), anchor: await loadTransparencyAnchor(), before });
       if (config.requireExternalAnchor && !evidence.checkpoint.anchor) throw new PriorSealError('TRANSPARENCY_ANCHOR_REQUIRED', 'A verified external anchor covering this authorization is required before execution');
       return evidence;
     } : null;

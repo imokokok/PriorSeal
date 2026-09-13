@@ -128,7 +128,7 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   const expectedEntryHash = await hashJson({ sequence: acceptance.sequence, authorizationHash: acceptance.authorizationHash, acceptedAt: acceptance.acceptedAt, previousEntryHash: acceptance.previousEntryHash })
   if (acceptance.entryHash !== expectedEntryHash) return fail('AUTHORIZATION_RECEIPT_MISMATCH')
   if (acceptance.issuer !== receipt.issuer || acceptance.keyId !== receipt.keyId || !await verifyEd25519(acceptance, key.publicKey)) return fail('INVALID_AUTHORIZATION_RECEIPT')
-  if (evidence.transparency && !await verifyTransparency(evidence.transparency, acceptance, key.publicKey)) return fail('INVALID_TRANSPARENCY_PROOF')
+  if (evidence.transparency && !await verifyTransparency(evidence.transparency, acceptance, key.publicKey, receipt.execution.executedAt ?? receipt.execution.observedAt ?? 0)) return fail('INVALID_TRANSPARENCY_PROOF')
   if (!authorization.signature) return fail('MISSING_AUTHORIZATION_SIGNATURE')
   if (authorization.authorizer.type === 'eip1271') return fail('AUTHORIZATION_REQUIRES_CHAIN_VERIFICATION')
   const authorizationValid = await verifyTypedData({
@@ -253,7 +253,7 @@ async function verifyEd25519(statement: object & { signature?: string }, publicK
   return crypto.subtle.verify({ name: 'Ed25519' }, imported, decodeBase64(signature), new TextEncoder().encode(canonicalize(unsigned)))
 }
 
-async function verifyTransparency(evidence: NonNullable<Receipt['authorizationEvidence']>['transparency'], acceptance: NonNullable<Receipt['authorizationEvidence']>['acceptance'], publicKey: string) {
+async function verifyTransparency(evidence: NonNullable<Receipt['authorizationEvidence']>['transparency'], acceptance: NonNullable<Receipt['authorizationEvidence']>['acceptance'], publicKey: string, executedAt: number) {
   if (!evidence?.checkpoint?.signature || !evidence.chain.length) return false
   const first = evidence.chain[0]
   if (first.sequence !== acceptance.sequence || first.entryHash !== acceptance.entryHash) return false
@@ -264,7 +264,7 @@ async function verifyTransparency(evidence: NonNullable<Receipt['authorizationEv
   }
   const last = evidence.chain.at(-1)!
   if (last.entryHash !== evidence.checkpoint.headEntryHash || last.sequence !== evidence.checkpoint.size) return false
-  if (evidence.checkpoint.anchor && (evidence.checkpoint.anchor.size !== evidence.checkpoint.size || evidence.checkpoint.anchor.headEntryHash !== evidence.checkpoint.headEntryHash)) return false
+  if (evidence.checkpoint.anchor && (evidence.checkpoint.anchor.size !== evidence.checkpoint.size || evidence.checkpoint.anchor.headEntryHash !== evidence.checkpoint.headEntryHash || evidence.checkpoint.anchor.anchoredAt > executedAt)) return false
   return verifyEd25519(evidence.checkpoint, publicKey)
 }
 

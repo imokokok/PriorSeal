@@ -192,6 +192,7 @@ export function buildAuthorizedReceipt({ authorization, acceptance, policyEviden
   const baseBinding = bindIntentExecution(intent, execution, issuedAt);
   const executorMismatch = execution.sender?.toLowerCase() !== authorization.delegate.executor;
   const executedAt = execution.executedAt ?? execution.observedAt ?? 0;
+  if (transparency?.checkpoint?.anchor?.anchoredAt > executedAt) throw new PriorSealError('TRANSPARENCY_AFTER_EXECUTION', 'Transparency anchor must precede execution');
   const timestampPolicy = evidencePolicy.document?.timestampPolicy;
   if (timestampPolicy) {
     const timestamped = validateTimestampEvidenceClaims(timestampEvidence, timestampPolicy, { authorizationHash: hashJson(authorization), requestedAt: acceptance.acceptedAt, before: executedAt });
@@ -291,7 +292,7 @@ export async function verifyAuthorizedReceipt(receipt, publicKeyPem, options = {
     const timestamped = await verifyTimestampEvidence(receipt.authorizationEvidence.timestamp, new TextEncoder().encode(canonicalize(claims.authorization)), timestampPolicy, { authorizationHash: receipt.authorizationHash, requestedAt: acceptance.acceptedAt, before: receipt.execution.executedAt ?? receipt.execution.observedAt ?? 0 });
     if (!timestamped.valid) return fail(timestamped.code);
   }
-  if (receipt.authorizationEvidence.transparency && !verifyTransparencyEvidence(receipt.authorizationEvidence.transparency, acceptance, publicKeyPem)) return fail('INVALID_TRANSPARENCY_PROOF');
+  if (receipt.authorizationEvidence.transparency && !verifyTransparencyEvidence(receipt.authorizationEvidence.transparency, acceptance, publicKeyPem, { before: receipt.execution.executedAt ?? receipt.execution.observedAt ?? 0 })) return fail('INVALID_TRANSPARENCY_PROOF');
   const authorizationResult = await verifyAuthorization(claims.authorization, { now: acceptance.acceptedAt, audience: options.audience ?? 'priorseal', verifyContractSignature: options.verifyContractSignature });
   if (!authorizationResult.valid) return fail(authorizationResult.code);
   if (!verifyEd25519Statement(receipt, publicKeyPem)) return fail('INVALID_SIGNATURE');
