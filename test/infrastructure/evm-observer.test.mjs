@@ -16,6 +16,22 @@ test('EVM observer validates endpoint chain identity and falls back safely', asy
 test('EVM observer rejects unsafe confirmation thresholds', async () => {
   await assert.rejects(() => observeEvm({ chainId: 8453, txHash, confirmations: -1, rpcUrls: ['unused'] }), (error) => error.code === 'INVALID_REQUEST');
 });
+test('EVM observer rejects missing nonce and gas evidence from RPC responses', async () => {
+  const missingNonceClient = { async call(_url, method) {
+    if (method === 'eth_chainId') return '0x2105';
+    if (method === 'eth_getTransactionByHash') return { hash: txHash, from: sender, to: recipient, value: '0x0', input: '0x' };
+    throw new Error('unexpected method');
+  } };
+  await assert.rejects(() => observeEvm({ chainId: 8453, txHash, rpcUrls: ['rpc'], rpcClient: missingNonceClient }), (error) => error.code === 'RPC_FAILURE');
+
+  const missingGasClient = { async call(_url, method) {
+    if (method === 'eth_chainId') return '0x2105';
+    if (method === 'eth_getTransactionByHash') return { hash: txHash, from: sender, to: recipient, nonce: '0x1', value: '0x0', input: '0x' };
+    if (method === 'eth_getTransactionReceipt') return { status: '0x1', blockNumber: '0xa', blockHash, logs: [] };
+    throw new Error('unexpected method');
+  } };
+  await assert.rejects(() => observeEvm({ chainId: 8453, txHash, rpcUrls: ['rpc'], rpcClient: missingGasClient }), (error) => error.code === 'RPC_FAILURE');
+});
 test('EVM observer does not treat malformed transfer logs as verified transfers', async () => {
   const rpcClient = { async call(_url, method) { if (method === 'eth_chainId') return '0x2105'; if (method === 'eth_getTransactionByHash') return { hash: txHash, from: sender, to: recipient, nonce: '0x0', value: '0x1', input: '0x12345678' }; if (method === 'eth_getTransactionReceipt') return { status: '0x1', blockNumber: '0xa', blockHash: `0x${'c'.repeat(64)}`, gasUsed: '0x1', logs: [{ topics: ['0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef', 'bad'], address: 'bad', data: 'bad', logIndex: 'bad' }] }; if (method === 'eth_getBlockByHash') return { hash: `0x${'c'.repeat(64)}`, timestamp: '0x64' }; return '0xa'; } };
   const observation = await observeEvm({ chainId: 8453, txHash, rpcUrls: ['https://secret.invalid/api-key'], rpcClient }); assert.equal(observation.transfers.length, 0); assert.equal(observation.asset, 'eip155:8453/native'); assert.equal(observation.action, 'CONTRACT_CALL'); assert.equal(JSON.stringify(observation).includes('api-key'), false);

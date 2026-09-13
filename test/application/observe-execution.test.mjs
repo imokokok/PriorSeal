@@ -1,12 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
-import { buildAuthorization, buildIntent, createMemoryStore } from '../../src/index.mjs';
+import { privateKeyToAccount } from 'viem/accounts';
+import { authorizationTypedData, authorizeIntent, buildAuthorization, buildIntent, createMemoryStore } from '../../src/index.mjs';
 import { observeExecution } from '../../src/application/observations/observe-execution.mjs';
 
 const sender = `0x${'a'.repeat(40)}`;
 const recipient = `0x${'b'.repeat(40)}`;
 const txHash = `0x${'1'.repeat(64)}`;
+const authorizer = privateKeyToAccount(`0x${'1'.repeat(64)}`);
+
+async function acceptAuthorization({ intentId, nonce, store, privateKeyPem, keyId = 'key-1' }) {
+  const draft = buildAuthorization({ intent: { intentId, chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2_000, nonce }, principal: { type: 'user', id: 'user-1', account: authorizer.address }, authorizer: { type: 'eip712', address: authorizer.address }, delegate: { agentId: 'agent-1', executor: sender }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${nonce.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}` });
+  const authorization = buildAuthorization({ ...draft, signature: await authorizer.signTypedData(authorizationTypedData(draft)) });
+  await authorizeIntent({ input: authorization, store, privateKeyPem, issuer: 'test', keyId, now: () => 1_001_000 });
+  return authorization;
+}
 
 test('observation is idempotent, linked to its intent, signed, and reorg-aware', async () => {
   const keys = generateKeyPairSync('ed25519');
@@ -61,16 +70,34 @@ test('pending candidate reports non-assessable compliance without consuming auth
   const keys = generateKeyPairSync('ed25519');
   const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
-  const authorization = buildAuthorization({ intent: { intentId: 'pending-candidate', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2_000, nonce: '5' }, principal: { type: 'user', id: 'user-1', account: `0x${'c'.repeat(40)}` }, authorizer: { type: 'eip712', address: `0x${'c'.repeat(40)}` }, delegate: { agentId: 'agent-1', executor: sender }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'5'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}`, signature: '0x01' });
   const store = createMemoryStore();
-  await store.saveIntent(authorization.intent);
-  await store.saveAuthorization({ authorization, acceptance: { acceptedAt: 1_001 }, policyEvidence: { schema: 'priorseal.policy-evidence.v1', policyHash: authorization.policyHash, document: null, result: { allowed: true, reasonCodes: [], policyId: null, evaluatedAt: 1_001 } }, status: 'ACCEPTED', boundTxHash: null, uses: 0 });
+  const authorization = await acceptAuthorization({ intentId: 'pending-candidate', nonce: '5', store, privateKeyPem });
   const pendingHash = `0x${'5'.repeat(64)}`;
   const result = await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: pendingHash }, store, observer: async () => ({ chainId: 8453, txHash: pendingHash, status: 'PENDING', executionDataAvailable: true, action: 'TRANSFER', sender, recipient, asset: authorization.intent.asset, amount: authorization.intent.amount, nonce: '5', observedAt: 1_002, finalityState: 'PENDING' }), privateKeyPem, publicKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_002_000 });
   assert.equal(result.response.authorizationAssociation, 'CANDIDATE');
   assert.equal(result.response.receipt.compliance.status, 'NOT_ASSESSABLE');
   assert.deepEqual(result.response.receipt.compliance.reasonCodes, ['EXECUTION_PENDING']);
   assert.equal((await store.getAuthorization(authorization.authorizationId)).boundTxHash, null);
+});
+
+test('a receipt that fails self-verification cannot consume an authorization during key rotation', async () => {
+  const oldKeys = generateKeyPairSync('ed25519');
+  const newKeys = generateKeyPairSync('ed25519');
+  const oldPrivateKeyPem = oldKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const newPrivateKeyPem = newKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const newPublicKeyPem = newKeys.publicKey.export({ type: 'spki', format: 'pem' });
+  const store = createMemoryStore();
+  const authorization = await acceptAuthorization({ intentId: 'rotation-safe', nonce: '7', store, privateKeyPem: oldPrivateKeyPem, keyId: 'old' });
+  const rotatedHash = `0x${'7'.repeat(64)}`;
+  const observer = async () => ({ chainId: 8453, txHash: rotatedHash, status: 'CONFIRMED', executionDataAvailable: true, action: 'TRANSFER', sender, recipient, asset: authorization.intent.asset, amount: authorization.intent.amount, nonce: '7', executedAt: 1_100, observedAt: 1_101, confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED' });
+
+  await assert.rejects(
+    () => observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: rotatedHash }, store, observer, privateKeyPem: newPrivateKeyPem, publicKeyPem: newPublicKeyPem, issuer: 'test', keyId: 'new', now: () => 1_101_000 }),
+    (error) => error.code === 'INVALID_AUTHORIZATION_RECEIPT',
+  );
+  const record = await store.getAuthorization(authorization.authorizationId);
+  assert.equal(record.status, 'ACCEPTED');
+  assert.equal(record.boundTxHash, null);
 });
 
 test('signed confirmation constraints cannot be relaxed by the observer request', async () => {

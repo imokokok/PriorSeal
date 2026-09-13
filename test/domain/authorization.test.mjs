@@ -111,6 +111,28 @@ test('a final but unrelated transaction is not assessable rather than evidence o
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
 });
 
+test('insufficient finality and missing constrained gas remain not assessable', async () => {
+  const issuerKeys = generateKeyPairSync('ed25519');
+  const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
+  const constrainedIntent = { ...intentInput, intentId: 'evidence-completeness', constraints: { minConfirmations: 12, maxGasUsed: '21000' } };
+  const authorization = await signedAuthorization(constrainedIntent, 'b');
+  const accepted = await authorizeIntent({ input: authorization, store: createMemoryStore({ clock: () => 1_001_000 }), privateKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1_001_000 });
+  const execution = { chainId: 8453, txHash: `0x${'b'.repeat(64)}`, status: 'CONFIRMED', action: 'TRANSFER', sender: executor, recipient: intentInput.recipient, asset: intentInput.asset, amount: intentInput.amount, nonce: intentInput.nonce, executedAt: 1_100, observedAt: 1_101, confirmations: 1, gasUsed: '21000', transfers: [], finalityState: 'INSUFFICIENT_FINALITY' };
+  const pendingReceipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), privateKeyPem);
+  assert.equal(pendingReceipt.outcome, 'PENDING');
+  assert.deepEqual(pendingReceipt.compliance, { schema: 'priorseal.compliance-assessment.v1', status: 'NOT_ASSESSABLE', reasonCodes: ['EXECUTION_PENDING'] });
+  assert.equal((await verifyAuthorizedReceipt(pendingReceipt, publicKeyPem)).valid, true);
+
+  const missingGas = { ...execution, txHash: `0x${'c'.repeat(64)}`, confirmations: 12, finalityState: 'CONFIRMED' };
+  delete missingGas.gasUsed;
+  const missingGasReceipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution: missingGas, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), privateKeyPem);
+  assert.equal(missingGasReceipt.binding.bound, false);
+  assert.deepEqual(missingGasReceipt.reasonCodes, ['EXECUTION_UNAVAILABLE']);
+  assert.deepEqual(missingGasReceipt.compliance, { schema: 'priorseal.compliance-assessment.v1', status: 'NOT_ASSESSABLE', reasonCodes: ['EXECUTION_UNAVAILABLE'] });
+  assert.equal((await verifyAuthorizedReceipt(missingGasReceipt, publicKeyPem)).valid, true);
+});
+
 test('exact-call profile completes despite multi-transfer swap logs when exact transaction bytes match', async () => {
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });

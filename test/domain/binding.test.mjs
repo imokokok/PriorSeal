@@ -7,6 +7,14 @@ const execution = { chainId: 8453, action: 'TRANSFER', sender: '0xaa', recipient
 test('binding returns explainable reason codes', () => { assert.deepEqual(bindIntentExecution(intent, execution).reasonCodes, []); const result = bindIntentExecution(intent, { ...execution, recipient: '0xcc', confirmations: 1, gasUsed: '200000' }); assert.equal(result.bound, false); assert.deepEqual(result.reasonCodes, ['RECIPIENT_MISMATCH', 'INSUFFICIENT_FINALITY', 'GAS_LIMIT_EXCEEDED']); });
 test('multiple transfers are undetermined unless uniquely selected', () => { const result = bindIntentExecution(intent, { ...execution, transfers: [{}, {}] }); assert.equal(result.reasonCodes.includes('AMBIGUOUS_TRANSFER'), true); });
 test('action and block time participate in binding', () => { assert.equal(bindIntentExecution(intent, { ...execution, action: 'CONTRACT_CALL' }).reasonCodes.includes('ACTION_MISMATCH'), true); assert.equal(bindIntentExecution(intent, { ...execution, executedAt: 1001 }).reasonCodes.includes('OUTSIDE_TIME_WINDOW'), true); assert.equal(bindIntentExecution(intent, execution).reasonCodes.includes('OUTSIDE_TIME_WINDOW'), false); });
+test('binding fails closed when nonce or constrained gas evidence is missing', () => {
+  const missingNonce = { ...execution };
+  delete missingNonce.nonce;
+  assert.deepEqual(bindIntentExecution(intent, missingNonce).reasonCodes, ['NONCE_MISMATCH']);
+  const missingGas = { ...execution };
+  delete missingGas.gasUsed;
+  assert.deepEqual(bindIntentExecution(intent, missingGas).reasonCodes, ['EXECUTION_UNAVAILABLE']);
+});
 test('exact-call profile binds transaction bytes instead of ambiguous transfer semantics', () => {
   const callTarget = `0x${'c'.repeat(40)}`;
   const calldataHash = `0x${'d'.repeat(64)}`;

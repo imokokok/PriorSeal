@@ -33,6 +33,7 @@ import { verifyReceiptLocally } from 'priorseal-sdk/verifier'
 
 const result = await verifyReceiptLocally(receipt, {
   trustedKeys: keyRegistry,
+  expectedAudience: 'your-deployment-audience',
 })
 
 if (!result.valid) console.error(result.code)
@@ -41,7 +42,7 @@ if (result.requiredExternalChecks.length) {
 }
 ```
 
-The verifier performs no network requests. It recomputes canonical intent, authorization and execution hashes, policy results, binding reason codes, outcomes and identifiers; it also checks EIP-712 EOA, Ed25519, RFC 3161, witness and transparency-chain evidence. ERC-1271 signatures and EVM anchor inclusion require chain state and are returned in `requiredExternalChecks` rather than being treated as offline facts.
+The verifier performs no network requests. It recomputes canonical intent, authorization and execution hashes, policy results, binding reason codes, outcomes and identifiers; it also checks the authorization against `expectedAudience` (defaulting to `priorseal`) and verifies EIP-712 EOA, Ed25519, RFC 3161, witness and transparency-chain evidence. Set the deployment-specific audience explicitly in production. ERC-1271 signatures and EVM anchor inclusion require chain state and are returned in `requiredExternalChecks` rather than being treated as offline facts.
 
 `verifyReceiptRemotely` remains available as a convenience API call, but it is not independent verification.
 

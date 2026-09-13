@@ -32,12 +32,12 @@ export async function hashJson(value: unknown) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-export async function verifyReceiptOffline(receipt: Receipt, key: KeyEntry, now = Math.floor(Date.now() / 1000)): Promise<VerificationResult> {
+export async function verifyReceiptOffline(receipt: Receipt, key: KeyEntry, now = Math.floor(Date.now() / 1000), expectedAudience = 'priorseal'): Promise<VerificationResult> {
   const fail = (code: string): VerificationResult => ({ valid: false, code, ...receiptResultFields(receipt) })
   try {
     if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) return fail('INVALID_RECEIPT')
     if (!receipt.signature) return fail('MISSING_SIGNATURE')
-    if (['priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3'].includes(receipt.schema)) return await verifyAuthorizedReceiptOffline(receipt, key, now)
+    if (['priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3'].includes(receipt.schema)) return await verifyAuthorizedReceiptOffline(receipt, key, now, expectedAudience)
     if (receipt.schema !== 'priorseal.execution-receipt.v1') return fail('UNSUPPORTED_SCHEMA')
     if (receipt.algorithm !== 'Ed25519') return fail('UNSUPPORTED_ALGORITHM')
     if (receipt.domain !== 'priorseal/execution-receipt/v1') return fail('INVALID_DOMAIN')
@@ -79,7 +79,7 @@ export async function verifyTimestampProofOffline(receipt: Receipt): Promise<Tim
   }
 }
 
-async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, now: number): Promise<VerificationResult> {
+async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, now: number, expectedAudience: string): Promise<VerificationResult> {
   const fail = (code: string): VerificationResult => ({ valid: false, code, ...receiptResultFields(receipt) })
   const evidence = receipt.authorizationEvidence
   if (!evidence?.authorization || !evidence.acceptance) return fail('MISSING_AUTHORIZATION_EVIDENCE')
@@ -98,6 +98,7 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (!['user', 'organization'].includes(authorization.principal.type) || !authorization.principal.id || !authorization.delegate.agentId) return fail('INVALID_AUTHORIZATION')
   if (!['eip712', 'eip1271'].includes(authorization.authorizer.type) || authorization.maxUses !== '1') return fail('INVALID_AUTHORIZATION')
   if (!/^0x[0-9a-f]{64}$/i.test(authorization.authorizationNonce) || !/^0x[0-9a-f]{64}$/i.test(authorization.policyHash) || !authorization.audience) return fail('INVALID_AUTHORIZATION')
+  if (authorization.audience !== expectedAudience) return fail('AUTHORIZATION_AUDIENCE_MISMATCH')
   if (authorization.notBefore < authorization.issuedAt || authorization.expiresAt < authorization.notBefore || authorization.expiresAt > authorization.intent.validUntil) return fail('INVALID_AUTHORIZATION')
   if (acceptance.schema !== 'priorseal.authorization-receipt.v1' || acceptance.domain !== 'priorseal/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519') return fail('INVALID_AUTHORIZATION_RECEIPT')
   if (acceptance.intentHash !== authorization.intentHash || acceptance.acceptedAt < authorization.notBefore || acceptance.acceptedAt > authorization.expiresAt || authorization.issuedAt > acceptance.acceptedAt || receipt.issuedAt < acceptance.acceptedAt) return fail('INVALID_AUTHORIZATION_RECEIPT')
@@ -181,13 +182,16 @@ function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
   if (!exactCall && !same(execution.recipient, intent.recipient)) reasons.push('RECIPIENT_MISMATCH')
   if (!exactCall && !same(execution.asset, intent.asset)) reasons.push('ASSET_MISMATCH')
   if (!exactCall && String(execution.amount ?? '') !== String(intent.amount)) reasons.push('AMOUNT_MISMATCH')
-  if (execution.nonce != null && String(execution.nonce) !== String(intent.nonce ?? '0')) reasons.push('NONCE_MISMATCH')
+  if (String(execution.nonce ?? '') !== String(intent.nonce ?? '0')) reasons.push('NONCE_MISMATCH')
   if (intent.callTarget != null && !same(execution.target, intent.callTarget)) reasons.push('CALL_TARGET_MISMATCH')
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push('CALLDATA_MISMATCH')
   if (intent.transactionValue != null && String(execution.nativeValue ?? '') !== String(intent.transactionValue)) reasons.push('TRANSACTION_VALUE_MISMATCH')
   if ((execution.executedAt ?? execution.observedAt ?? 0) > intent.validUntil) reasons.push('OUTSIDE_TIME_WINDOW')
   if (intent.constraints?.minConfirmations != null && Number(execution.confirmations ?? 0) < intent.constraints.minConfirmations) reasons.push('INSUFFICIENT_FINALITY')
-  if (intent.constraints?.maxGasUsed != null && BigInt(execution.gasUsed ?? 0) > BigInt(intent.constraints.maxGasUsed)) reasons.push('GAS_LIMIT_EXCEEDED')
+  if (intent.constraints?.maxGasUsed != null) {
+    if (execution.gasUsed == null) reasons.push('EXECUTION_UNAVAILABLE')
+    else if (BigInt(execution.gasUsed) > BigInt(intent.constraints.maxGasUsed)) reasons.push('GAS_LIMIT_EXCEEDED')
+  }
   if (!exactCall && Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push('AMBIGUOUS_TRANSFER')
   if (!same(execution.sender, executor)) reasons.push('EXECUTOR_MISMATCH')
   const executedAt = execution.executedAt ?? execution.observedAt ?? 0
@@ -211,6 +215,7 @@ function validContextCommitments(value: Intent['contextCommitments']) {
 
 function outcomeFor(intent: NonNullable<Receipt['authorizationEvidence']>['authorization']['intent'], execution: Receipt['execution'], binding: { bound: boolean }) {
   if (execution.status === 'REORGED' || execution.finalityState === 'REORGED') return 'REORGED'
+  if (execution.finalityState === 'INSUFFICIENT_FINALITY') return 'PENDING'
   if (execution.status === 'PENDING') return 'PENDING'
   if (execution.status === 'REVERTED') return 'FAILED'
   if (['NOT_FOUND', 'RPC_ERROR', 'UNSUPPORTED_CHAIN'].includes(execution.status)) return 'UNDETERMINED'
@@ -221,6 +226,7 @@ function outcomeFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
 
 function executionOutcomeFor(execution: Receipt['execution']) {
   if (execution.status === 'REORGED' || execution.finalityState === 'REORGED') return 'REORGED'
+  if (execution.finalityState === 'INSUFFICIENT_FINALITY') return 'PENDING'
   if (execution.status === 'PENDING') return 'PENDING'
   if (execution.status === 'REVERTED') return 'FAILED'
   if (execution.status === 'CONFIRMED') return 'COMPLETED'
@@ -231,9 +237,12 @@ function complianceFor(authorization: NonNullable<Receipt['authorizationEvidence
   const assessment = (status: 'COMPLIANT' | 'NON_COMPLIANT' | 'NOT_ASSESSABLE', reasonCodes: string[]) => ({ schema: 'priorseal.compliance-assessment.v1', status, reasonCodes })
   if (execution.executionDataAvailable === false) return assessment('NOT_ASSESSABLE', ['EXECUTION_UNAVAILABLE'])
   if (execution.status === 'REORGED' || execution.finalityState === 'REORGED') return assessment('NOT_ASSESSABLE', ['EXECUTION_REORGED'])
+  if (execution.finalityState === 'INSUFFICIENT_FINALITY') return assessment('NOT_ASSESSABLE', ['EXECUTION_PENDING'])
   if (execution.status === 'PENDING') return assessment('NOT_ASSESSABLE', ['EXECUTION_PENDING'])
   if (execution.status === 'NOT_FOUND') return assessment('NOT_ASSESSABLE', ['EXECUTION_NOT_FOUND'])
   if (['RPC_ERROR', 'UNSUPPORTED_CHAIN'].includes(execution.status) || !['CONFIRMED', 'REVERTED'].includes(execution.status)) return assessment('NOT_ASSESSABLE', ['EXECUTION_UNAVAILABLE'])
+  const unavailableBindingReasons = binding.reasonCodes.filter((code) => ['EXECUTION_UNAVAILABLE', 'INSUFFICIENT_FINALITY'].includes(code))
+  if (unavailableBindingReasons.length) return assessment('NOT_ASSESSABLE', unavailableBindingReasons)
   const correlationReasons: string[] = []
   if (Number(execution.chainId) !== Number(authorization.intent.chainId)) correlationReasons.push('CHAIN_MISMATCH')
   if (String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor.toLowerCase()) correlationReasons.push('EXECUTOR_MISMATCH')

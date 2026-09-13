@@ -71,6 +71,32 @@ test('SDK verifier independently validates authorization-bound receipt v3, polic
   assert.equal((await verifyReceiptLocally(mutated, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'AUTHORIZATION_ID_MISMATCH');
 });
 
+test('SDK verifier enforces the expected authorization audience', async () => {
+  const keys = issuerKeys();
+  const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);
+  const executor = `0x${'a'.repeat(40)}`;
+  const intent = { intentId: 'sdk-audience', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender: executor, recipient: `0x${'b'.repeat(40)}`, validUntil: 2_000, nonce: '7', constraints: { minConfirmations: 12, maxGasUsed: '21000' } };
+  const draft = buildAuthorization({ intent, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'7'.repeat(64)}`, maxUses: '1', audience: 'partner-deployment', policyHash: `0x${'0'.repeat(64)}` });
+  const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
+  const accepted = await authorizeIntent({ input: authorization, store: createMemoryStore({ clock: () => 1_001_000 }), privateKeyPem: keys.privateKey, issuer: 'test', keyId: 'key-1', audience: 'partner-deployment', now: () => 1_001_000 });
+  const execution = { chainId: 8453, txHash: `0x${'7'.repeat(64)}`, status: 'CONFIRMED', action: 'TRANSFER', sender: executor, recipient: intent.recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, executedAt: 1_100, observedAt: 1_101, confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED' };
+  const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), keys.privateKey);
+
+  assert.equal((await verifyReceiptLocally(receipt, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'AUTHORIZATION_AUDIENCE_MISMATCH');
+  assert.equal((await verifyReceiptLocally(receipt, { trustedKeys: trustedKey(keys.publicKey), expectedAudience: 'partner-deployment', now: 1_200 })).valid, true);
+
+  const pendingExecution = { ...execution, confirmations: 1, finalityState: 'INSUFFICIENT_FINALITY' };
+  const pendingReceipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution: pendingExecution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), keys.privateKey);
+  assert.equal(pendingReceipt.outcome, 'PENDING');
+  assert.equal((await verifyReceiptLocally(pendingReceipt, { trustedKeys: trustedKey(keys.publicKey), expectedAudience: 'partner-deployment', now: 1_200 })).valid, true);
+
+  const missingGasExecution = { ...execution };
+  delete missingGasExecution.gasUsed;
+  const missingGasReceipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution: missingGasExecution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), keys.privateKey);
+  assert.equal(missingGasReceipt.compliance.status, 'NOT_ASSESSABLE');
+  assert.equal((await verifyReceiptLocally(missingGasReceipt, { trustedKeys: trustedKey(keys.publicKey), expectedAudience: 'partner-deployment', now: 1_200 })).valid, true);
+});
+
 test('SDK verifier independently validates exact-call receipts with multi-transfer execution', async () => {
   const keys = issuerKeys();
   const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);

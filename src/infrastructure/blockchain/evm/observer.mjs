@@ -26,13 +26,16 @@ export async function observeEvm({ chainId, txHash, confirmations = 0, rpcUrls, 
     const tx = await rpcClient.call(url, 'eth_getTransactionByHash', [txHash], signal);
     if (!tx) { fallbackObservation ??= normalizeExecution({ chainId, txHash, status: 'NOT_FOUND', executionDataAvailable: false, observationSource }); continue; }
     if (String(tx.hash).toLowerCase() !== txHash.toLowerCase()) throw new PriorSealError('RPC_INVALID_RESPONSE', 'Transaction hash does not match request');
+    const transactionNonce = hexBig(tx.nonce);
+    if (transactionNonce === null) throw new PriorSealError('RPC_INVALID_RESPONSE', 'RPC endpoint returned an invalid transaction nonce');
     const receipt = await rpcClient.call(url, 'eth_getTransactionReceipt', [txHash], signal);
-    if (!receipt) { fallbackObservation = normalizeExecution({ chainId, txHash, status: 'PENDING', action: actionFor(tx), nonce: hexBig(tx.nonce), sender: tx.from, recipient: tx.to, target: tx.to, calldataHash: keccak256(tx.input ?? '0x'), nativeValue: hexBig(tx.value), executionDataAvailable: true, observationSource, finalityState: 'PENDING' }); continue; }
+    if (!receipt) { fallbackObservation = normalizeExecution({ chainId, txHash, status: 'PENDING', action: actionFor(tx), nonce: transactionNonce, sender: tx.from, recipient: tx.to, target: tx.to, calldataHash: keccak256(tx.input ?? '0x'), nativeValue: hexBig(tx.value), executionDataAvailable: true, observationSource, finalityState: 'PENDING' }); continue; }
     if (receipt.transactionHash && String(receipt.transactionHash).toLowerCase() !== txHash.toLowerCase()) throw new PriorSealError('RPC_INVALID_RESPONSE', 'Receipt hash does not match request');
     const receiptStatus = String(receipt.status).toLowerCase();
     const receiptBlockNumber = hexBig(receipt.blockNumber);
+    const gasUsed = hexBig(receipt.gasUsed);
     if (!['0x0', '0x1'].includes(receiptStatus)) throw new PriorSealError('RPC_INVALID_RESPONSE', 'RPC endpoint returned an invalid transaction status');
-    if (receiptBlockNumber === null || !BLOCK_HASH.test(receipt.blockHash ?? '')) throw new PriorSealError('RPC_INVALID_RESPONSE', 'RPC endpoint returned invalid receipt block evidence');
+    if (receiptBlockNumber === null || gasUsed === null || !BLOCK_HASH.test(receipt.blockHash ?? '')) throw new PriorSealError('RPC_INVALID_RESPONSE', 'RPC endpoint returned invalid receipt block evidence');
     const [head, containingBlock] = await Promise.all([
       rpcClient.call(url, 'eth_blockNumber', [], signal),
       rpcClient.call(url, 'eth_getBlockByHash', [receipt.blockHash, false], signal),
@@ -53,7 +56,7 @@ export async function observeEvm({ chainId, txHash, confirmations = 0, rpcUrls, 
     const first = transfers[0];
     const gasPrice = receipt.effectiveGasPrice ?? tx.gasPrice;
     const finalityReached = confirmationsSeen >= confirmations;
-    return normalizeExecution({ chainId, txHash, status: finalityReached ? receiptStatus === '0x0' ? 'REVERTED' : 'CONFIRMED' : 'PENDING', executedAt: Number(BigInt(containingBlock.timestamp)), action: actionFor(tx), nonce: hexBig(tx.nonce), sender: tx.from, recipient: first?.recipient ?? tx.to, target: tx.to, calldataHash: keccak256(tx.input ?? '0x'), asset: first ? `eip155:${chainId}/erc20:${first.asset}` : `eip155:${chainId}/native`, amount: first?.amount ?? hexBig(tx.value), transfers, nativeValue: hexBig(tx.value), gasUsed: hexBig(receipt.gasUsed), fee: gasPrice && receipt.gasUsed ? (BigInt(gasPrice) * BigInt(receipt.gasUsed)).toString() : null, blockNumber: Number(BigInt(receiptBlockNumber)), blockHash: receipt.blockHash, confirmations: confirmationsSeen, observationSource, finalityState: finalityReached ? 'CONFIRMED' : 'INSUFFICIENT_FINALITY' });
+    return normalizeExecution({ chainId, txHash, status: finalityReached ? receiptStatus === '0x0' ? 'REVERTED' : 'CONFIRMED' : 'PENDING', executedAt: Number(BigInt(containingBlock.timestamp)), action: actionFor(tx), nonce: transactionNonce, sender: tx.from, recipient: first?.recipient ?? tx.to, target: tx.to, calldataHash: keccak256(tx.input ?? '0x'), asset: first ? `eip155:${chainId}/erc20:${first.asset}` : `eip155:${chainId}/native`, amount: first?.amount ?? hexBig(tx.value), transfers, nativeValue: hexBig(tx.value), gasUsed, fee: gasPrice ? (BigInt(gasPrice) * BigInt(gasUsed)).toString() : null, blockNumber: Number(BigInt(receiptBlockNumber)), blockHash: receipt.blockHash, confirmations: confirmationsSeen, observationSource, finalityState: finalityReached ? 'CONFIRMED' : 'INSUFFICIENT_FINALITY' });
   } catch (error) { lastError = error; } }
   if (fallbackObservation) return fallbackObservation;
   throw new PriorSealError(signal?.aborted ? 'REQUEST_ABORTED' : lastError?.code === 'RPC_TIMEOUT' ? 'RPC_TIMEOUT' : 'RPC_FAILURE', 'All RPC endpoints failed');

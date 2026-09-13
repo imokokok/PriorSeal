@@ -13,6 +13,9 @@ export function assessCompliance({ authorization, execution, binding }) {
   const unavailableReason = assessmentUnavailableReason(execution);
   if (unavailableReason) return assessment('NOT_ASSESSABLE', [unavailableReason]);
 
+  const unavailableBindingReasons = binding.reasonCodes.filter((code) => ['EXECUTION_UNAVAILABLE', 'INSUFFICIENT_FINALITY'].includes(code));
+  if (unavailableBindingReasons.length) return assessment('NOT_ASSESSABLE', unavailableBindingReasons);
+
   const correlationReasons = [];
   if (Number(execution.chainId) !== Number(authorization.intent.chainId)) correlationReasons.push('CHAIN_MISMATCH');
   if (String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor) correlationReasons.push('EXECUTOR_MISMATCH');
@@ -29,6 +32,7 @@ export function assessCompliance({ authorization, execution, binding }) {
  */
 export function classifyExecutionOutcome(execution) {
   if (execution?.status === 'REORGED' || execution?.finalityState === 'REORGED') return 'REORGED';
+  if (execution?.finalityState === 'INSUFFICIENT_FINALITY') return 'PENDING';
   if (execution?.status === 'PENDING') return 'PENDING';
   if (execution?.status === 'REVERTED') return 'FAILED';
   if (execution?.status === 'CONFIRMED') return 'COMPLETED';
@@ -38,6 +42,7 @@ export function classifyExecutionOutcome(execution) {
 function assessmentUnavailableReason(execution) {
   if (!execution || execution.executionDataAvailable === false) return 'EXECUTION_UNAVAILABLE';
   if (execution.status === 'REORGED' || execution.finalityState === 'REORGED') return 'EXECUTION_REORGED';
+  if (execution.finalityState === 'INSUFFICIENT_FINALITY') return 'EXECUTION_PENDING';
   if (execution.status === 'PENDING') return 'EXECUTION_PENDING';
   if (execution.status === 'NOT_FOUND') return 'EXECUTION_NOT_FOUND';
   if (['RPC_ERROR', 'UNSUPPORTED_CHAIN'].includes(execution.status)) return 'EXECUTION_UNAVAILABLE';

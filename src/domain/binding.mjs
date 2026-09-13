@@ -20,7 +20,7 @@ export function bindIntentExecution(intent, execution, now = execution.observedA
   if (!exactCall && !same(execution.recipient, intent.recipient)) reasons.push(BINDING_CODES.RECIPIENT_MISMATCH);
   if (!exactCall && !same(execution.asset, intent.asset)) reasons.push(BINDING_CODES.ASSET_MISMATCH);
   if (!exactCall && String(execution.amount ?? '') !== String(intent.amount)) reasons.push(BINDING_CODES.AMOUNT_MISMATCH);
-  if (execution.nonce != null && String(execution.nonce) !== String(intent.nonce)) reasons.push(BINDING_CODES.NONCE_MISMATCH);
+  if (String(execution.nonce ?? '') !== String(intent.nonce ?? '0')) reasons.push(BINDING_CODES.NONCE_MISMATCH);
   if (intent.callTarget != null && !same(execution.target, intent.callTarget)) reasons.push(BINDING_CODES.CALL_TARGET_MISMATCH);
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
   if (intent.transactionValue != null && String(execution.nativeValue ?? '') !== String(intent.transactionValue)) reasons.push(BINDING_CODES.TRANSACTION_VALUE_MISMATCH);
@@ -30,7 +30,10 @@ export function bindIntentExecution(intent, execution, now = execution.observedA
   if (executedAt != null && executedAt > intent.validUntil) reasons.push(BINDING_CODES.OUTSIDE_TIME_WINDOW);
   const constraints = intent.constraints ?? {};
   if (constraints.minConfirmations != null && Number(execution.confirmations ?? 0) < Number(constraints.minConfirmations)) reasons.push(BINDING_CODES.INSUFFICIENT_FINALITY);
-  if (constraints.maxGasUsed != null && BigInt(execution.gasUsed ?? 0) > BigInt(constraints.maxGasUsed)) reasons.push(BINDING_CODES.GAS_LIMIT_EXCEEDED);
+  if (constraints.maxGasUsed != null) {
+    if (execution.gasUsed == null) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
+    else if (BigInt(execution.gasUsed) > BigInt(constraints.maxGasUsed)) reasons.push(BINDING_CODES.GAS_LIMIT_EXCEEDED);
+  }
   if (!exactCall && Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push(BINDING_CODES.AMBIGUOUS_TRANSFER);
   return { bound: reasons.length === 0, reasonCodes: [...new Set(reasons)] };
 }

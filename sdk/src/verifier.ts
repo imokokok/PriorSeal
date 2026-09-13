@@ -7,8 +7,8 @@ import {
 
 export type TimestampProofResult = { status: 'VALID' | 'INVALID' | 'MISSING' | 'NOT_REQUIRED'; code: string }
 
-export function verifyReceiptOffline(receipt: Receipt, key: KeyEntry, now?: number): Promise<VerificationResult> {
-  return verifyWithTrustedKey(receipt, key, now)
+export function verifyReceiptOffline(receipt: Receipt, key: KeyEntry, now?: number, expectedAudience = 'priorseal'): Promise<VerificationResult> {
+  return verifyWithTrustedKey(receipt, key, now, expectedAudience)
 }
 
 export function verifyTimestampProofOffline(receipt: Receipt): Promise<TimestampProofResult> {
@@ -27,13 +27,14 @@ export type LocalVerificationResult = VerificationResult & {
 export type LocalVerifierOptions = {
   trustedKeys?: KeyEntry | readonly KeyEntry[] | KeyRegistry
   now?: number
+  expectedAudience?: string
 }
 
 export async function verifyReceiptLocally(receipt: Receipt, options: LocalVerifierOptions = {}): Promise<LocalVerificationResult> {
   const requiredExternalChecks = externalRequirements(receipt)
   const key = resolveTrustedKey(receipt, options.trustedKeys)
   const result = key
-    ? await verifyWithTrustedKey(receipt, key, options.now ?? Math.floor(Date.now() / 1000))
+    ? await verifyWithTrustedKey(receipt, key, options.now ?? Math.floor(Date.now() / 1000), options.expectedAudience ?? 'priorseal')
     : { valid: false, code: 'UNKNOWN_KEY', outcome: receipt?.outcome, receiptId: receipt?.receiptId }
   return {
     ...result,

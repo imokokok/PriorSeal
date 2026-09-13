@@ -60,11 +60,17 @@ export async function observeExecution({ input, store, observer, signal, private
       ? buildAuthorizedReceipt({ authorization: authorizationRecord.authorization, acceptance: authorizationRecord.acceptance, policyEvidence: authorizationRecord.policyEvidence, timestampEvidence: authorizationRecord.timestampEvidence, witnessEvidence: authorizationRecord.witnessEvidence, transparency, execution: observation, issuer, keyId, issuedAt: Math.floor(now() / 1000) })
       : buildReceipt({ intent, execution: observation, issuer, keyId, issuedAt: Math.floor(now() / 1000) }), privateKeyPem)
     : null;
+  const verification = receipt
+    ? authorizationRecord
+      ? await verifyAuthorizedReceipt(receipt, publicKeyPem, { audience: authorizationAudience, verifyContractSignature })
+      : verifyReceipt(receipt, publicKeyPem, { keyId })
+    : null;
+  if (verification && !verification.valid) throw new PriorSealError(verification.code, 'The generated receipt failed self-verification and was not persisted');
   const response = {
     observation,
     receipt,
     ...(authorizationAssociation ? { authorizationAssociation } : {}),
-    ...(receipt ? { verification: authorizationRecord ? await verifyAuthorizedReceipt(receipt, publicKeyPem, { audience: authorizationAudience, verifyContractSignature }) : verifyReceipt(receipt, publicKeyPem, { keyId }) } : {}),
+    ...(verification ? { verification } : {}),
   };
   if (store.saveObservationReceipt) {
     const committed = await store.saveObservationReceipt({ authorizationId: authorizationRecord?.authorization.authorizationId, claimAuthorization, observation, receipt });
