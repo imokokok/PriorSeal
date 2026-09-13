@@ -139,10 +139,12 @@ test('signed authorization is accepted before execution and produces a v3 compli
   const draft = buildAuthorization({ intent: executionIntent, principal: { type: 'organization', id: 'org-test', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-test', executor: account.address }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'2'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}` });
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
   const txHash = `0x${'5'.repeat(64)}`;
-  const server = createHttpServer({ privateKeyPem, publicKeyPem, now: () => 1_001_000, observer: async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_100, observedAt: 1_101, sender: account.address.toLowerCase(), recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'test' }) });
+  let clock = 1_001_000;
+  const server = createHttpServer({ privateKeyPem, publicKeyPem, now: () => clock, observer: async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_100, observedAt: 1_101, sender: account.address.toLowerCase(), recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'test' }) });
   t.after(() => server.close());
   const accepted = await request(server, '/v1/authorizations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(authorization) });
   assert.equal(accepted.status, 201);
+  clock = 1_101_000;
   const authorizationId = accepted.json().authorization.authorizationId;
   const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ authorizationId, chainId: 8453, txHash, confirmations: 12 }) });
   assert.equal(observed.status, 200);

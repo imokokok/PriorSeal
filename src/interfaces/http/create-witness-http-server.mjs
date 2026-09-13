@@ -6,11 +6,13 @@ import { createMemoryWitnessStore } from '../../infrastructure/witness/memory-wi
 import { createMemoryRateLimiter } from './rate-limiter.mjs';
 import { readJsonBody, requestPath } from './request-parser.mjs';
 import { errorBody, sendJson } from './response-writer.mjs';
+import { assertEd25519KeyPair } from '../../domain/ed25519.mjs';
 
 const ERROR_STATUS = Object.freeze({ INVALID_JSON: 400, INVALID_WITNESS_REQUEST: 400, WITNESS_REQUEST_IN_FUTURE: 400, WITNESS_REQUEST_TOO_OLD: 410, WITNESS_REQUEST_EXPIRED: 410, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, RATE_LIMITED: 429, UNAUTHORIZED: 401, REQUEST_TIMEOUT: 504, WITNESS_NOT_CONFIGURED: 503, NOT_FOUND: 404 });
 
 export function createWitnessHttpServer({ witnessId, keyId = 'default', privateKeyPem, publicKeyPem, store = createMemoryWitnessStore(), bearerToken, maxBodyBytes = 16 * 1024, rateLimit = 120, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 10_000, maxRequestAgeSeconds = 300, now = () => Date.now(), logger = null } = {}) {
   if (!witnessId || !privateKeyPem || !publicKeyPem) throw new TypeError('Witness ID and Ed25519 key pair are required');
+  assertEd25519KeyPair(privateKeyPem, publicKeyPem);
   return createServer(async (req, res) => {
     const requestId = randomUUID();
     const controller = new AbortController();

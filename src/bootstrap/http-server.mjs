@@ -19,6 +19,7 @@ import { createDigiCertTimestampProvider } from '../infrastructure/timestamp/dig
 import { loadRuntimeConfig } from './runtime-config.mjs';
 import { assertProductionSchema } from './production-schema.mjs';
 import { createContractSignatureVerifier } from '../infrastructure/blockchain/evm/contract-signature-verifier.mjs';
+import { assertEd25519KeyPair } from '../domain/ed25519.mjs';
 
 const { Pool } = pg;
 const config = loadRuntimeConfig();
@@ -28,6 +29,10 @@ const store = pool ? createPostgresStore(pool) : undefined;
 const keyProvider = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
 const privateKeyPem = config.privateKeyPem ?? keyProvider.getPrivateKey();
 const publicKeyPem = config.publicKeyPem ?? keyProvider.getPublicKey();
+if (privateKeyPem || publicKeyPem) {
+  if (!privateKeyPem || !publicKeyPem) throw new TypeError('Issuer private and public keys must be configured together');
+  assertEd25519KeyPair(privateKeyPem, publicKeyPem);
+}
 const registry = createKeyRegistry(config.keyRegistryJson ? parseKeyRegistryDocument(config.keyRegistryJson) : readFileKeyRegistry(config.keyRegistryFile));
 const policy = config.policyJson ? parsePolicyDocument(config.policyJson) : readPolicyFile(config.policyFile);
 if (config.environment === 'production' && !config.allowSelfAssertedPrincipals && !policy?.principals?.length) throw new TypeError('Production policy must contain at least one reviewed principal or explicitly allow self-asserted principals');

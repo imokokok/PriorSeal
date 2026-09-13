@@ -53,12 +53,12 @@ const evidence = await priorseal.observeExecution({
 
 const verificationExample = `import { verifyReceiptLocally } from 'priorseal-sdk/verifier'
 
-const registry = await priorseal.getKeyRegistry()
 const receipt = await priorseal.getReceipt(receiptId)
+const pinnedKey = loadKeyFromIndependentTrustStore(receipt.issuer, receipt.keyId)
 
 // No receipt bytes are sent back to PriorSeal.
 const result = await verifyReceiptLocally(receipt, {
-  trustedKeys: registry
+  trustedKeys: pinnedKey
 })
 
 console.log(result.valid, result.requiredExternalChecks)`
@@ -130,7 +130,7 @@ export function SdkPage() {
     </section>
 
     <section className="sdk-verify panel">
-      <div><p className="eyebrow">VERIFICATION</p><h2>Keep independent verification explicit.</h2><p>The SDK verifier recomputes hashes, policy, binding, timestamps and signatures locally. Receipt bytes never need to return to PriorSeal.</p><div className="sdk-links"><Link className="button primary" to="/app/verify">Open local verifier</Link><Link className="button secondary" to="/app/quickstart">Run quickstart</Link></div></div>
+      <div><p className="eyebrow">VERIFICATION</p><h2>Keep independent verification explicit.</h2><p>The SDK verifier recomputes hashes, policy, binding, timestamps and signatures locally. Pin the issuer key through a separate trusted channel; the issuer API registry is discovery metadata only.</p><div className="sdk-links"><Link className="button primary" to="/app/verify">Open local verifier</Link><Link className="button secondary" to="/app/quickstart">Run quickstart</Link></div></div>
       <div><div className="sdk-code-head"><span>verification.ts</span><CopyButton value={verificationExample} /></div><pre>{verificationExample}</pre></div>
     </section>
 

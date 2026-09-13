@@ -2,6 +2,14 @@ import type { Intent, KeyEntry, Receipt, TimestampPolicy, VerificationResult } f
 import { verifyTypedData } from 'viem'
 
 const forbidden = new Set(['__proto__', 'prototype', 'constructor'])
+const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+const addressPattern = /^0x[0-9a-f]{40}$/
+const uintPattern = /^(0|[1-9][0-9]*)$/
+const hashPattern = /^[0-9a-f]{64}$/
+const authorizedReceiptFields = ['algorithm', 'authorizationEvidence', 'authorizationHash', 'binding', 'compliance', 'domain', 'execution', 'executionHash', 'executionStatus', 'intentHash', 'issuedAt', 'issuer', 'keyId', 'outcome', 'reasonCodes', 'receiptId', 'schema', 'signature', 'validUntil', 'verifierVersion']
+const legacyReceiptFields = ['algorithm', 'binding', 'domain', 'execution', 'executionHash', 'intentHash', 'issuedAt', 'issuer', 'keyId', 'outcome', 'reasonCodes', 'receiptId', 'schema', 'signature', 'validUntil', 'verifierVersion']
+const authorizationFields = ['audience', 'authorizationId', 'authorizationNonce', 'authorizer', 'delegate', 'domain', 'expiresAt', 'intent', 'intentHash', 'issuedAt', 'maxUses', 'notBefore', 'policyHash', 'principal', 'schema', 'signature']
+const intentFields = ['action', 'amount', 'asset', 'calldataHash', 'chainId', 'chainIds', 'constraints', 'contextCommitments', 'executionProfile', 'intentHash', 'intentId', 'nonce', 'recipient', 'schema', 'sender', 'transactionValue', 'validUntil', 'callTarget']
 
 function canonicalize(value: unknown): string {
   if (value === undefined) throw new TypeError('undefined is not valid canonical JSON')
@@ -41,16 +49,18 @@ export async function verifyReceiptOffline(receipt: Receipt, key: KeyEntry, now 
     if (receipt.schema !== 'priorseal.execution-receipt.v1') return fail('UNSUPPORTED_SCHEMA')
     if (receipt.algorithm !== 'Ed25519') return fail('UNSUPPORTED_ALGORITHM')
     if (receipt.domain !== 'priorseal/execution-receipt/v1') return fail('INVALID_DOMAIN')
+    if (!hasOnlyFields(receipt, legacyReceiptFields)) return fail('INVALID_RECEIPT')
     if (!key || key.keyId !== receipt.keyId) return fail('UNKNOWN_KEY')
-    if (key.algorithm !== 'Ed25519' || key.status === 'revoked' || key.issuer !== receipt.issuer) return fail('INVALID_KEY')
+    if (!validTrustedKey(key) || key.issuer !== receipt.issuer) return fail('INVALID_KEY')
     if (key.validFrom != null && receipt.issuedAt < key.validFrom) return fail('KEY_NOT_YET_VALID')
     if (key.validUntil != null && receipt.issuedAt > key.validUntil) return fail('KEY_EXPIRED')
     if (receipt.issuedAt > now) return fail('NOT_YET_VALID')
+    if (!validReceiptTimeline(receipt)) return fail('INVALID_RECEIPT_TIMELINE')
+    if (!await verifyEd25519(receipt, key.publicKey)) return fail('INVALID_SIGNATURE')
     if (receipt.executionHash !== await hashJson(receipt.execution)) return fail('EXECUTION_HASH_MISMATCH')
-    const { signature, ...unsigned } = receipt
-    const imported = await crypto.subtle.importKey('spki', publicKeyBytes(key.publicKey), { name: 'Ed25519' }, false, ['verify'])
-    const valid = await crypto.subtle.verify({ name: 'Ed25519' }, imported, decodeBase64(signature), new TextEncoder().encode(canonicalize(unsigned)))
-    return valid ? { valid: true, code: 'OK', ...receiptResultFields(receipt) } : fail('INVALID_SIGNATURE')
+    const expectedReceiptId = `psr_${(await hashJson({ intentHash: receipt.intentHash, executionHash: receipt.executionHash, issuer: receipt.issuer, keyId: receipt.keyId })).slice(0, 32)}`
+    if (receipt.receiptId !== expectedReceiptId) return fail('RECEIPT_ID_MISMATCH')
+    return { valid: true, code: 'OK', ...receiptResultFields(receipt) }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'NotSupportedError') return fail('UNSUPPORTED_CRYPTO')
     return fail('INVALID_RECEIPT')
@@ -81,32 +91,28 @@ export async function verifyTimestampProofOffline(receipt: Receipt): Promise<Tim
 
 async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, now: number, expectedAudience: string): Promise<VerificationResult> {
   const fail = (code: string): VerificationResult => ({ valid: false, code, ...receiptResultFields(receipt) })
+  if (!hasOnlyFields(receipt, authorizedReceiptFields)) return fail('INVALID_RECEIPT')
   const evidence = receipt.authorizationEvidence
   if (!evidence?.authorization || !evidence.acceptance) return fail('MISSING_AUTHORIZATION_EVIDENCE')
+  if (!hasOnlyFields(evidence, ['acceptance', 'authorization', 'policy', 'timestamp', 'transparency', 'witnesses'])) return fail('INVALID_RECEIPT')
   const authorization = evidence.authorization
   const acceptance = evidence.acceptance
   const receiptV3 = receipt.schema === 'priorseal.execution-receipt.v3'
   if (receipt.domain !== (receiptV3 ? 'priorseal/execution-receipt/v3' : 'priorseal/execution-receipt/v2') || receipt.algorithm !== 'Ed25519') return fail('INVALID_DOMAIN')
+  if (!receiptV3 && (receipt.executionStatus !== undefined || receipt.compliance !== undefined)) return fail('INVALID_RECEIPT')
+  if (!validAuthorizationShape(authorization)) return fail('INVALID_AUTHORIZATION')
   const legacyAuthorization = authorization.schema === 'priorseal.authorization.v1'
-  if (!legacyAuthorization && authorization.schema !== 'priorseal.authorization.v2') return fail('INVALID_AUTHORIZATION')
-  if (authorization.domain !== (legacyAuthorization ? 'priorseal/authorization/v1' : 'priorseal/authorization/v2')) return fail('INVALID_AUTHORIZATION')
-  if (!['priorseal.intent.v1', 'priorseal.intent.v2'].includes(authorization.intent.schema ?? '')) return fail('INVALID_AUTHORIZATION')
-  const exactCall = authorization.intent.schema === 'priorseal.intent.v2'
-  if (exactCall && (authorization.intent.executionProfile !== 'priorseal.execution-profile.exact-call.v1' || authorization.intent.action !== 'CONTRACT_CALL' || authorization.intent.nonce == null || authorization.intent.callTarget == null || authorization.intent.calldataHash == null || authorization.intent.transactionValue == null || !validContextCommitments(authorization.intent.contextCommitments))) return fail('INVALID_AUTHORIZATION')
-  if (!exactCall && (authorization.intent.executionProfile != null || authorization.intent.contextCommitments != null)) return fail('INVALID_AUTHORIZATION')
-  if (authorization.principal.account.toLowerCase() !== authorization.authorizer.address.toLowerCase()) return fail('INVALID_AUTHORIZATION')
-  if (!['user', 'organization'].includes(authorization.principal.type) || !authorization.principal.id || !authorization.delegate.agentId) return fail('INVALID_AUTHORIZATION')
-  if (!['eip712', 'eip1271'].includes(authorization.authorizer.type) || authorization.maxUses !== '1') return fail('INVALID_AUTHORIZATION')
-  if (!/^0x[0-9a-f]{64}$/i.test(authorization.authorizationNonce) || !/^0x[0-9a-f]{64}$/i.test(authorization.policyHash) || !authorization.audience) return fail('INVALID_AUTHORIZATION')
   if (authorization.audience !== expectedAudience) return fail('AUTHORIZATION_AUDIENCE_MISMATCH')
   if (authorization.notBefore < authorization.issuedAt || authorization.expiresAt < authorization.notBefore || authorization.expiresAt > authorization.intent.validUntil) return fail('INVALID_AUTHORIZATION')
-  if (acceptance.schema !== 'priorseal.authorization-receipt.v1' || acceptance.domain !== 'priorseal/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519') return fail('INVALID_AUTHORIZATION_RECEIPT')
+  if (!validAcceptanceShape(acceptance) || acceptance.schema !== 'priorseal.authorization-receipt.v1' || acceptance.domain !== 'priorseal/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519') return fail('INVALID_AUTHORIZATION_RECEIPT')
   if (acceptance.intentHash !== authorization.intentHash || acceptance.acceptedAt < authorization.notBefore || acceptance.acceptedAt > authorization.expiresAt || authorization.issuedAt > acceptance.acceptedAt || receipt.issuedAt < acceptance.acceptedAt) return fail('INVALID_AUTHORIZATION_RECEIPT')
   if (!key || key.keyId !== receipt.keyId) return fail('UNKNOWN_KEY')
-  if (key.algorithm !== 'Ed25519' || key.status === 'revoked' || key.issuer !== receipt.issuer) return fail('INVALID_KEY')
+  if (!validTrustedKey(key) || key.issuer !== receipt.issuer) return fail('INVALID_KEY')
   if (key.validFrom != null && (acceptance.acceptedAt < key.validFrom || receipt.issuedAt < key.validFrom)) return fail('KEY_NOT_YET_VALID')
   if (key.validUntil != null && (acceptance.acceptedAt > key.validUntil || receipt.issuedAt > key.validUntil)) return fail('KEY_EXPIRED')
   if (receipt.issuedAt > now) return fail('NOT_YET_VALID')
+  if (!validReceiptTimeline(receipt) || receipt.validUntil !== authorization.intent.validUntil) return fail(receipt.validUntil !== authorization.intent.validUntil ? 'VALID_UNTIL_MISMATCH' : 'INVALID_RECEIPT_TIMELINE')
+  if (!await verifyEd25519(receipt, key.publicKey)) return fail('INVALID_SIGNATURE')
   if (authorization.intentHash !== await hashJson(stripIntentHash(authorization.intent))) return fail('INTENT_HASH_MISMATCH')
   const expectedAuthorizationId = `auth_${(await hashJson(stripAuthorizationMetadata(authorization))).slice(0, 32)}`
   if (authorization.authorizationId !== expectedAuthorizationId) return fail('AUTHORIZATION_ID_MISMATCH')
@@ -131,8 +137,8 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (acceptance.issuer !== receipt.issuer || acceptance.keyId !== receipt.keyId || !await verifyEd25519(acceptance, key.publicKey)) return fail('INVALID_AUTHORIZATION_RECEIPT')
   if (evidence.transparency && !await verifyTransparency(evidence.transparency, acceptance, key.publicKey, receipt.execution.executedAt ?? receipt.execution.observedAt ?? 0)) return fail('INVALID_TRANSPARENCY_PROOF')
   if (!authorization.signature) return fail('MISSING_AUTHORIZATION_SIGNATURE')
-  if (authorization.authorizer.type === 'eip1271') return fail('AUTHORIZATION_REQUIRES_CHAIN_VERIFICATION')
-  const authorizationValid = await verifyTypedData({
+  const requiresContractVerification = authorization.authorizer.type === 'eip1271'
+  const authorizationValid = requiresContractVerification || await verifyTypedData({
     address: authorization.authorizer.address as `0x${string}`,
     domain: { name: 'PriorSeal', version: legacyAuthorization ? '1' : '2', chainId: Number(authorization.intent.chainId) },
     types: { PriorSealAuthorization: legacyAuthorization ? [
@@ -157,8 +163,89 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   const receiptIdentity = { authorizationHash, executionHash: receipt.executionHash, issuer: receipt.issuer, keyId: receipt.keyId }
   const expectedReceiptId = `psr_${(await hashJson(receiptV3 ? { schema: receipt.schema, ...receiptIdentity } : receiptIdentity)).slice(0, 32)}`
   if (receipt.receiptId !== expectedReceiptId) return fail('RECEIPT_ID_MISMATCH')
-  if (!await verifyEd25519(receipt, key.publicKey)) return fail('INVALID_SIGNATURE')
+  if (requiresContractVerification) return fail('AUTHORIZATION_REQUIRES_CHAIN_VERIFICATION')
   return { valid: true, code: 'OK', ...receiptResultFields(receipt), authorizationId: authorization.authorizationId }
+}
+
+function hasOnlyFields(value: unknown, allowed: readonly string[]): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every((key) => allowed.includes(key)))
+}
+
+function validAuthorizationShape(value: NonNullable<Receipt['authorizationEvidence']>['authorization']) {
+  if (!hasOnlyFields(value, authorizationFields) || !hasOnlyFields(value.principal, ['account', 'id', 'type']) || !hasOnlyFields(value.authorizer, ['address', 'type']) || !hasOnlyFields(value.delegate, ['agentId', 'executor'])) return false
+  const legacy = value.schema === 'priorseal.authorization.v1'
+  if (!legacy && value.schema !== 'priorseal.authorization.v2') return false
+  if (value.domain !== (legacy ? 'priorseal/authorization/v1' : 'priorseal/authorization/v2') || !validIntentShape(value.intent)) return false
+  if (!hashPattern.test(value.intentHash) || !/^auth_[0-9a-f]{32}$/.test(value.authorizationId)) return false
+  if (!['user', 'organization'].includes(value.principal.type) || !identifierPattern.test(value.principal.id) || !canonicalAddress(value.principal.account)) return false
+  if (!['eip712', 'eip1271'].includes(value.authorizer.type) || !canonicalAddress(value.authorizer.address) || value.principal.account !== value.authorizer.address) return false
+  if (!identifierPattern.test(value.delegate.agentId) || !canonicalAddress(value.delegate.executor)) return false
+  if (![value.issuedAt, value.notBefore, value.expiresAt].every(positiveUnixSeconds)) return false
+  if (!/^0x[0-9a-f]{64}$/.test(value.authorizationNonce) || !/^0x[0-9a-f]{64}$/.test(value.policyHash) || value.maxUses !== '1' || !identifierPattern.test(value.audience)) return false
+  return value.signature === undefined || typeof value.signature === 'string'
+}
+
+function validIntentShape(value: Intent) {
+  if (!hasOnlyFields(value, intentFields)) return false
+  const record = value as unknown as Record<string, unknown>
+  const exactCall = value.schema === 'priorseal.intent.v2'
+  if (!exactCall && value.schema !== 'priorseal.intent.v1') return false
+  if (exactCall !== (value.executionProfile === 'priorseal.execution-profile.exact-call.v1') || (exactCall && value.action !== 'CONTRACT_CALL')) return false
+  if (!identifierPattern.test(value.intentId) || !identifierPattern.test(value.action) || !positiveChainId(value.chainId) || !positiveUnixSeconds(value.validUntil)) return false
+  if (!canonicalAddress(value.sender) || !canonicalAddress(value.recipient) || !uintPattern.test(value.amount) || !uintPattern.test(value.nonce ?? '0')) return false
+  const asset = /^eip155:([1-9][0-9]*)\/(native|erc20:0x[0-9a-fA-F]{40})$/.exec(value.asset)
+  if (!asset || Number(asset[1]) !== value.chainId || !hashPattern.test(value.intentHash ?? '')) return false
+  if (record.chainIds !== undefined && (!Array.isArray(record.chainIds) || !record.chainIds.every(positiveChainId))) return false
+  if (value.callTarget !== undefined && !canonicalAddress(value.callTarget)) return false
+  if (value.calldataHash !== undefined && !/^0x[0-9a-f]{64}$/.test(value.calldataHash)) return false
+  if (value.transactionValue !== undefined && !uintPattern.test(value.transactionValue)) return false
+  if (exactCall && (value.nonce == null || value.callTarget == null || value.calldataHash == null || value.transactionValue == null || !validContextCommitments(value.contextCommitments))) return false
+  if (!exactCall && (value.executionProfile != null || value.contextCommitments != null)) return false
+  if (value.constraints !== undefined) {
+    if (!hasOnlyFields(value.constraints, ['maxGasUsed', 'minConfirmations'])) return false
+    if (value.constraints.minConfirmations != null && (!Number.isSafeInteger(Number(value.constraints.minConfirmations)) || Number(value.constraints.minConfirmations) < 0 || Number(value.constraints.minConfirmations) > 10_000)) return false
+    if (value.constraints.maxGasUsed != null && !uintPattern.test(value.constraints.maxGasUsed)) return false
+  }
+  return true
+}
+
+function validAcceptanceShape(value: NonNullable<Receipt['authorizationEvidence']>['acceptance']) {
+  if (!hasOnlyFields(value, ['acceptedAt', 'algorithm', 'authorizationHash', 'authorizationId', 'domain', 'entryHash', 'intentHash', 'issuer', 'keyId', 'previousEntryHash', 'schema', 'sequence', 'signature', 'status'])) return false
+  return /^auth_[0-9a-f]{32}$/.test(value.authorizationId)
+    && hashPattern.test(value.authorizationHash)
+    && hashPattern.test(value.intentHash)
+    && hashPattern.test(value.entryHash)
+    && (value.previousEntryHash === null || hashPattern.test(value.previousEntryHash))
+    && positiveUnixSeconds(value.acceptedAt)
+    && Number.isSafeInteger(value.sequence) && value.sequence > 0
+    && typeof value.issuer === 'string' && value.issuer.length > 0
+    && typeof value.keyId === 'string' && value.keyId.length > 0
+    && typeof value.signature === 'string'
+}
+
+function validTrustedKey(key: KeyEntry) {
+  if (!hasOnlyFields(key, ['algorithm', 'issuer', 'keyId', 'publicKey', 'status', 'validFrom', 'validUntil'])) return false
+  if (key.algorithm !== 'Ed25519' || !['active', 'retired'].includes(key.status) || typeof key.issuer !== 'string' || !key.issuer || typeof key.keyId !== 'string' || !key.keyId || typeof key.publicKey !== 'string' || !key.publicKey) return false
+  if (![key.validFrom, key.validUntil].every((entry) => entry === null || positiveUnixSeconds(entry))) return false
+  return key.validFrom === null || key.validUntil === null || key.validFrom <= key.validUntil
+}
+
+function validReceiptTimeline(receipt: Receipt) {
+  if (!positiveUnixSeconds(receipt.issuedAt) || !positiveUnixSeconds(receipt.validUntil)) return false
+  const observedAt = receipt.execution?.observedAt ?? receipt.execution?.executedAt
+  return observedAt == null || positiveUnixSeconds(observedAt) && receipt.issuedAt >= observedAt
+}
+
+function positiveUnixSeconds(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
+function positiveChainId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
+function canonicalAddress(value: unknown): value is string {
+  return typeof value === 'string' && addressPattern.test(value)
 }
 
 function stripIntentHash(intent: Intent) {
@@ -257,24 +344,46 @@ function receiptResultFields(receipt: Receipt) {
 
 async function verifyEd25519(statement: object & { signature?: string }, publicKey: string) {
   const { signature, ...unsigned } = statement
-  if (!signature) return false
+  if (!signature || !/^[A-Za-z0-9_-]{86}$/.test(signature)) return false
+  const signatureBytes = decodeBase64(signature)
+  if (signatureBytes.length !== 64 || encodeBase64Url(signatureBytes) !== signature) return false
   const imported = await crypto.subtle.importKey('spki', publicKeyBytes(publicKey), { name: 'Ed25519' }, false, ['verify'])
-  return crypto.subtle.verify({ name: 'Ed25519' }, imported, decodeBase64(signature), new TextEncoder().encode(canonicalize(unsigned)))
+  return crypto.subtle.verify({ name: 'Ed25519' }, imported, signatureBytes, new TextEncoder().encode(canonicalize(unsigned)))
+}
+
+function encodeBase64Url(value: Uint8Array) {
+  let binary = ''
+  for (const byte of value) binary += String.fromCharCode(byte)
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 }
 
 async function verifyTransparency(evidence: NonNullable<Receipt['authorizationEvidence']>['transparency'], acceptance: NonNullable<Receipt['authorizationEvidence']>['acceptance'], publicKey: string, executedAt: number) {
-  if (!evidence?.checkpoint?.signature || !evidence.chain.length) return false
+  if (!hasOnlyFields(evidence, ['chain', 'checkpoint']) || !hasOnlyFields(evidence.checkpoint, ['algorithm', 'anchor', 'domain', 'headEntryHash', 'issuedAt', 'issuer', 'keyId', 'schema', 'signature', 'size'])) return false
+  if (!evidence.checkpoint.signature || evidence.checkpoint.schema !== 'priorseal.transparency-checkpoint.v1' || evidence.checkpoint.domain !== 'priorseal/transparency-checkpoint/v1' || evidence.checkpoint.algorithm !== 'Ed25519' || evidence.checkpoint.issuer !== acceptance.issuer || evidence.checkpoint.keyId !== acceptance.keyId || !positiveUnixSeconds(evidence.checkpoint.issuedAt) || evidence.checkpoint.issuedAt < acceptance.acceptedAt || !Number.isSafeInteger(evidence.checkpoint.size) || evidence.checkpoint.size < 1 || !hashPattern.test(evidence.checkpoint.headEntryHash) || !Array.isArray(evidence.chain) || !evidence.chain.length) return false
   const first = evidence.chain[0]
   if (first.sequence !== acceptance.sequence || first.entryHash !== acceptance.entryHash) return false
   for (let index = 0; index < evidence.chain.length; index += 1) {
     const entry = evidence.chain[index]
+    if (!hasOnlyFields(entry, ['acceptedAt', 'authorizationHash', 'entryHash', 'previousEntryHash', 'sequence']) || !Number.isSafeInteger(entry.sequence) || entry.sequence < 1 || !positiveUnixSeconds(entry.acceptedAt) || !hashPattern.test(entry.authorizationHash) || !hashPattern.test(entry.entryHash) || (entry.previousEntryHash !== null && !hashPattern.test(entry.previousEntryHash))) return false
     if (entry.entryHash !== await hashJson({ sequence: entry.sequence, authorizationHash: entry.authorizationHash, acceptedAt: entry.acceptedAt, previousEntryHash: entry.previousEntryHash })) return false
     if (index > 0 && (entry.sequence !== evidence.chain[index - 1].sequence + 1 || entry.previousEntryHash !== evidence.chain[index - 1].entryHash)) return false
   }
   const last = evidence.chain.at(-1)!
   if (last.entryHash !== evidence.checkpoint.headEntryHash || last.sequence !== evidence.checkpoint.size) return false
-  if (evidence.checkpoint.anchor && (evidence.checkpoint.anchor.size !== evidence.checkpoint.size || evidence.checkpoint.anchor.headEntryHash !== evidence.checkpoint.headEntryHash || evidence.checkpoint.anchor.anchoredAt > executedAt)) return false
+  if (evidence.checkpoint.anchor && (!validTransparencyAnchor(evidence.checkpoint.anchor) || evidence.checkpoint.anchor.size !== evidence.checkpoint.size || evidence.checkpoint.anchor.headEntryHash !== evidence.checkpoint.headEntryHash || evidence.checkpoint.anchor.anchoredAt > executedAt)) return false
   return verifyEd25519(evidence.checkpoint, publicKey)
+}
+
+function validTransparencyAnchor(anchor: NonNullable<NonNullable<Receipt['authorizationEvidence']>['transparency']>['checkpoint']['anchor']) {
+  return hasOnlyFields(anchor, ['anchoredAt', 'blockNumber', 'chainId', 'contract', 'headEntryHash', 'size', 'txHash', 'type'])
+    && anchor.type === 'eip155'
+    && positiveChainId(anchor.chainId)
+    && canonicalAddress(anchor.contract)
+    && /^0x[0-9a-f]{64}$/.test(anchor.txHash)
+    && Number.isSafeInteger(anchor.blockNumber) && anchor.blockNumber >= 0
+    && Number.isSafeInteger(anchor.anchoredAt) && anchor.anchoredAt >= 0
+    && Number.isSafeInteger(anchor.size) && anchor.size > 0
+    && hashPattern.test(anchor.headEntryHash)
 }
 
 async function verifyWitnessEvidence(evidence: NonNullable<Receipt['authorizationEvidence']>['witnesses'], authorization: NonNullable<Receipt['authorizationEvidence']>['authorization'], acceptedAt: number, executedAt: number, inputPolicy: Record<string, unknown>) {

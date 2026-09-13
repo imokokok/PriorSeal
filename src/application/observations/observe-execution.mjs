@@ -55,10 +55,11 @@ export async function observeExecution({ input, store, observer, signal, private
   }
   const authorizationAssociation = authorizationRecord ? classifyAuthorizationAssociation(authorizationRecord.authorization, observation) : null;
   const claimAuthorization = authorizationAssociation === 'FINAL';
+  const receiptIssuedAt = Math.max(Math.floor(now() / 1000), observation.observedAt ?? observation.executedAt ?? 0);
   const receipt = privateKeyPem
     ? signReceipt(authorizationRecord
-      ? buildAuthorizedReceipt({ authorization: authorizationRecord.authorization, acceptance: authorizationRecord.acceptance, policyEvidence: authorizationRecord.policyEvidence, timestampEvidence: authorizationRecord.timestampEvidence, witnessEvidence: authorizationRecord.witnessEvidence, transparency, execution: observation, issuer, keyId, issuedAt: Math.floor(now() / 1000) })
-      : buildReceipt({ intent, execution: observation, issuer, keyId, issuedAt: Math.floor(now() / 1000) }), privateKeyPem)
+      ? buildAuthorizedReceipt({ authorization: authorizationRecord.authorization, acceptance: authorizationRecord.acceptance, policyEvidence: authorizationRecord.policyEvidence, timestampEvidence: authorizationRecord.timestampEvidence, witnessEvidence: authorizationRecord.witnessEvidence, transparency, execution: observation, issuer, keyId, issuedAt: receiptIssuedAt })
+      : buildReceipt({ intent, execution: observation, issuer, keyId, issuedAt: receiptIssuedAt }), privateKeyPem)
     : null;
   const verification = receipt
     ? authorizationRecord

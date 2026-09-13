@@ -1,4 +1,3 @@
-import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { encodeFunctionData, hashTypedData, verifyTypedData } from 'viem';
 import { bindIntentExecution } from './binding.mjs';
 import { PriorSealError } from './errors.mjs';
@@ -12,6 +11,7 @@ import { verifyTransparencyEvidence } from './transparency.mjs';
 import { verifyWitnessEvidence } from './witness.mjs';
 import { validateTimestampEvidenceClaims, verifyTimestampEvidence } from './rfc3161.mjs';
 import { assessCompliance, classifyExecutionOutcome } from './compliance.mjs';
+import { signEd25519Statement, verifyEd25519Statement as verifyEd25519StatementStrict } from './ed25519.mjs';
 
 export const LEGACY_AUTHORIZATION_SCHEMA = 'priorseal.authorization.v1';
 export const AUTHORIZATION_SCHEMA = 'priorseal.authorization.v2';
@@ -19,6 +19,9 @@ export const AUTHORIZATION_RECEIPT_SCHEMA = 'priorseal.authorization-receipt.v1'
 export const AUTHORIZATION_DOMAIN = 'priorseal/authorization/v2';
 export const LEGACY_AUTHORIZED_RECEIPT_SCHEMA = 'priorseal.execution-receipt.v2';
 export const AUTHORIZED_RECEIPT_SCHEMA = 'priorseal.execution-receipt.v3';
+
+const AUTHORIZED_RECEIPT_FIELDS = ['schema', 'domain', 'receiptId', 'intentHash', 'authorizationHash', 'executionHash', 'authorizationEvidence', 'execution', 'executionStatus', 'compliance', 'issuer', 'issuedAt', 'validUntil', 'outcome', 'reasonCodes', 'binding', 'algorithm', 'keyId', 'verifierVersion', 'signature'];
+const AUTHORIZATION_EVIDENCE_FIELDS = ['authorization', 'acceptance', 'policy', 'timestamp', 'witnesses', 'transparency'];
 
 const LEGACY_AUTHORIZATION_TYPES = Object.freeze({
   PriorSealAuthorization: [
@@ -170,7 +173,7 @@ export function buildAuthorizationReceipt({ authorization, issuer, keyId = 'defa
 }
 
 export function signAuthorizationReceipt(receipt, privateKeyPem) {
-  return { ...receipt, signature: sign(null, Buffer.from(canonicalize(receipt)), createPrivateKey(privateKeyPem)).toString('base64url') };
+  return signEd25519Statement(receipt, privateKeyPem);
 }
 
 export function verifyAuthorizationReceipt(receipt, publicKeyPem) {
@@ -178,15 +181,17 @@ export function verifyAuthorizationReceipt(receipt, publicKeyPem) {
     assertSafeJson(receipt);
     assertOnlyFields(receipt, ['schema', 'domain', 'authorizationId', 'authorizationHash', 'intentHash', 'acceptedAt', 'sequence', 'previousEntryHash', 'entryHash', 'status', 'issuer', 'algorithm', 'keyId', 'signature'], 'authorization receipt');
   } catch { return false; }
-  const { signature, ...unsigned } = receipt ?? {};
-  if (!signature || receipt.schema !== AUTHORIZATION_RECEIPT_SCHEMA || receipt.domain !== 'priorseal/authorization-receipt/v1' || receipt.status !== 'ACCEPTED' || receipt.algorithm !== 'Ed25519') return false;
+  if (!receipt?.signature || receipt.schema !== AUTHORIZATION_RECEIPT_SCHEMA || receipt.domain !== 'priorseal/authorization-receipt/v1' || receipt.status !== 'ACCEPTED' || receipt.algorithm !== 'Ed25519') return false;
   if (receipt.entryHash !== hashJson({ sequence: receipt.sequence, authorizationHash: receipt.authorizationHash, acceptedAt: receipt.acceptedAt, previousEntryHash: receipt.previousEntryHash })) return false;
-  try { return verify(null, Buffer.from(canonicalize(unsigned)), createPublicKey(publicKeyPem), Buffer.from(signature, 'base64url')); } catch { return false; }
+  return verifyEd25519Statement(receipt, publicKeyPem);
 }
 
 export function buildAuthorizedReceipt({ authorization, acceptance, policyEvidence = null, timestampEvidence = null, witnessEvidence = null, transparency = null, execution, issuer, keyId = 'default', issuedAt = Math.floor(Date.now() / 1000), verifierVersion, schema = AUTHORIZED_RECEIPT_SCHEMA }) {
   if (![AUTHORIZED_RECEIPT_SCHEMA, LEGACY_AUTHORIZED_RECEIPT_SCHEMA].includes(schema)) throw new PriorSealError('UNSUPPORTED_SCHEMA', 'Authorized receipt schema is not supported');
   const intent = authorization.intent;
+  if (!Number.isSafeInteger(issuedAt) || issuedAt <= 0) throw new PriorSealError('INVALID_RECEIPT_TIMELINE', 'Receipt issuedAt must be a positive Unix timestamp');
+  const observedAt = execution?.observedAt ?? execution?.executedAt;
+  if (observedAt != null && (!Number.isSafeInteger(observedAt) || issuedAt < observedAt)) throw new PriorSealError('INVALID_RECEIPT_TIMELINE', 'Receipt cannot be issued before the execution observation');
   const evidencePolicy = policyEvidence ?? defaultPolicyEvidence(authorization, acceptance.acceptedAt);
   validatePolicyEvidence(authorization, evidencePolicy, acceptance.acceptedAt);
   const baseBinding = bindIntentExecution(intent, execution, issuedAt);
@@ -227,7 +232,10 @@ export function authorizedReceiptId(receipt) {
 export function validateAuthorizedReceiptClaims(receipt) {
   try {
     if (![AUTHORIZED_RECEIPT_SCHEMA, LEGACY_AUTHORIZED_RECEIPT_SCHEMA].includes(receipt?.schema)) return invalid('UNSUPPORTED_SCHEMA');
+    assertOnlyFields(receipt, AUTHORIZED_RECEIPT_FIELDS, 'authorized receipt');
+    assertOnlyFields(receipt.authorizationEvidence, AUTHORIZATION_EVIDENCE_FIELDS, 'authorization evidence');
     const legacy = receipt.schema === LEGACY_AUTHORIZED_RECEIPT_SCHEMA;
+    if (legacy && (receipt.executionStatus !== undefined || receipt.compliance !== undefined)) return invalid('INVALID_RECEIPT');
     if (receipt.domain !== (legacy ? 'priorseal/execution-receipt/v2' : 'priorseal/execution-receipt/v3')) return invalid('INVALID_DOMAIN');
     const authorization = buildAuthorization(receipt.authorizationEvidence?.authorization);
     const acceptance = receipt.authorizationEvidence?.acceptance;
@@ -247,6 +255,10 @@ export function validateAuthorizedReceiptClaims(receipt) {
       if (!witnessed.valid) return invalid(witnessed.code);
     } else if (receipt.authorizationEvidence?.witnesses) return invalid('WITNESS_POLICY_MISMATCH');
     if (receipt.intentHash !== authorization.intentHash || authorization.intentHash !== hashJson(stripIntentHash(authorization.intent))) return invalid('INTENT_HASH_MISMATCH');
+    if (receipt.validUntil !== authorization.intent.validUntil) return invalid('VALID_UNTIL_MISMATCH');
+    if (!Number.isSafeInteger(receipt.issuedAt) || receipt.issuedAt <= 0) return invalid('INVALID_RECEIPT_TIMELINE');
+    const observedAt = receipt.execution?.observedAt ?? receipt.execution?.executedAt;
+    if (observedAt != null && (!Number.isSafeInteger(observedAt) || receipt.issuedAt < observedAt)) return invalid('INVALID_RECEIPT_TIMELINE');
     if (receipt.executionHash !== hashJson(receipt.execution)) return invalid('EXECUTION_HASH_MISMATCH');
     if (receipt.receiptId !== authorizedReceiptId(receipt)) return invalid('RECEIPT_ID_MISMATCH');
     const baseBinding = bindIntentExecution(authorization.intent, receipt.execution, receipt.issuedAt);
@@ -276,13 +288,14 @@ export async function verifyAuthorizedReceipt(receipt, publicKeyPem, options = {
   try { assertSafeJson(receipt); } catch { return fail('INVALID_RECEIPT'); }
   if (!receipt?.signature) return fail('MISSING_SIGNATURE');
   if (receipt.algorithm !== 'Ed25519') return fail('UNSUPPORTED_ALGORITHM');
+  const key = options.key;
+  if (key && (key.keyId !== receipt.keyId || key.algorithm !== 'Ed25519' || !['active', 'retired'].includes(key.status) || key.issuer !== receipt.issuer || !validKeyWindow(key))) return fail(key.keyId !== receipt.keyId ? 'UNKNOWN_KEY' : 'INVALID_KEY');
+  if (!verifyEd25519Statement(receipt, publicKeyPem)) return fail('INVALID_SIGNATURE');
   const claims = validateAuthorizedReceiptClaims(receipt);
   if (!claims.valid) return fail(claims.code);
   const acceptance = receipt.authorizationEvidence.acceptance;
   if (acceptance.domain !== 'priorseal/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519' || acceptance.intentHash !== claims.authorization.intentHash) return fail('INVALID_AUTHORIZATION_RECEIPT');
   if (acceptance.acceptedAt < claims.authorization.notBefore || acceptance.acceptedAt > claims.authorization.expiresAt || claims.authorization.issuedAt > acceptance.acceptedAt || receipt.issuedAt < acceptance.acceptedAt) return fail('INVALID_AUTHORIZATION_RECEIPT');
-  const key = options.key;
-  if (key && (key.keyId !== receipt.keyId || key.algorithm !== 'Ed25519' || key.status === 'revoked' || key.issuer !== receipt.issuer)) return fail(key.keyId !== receipt.keyId ? 'UNKNOWN_KEY' : 'INVALID_KEY');
   if (key?.validFrom != null && (acceptance.acceptedAt < key.validFrom || receipt.issuedAt < key.validFrom)) return fail('KEY_NOT_YET_VALID');
   if (key?.validUntil != null && (acceptance.acceptedAt > key.validUntil || receipt.issuedAt > key.validUntil)) return fail('KEY_EXPIRED');
   if (options.now !== undefined && receipt.issuedAt > options.now) return fail('NOT_YET_VALID');
@@ -295,14 +308,15 @@ export async function verifyAuthorizedReceipt(receipt, publicKeyPem, options = {
   if (receipt.authorizationEvidence.transparency && !verifyTransparencyEvidence(receipt.authorizationEvidence.transparency, acceptance, publicKeyPem, { before: receipt.execution.executedAt ?? receipt.execution.observedAt ?? 0 })) return fail('INVALID_TRANSPARENCY_PROOF');
   const authorizationResult = await verifyAuthorization(claims.authorization, { now: acceptance.acceptedAt, audience: options.audience ?? 'priorseal', verifyContractSignature: options.verifyContractSignature });
   if (!authorizationResult.valid) return fail(authorizationResult.code);
-  if (!verifyEd25519Statement(receipt, publicKeyPem)) return fail('INVALID_SIGNATURE');
   return { valid: true, code: 'OK', ...resultFields(), authorizationId: claims.authorization.authorizationId };
 }
 
 function verifyEd25519Statement(statement, publicKeyPem) {
-  const { signature, ...unsigned } = statement ?? {};
-  if (!signature) return false;
-  try { return verify(null, Buffer.from(canonicalize(unsigned)), createPublicKey(publicKeyPem), Buffer.from(signature, 'base64url')); } catch { return false; }
+  return verifyEd25519StatementStrict(statement, publicKeyPem);
+}
+function validKeyWindow(key) {
+  for (const field of ['validFrom', 'validUntil']) if (key[field] != null && (!Number.isSafeInteger(key[field]) || key[field] <= 0)) return false;
+  return key.validFrom == null || key.validUntil == null || key.validFrom <= key.validUntil;
 }
 
 function stripIntentHash(intent) { const { intentHash, ...unsigned } = intent; return unsigned; }

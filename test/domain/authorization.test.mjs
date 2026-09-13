@@ -69,7 +69,13 @@ test('accepted authorization is single-use and produces a self-checking v3 recei
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem, { key: { keyId: 'key-1', issuer: 'test', algorithm: 'Ed25519', status: 'revoked', validFrom: null, validUntil: null } })).code, 'INVALID_KEY');
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem, { key: { keyId: 'key-1', issuer: 'test', algorithm: 'Ed25519', status: 'retired', validFrom: 1_050, validUntil: null } })).code, 'KEY_NOT_YET_VALID');
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem, { now: 1_000 })).code, 'NOT_YET_VALID');
-  assert.equal((await verifyAuthorizedReceipt({ ...receipt, outcome: 'FAILED' }, publicKeyPem)).code, 'OUTCOME_MISMATCH');
+  assert.equal((await verifyAuthorizedReceipt(signReceipt({ ...receipt, outcome: 'FAILED' }, privateKeyPem), publicKeyPem)).code, 'OUTCOME_MISMATCH');
+  assert.equal((await verifyAuthorizedReceipt(signReceipt({ ...receipt, validUntil: 1_999 }, privateKeyPem), publicKeyPem)).code, 'VALID_UNTIL_MISMATCH');
+  const extendedAuthorization = structuredClone(receipt);
+  extendedAuthorization.authorizationEvidence.authorization.unsignedPrivilege = true;
+  assert.equal((await verifyAuthorizedReceipt(signReceipt(extendedAuthorization, privateKeyPem), publicKeyPem)).code, 'UNKNOWN_FIELD');
+  assert.equal((await verifyAuthorizedReceipt(signReceipt({ ...receipt, unsignedClaim: true }, privateKeyPem), publicKeyPem)).code, 'UNKNOWN_FIELD');
+  assert.equal((await verifyAuthorizedReceipt({ ...receipt, signature: `${receipt.signature}!` }, publicKeyPem)).code, 'INVALID_SIGNATURE');
   const legacy = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101, schema: LEGACY_AUTHORIZED_RECEIPT_SCHEMA }), privateKeyPem);
   assert.equal(legacy.schema, 'priorseal.execution-receipt.v2');
   assert.equal(legacy.compliance, undefined);
@@ -94,7 +100,7 @@ test('exact-call mismatch is signed as confirmed non-compliance', async () => {
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
   const changedAssessment = structuredClone(receipt);
   changedAssessment.compliance.status = 'COMPLIANT';
-  assert.equal((await verifyAuthorizedReceipt(changedAssessment, publicKeyPem)).code, 'COMPLIANCE_MISMATCH');
+  assert.equal((await verifyAuthorizedReceipt(signReceipt(changedAssessment, privateKeyPem), publicKeyPem)).code, 'COMPLIANCE_MISMATCH');
 });
 
 test('a final but unrelated transaction is not assessable rather than evidence of breach', async () => {
@@ -228,7 +234,7 @@ test('v3 receipt embeds and verifies the principal identity policy snapshot', as
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
   const mutated = structuredClone(receipt);
   mutated.authorizationEvidence.policy.document.principals[0].id = 'lookalike';
-  assert.equal((await verifyAuthorizedReceipt(mutated, publicKeyPem)).code, 'INVALID_POLICY_EVIDENCE');
+  assert.equal((await verifyAuthorizedReceipt(signReceipt(mutated, privateKeyPem), publicKeyPem)).code, 'INVALID_POLICY_EVIDENCE');
 });
 
 test('required transparency failure does not consume the authorization', async () => {

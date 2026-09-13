@@ -102,5 +102,5 @@ test('signed authorization policy binds witness keys and receipt verification en
   assert.equal((await verifyAuthorizedReceipt(receipt, issuer.publicKey)).valid, true);
   const tampered = structuredClone(receipt);
   tampered.authorizationEvidence.witnesses.attestations.pop();
-  assert.equal((await verifyAuthorizedReceipt(tampered, issuer.publicKey)).code, 'WITNESS_QUORUM_NOT_MET');
+  assert.equal((await verifyAuthorizedReceipt(signReceipt(tampered, issuer.privateKey), issuer.publicKey)).code, 'WITNESS_QUORUM_NOT_MET');
 });

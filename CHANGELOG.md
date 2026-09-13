@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Hardened receipt and authorization verification across Node and the browser: canonical Ed25519 signatures, exact schema fields, issuer-key status and pair validation, signed validity/timeline invariants, transparent-log metadata checks, immutable receipt-ID collision handling, and explicit external-check/trust-source states in the console.
 - Enforce EVM transparency-anchor chain identity, configured finality, and pre-execution ordering before issuing or validating an execution receipt.
 - Require production `evm-anchor` deployments to configure a verifiable anchor and include that check in production readiness.
 

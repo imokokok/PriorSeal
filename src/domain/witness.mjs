@@ -1,8 +1,9 @@
-import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
+import { createPublicKey } from 'node:crypto';
 import { PriorSealError } from './errors.mjs';
-import { canonicalize, hashJson } from './hashing.mjs';
+import { hashJson } from './hashing.mjs';
 import { protocolId, unixSeconds } from './values.mjs';
 import { assertOnlyFields, assertSafeJson } from '../shared/safe-json.mjs';
+import { signEd25519Statement, verifyEd25519Statement } from './ed25519.mjs';
 
 export const WITNESS_POLICY_SCHEMA = 'priorseal.witness-policy.v1';
 export const WITNESS_REQUEST_SCHEMA = 'priorseal.witness-request.v1';
@@ -87,7 +88,7 @@ export function buildWitnessAttestation({ request, witnessId, keyId, observedAt 
 
 export function signWitnessAttestation(attestation, privateKeyPem) {
   if (!privateKeyPem) throw new PriorSealError('WITNESS_NOT_CONFIGURED', 'witness signing key is required');
-  return { ...attestation, signature: sign(null, Buffer.from(canonicalize(attestation)), createPrivateKey(privateKeyPem)).toString('base64url') };
+  return signEd25519Statement(attestation, privateKeyPem);
 }
 
 export function verifyWitnessAttestation(attestation, request, witness) {
@@ -99,8 +100,7 @@ export function verifyWitnessAttestation(attestation, request, witness) {
   if (attestation.witnessId !== witness.witnessId || attestation.keyId !== witness.keyId || attestation.algorithm !== witness.algorithm) return false;
   if (attestation.requestHash !== hashJson(request) || attestation.authorizationId !== request.authorizationId || attestation.authorizationHash !== request.authorizationHash || attestation.intentHash !== request.intentHash || attestation.expiresAt !== request.expiresAt) return false;
   if (!Number.isSafeInteger(attestation.observedAt) || attestation.observedAt < 0 || attestation.observedAt > request.expiresAt) return false;
-  const { signature, ...unsigned } = attestation;
-  try { return verify(null, Buffer.from(canonicalize(unsigned)), createPublicKey(witness.publicKey), Buffer.from(signature, 'base64url')); } catch { return false; }
+  return verifyEd25519Statement(attestation, witness.publicKey);
 }
 
 export function buildWitnessEvidence({ request, attestations, policy }) {

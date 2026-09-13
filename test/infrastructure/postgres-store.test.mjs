@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresStore } from '../../src/index.mjs';
 
-test('Postgres store preserves an existing immutable receipt', async () => {
-  const original = { receiptId: 'psr_same', marker: 'original' };
+test('Postgres store rejects a receipt ID collision but permits an identical replay', async () => {
+  const original = { receiptId: 'psr_same', intentHash: 'intent', execution: { txHash: '0x1' }, schema: 'v1', issuer: 'test', keyId: 'k1', outcome: 'COMPLETED', signature: 'original' };
   const pool = { async query(sql) { if (sql.startsWith('INSERT INTO receipts')) return { rows: [] }; if (sql.startsWith('SELECT receipt_json FROM receipts')) return { rows: [{ receipt_json: original }] }; throw new Error(`Unexpected query: ${sql}`); } };
   const store = createPostgresStore(pool);
-  const result = await store.saveReceipt({ receiptId: 'psr_same', intentHash: 'intent', execution: { txHash: '0x1' }, schema: 'v1', issuer: 'test', keyId: 'k1', outcome: 'COMPLETED', signature: 'new' });
-  assert.equal(result, original);
+  await assert.rejects(() => store.saveReceipt({ receiptId: 'psr_same', intentHash: 'intent', execution: { txHash: '0x1' }, schema: 'v1', issuer: 'test', keyId: 'k1', outcome: 'COMPLETED', signature: 'new' }), (error) => error.code === 'RECEIPT_ID_CONFLICT');
+  assert.equal(await store.saveReceipt(original), original);
 });
 
 test('Postgres idempotency rows can be read and expired rows can be replaced', async () => {

@@ -13,10 +13,12 @@ test('transparency evidence links an acceptance entry to a signed checkpoint', (
   first.entryHash = hashJson(first);
   const second = { sequence: 2, authorizationHash: 'b'.repeat(64), acceptedAt: 101, previousEntryHash: first.entryHash };
   second.entryHash = hashJson(second);
-  const acceptance = { sequence: 1, entryHash: first.entryHash };
+  const acceptance = { sequence: 1, entryHash: first.entryHash, acceptedAt: 100, issuer: 'test', keyId: 'k1' };
   const evidence = buildTransparencyEvidence({ entries: [first, second], acceptance, issuer: 'test', keyId: 'k1', privateKeyPem, issuedAt: 102 });
   assert.equal(verifyTransparencyEvidence(evidence, acceptance, publicKeyPem), true);
   assert.equal(verifyTransparencyEvidence({ ...evidence, chain: [{ ...first, authorizationHash: 'c'.repeat(64) }, second] }, acceptance, publicKeyPem), false);
+  const wrongIssuer = buildTransparencyEvidence({ entries: [first, second], acceptance, issuer: 'lookalike', keyId: 'k1', privateKeyPem, issuedAt: 102 });
+  assert.equal(verifyTransparencyEvidence(wrongIssuer, acceptance, publicKeyPem), false);
 });
 
 test('an external anchor is accepted only when its successful on-chain call matches', async () => {
@@ -62,7 +64,7 @@ test('an anchor recorded after execution cannot serve as pre-execution evidence'
   const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
   const entry = { sequence: 1, authorizationHash: 'a'.repeat(64), acceptedAt: 100, previousEntryHash: null };
   entry.entryHash = hashJson(entry);
-  const acceptance = { sequence: 1, entryHash: entry.entryHash };
+  const acceptance = { sequence: 1, entryHash: entry.entryHash, acceptedAt: 100, issuer: 'test', keyId: 'k1' };
   const anchor = { type: 'eip155', chainId: 8453, contract: `0x${'1'.repeat(40)}`, txHash: `0x${'2'.repeat(64)}`, blockNumber: 100, anchoredAt: 200, size: 1, headEntryHash: entry.entryHash };
   const evidence = buildTransparencyEvidence({ entries: [entry], acceptance, issuer: 'test', keyId: 'k1', privateKeyPem, issuedAt: 201, anchor });
   assert.equal(verifyTransparencyEvidence(evidence, acceptance, publicKeyPem, { before: 199 }), false);

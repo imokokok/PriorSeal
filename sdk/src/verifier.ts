@@ -32,10 +32,10 @@ export type LocalVerifierOptions = {
 
 export async function verifyReceiptLocally(receipt: Receipt, options: LocalVerifierOptions = {}): Promise<LocalVerificationResult> {
   const requiredExternalChecks = externalRequirements(receipt)
-  const key = resolveTrustedKey(receipt, options.trustedKeys)
-  const result = key
-    ? await verifyWithTrustedKey(receipt, key, options.now ?? Math.floor(Date.now() / 1000), options.expectedAudience ?? 'priorseal')
-    : { valid: false, code: 'UNKNOWN_KEY', outcome: receipt?.outcome, receiptId: receipt?.receiptId }
+  const keyResolution = resolveTrustedKey(receipt, options.trustedKeys)
+  const result = keyResolution.key
+    ? await verifyWithTrustedKey(receipt, keyResolution.key, options.now ?? Math.floor(Date.now() / 1000), options.expectedAudience ?? 'priorseal')
+    : { valid: false, code: keyResolution.code, outcome: receipt?.outcome, receiptId: receipt?.receiptId }
   return {
     ...result,
     verificationScope: requiredExternalChecks.length ? 'EXTERNAL_CHECK_REQUIRED' : 'LOCAL_COMPLETE',
@@ -57,27 +57,34 @@ export function verifyTimestampProofLocally(receipt: Receipt): Promise<Timestamp
 }
 
 function resolveTrustedKey(receipt: Receipt, source?: KeyEntry | readonly KeyEntry[] | KeyRegistry) {
+  if (isKeyRegistry(source) && (source.schema !== 'priorseal.keys.v1' || source.issuer !== receipt?.issuer)) return { key: undefined, code: 'INVALID_KEY_REGISTRY' }
   const keys: readonly KeyEntry[] = !source
     ? []
     : Array.isArray(source)
       ? source as readonly KeyEntry[]
-      : 'keys' in source
-        ? source.keys as readonly KeyEntry[]
+      : isKeyRegistry(source)
+        ? source.keys
         : [source as KeyEntry]
-  return keys.find((key) => key.keyId === receipt?.keyId && key.issuer === receipt?.issuer)
+  const matches = keys.filter((key) => key.keyId === receipt?.keyId && key.issuer === receipt?.issuer)
+  if (matches.length > 1) return { key: undefined, code: 'AMBIGUOUS_KEY' }
+  return { key: matches[0], code: 'UNKNOWN_KEY' }
+}
+
+function isKeyRegistry(source?: KeyEntry | readonly KeyEntry[] | KeyRegistry): source is KeyRegistry {
+  return Boolean(source && !Array.isArray(source) && 'keys' in source)
 }
 
 function externalRequirements(receipt: Receipt): ExternalVerificationRequirement[] {
   const requirements: ExternalVerificationRequirement[] = []
   const authorization = receipt?.authorizationEvidence?.authorization
-  if (authorization?.authorizer.type === 'eip1271') {
+  if (authorization?.authorizer?.type === 'eip1271') {
     requirements.push({
       type: 'ERC1271',
       chainId: Number(authorization.intent.chainId),
       address: authorization.authorizer.address,
     })
   }
-  const anchor = receipt?.authorizationEvidence?.transparency?.checkpoint.anchor
+  const anchor = receipt?.authorizationEvidence?.transparency?.checkpoint?.anchor
   if (anchor) {
     requirements.push({
       type: 'EVM_ANCHOR',

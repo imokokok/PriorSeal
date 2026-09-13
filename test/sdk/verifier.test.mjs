@@ -29,7 +29,11 @@ test('SDK verifier validates a v1 receipt locally and detects mutations', async 
   assert.equal(verified.valid, true);
   assert.equal(verified.verificationScope, 'LOCAL_COMPLETE');
   assert.deepEqual(verified.requiredExternalChecks, []);
-  assert.equal((await verifyReceiptLocally({ ...receipt, executionHash: 'changed' }, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'EXECUTION_HASH_MISMATCH');
+  assert.equal((await verifyReceiptLocally(signReceipt({ ...receipt, executionHash: 'changed' }, keys.privateKey), { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'EXECUTION_HASH_MISMATCH');
+  assert.equal((await verifyReceiptLocally({ ...receipt, signature: `${receipt.signature}!` }, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'INVALID_SIGNATURE');
+  assert.equal((await verifyReceiptLocally(receipt, { trustedKeys: [trustedKey(keys.publicKey), trustedKey(keys.publicKey)], now: 1_200 })).code, 'AMBIGUOUS_KEY');
+  assert.equal((await verifyReceiptLocally(receipt, { trustedKeys: { ...trustedKey(keys.publicKey), status: 'unknown' }, now: 1_200 })).code, 'INVALID_KEY');
+  assert.equal((await verifyReceiptLocally(receipt, { trustedKeys: { schema: 'priorseal.keys.v1', issuer: 'lookalike', keys: [trustedKey(keys.publicKey)] }, now: 1_200 })).code, 'INVALID_KEY_REGISTRY');
   const bundle = buildVerificationBundle({ receipt, keyRegistry: { schema: 'priorseal.keys.v1', issuer: 'test', keys: [trustedKey(keys.publicKey)] }, assembledAt: 1_101 });
   assert.equal((await verifyVerificationBundleLocally(bundle, { now: 1_200 })).code, 'UNKNOWN_KEY');
   assert.equal((await verifyVerificationBundleLocally(bundle, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).valid, true);
@@ -68,7 +72,11 @@ test('SDK verifier independently validates authorization-bound receipt v3, polic
   assert.equal((await verifyReceiptLocally(resignedLateAnchorReceipt, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'INVALID_TRANSPARENCY_PROOF');
   const mutated = structuredClone(receipt);
   mutated.authorizationEvidence.authorization.delegate.agentId = 'agent-impersonated';
-  assert.equal((await verifyReceiptLocally(mutated, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'AUTHORIZATION_ID_MISMATCH');
+  assert.equal((await verifyReceiptLocally(signReceipt(mutated, keys.privateKey), { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'AUTHORIZATION_ID_MISMATCH');
+  const extendedAuthorization = structuredClone(receipt);
+  extendedAuthorization.authorizationEvidence.authorization.unsignedPrivilege = true;
+  assert.equal((await verifyReceiptLocally(signReceipt(extendedAuthorization, keys.privateKey), { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'INVALID_AUTHORIZATION');
+  assert.equal((await verifyReceiptLocally(signReceipt({ ...receipt, validUntil: 1_999 }, keys.privateKey), { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'VALID_UNTIL_MISMATCH');
 });
 
 test('SDK verifier enforces the expected authorization audience', async () => {
@@ -132,7 +140,7 @@ test('SDK verifier independently validates exact-call receipts with multi-transf
   assert.equal(receipt.compliance.status, 'COMPLIANT');
   const contextMutated = structuredClone(receipt);
   contextMutated.authorizationEvidence.authorization.intent.contextCommitments[0].digest = `0x${'7'.repeat(64)}`;
-  assert.equal((await verifyReceiptLocally(contextMutated, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'INTENT_HASH_MISMATCH');
+  assert.equal((await verifyReceiptLocally(signReceipt(contextMutated, keys.privateKey), { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'INTENT_HASH_MISMATCH');
 });
 
 test('SDK verifier reports chain-state requirements without making network calls', async () => {

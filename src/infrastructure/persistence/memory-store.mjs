@@ -21,6 +21,7 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) { const int
   async bindAuthorization(id, txHash) { const record = authorizations.get(id); if (!record) return { ok: false, code: 'AUTHORIZATION_NOT_FOUND' }; if (record.boundTxHash && record.boundTxHash !== txHash) return { ok: false, code: 'AUTHORIZATION_ALREADY_USED' }; if (!record.boundTxHash) { record.boundTxHash = txHash; record.uses = 1; record.status = 'BOUND'; } return { ok: true, record: structuredClone(record) }; },
   async saveObservationReceipt({ authorizationId, claimAuthorization, observation, receipt }) {
     const record = authorizationId ? authorizations.get(authorizationId) : null;
+    assertReceiptIdentity(receipts.get(receipt?.receiptId), receipt);
     if (claimAuthorization && !record) return { ok: false, code: 'AUTHORIZATION_NOT_FOUND' };
     if (claimAuthorization && record.boundTxHash && record.boundTxHash !== observation.txHash) return { ok: false, code: 'AUTHORIZATION_ALREADY_USED' };
     const compound = `${observation.chainId}:${observation.txHash}`; const versions = observations.get(compound) ?? [];
@@ -29,7 +30,7 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) { const int
     if (receipt && !receipts.has(receipt.receiptId)) receipts.set(receipt.receiptId, structuredClone(receipt));
     return { ok: true, record: record ? structuredClone(record) : null };
   },
-  async saveReceipt(value) { if (!receipts.has(value.receiptId)) receipts.set(value.receiptId, value); return receipts.get(value.receiptId); }, async getReceipt(id) { return receipts.get(id); },
+  async saveReceipt(value) { const existing = receipts.get(value.receiptId); assertReceiptIdentity(existing, value); if (!existing) receipts.set(value.receiptId, value); return receipts.get(value.receiptId); }, async getReceipt(id) { return receipts.get(id); },
   async getIdempotency(scope, key) { return idempotency.get(`${scope}:${key}`); },
   async reserveIdempotency({ scope, key, requestHash, response, expiresAt }) {
     const compound = `${scope}:${key}`; const existing = idempotency.get(compound);
@@ -52,3 +53,10 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) { const int
   async getJob(jobId) { return jobs.get(jobId); },
   async listJobs() { return [...jobs.values()]; },
 }; }
+
+function assertReceiptIdentity(existing, candidate) {
+  if (!existing || !candidate || hashJson(existing) === hashJson(candidate)) return;
+  const error = new Error('Receipt ID is already associated with different signed evidence');
+  error.code = 'RECEIPT_ID_CONFLICT';
+  throw error;
+}

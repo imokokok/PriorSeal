@@ -75,6 +75,10 @@ export function createPostgresStore(pool) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        if (receipt) {
+          const existingReceipt = await client.query('SELECT receipt_json FROM receipts WHERE receipt_id=$1', [receipt.receiptId]);
+          assertReceiptIdentity(existingReceipt.rows[0]?.receipt_json, receipt);
+        }
         if (claimAuthorization) {
           const bound = await client.query(`UPDATE authorizations SET bound_tx_hash=COALESCE(bound_tx_hash,$2),uses=CASE WHEN bound_tx_hash IS NULL THEN 1 ELSE uses END,status='BOUND' WHERE authorization_id=$1 AND (bound_tx_hash IS NULL OR bound_tx_hash=$2) RETURNING *`, [authorizationId, observation.txHash]);
           if (!bound.rows[0]) {
@@ -83,11 +87,17 @@ export function createPostgresStore(pool) {
           }
         }
         await client.query(`INSERT INTO execution_observations (intent_hash,chain_id,tx_hash,status,block_number,observed_at,finality_state,observation_json,observation_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (chain_id,tx_hash,observation_hash) DO NOTHING`, [observation.intentHash ?? null, observation.chainId, observation.txHash, observation.status, observation.blockNumber, observation.observedAt, observation.finalityState, observation, hashJson(observation)]);
-        if (receipt) await client.query('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (receipt_id) DO NOTHING', [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, receipt, receipt.signature ?? null]);
+        if (receipt) {
+          const insertedReceipt = await client.query('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (receipt_id) DO NOTHING RETURNING receipt_json', [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, receipt, receipt.signature ?? null]);
+          if (!insertedReceipt.rows[0]) {
+            const existingReceipt = await client.query('SELECT receipt_json FROM receipts WHERE receipt_id=$1', [receipt.receiptId]);
+            assertReceiptIdentity(existingReceipt.rows[0]?.receipt_json, receipt);
+          }
+        }
         await client.query('COMMIT'); return { ok: true };
       } catch (error) { await client.query('ROLLBACK'); if (error.code === 'AUTHORIZATION_ALREADY_USED' || error.code === 'AUTHORIZATION_NOT_FOUND') return { ok: false, code: error.code }; throw error; } finally { client.release(); }
     },
-    async saveReceipt(receipt) { const result = await pool.query('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (receipt_id) DO NOTHING RETURNING receipt_json', [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, receipt, receipt.signature ?? null]); if (result.rows[0]) return result.rows[0].receipt_json; const existing = await pool.query('SELECT receipt_json FROM receipts WHERE receipt_id = $1', [receipt.receiptId]); return existing.rows[0]?.receipt_json; },
+    async saveReceipt(receipt) { const result = await pool.query('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (receipt_id) DO NOTHING RETURNING receipt_json', [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, receipt, receipt.signature ?? null]); if (result.rows[0]) return result.rows[0].receipt_json; const existing = await pool.query('SELECT receipt_json FROM receipts WHERE receipt_id = $1', [receipt.receiptId]); assertReceiptIdentity(existing.rows[0]?.receipt_json, receipt); return existing.rows[0]?.receipt_json; },
     async getReceipt(receiptId) { const result = await pool.query('SELECT receipt_json FROM receipts WHERE receipt_id = $1', [receiptId]); return result.rows[0]?.receipt_json; },
     async getIdempotency(scope, key) { const result = await pool.query('SELECT request_hash,response_json,expires_at FROM idempotency_records WHERE scope = $1 AND idempotency_key = $2', [scope, key]); const row = result.rows[0]; return row ? { requestHash: row.request_hash, response: row.response_json, expiresAt: new Date(row.expires_at).getTime() } : undefined; },
     async reserveIdempotency({ scope, key, requestHash, response, expiresAt }) {
@@ -108,3 +118,10 @@ export function createPostgresStore(pool) {
 
 function rowToJob(row) { return { jobId: row.job_id, idempotencyKey: row.idempotency_key, input: row.input_json, state: row.state, attempts: row.attempts, nextAttemptAt: new Date(row.next_attempt_at).getTime(), observation: row.observation_json, result: row.result_json ?? null, error: row.error_json, createdAt: new Date(row.created_at).getTime() }; }
 function rowToAuthorization(row) { return { authorization: row.authorization_json, acceptance: row.acceptance_json, policy: row.policy_json?.result ?? row.policy_json, policyEvidence: row.policy_json?.schema === 'priorseal.policy-evidence.v1' ? row.policy_json : undefined, ...(row.timestamp_evidence_json ? { timestampEvidence: row.timestamp_evidence_json } : {}), ...(row.witness_evidence_json ? { witnessEvidence: row.witness_evidence_json } : {}), status: row.status, boundTxHash: row.bound_tx_hash, uses: row.uses }; }
+
+function assertReceiptIdentity(existing, candidate) {
+  if (!existing || hashJson(existing) === hashJson(candidate)) return;
+  const error = new Error('Receipt ID is already associated with different signed evidence');
+  error.code = 'RECEIPT_ID_CONFLICT';
+  throw error;
+}

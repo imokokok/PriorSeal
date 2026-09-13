@@ -17,6 +17,7 @@ import { createHttpWitnessProvider, parseWitnessEndpoints, readWitnessEndpoints 
 import { createDigiCertTimestampProvider } from '../infrastructure/timestamp/digicert-rfc3161-client.mjs';
 import { assertProductionSchema } from './production-schema.mjs';
 import { createContractSignatureVerifier } from '../infrastructure/blockchain/evm/contract-signature-verifier.mjs';
+import { assertEd25519KeyPair } from '../domain/ed25519.mjs';
 
 const { Pool } = pg;
 
@@ -31,6 +32,10 @@ export async function createPriorSealRuntime({ config, environment = process.env
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();
     const publicKeyPem = config.publicKeyPem ?? fileKeys.getPublicKey();
+    if (privateKeyPem || publicKeyPem) {
+      if (!privateKeyPem || !publicKeyPem) throw new TypeError('Issuer private and public keys must be configured together');
+      assertEd25519KeyPair(privateKeyPem, publicKeyPem);
+    }
     const registryEntries = config.keyRegistryJson ? parseKeyRegistryDocument(config.keyRegistryJson) : readFileKeyRegistry(config.keyRegistryFile);
     const registry = createKeyRegistry(registryEntries);
     const policy = config.policyJson ? parsePolicyDocument(config.policyJson) : readPolicyFile(config.policyFile);
