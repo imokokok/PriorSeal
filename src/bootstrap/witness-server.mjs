@@ -4,6 +4,7 @@ import { statSync } from 'node:fs';
 import { createFileKeyProvider } from '../infrastructure/keys/file-key-provider.mjs';
 import { createPostgresWitnessStore } from '../infrastructure/witness/postgres-witness-store.mjs';
 import { createWitnessHttpServer } from '../interfaces/http/create-witness-http-server.mjs';
+import { assertWitnessSchema } from './production-schema.mjs';
 
 const { Pool } = pg;
 const environment = process.env.PRIORSEAL_ENVIRONMENT ?? 'development';
@@ -16,6 +17,9 @@ const databaseUrl = process.env.DATABASE_URL?.trim();
 if (environment === 'production' && !databaseUrl) throw new TypeError('Production witness requires DATABASE_URL');
 if (environment === 'production' && !process.env.PRIORSEAL_WITNESS_BEARER_TOKEN) throw new TypeError('Production witness requires PRIORSEAL_WITNESS_BEARER_TOKEN');
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
+if (environment === 'production') {
+  try { await assertWitnessSchema(pool); } catch (error) { await pool?.end().catch(() => {}); throw error; }
+}
 const keys = createFileKeyProvider({ privateKeyFile, publicKeyFile });
 const privateKeyPem = keys.getPrivateKey();
 const publicKeyPem = keys.getPublicKey();

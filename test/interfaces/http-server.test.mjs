@@ -172,3 +172,13 @@ test('serves the production console and preserves API 404 responses', async (t) 
   const notModified = await request(server, '/photo.jpg', { headers: { 'if-none-match': image.headers.etag } }); assert.equal(notModified.status, 304);
   assert.equal(missingApi.status, 404); assert.equal(missingApi.json().error.code, 'NOT_FOUND'); assert.equal(rateLimitChecks, 1);
 });
+
+test('HTTP handling awaits a shared limiter and uses the trusted Cloudflare client address', async (t) => {
+  let limitedKey;
+  const server = createHttpServer({ trustProxy: true, rateLimiter: { async allow(key) { limitedKey = key; return false; } } });
+  t.after(() => server.close());
+  const response = await request(server, '/v1/version', { headers: { 'cf-connecting-ip': '203.0.113.7', 'x-forwarded-for': '198.51.100.9' } });
+  assert.equal(response.status, 429);
+  assert.equal(response.json().error.code, 'RATE_LIMITED');
+  assert.equal(limitedKey, '203.0.113.7');
+});

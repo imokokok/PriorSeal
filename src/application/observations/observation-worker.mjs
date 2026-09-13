@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { detectReorg } from '../../domain/execution.mjs';
 
 const retryable = new Set(['PENDING', 'NOT_FOUND', 'RPC_ERROR', 'RPC_TIMEOUT']);
-export function createObservationWorker({ observe, saveObservation, store = null, clock = () => Date.now(), retryDelayMs = 5000, maxAttempts = 8, jitter = () => 0.5 } = {}) {
+export function createObservationWorker({ observe, saveObservation, store = null, clock = () => Date.now(), retryDelayMs = 5000, maxAttempts = 8, jobLeaseMs = 15 * 60_000, jitter = () => 0.5 } = {}) {
   if (typeof observe !== 'function' || typeof saveObservation !== 'function') throw new TypeError('observe and saveObservation are required');
   const jobs = new Map();
   async function enqueuePersistent(input) {
@@ -19,7 +19,7 @@ export function createObservationWorker({ observe, saveObservation, store = null
   }
   async function runOnce() {
     const persistentClaims = Boolean(store?.claimDueJobs);
-    const due = persistentClaims ? await store.claimDueJobs(clock()) : [...jobs.values()].filter((job) => ['QUEUED', 'RETRY_WAIT'].includes(job.state) && job.nextAttemptAt <= clock());
+    const due = persistentClaims ? await store.claimDueJobs(clock(), 10, jobLeaseMs) : [...jobs.values()].filter((job) => ['QUEUED', 'RETRY_WAIT'].includes(job.state) && job.nextAttemptAt <= clock());
     for (const job of due) {
       job.state = 'RUNNING'; if (!persistentClaims) job.attempts += 1;
       try {

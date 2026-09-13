@@ -10,6 +10,6 @@ export function createPostgresWitnessStore(pool) {
       if (result.rows[0]) return result.rows[0].attestation_json;
       return this.get(requestHash, witnessId);
     },
-    async health() { await pool.query('SELECT 1'); return 'postgresql'; },
+    async health() { await pool.query('SELECT 1 FROM witness_attestations LIMIT 0'); return 'postgresql'; },
   };
 }

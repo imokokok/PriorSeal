@@ -31,3 +31,32 @@ test('Postgres observation persistence rolls back the authorization claim with e
   assert.equal(calls.includes('COMMIT'), false);
   assert.equal(released, true);
 });
+
+test('Postgres observation claims recover expired leases and reject a stale owner update', async () => {
+  const calls = [];
+  const claimedRow = { job_id: 'job-1', idempotency_key: 'same', input_json: { chainId: 8453, txHash: '0x1' }, state: 'RUNNING', attempts: 2, next_attempt_at: new Date(1_000), observation_json: null, result_json: null, error_json: null, created_at: new Date(0), lease_token: 'lease-token', lease_expires_at: new Date(901_000) };
+  const client = {
+    async query(sql, parameters) {
+      calls.push({ sql, parameters });
+      if (sql.startsWith('WITH due AS')) return { rows: [claimedRow] };
+      return { rows: [] };
+    },
+    release() {},
+  };
+  const pool = {
+    connect: async () => client,
+    async query(sql, parameters) {
+      calls.push({ sql, parameters });
+      if (sql.startsWith('UPDATE observation_jobs')) return { rows: [] };
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  };
+  const store = createPostgresStore(pool);
+  const [claim] = await store.claimDueJobs(1_000, 10, 900_000);
+  assert.equal(claim.leaseToken, 'lease-token');
+  assert.match(calls.find((call) => call.sql.startsWith('WITH due AS')).sql, /state='RUNNING' AND lease_expires_at <=/);
+  assert.equal(await store.saveJob({ ...claim, state: 'COMPLETED' }), undefined);
+  const save = calls.find((call) => call.sql.startsWith('UPDATE observation_jobs'));
+  assert.match(save.sql, /lease_token=\$8/);
+  assert.equal(save.parameters[7], 'lease-token');
+});

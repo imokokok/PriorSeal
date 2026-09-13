@@ -108,15 +108,19 @@ Production mode is fail-closed. Set `PRIORSEAL_ENVIRONMENT=production`; startup 
 
 ## Persistence and operations
 
-Neon is the production persistence backend. The Cloudflare Worker reaches it through Hyperdrive; local Node operation uses `DATABASE_URL`, and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. Apply migrations through `007_observation_job_results.sql`; they establish authorization, timestamp and witness evidence storage, durable intents, observation versions, idempotency records, and recoverable at-least-once worker results. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
+Neon is the production persistence backend. The Cloudflare Worker reaches it through Hyperdrive; local Node operation uses `DATABASE_URL`, and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. Apply migrations through `008_observation_job_leases.sql`; they establish authorization, timestamp and witness evidence storage, durable intents, observation versions, idempotency records, and leased at-least-once worker results that recover after an interrupted consumer. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
 
-The production web console and API run together on Cloudflare Workers. Static assets are served from `web/dist`, API and health paths run Worker-first, Hyperdrive provides the PostgreSQL connection, Cloudflare Queues dispatch durable observation jobs, and the minute cron recovers work that was persisted before a queue delivery. The production domains are `https://priorseal.xyz` and `https://www.priorseal.xyz`; `https://priorseal.priorseal.workers.dev` remains available for deployment diagnostics. Validate the bundle with `npm run worker:check`, deploy with `npm run worker:deploy`, and run the no-spend production check with `npm run production:smoke`. Add the durable pending/retry check with `npm run production:smoke:pending`. Store every value named by `secrets.required` in Worker Secrets, never in Git. See the [Cloudflare runbook](docs/runbooks/cloudflare.md).
+The production web console and API run together on Cloudflare Workers. Static assets are served from `web/dist`, API and health paths run Worker-first, Hyperdrive provides the PostgreSQL connection, Cloudflare Queues dispatch durable observation jobs, and the minute cron recovers work that was persisted before a queue delivery. The production domains are `https://priorseal.xyz` and `https://www.priorseal.xyz`; `https://priorseal.priorseal.workers.dev` remains available for deployment diagnostics. Validate the bundle with `npm run worker:check`, deploy a clean commit with `npm run worker:deploy`, and pass that exact Git SHA as `PRIORSEAL_EXPECTED_VERSION` to the no-spend production smoke commands. Store every value named by `secrets.required` in Worker Secrets, never in Git. See the [Cloudflare runbook](docs/runbooks/cloudflare.md).
 
 For a local container environment:
 
 ```bash
-docker compose up --build
+cp .env.example .env.local
+# Configure development issuer key paths in .env.local first.
+docker compose --env-file .env.local up --build
 ```
+
+Compose mounts the issuer keys as read-only secrets, connects the API to its local PostgreSQL service, and applies all migrations before starting the API.
 
 Mount issuer key files read-only outside the image and inject production configuration through the deployment secret system. Do not use the compose database password outside local development. See [operations](docs/runbooks/operations.md) for RPC outage, reorg, backup/restore, and key-rotation procedures.
 

@@ -3,7 +3,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { canonicalize, verifyAuthorization, verifyAuthorizationReceipt, verifyTimestampEvidence } from '../src/index.mjs';
 
 const baseUrl = new URL(process.env.PRIORSEAL_BASE_URL ?? 'https://priorseal.xyz');
-const expectedVersion = process.env.PRIORSEAL_EXPECTED_VERSION ?? 'cloudflare-';
+const expectedVersion = process.env.PRIORSEAL_EXPECTED_VERSION?.trim();
 const runPendingFlow = process.argv.includes('--pending');
 const resumedPendingJobId = process.env.PRIORSEAL_PENDING_JOB_ID?.trim();
 const pendingTimeoutMs = Number(process.env.PRIORSEAL_PENDING_TIMEOUT_MS ?? 720_000);
@@ -11,6 +11,7 @@ const pendingTimeoutMs = Number(process.env.PRIORSEAL_PENDING_TIMEOUT_MS ?? 720_
 if (baseUrl.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(baseUrl.hostname)) {
   throw new Error('PRIORSEAL_BASE_URL must use HTTPS outside local development');
 }
+if (!expectedVersion) throw new Error('PRIORSEAL_EXPECTED_VERSION must be the exact Git SHA used as the Worker version tag');
 if (!Number.isSafeInteger(pendingTimeoutMs) || pendingTimeoutMs < 90_000 || pendingTimeoutMs > 900_000) {
   throw new Error('PRIORSEAL_PENDING_TIMEOUT_MS must be an integer between 90000 and 900000');
 }
@@ -67,7 +68,7 @@ const homeText = await home.text();
 
 assert(live.body.status === 'ok', 'Liveness check failed');
 assert(ready.body.status === 'ready' && ready.body.storage === 'postgresql', 'PostgreSQL readiness check failed');
-assert(version.body.service === 'priorseal' && version.body.version.startsWith(expectedVersion), `Unexpected production build: ${version.body.version}`);
+assert(version.body.service === 'priorseal' && version.body.version === expectedVersion, `Unexpected production build: ${version.body.version}`);
 assert(!version.response.headers.has('x-render-origin-server') && !version.response.headers.has('rndr-id'), 'Request still reached Render');
 assert(home.ok && /PriorSeal/i.test(homeText), 'Production console is unavailable');
 assert(registry.body.keys?.some((key) => key.status === 'active'), 'No active issuer key is published');

@@ -4,6 +4,7 @@ import { createPriorSealRuntime } from './create-runtime.mjs';
 import { loadRuntimeConfig } from './runtime-config.mjs';
 import { assertProductionSchema, REQUIRED_PRODUCTION_MIGRATION } from './production-schema.mjs';
 import { retryDelaySeconds, shouldRedeliverJob } from './cloudflare-retry.mjs';
+import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter } from './cloudflare-bindings.mjs';
 
 const { Client } = pg;
 
@@ -24,9 +25,8 @@ async function assertSchemaCached(database, config, context) {
 }
 
 async function withRuntime(environment, context, operation) {
-  if (!environment.HYPERDRIVE?.connectionString) throw new TypeError('HYPERDRIVE binding is required');
-  if (!environment.OBSERVATION_QUEUE?.send) throw new TypeError('OBSERVATION_QUEUE binding is required');
-  const config = loadRuntimeConfig({ ...environment, PRIORSEAL_RUNTIME: 'cloudflare-workers', DATABASE_URL: environment.HYPERDRIVE.connectionString });
+  const runtimeEnvironment = cloudflareRuntimeEnvironment(environment);
+  const config = loadRuntimeConfig(runtimeEnvironment);
   const client = new Client({ connectionString: environment.HYPERDRIVE.connectionString });
   await client.connect();
   const database = databaseAdapter(client);
@@ -38,6 +38,7 @@ async function withRuntime(environment, context, operation) {
       environment,
       database,
       assertSchema: false,
+      rateLimiter: createCloudflareRateLimiter(environment.HTTP_RATE_LIMITER),
       dispatchObservationJob: (job) => environment.OBSERVATION_QUEUE.send({ jobId: job.jobId }),
     });
     return await operation(runtime);

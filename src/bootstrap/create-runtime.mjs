@@ -22,7 +22,7 @@ import { assertEd25519KeyPair } from '../domain/ed25519.mjs';
 const { Pool } = pg;
 
 /** Composes the protocol once for Node or Cloudflare without leaking runtime details into the domain. */
-export async function createPriorSealRuntime({ config, environment = process.env, database, databaseConnectionString = config.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, assertSchema = true } = {}) {
+export async function createPriorSealRuntime({ config, environment = process.env, database, databaseConnectionString = config.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, assertSchema = true } = {}) {
   if (!config) throw new TypeError('Runtime config is required');
   const ownsPool = !database;
   const pool = database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
@@ -69,7 +69,7 @@ export async function createPriorSealRuntime({ config, environment = process.env
         return job;
       },
     } : baseObservationWorker;
-    const server = createHttpServer({ store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer });
+    const server = createHttpServer({ store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter });
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {});

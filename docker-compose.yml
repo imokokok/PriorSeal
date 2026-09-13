@@ -1,9 +1,32 @@
 services:
   api:
     build: .
-    env_file: .env
+    env_file: .env.local
+    environment:
+      DATABASE_URL: postgresql://priorseal:development-only-change-me@postgres:5432/priorseal
+      DATABASE_URL_UNPOOLED: postgresql://priorseal:development-only-change-me@postgres:5432/priorseal
+      PRIORSEAL_PRIVATE_KEY_FILE: /run/secrets/priorseal-issuer-private.pem
+      PRIORSEAL_PUBLIC_KEY_FILE: /run/secrets/priorseal-issuer-public.pem
+    secrets:
+      - source: priorseal-issuer-private
+        target: priorseal-issuer-private.pem
+      - source: priorseal-issuer-public
+        target: priorseal-issuer-public.pem
     ports:
       - "3000:3000"
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  migrate:
+    build: .
+    env_file: .env.local
+    environment:
+      DATABASE_URL: postgresql://priorseal:development-only-change-me@postgres:5432/priorseal
+      DATABASE_URL_UNPOOLED: postgresql://priorseal:development-only-change-me@postgres:5432/priorseal
+    command: ["node", "scripts/migrate.mjs"]
     read_only: true
     tmpfs: ["/tmp"]
     security_opt: ["no-new-privileges:true"]
@@ -25,3 +48,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
 volumes:
   postgres-data:
+secrets:
+  priorseal-issuer-private:
+    file: ${PRIORSEAL_PRIVATE_KEY_FILE:?Set PRIORSEAL_PRIVATE_KEY_FILE in .env.local}
+  priorseal-issuer-public:
+    file: ${PRIORSEAL_PUBLIC_KEY_FILE:?Set PRIORSEAL_PUBLIC_KEY_FILE in .env.local}

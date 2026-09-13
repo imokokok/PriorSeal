@@ -5,7 +5,7 @@ import { parsePolicyDocument, readPolicyFile } from '../src/infrastructure/polic
 import { createRpcClient } from '../src/infrastructure/blockchain/evm/rpc-client.mjs';
 import { getRpcUrls, SUPPORTED_CHAINS } from '../src/infrastructure/blockchain/evm/chains.mjs';
 import { parseWitnessEndpoints, readWitnessEndpoints } from '../src/infrastructure/witness/http-witness-client.mjs';
-import { assertProductionSchema } from '../src/bootstrap/production-schema.mjs';
+import { assertProductionSchema, REQUIRED_PRODUCTION_MIGRATION } from '../src/bootstrap/production-schema.mjs';
 import { parseTransparencyAnchor, readTransparencyAnchor, verifyTransparencyAnchor } from '../src/infrastructure/transparency/file-anchor-provider.mjs';
 
 if (process.env.PRIORSEAL_ENVIRONMENT !== 'production') throw new TypeError('Set PRIORSEAL_ENVIRONMENT=production before running the production readiness check');
@@ -48,4 +48,4 @@ if (config.preExecutionProofMode === 'evm-anchor') {
   const candidate = config.transparencyAnchorJson ? parseTransparencyAnchor(config.transparencyAnchorJson) : readTransparencyAnchor(config.transparencyAnchorFile);
   verifiedAnchor = await verifyTransparencyAnchor(candidate, { rpcClient, rpcUrls: getRpcUrls(candidate.chainId) ?? [], minConfirmations: config.anchorConfirmations });
 }
-console.log(JSON.stringify({ ready: true, buildVersion: config.buildVersion, databaseMigration: '007_observation_job_results.sql', principalMode: config.allowSelfAssertedPrincipals ? 'self-asserted' : 'reviewed-registry', reviewedPrincipals: policy.principals?.length ?? 0, verifiedChains, preExecutionProofMode: config.preExecutionProofMode, timestampProfile: policy.timestampPolicy?.profile ?? null, witnessThreshold: policy.witnessQuorum?.threshold ?? null, externalAnchorRequired: config.requireExternalAnchor, anchorConfirmations: config.anchorConfirmations, verifiedAnchorTxHash: verifiedAnchor?.txHash ?? null }));
+console.log(JSON.stringify({ ready: true, buildVersion: config.buildVersion, databaseMigration: REQUIRED_PRODUCTION_MIGRATION, principalMode: config.allowSelfAssertedPrincipals ? 'self-asserted' : 'reviewed-registry', reviewedPrincipals: policy.principals?.length ?? 0, verifiedChains, preExecutionProofMode: config.preExecutionProofMode, timestampProfile: policy.timestampPolicy?.profile ?? null, witnessThreshold: policy.witnessQuorum?.threshold ?? null, externalAnchorRequired: config.requireExternalAnchor, anchorConfirmations: config.anchorConfirmations, verifiedAnchorTxHash: verifiedAnchor?.txHash ?? null }));

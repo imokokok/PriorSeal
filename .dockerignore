@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.env.*
+.priorseal
+**/*.pem
+node_modules
+sdk/dist
+web/dist
+.wrangler
+coverage
+test-results
+playwright-report
+blob-report
+*.log
