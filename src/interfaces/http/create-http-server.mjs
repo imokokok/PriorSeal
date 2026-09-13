@@ -68,7 +68,8 @@ export function createHttpServer({ store = createMemoryStore(), issuer = 'priors
       if (authorizationMatch) { const record = await store.getAuthorization?.(decodeURIComponent(authorizationMatch[1])); if (!record) throw new PriorSealError('AUTHORIZATION_NOT_FOUND', 'Authorization not found'); return respond(200, record); }
       if (req.method === 'POST' && path === '/v1/executions/observe') {
         const result = await observeExecution({ input: body, store, observer, signal: controller.signal, privateKeyPem, issuer, keyId, publicKeyPem, idempotencyKey: req.headers['idempotency-key'], transparencyProvider, authorizationAudience, verifyContractSignature, now });
-        const observationJob = observationWorker && ['PENDING', 'NOT_FOUND', 'RPC_ERROR', 'RPC_TIMEOUT'].includes(result.response.observation.status) ? await observationWorker.enqueuePersistent({ ...body, idempotencyKey: `${body.authorizationId ?? body.intentId}:${body.chainId}:${body.txHash}:${body.confirmations ?? 0}` }) : null;
+        const observationCycle = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : requestId;
+        const observationJob = observationWorker && ['PENDING', 'NOT_FOUND', 'RPC_ERROR', 'RPC_TIMEOUT'].includes(result.response.observation.status) ? await observationWorker.enqueuePersistent({ ...body, idempotencyKey: `observation:${hashJson(body)}:${observationCycle}` }) : null;
         return respond(200, { ...result.response, ...(observationJob ? { observationJob } : {}), requestId }, result.replay ? { 'idempotency-replayed': 'true' } : {});
       }
       const transparencyMatch = req.method === 'GET' && path.match(/^\/v1\/authorizations\/([^/]+)\/transparency$/);

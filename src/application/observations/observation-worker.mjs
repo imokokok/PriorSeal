@@ -24,7 +24,7 @@ export function createObservationWorker({ observe, saveObservation, store = null
       job.state = 'RUNNING'; if (!persistentClaims) job.attempts += 1;
       try {
         const previous = job.observation ?? (store?.getObservation ? await store.getObservation(job.input.chainId, job.input.txHash) : null);
-        const observed = await observe(job.input); const result = observed?.observation ? observed : null; const observation = result?.observation ?? observed; if (detectReorg(previous, observation)) observation.status = 'REORGED', observation.finalityState = 'REORGED', observation.previousBlockHash = previous.blockHash; job.observation = observation; job.result = result ? { ...result, observation } : null; await saveObservation(observation);
+        const observed = await observe(job.input); const result = observed?.observation ? observed : null; const observation = result?.observation ?? observed; if (detectReorg(previous, observation)) observation.status = 'REORGED', observation.finalityState = 'REORGED', observation.previousBlockHash = previous.blockHash; job.observation = observation; job.result = result ? { ...result, observation } : null; await saveObservation(observation); job.error = null;
         if (retryable.has(observation.status) && job.attempts < maxAttempts) { job.state = 'RETRY_WAIT'; job.nextAttemptAt = nextRetry(job.attempts); }
         else { job.state = observation.status === 'CONFIRMED' || observation.status === 'REVERTED' ? 'COMPLETED' : 'UNDETERMINED'; }
       } catch (error) {

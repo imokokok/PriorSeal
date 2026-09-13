@@ -82,6 +82,18 @@ test('signed confirmation constraints cannot be relaxed by the observer request'
   await assert.rejects(() => observeExecution({ input: { intentId: intent.intentId, txHash, confirmations: -1 }, store, observer: async () => ({}) }), (error) => error.code === 'INVALID_REQUEST');
 });
 
+test('an adapter cannot claim authorization with an under-finalized reverted observation', async () => {
+  const store = createMemoryStore();
+  const authorization = buildAuthorization({ intent: { intentId: 'revert-finality-safe', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2_000, nonce: '6', constraints: { minConfirmations: 12 } }, principal: { type: 'user', id: 'user-1', account: `0x${'c'.repeat(40)}` }, authorizer: { type: 'eip712', address: `0x${'c'.repeat(40)}` }, delegate: { agentId: 'agent-1', executor: sender }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'6'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}`, signature: '0x01' });
+  await store.saveIntent(authorization.intent);
+  await store.saveAuthorization({ authorization, acceptance: { acceptedAt: 1_001 }, policyEvidence: { schema: 'priorseal.policy-evidence.v1', policyHash: authorization.policyHash, document: null, result: { allowed: true, reasonCodes: [], policyId: null, evaluatedAt: 1_001 } }, status: 'ACCEPTED', boundTxHash: null, uses: 0 });
+  const revertedHash = `0x${'4'.repeat(64)}`;
+  const result = await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: revertedHash }, store, observer: async () => ({ chainId: 8453, txHash: revertedHash, status: 'REVERTED', executionDataAvailable: true, action: 'TRANSFER', sender, recipient, asset: authorization.intent.asset, amount: authorization.intent.amount, nonce: '6', executedAt: 1_100, observedAt: 1_101, confirmations: 1, finalityState: 'INSUFFICIENT_FINALITY' }) });
+  assert.equal(result.response.observation.status, 'PENDING');
+  assert.equal(result.response.authorizationAssociation, 'CANDIDATE');
+  assert.equal((await store.getAuthorization(authorization.authorizationId)).boundTxHash, null);
+});
+
 test('observation idempotency rejects a reused key with different input', async () => {
   const store = createMemoryStore({ clock: () => 1_000 });
   const intent = buildIntent({ intentId: 'observe-conflict', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '1', sender, recipient, validUntil: 2_000 });

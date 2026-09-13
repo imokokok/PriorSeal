@@ -35,6 +35,10 @@ export async function observeExecution({ input, store, observer, signal, private
     signal,
   });
   let observation = { ...observed, intentHash: intent.intentHash };
+  const observedConfirmations = Number(observation.confirmations ?? 0);
+  const claimsFinalExecution = ['CONFIRMED', 'REVERTED'].includes(observation.status);
+  const hasRequiredFinality = observation.finalityState === 'CONFIRMED' && Number.isSafeInteger(observedConfirmations) && observedConfirmations >= confirmations;
+  if (claimsFinalExecution && !hasRequiredFinality) observation = { ...observation, status: 'PENDING', finalityState: 'INSUFFICIENT_FINALITY' };
   if (detectReorg(previous, observation)) observation = { ...observation, status: 'REORGED', finalityState: 'REORGED', previousBlockHash: previous.blockHash };
 
   const executionTime = observation.executedAt ?? observation.observedAt;
@@ -86,7 +90,8 @@ export function classifyAuthorizationAssociation(authorization, observation) {
     && String(observation.sender ?? '').toLowerCase() === authorization.delegate.executor
     && String(observation.nonce ?? '') === String(authorization.intent.nonce);
   if (!correlated) return 'UNRELATED';
-  if (['CONFIRMED', 'REVERTED'].includes(observation.status)) return 'FINAL';
+  if (['CONFIRMED', 'REVERTED'].includes(observation.status) && observation.finalityState === 'CONFIRMED') return 'FINAL';
+  if (['CONFIRMED', 'REVERTED'].includes(observation.status)) return 'CANDIDATE';
   if (observation.status === 'PENDING') return 'CANDIDATE';
   return 'UNRELATED';
 }

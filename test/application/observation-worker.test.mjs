@@ -33,3 +33,25 @@ test('observation worker preserves the final receipt result for resumable client
   assert.equal(completed.result.receipt.receiptId, 'psr-final');
   assert.equal(completed.result.verification.valid, true);
 });
+
+test('observation worker clears a transient error after a successful retry', async () => {
+  let now = 1_000; let calls = 0;
+  const worker = createObservationWorker({
+    clock: () => now,
+    retryDelayMs: 10,
+    jitter: () => 0.5,
+    observe: async () => {
+      calls += 1;
+      if (calls === 1) throw Object.assign(new Error('temporary failure'), { code: 'RPC_TIMEOUT' });
+      return { chainId: 8453, txHash: '0x1', status: 'CONFIRMED', finalityState: 'CONFIRMED' };
+    },
+    saveObservation: async () => {},
+  });
+  const job = worker.enqueue({ chainId: 8453, txHash: '0x1' });
+  await worker.runOnce();
+  now += 10;
+  await worker.runOnce();
+  const completed = worker.get(job.jobId);
+  assert.equal(completed.state, 'COMPLETED');
+  assert.equal(completed.error, null);
+});

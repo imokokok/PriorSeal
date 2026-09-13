@@ -113,14 +113,22 @@ test('observation writes honor Idempotency-Key and return a signed linked receip
 test('pending observations return a durable job handle', async (t) => {
   const txHash = `0x${'7'.repeat(64)}`;
   const queued = { jobId: 'job-pending-1', state: 'QUEUED', attempts: 0, input: { intentId: intent.intentId, chainId: 8453, txHash }, observation: null, result: null, error: null };
-  const observationWorker = { async enqueuePersistent() { return queued; }, async get() { return queued; } };
+  const jobKeys = [];
+  const observationWorker = { async enqueuePersistent(input) { jobKeys.push(input.idempotencyKey); return { ...queued, jobId: `job-pending-${jobKeys.length}` }; }, async get() { return queued; } };
   const server = createHttpServer({ observationWorker, observer: async () => ({ chainId: 8453, txHash, status: 'PENDING', action: 'TRANSFER', sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 0, transfers: [], finalityState: 'PENDING' }) });
   t.after(() => server.close());
   await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
-  const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 }) });
+  const observationBody = JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 });
+  const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'observe-cycle-1' }, body: observationBody });
+  const replay = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'observe-cycle-1' }, body: observationBody });
+  const restarted = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'observe-cycle-2' }, body: observationBody });
   assert.equal(observed.status, 200);
   assert.equal(observed.json().observationJob.jobId, 'job-pending-1');
   assert.equal(observed.json().observation.status, 'PENDING');
+  assert.equal(replay.json().observationJob.jobId, 'job-pending-2');
+  assert.equal(restarted.json().observationJob.jobId, 'job-pending-3');
+  assert.equal(jobKeys[0], jobKeys[1]);
+  assert.notEqual(jobKeys[1], jobKeys[2]);
 });
 test('signed authorization is accepted before execution and produces a v3 compliance receipt', async (t) => {
   const keys = generateKeyPairSync('ed25519');
