@@ -1,0 +1,130 @@
+{
+  "schema": "priorseal.thoughtproof-sentinel-paired-fixture.v1",
+  "exportSchema": "thoughtproof.sentinel.export.v1",
+  "artifactSchema": "sentinel.verdict.canonical.v1",
+  "exportDomain": "thoughtproof.sentinel.export.v1",
+  "namespace": "thoughtproof.sentinel-decision.v1",
+  "algorithm": "sha256",
+  "trustedThoughtProofKeys": [
+    {
+      "kid": "tp-sentinel-export-ed25519-2026-09",
+      "x": "rKfORFLuIi74fCI9DZEpefBXcKFU4e_0CuYuSH7Fh98",
+      "use": "production"
+    },
+    {
+      "kid": "tp-sentinel-export-ed25519-2026-09-vector",
+      "x": "IuMSTQMowwaP3yaOmlf9unkZAVjvc9MwOOqluXCjFDs",
+      "use": "vector-only"
+    }
+  ],
+  "priorSeal": {
+    "issuer": "priorseal.thoughtproof-fixture",
+    "keyId": "priorseal-thoughtproof-fixture-ed25519-1",
+    "publicKeySpkiSha256": "3532fb2b134488a2a18f2a07cd6db85b4c1b808ddb10972f0ad5526856177bd4",
+    "receiptSchema": "priorseal.execution-receipt.v3",
+    "intentSchema": "priorseal.intent.v2",
+    "executionProfile": "priorseal.execution-profile.exact-call.v1"
+  },
+  "effectMap": {
+    "ALLOW": "RECOMMEND",
+    "BLOCK": "DO_NOT_RECOMMEND",
+    "UNCERTAIN": "REVIEW_REQUIRED"
+  },
+  "cases": [
+    {
+      "name": "production matching pair",
+      "export": "export-prod-live.json",
+      "receipt": "priorseal-receipt-production.json",
+      "allowVectorOnly": false,
+      "expectedCode": "DECISION_COMMITMENT_VERIFIED",
+      "expectedSubjectBindingCode": "DECISION_SUBJECT_UNBOUND",
+      "expectedEffect": "REVIEW_REQUIRED"
+    },
+    {
+      "name": "vector matching pair",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-vector.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_COMMITMENT_VERIFIED",
+      "expectedSubjectBindingCode": "DECISION_SUBJECT_UNBOUND",
+      "expectedEffect": "RECOMMEND"
+    },
+    {
+      "name": "vector kid rejected without explicit allowance",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-vector.json",
+      "allowVectorOnly": false,
+      "expectedCode": "DECISION_SIGNER_UNTRUSTED"
+    },
+    {
+      "name": "missing signed export",
+      "export": null,
+      "receipt": "priorseal-receipt-vector.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_EXPORT_MISSING"
+    },
+    {
+      "name": "tampered transported canonical string",
+      "export": "export-tampered-canonical.json",
+      "receipt": "priorseal-receipt-vector.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SIGNATURE_INVALID"
+    },
+    {
+      "name": "tampered signed validUntil",
+      "export": "export-tampered-validUntil.json",
+      "receipt": "priorseal-receipt-vector.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SIGNATURE_INVALID"
+    },
+    {
+      "name": "known kid with wrong signature key",
+      "export": "export-wrong-key.json",
+      "receipt": "priorseal-receipt-vector.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SIGNATURE_INVALID"
+    },
+    {
+      "name": "unknown ThoughtProof kid",
+      "export": "export-unknown-keyId.json",
+      "receipt": "priorseal-receipt-vector.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SIGNER_UNTRUSTED"
+    },
+    {
+      "name": "valid PriorSeal receipt with wrong commitment digest",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-wrong-digest.json",
+      "allowVectorOnly": true,
+      "expectedCode": "CONTEXT_COMMITMENT_DIGEST_MISMATCH"
+    },
+    {
+      "name": "ThoughtProof commitment namespace missing",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-missing-commitment.json",
+      "allowVectorOnly": true,
+      "expectedCode": "CONTEXT_COMMITMENT_MISSING"
+    },
+    {
+      "name": "ThoughtProof commitment namespace ambiguous",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-ambiguous-commitment.json",
+      "allowVectorOnly": true,
+      "expectedCode": "CONTEXT_COMMITMENT_AMBIGUOUS"
+    },
+    {
+      "name": "decision expires before PriorSeal authorization",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-decision-expires-first.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_EXPIRES_BEFORE_AUTHORIZATION"
+    },
+    {
+      "name": "tampered PriorSeal receipt signature",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-tampered-signature.json",
+      "allowVectorOnly": true,
+      "expectedCode": "PRIORSEAL_INVALID_SIGNATURE"
+    }
+  ]
+}

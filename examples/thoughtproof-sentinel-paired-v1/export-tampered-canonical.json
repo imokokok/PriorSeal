@@ -1,0 +1,12 @@
+{
+  "exportSchema": "thoughtproof.sentinel.export.v1",
+  "artifactSchema": "sentinel.verdict.canonical.v1",
+  "verificationId": "sent_9f3c2a7b1e004d68",
+  "canonical": "{\"apiVersion\":\"sentinel-api-0.1.0\",\"artifactSchema\":\"sentinel.verdict.canonical.v1\",\"confidence\":84,\"evaluatedAt\":1782916498,\"mode\":\"trade_execution\",\"models\":{\"primary\":\"serv-nano\",\"secondary\":\"serv-swift\"},\"objections\":[\"step_0: Direction claim verified against market data.\"],\"reasoning\":\"All steps adequately supported by the evidence.\",\"tier\":\"standard\",\"verdict\":\"BLOCK\",\"verificationId\":\"sent_9f3c2a7b1e004d68\"}",
+  "digest": "0x419c360db82ee72be3411acd2d30f560b3f62842c2162fa3cb4a08c1fa4ce65a",
+  "keyId": "tp-sentinel-export-ed25519-2026-09-vector",
+  "alg": "Ed25519",
+  "signedAt": 1782916498,
+  "validUntil": 1783002898,
+  "signature": "0x81aa38bdde6c519a8c8029fedca2a5848a348dbfbc1e1a377864eef3e440f133631da5dc3c01e9716ac9745fda8296261b4f9546de80bf29748777f4a1fc9c00"
+}

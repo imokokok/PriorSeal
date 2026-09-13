@@ -31,3 +31,27 @@ test('create intent rejects policy violations and unsafe idempotency keys', asyn
   await assert.rejects(() => createIntent({ input, store, policy: { allowedChainIds: [1] } }), (error) => error.code === 'POLICY_REJECTED');
   await assert.rejects(() => createIntent({ input, store, idempotencyKey: 'not safe' }), (error) => error.code === 'INVALID_IDEMPOTENCY_KEY');
 });
+
+test('create intent rejects misleading exact-call semantic policy constraints', async () => {
+  const store = createMemoryStore();
+  const exact = {
+    ...input,
+    schema: 'priorseal.intent.v2',
+    executionProfile: 'priorseal.execution-profile.exact-call.v1',
+    action: 'CONTRACT_CALL',
+    nonce: '7',
+    callTarget: input.recipient,
+    calldataHash: `0x${'1'.repeat(64)}`,
+    transactionValue: '0',
+  };
+  await assert.rejects(
+    () => createIntent({ input: exact, store, policy: { allowedChainIds: [8453], maxAmount: '1000000' } }),
+    (error) => error.code === 'POLICY_REJECTED' && error.details.reasonCodes.includes('POLICY_EXACT_CALL_SEMANTICS_UNSUPPORTED'),
+  );
+});
+
+test('new intent issuance rejects legacy multi-chain and ambiguous constraint representations', async () => {
+  const store = createMemoryStore();
+  await assert.rejects(() => createIntent({ input: { ...input, chainIds: [1, 8453] }, store }), (error) => error.code === 'INVALID_INTENT');
+  await assert.rejects(() => createIntent({ input: { ...input, constraints: { minConfirmations: '12' } }, store }), (error) => error.code === 'INVALID_CONSTRAINT');
+});

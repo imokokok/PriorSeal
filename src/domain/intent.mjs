@@ -7,6 +7,18 @@ export const INTENT_SCHEMA = 'priorseal.intent.v1';
 export const EXACT_CALL_INTENT_SCHEMA = 'priorseal.intent.v2';
 export const EXACT_CALL_PROFILE = 'priorseal.execution-profile.exact-call.v1';
 const required = ['intentId', 'chainId', 'action', 'asset', 'amount', 'sender', 'recipient', 'validUntil'];
+
+/**
+ * New authorization flows accept one execution chain and typed constraint
+ * values. Historical receipt verification remains tolerant of representations
+ * accepted by older releases.
+ */
+export function assertIssuableIntentInput(input) {
+  if (input?.chainIds !== undefined) throw new PriorSealError('INVALID_INTENT', 'chainIds is not supported for new intents; use chainId');
+  if (input?.constraints?.minConfirmations != null && typeof input.constraints.minConfirmations !== 'number') throw new PriorSealError('INVALID_CONSTRAINT', 'minConfirmations must be a JSON number');
+  return input;
+}
+
 export function buildIntent(input) {
   assertSafeJson(input);
   assertOnlyFields(input, ['schema', 'executionProfile', 'intentId', 'chainId', 'chainIds', 'action', 'asset', 'amount', 'sender', 'recipient', 'validUntil', 'nonce', 'callTarget', 'calldataHash', 'transactionValue', 'contextCommitments', 'constraints'], 'intent');
@@ -19,6 +31,7 @@ export function buildIntent(input) {
   if (exactCall && input.action !== 'CONTRACT_CALL') throw new PriorSealError('INVALID_INTENT', 'exact-call intents require action CONTRACT_CALL');
   if (exactCall && input.nonce == null) throw new PriorSealError('INVALID_INTENT', 'exact-call intents require an explicit transaction nonce');
   if (exactCall && (input.callTarget == null || input.calldataHash == null || input.transactionValue == null)) throw new PriorSealError('INVALID_INTENT', 'exact-call intents require callTarget, calldataHash, and transactionValue');
+  if (input.chainIds != null && !Array.isArray(input.chainIds)) throw new PriorSealError('INVALID_INTENT', 'chainIds must be an array when provided');
   const contextCommitments = normalizeContextCommitments(input.contextCommitments, exactCall);
   const constraints = input.constraints ?? undefined;
   if (constraints !== undefined) {

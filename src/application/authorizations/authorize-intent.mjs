@@ -1,15 +1,17 @@
 import { AUTHORIZATION_SCHEMA, buildAuthorization, buildAuthorizationReceipt, signAuthorizationReceipt, verifyAuthorization } from '../../domain/authorization.mjs';
 import { PriorSealError } from '../../domain/errors.mjs';
 import { canonicalize, hashJson } from '../../domain/hashing.mjs';
-import { evaluateAuthorizationPolicy } from '../../domain/intent-policy.mjs';
+import { evaluateAuthorizationPolicy, evaluateNewIntentPolicyCompatibility } from '../../domain/intent-policy.mjs';
 import { verifyTimestampEvidence } from '../../domain/rfc3161.mjs';
 import { verifyWitnessEvidence } from '../../domain/witness.mjs';
 import { findIdempotentReplay, reserveIdempotentResponse } from '../idempotency.mjs';
+import { assertIssuableIntentInput } from '../../domain/intent.mjs';
 
 export async function authorizeIntent({ input, idempotencyKey, store, privateKeyPem, issuer, keyId, policy = null, audience = 'priorseal', verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, now = () => Date.now() }) {
   const idempotency = await findIdempotentReplay({ scope: 'authorize-intent', key: idempotencyKey, request: input, store, now });
   if (idempotency.replay) return idempotency.replay;
   if (!privateKeyPem) throw new PriorSealError('ISSUER_NOT_CONFIGURED', 'Issuer signing is required to accept an authorization');
+  assertIssuableIntentInput(input?.intent);
   const acceptedAt = Math.floor(now() / 1000);
   const authorization = buildAuthorization(input);
   if (authorization.schema !== AUTHORIZATION_SCHEMA) throw new PriorSealError('INVALID_AUTHORIZATION', 'Legacy authorization schemas are verification-only');
@@ -18,6 +20,8 @@ export async function authorizeIntent({ input, idempotencyKey, store, privateKey
   const expectedPolicyHash = policy ? `0x${hashJson(policy)}` : `0x${'0'.repeat(64)}`;
   if (authorization.policyHash !== expectedPolicyHash) throw new PriorSealError('AUTHORIZATION_POLICY_MISMATCH', 'Authorization policyHash does not match the active policy');
   const policyResult = policy ? evaluateAuthorizationPolicy(authorization, policy, acceptedAt) : { allowed: true, reasonCodes: [], policyId: null, evaluatedAt: acceptedAt };
+  const compatibility = evaluateNewIntentPolicyCompatibility(authorization.intent, policy ?? {});
+  if (!compatibility.allowed) throw new PriorSealError('POLICY_REJECTED', 'Authorization policy cannot enforce descriptive exact-call semantics', { ...policyResult, ...compatibility, policyId: policyResult.policyId ?? null });
   if (!policyResult.allowed) throw new PriorSealError('POLICY_REJECTED', 'Intent rejected by policy', policyResult);
   const existing = await store.getAuthorization?.(authorization.authorizationId);
   if (existing) return { replay: true, response: { authorization: existing.authorization, acceptance: existing.acceptance, policy: existing.policyEvidence?.result ?? existing.policy, policyEvidence: existing.policyEvidence, ...(existing.timestampEvidence ? { timestampEvidence: existing.timestampEvidence } : {}), ...(existing.witnessEvidence ? { witnessEvidence: existing.witnessEvidence } : {}) } };

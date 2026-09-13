@@ -1,0 +1,12 @@
+{
+  "exportSchema": "thoughtproof.sentinel.export.v1",
+  "artifactSchema": "sentinel.verdict.canonical.v1",
+  "verificationId": "sent_ccf0630f262943e3",
+  "canonical": "{\"apiVersion\":\"sentinel-api-0.1.0\",\"artifactSchema\":\"sentinel.verdict.canonical.v1\",\"confidence\":0,\"evaluatedAt\":1789231675,\"mode\":\"handoff\",\"models\":{\"primary\":\"serv-nano\"},\"objections\":[\"step_0: Criterion \\\"The claim accurately represents the content and intent of the evidence without fabrication or omission of critical details.\\\" was failed: the decision is not faithful to the evidence for this criterion.\"],\"reasoning\":\"failScore=1 (TE: 1+0p, AC: 0+0p). IDs: [step_0]\",\"tier\":\"checkpoint\",\"verdict\":\"UNCERTAIN\",\"verificationId\":\"sent_ccf0630f262943e3\"}",
+  "digest": "0x3211080583ff283a5259e709bee12c16030dc7d999251ce854f5189604a2f9e5",
+  "keyId": "tp-sentinel-export-ed25519-2026-09",
+  "alg": "Ed25519",
+  "signedAt": 1789231675,
+  "validUntil": 1789318075,
+  "signature": "0x154cf6c9a25f62f6fbab365e701e49f7f41f00cb85d7e247c1d10161841b5798076f2a14c8a8fe57ea4e25d93638cbc396ca4f920e050012de89bf03adcf2802"
+}

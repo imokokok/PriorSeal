@@ -1,0 +1,15 @@
+{
+  "schema": "priorseal.keys.v1",
+  "issuer": "priorseal.thoughtproof-fixture",
+  "keys": [
+    {
+      "issuer": "priorseal.thoughtproof-fixture",
+      "keyId": "priorseal-thoughtproof-fixture-ed25519-1",
+      "algorithm": "Ed25519",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAF8t5+ytBIPKx7GXkGY1uCLKOgT/rAeSkAIObheGAgM4=\n-----END PUBLIC KEY-----\n",
+      "status": "active",
+      "validFrom": null,
+      "validUntil": null
+    }
+  ]
+}

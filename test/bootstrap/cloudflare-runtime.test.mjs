@@ -47,3 +47,12 @@ test('inline key registry parser rejects private or unknown fields', () => {
   assert.deepEqual(parseKeyRegistryDocument({ schema: 'priorseal.keys.v1', keys: [] }), []);
   assert.throws(() => parseKeyRegistryDocument({ schema: 'priorseal.keys.v1', keys: [{ issuer: 'priorseal.xyz', keyId: 'old', algorithm: 'Ed25519', publicKey: 'pem', privateKey: 'never' }] }), /unsupported field/);
 });
+
+test('authorization policy parsing rejects malformed allowlists instead of disabling them', () => {
+  assert.throws(() => parsePolicyDocument({ allowedRecipients: `0x${'a'.repeat(40)}` }), /must be an array/);
+  assert.throws(() => parsePolicyDocument({ allowedChainIds: ['not-a-chain'] }), /chainId must be/);
+  assert.throws(() => parsePolicyDocument({ allowedAssets: ['native'] }), /canonical EIP-155 asset/);
+  assert.throws(() => parsePolicyDocument({ allowedSenders: [`0x${'a'.repeat(39)}`] }), /20-byte EVM address/);
+  assert.throws(() => parsePolicyDocument({ maxAmount: '-1' }), /unsigned base-10 integer/);
+  assert.throws(() => parsePolicyDocument({ maxValiditySeconds: '900' }), /non-negative safe integer/);
+});

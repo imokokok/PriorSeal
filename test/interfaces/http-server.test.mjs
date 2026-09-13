@@ -35,6 +35,31 @@ test('API rejects unknown fields and unsafe JSON keys without exposing internals
   const badType = await request(server, '/v1/intents', { method: 'POST', body: JSON.stringify(intent) }); assert.equal(badType.status, 415);
   const health = await request(server, '/health/live'); assert.equal(health.json().status, 'ok');
 });
+test('authorization preparation rejects unsupported intent and exact-call policy combinations before wallet signing', async (t) => {
+  const account = `0x${'c'.repeat(40)}`;
+  const base = {
+    intent,
+    principal: { type: 'user', id: 'user-test', account },
+    authorizer: { type: 'eip712', address: account },
+    delegate: { agentId: 'agent-test', executor: sender },
+    issuedAt: 1_000,
+    expiresAt: intent.validUntil,
+    authorizationNonce: `0x${'4'.repeat(64)}`,
+    maxUses: '1',
+    audience: 'priorseal',
+  };
+  const server = createHttpServer({ policy: { allowedChainIds: [8453], maxAmount: '1000000' } });
+  t.after(() => server.close());
+  const headers = { 'content-type': 'application/json' };
+  const legacyMultiChain = await request(server, '/v1/authorizations/prepare', { method: 'POST', headers, body: JSON.stringify({ ...base, intent: { ...intent, chainIds: [1, 8453] } }) });
+  assert.equal(legacyMultiChain.status, 400);
+  assert.equal(legacyMultiChain.json().error.code, 'INVALID_INTENT');
+  const exactIntent = { ...intent, schema: 'priorseal.intent.v2', executionProfile: 'priorseal.execution-profile.exact-call.v1', action: 'CONTRACT_CALL', callTarget: recipient, calldataHash: `0x${'5'.repeat(64)}`, transactionValue: '0' };
+  const misleadingPolicy = await request(server, '/v1/authorizations/prepare', { method: 'POST', headers, body: JSON.stringify({ ...base, intent: exactIntent }) });
+  assert.equal(misleadingPolicy.status, 403);
+  assert.equal(misleadingPolicy.json().error.code, 'POLICY_REJECTED');
+  assert.deepEqual(misleadingPolicy.json().error.details.reasonCodes, ['POLICY_EXACT_CALL_SEMANTICS_UNSUPPORTED']);
+});
 test('observation writes honor Idempotency-Key and return a signed linked receipt', async (t) => {
   const keys = generateKeyPairSync('ed25519');
   const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });

@@ -313,14 +313,25 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
   const reasons: string[] = []
   const listMisses = (value: unknown, candidate: unknown) => Array.isArray(value) && !value.map(String).map((item) => item.toLowerCase()).includes(String(candidate).toLowerCase())
   const intent = authorization.intent
+  const listFields = ['allowedChainIds', 'allowedActions', 'allowedAssets', 'allowedSenders', 'allowedRecipients']
+  const invalidPolicy = listFields.some((field) => policy[field] !== undefined && !Array.isArray(policy[field]))
+    || (policy.principals !== undefined && !Array.isArray(policy.principals))
+    || (policy.maxAmount != null && !/^(0|[1-9][0-9]*)$/.test(String(policy.maxAmount)))
+    || (policy.maxValiditySeconds != null && (typeof policy.maxValiditySeconds !== 'number' || !Number.isSafeInteger(policy.maxValiditySeconds) || policy.maxValiditySeconds < 0))
+    || (policy.minConfirmations != null && (typeof policy.minConfirmations !== 'number' || !Number.isSafeInteger(policy.minConfirmations) || policy.minConfirmations < 1 || policy.minConfirmations > 10_000))
+  if (invalidPolicy) reasons.push('POLICY_INVALID')
   if (listMisses(policy.allowedChainIds, intent.chainId)) reasons.push('POLICY_CHAIN_NOT_ALLOWED')
   if (listMisses(policy.allowedActions, intent.action)) reasons.push('POLICY_ACTION_NOT_ALLOWED')
   if (listMisses(policy.allowedAssets, intent.asset)) reasons.push('POLICY_ASSET_NOT_ALLOWED')
   if (listMisses(policy.allowedSenders, intent.sender)) reasons.push('POLICY_SENDER_NOT_ALLOWED')
   if (listMisses(policy.allowedRecipients, intent.recipient)) reasons.push('POLICY_RECIPIENT_NOT_ALLOWED')
-  if (policy.maxAmount != null && BigInt(intent.amount) > BigInt(String(policy.maxAmount))) reasons.push('POLICY_AMOUNT_EXCEEDED')
-  if (policy.maxValiditySeconds != null && intent.validUntil > evaluatedAt + Number(policy.maxValiditySeconds)) reasons.push('POLICY_EXPIRY_TOO_FAR')
-  if (policy.minConfirmations != null && Number(intent.constraints?.minConfirmations ?? 0) < Number(policy.minConfirmations)) reasons.push('POLICY_MIN_CONFIRMATIONS_REQUIRED')
+  try {
+    if (policy.maxAmount != null && BigInt(intent.amount) > BigInt(String(policy.maxAmount))) reasons.push('POLICY_AMOUNT_EXCEEDED')
+    if (policy.maxValiditySeconds != null && intent.validUntil > evaluatedAt + Number(policy.maxValiditySeconds)) reasons.push('POLICY_EXPIRY_TOO_FAR')
+    if (policy.minConfirmations != null && Number(intent.constraints?.minConfirmations ?? 0) < Number(policy.minConfirmations)) reasons.push('POLICY_MIN_CONFIRMATIONS_REQUIRED')
+  } catch {
+    reasons.push('POLICY_INVALID')
+  }
   if (Array.isArray(policy.principals)) {
     const matched = policy.principals.some((value) => {
       const principal = value as Record<string, unknown>
@@ -328,5 +339,5 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
     })
     if (!matched) reasons.push('POLICY_PRINCIPAL_NOT_ALLOWED')
   }
-  return { allowed: reasons.length === 0, reasonCodes: reasons, policyId: typeof policy.policyId === 'string' ? policy.policyId : null, evaluatedAt }
+  return { allowed: reasons.length === 0, reasonCodes: [...new Set(reasons)], policyId: typeof policy.policyId === 'string' ? policy.policyId : null, evaluatedAt }
 }

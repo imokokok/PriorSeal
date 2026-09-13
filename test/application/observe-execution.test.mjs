@@ -97,3 +97,8 @@ test('intent rejects impossible confirmation floors and cross-chain assets', () 
   assert.throws(() => buildIntent({ ...base, constraints: { minConfirmations: 10_001 } }), (error) => error.code === 'INVALID_CONSTRAINT');
   assert.throws(() => buildIntent({ ...base, asset: 'eip155:1/native' }), (error) => error.code === 'INVALID_ASSET');
 });
+
+test('intent rejects malformed chainIds with a protocol error', () => {
+  const base = { intentId: 'invalid-chain-list', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '1', sender, recipient, validUntil: 2_000 };
+  assert.throws(() => buildIntent({ ...base, chainIds: '8453' }), (error) => error.code === 'INVALID_INTENT');
+});

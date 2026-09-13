@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made authorization policies fail closed on malformed allowlists and invalid numeric limits, rejected misleading transfer-semantic limits for new exact-call authorizations, and preserved partner-owned context-commitment semantics.
+- Hardened new intent issuance against the unused `chainIds` field and ambiguous string confirmation thresholds while retaining historical receipt verification.
+- Expanded the console's pre-sign review to show canonical advanced constraints and require an explicit transaction nonce; clarified that its optional call fields remain v1 constraints rather than the router-oriented exact-call v2 profile.
 - Added a synthetic BoundaryAttest v0.2 paired fixture that independently verifies both trust domains, binds the RFC 8785/JCS claim digest through an exact-call context commitment, and exercises freshness, replay, digest, signature, and signer-key failures.
 - Added a design-partner collaboration guide, structured GitHub pilot/integration requests, and direct website, SDK, OpenAPI and source links.
 - Kept the console's SDK version synchronized with the published package, corrected the production API example and upgraded the self-contained receipt example to authorization-bound receipt v3.

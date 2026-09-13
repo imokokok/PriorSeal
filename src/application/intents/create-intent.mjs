@@ -1,6 +1,6 @@
-import { buildIntent } from '../../domain/intent.mjs';
+import { assertIssuableIntentInput, buildIntent } from '../../domain/intent.mjs';
 import { PriorSealError } from '../../domain/errors.mjs';
-import { evaluateIntentPolicy } from '../../domain/intent-policy.mjs';
+import { evaluateIntentPolicy, evaluateNewIntentPolicyCompatibility } from '../../domain/intent-policy.mjs';
 import { findIdempotentReplay, reserveIdempotentResponse } from '../idempotency.mjs';
 
 /**
@@ -10,10 +10,12 @@ import { findIdempotentReplay, reserveIdempotentResponse } from '../idempotency.
 export async function createIntent({ input, idempotencyKey, store, policy = null, now = () => Date.now() }) {
   const idempotency = await findIdempotentReplay({ scope: 'create-intent', key: idempotencyKey, request: input, store, now });
   if (idempotency.replay) return idempotency.replay;
-  const intent = buildIntent(input);
+  const intent = buildIntent(assertIssuableIntentInput(input));
   const policyResult = policy
     ? evaluateIntentPolicy(intent, policy, Math.floor(now() / 1000))
     : { allowed: true, reasonCodes: [], policyId: null };
+  const compatibility = evaluateNewIntentPolicyCompatibility(intent, policy ?? {});
+  if (!compatibility.allowed) throw new PriorSealError('POLICY_REJECTED', 'Intent policy cannot enforce descriptive exact-call semantics', { ...policyResult, ...compatibility, policyId: policyResult.policyId ?? null });
   if (!policyResult.allowed) throw new PriorSealError('POLICY_REJECTED', 'Intent rejected by policy', policyResult);
 
   const response = { intent, intentHash: intent.intentHash, policy: policyResult };

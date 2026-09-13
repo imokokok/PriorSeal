@@ -1,5 +1,19 @@
 # Repository collaboration rules
 
+## Product and commercialization scope
+
+- Treat Insight and PriorSeal as a three-part commercial portfolio by default: Insight can be sold independently, PriorSeal can be sold independently, and Insight + PriorSeal can be sold as an integrated decision, authorization, execution, and verification evidence workflow.
+- Do not narrow customer discovery, positioning, partnerships, pricing, or go-to-market work to PriorSeal alone unless the user explicitly asks for PriorSeal-only work.
+- When evaluating prospects, identify which of the three offers fits the buyer instead of assuming that every prospect should buy both products.
+
+## Public identity and product links
+
+- Use `YuTao Peng` as the user's full name and external signature unless the user requests another form.
+- Insight website: `https://www.oracleinsight.xyz/`
+- Insight GitHub: `https://github.com/imokokok/Insight.git`
+- PriorSeal website: `https://priorseal.xyz/`
+- PriorSeal GitHub: `https://github.com/imokokok/PriorSeal.git`
+
 ## Git identity and publishing
 
 - Before creating or rewriting a commit, verify that both author and committer use `imokokok <145034722+imokokok@users.noreply.github.com>`.
