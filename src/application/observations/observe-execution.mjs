@@ -7,12 +7,14 @@ import { detectReorg } from '../../domain/execution.mjs';
 import { verifyWitnessEvidence } from '../../domain/witness.mjs';
 import { canonicalize, hashJson } from '../../domain/hashing.mjs';
 import { verifyTimestampEvidence } from '../../domain/rfc3161.mjs';
+import { txHash as normalizeTxHash } from '../../domain/values.mjs';
 import { assertOnlyFields } from '../../shared/safe-json.mjs';
 import { findIdempotentReplay, reserveIdempotentResponse } from '../idempotency.mjs';
 
 /** Observes an execution, records evidence, and optionally issues a signed receipt. */
 export async function observeExecution({ input, store, observer, signal, privateKeyPem, publicKeyPem, issuer, keyId, idempotencyKey, transparencyProvider, authorizationAudience = 'priorseal', verifyContractSignature, now = () => Date.now() }) {
   assertOnlyFields(input, ['intentId', 'authorizationId', 'intent', 'chainId', 'txHash', 'confirmations'], 'observation request');
+  const requestedTxHash = normalizeTxHash(input.txHash);
   const idempotency = await findIdempotentReplay({ scope: 'observe-execution', key: idempotencyKey, request: input, store, now });
   if (idempotency.replay) return idempotency.replay;
   const authorizationRecord = input.authorizationId ? await store.getAuthorization?.(input.authorizationId) : null;
@@ -27,14 +29,17 @@ export async function observeExecution({ input, store, observer, signal, private
   const requestedConfirmations = input.confirmations ?? 0;
   if (!Number.isSafeInteger(requestedConfirmations) || requestedConfirmations < 0 || requestedConfirmations > 10_000) throw new PriorSealError('INVALID_REQUEST', 'confirmations must be an integer between 0 and 10000');
   const confirmations = Math.max(requestedConfirmations, Number(intent.constraints?.minConfirmations ?? 0));
-  const previous = store.getObservation ? await store.getObservation(intent.chainId, input.txHash) : null;
+  const previous = store.getObservation ? await store.getObservation(intent.chainId, requestedTxHash) : null;
   const observed = await observer({
     chainId: intent.chainId,
-    txHash: input.txHash,
+    txHash: requestedTxHash,
     confirmations,
     signal,
   });
-  let observation = { ...observed, intentHash: intent.intentHash };
+  const observedTxHash = normalizeTxHash(observed?.txHash);
+  if (observedTxHash !== requestedTxHash) throw new PriorSealError('OBSERVATION_TX_HASH_MISMATCH', 'Observer transaction hash does not match the requested transaction');
+  if (Number(observed?.chainId) !== Number(intent.chainId)) throw new PriorSealError('OBSERVATION_CHAIN_MISMATCH', 'Observer chain does not match the authorized intent');
+  let observation = { ...observed, txHash: observedTxHash, intentHash: intent.intentHash };
   const observedConfirmations = Number(observation.confirmations ?? 0);
   const claimsFinalExecution = ['CONFIRMED', 'REVERTED'].includes(observation.status);
   const hasRequiredFinality = observation.finalityState === 'CONFIRMED' && Number.isSafeInteger(observedConfirmations) && observedConfirmations >= confirmations;
@@ -54,6 +59,7 @@ export async function observeExecution({ input, store, observer, signal, private
     if (!witnessed.valid) throw new PriorSealError(witnessed.code, 'A valid pre-execution witness quorum is required', witnessed);
   }
   const authorizationAssociation = authorizationRecord ? classifyAuthorizationAssociation(authorizationRecord.authorization, observation) : null;
+  const executionCorrelation = authorizationRecord ? classifyExecutionCorrelation(authorizationRecord.authorization, observation) : null;
   const claimAuthorization = authorizationAssociation === 'FINAL';
   const receiptIssuedAt = Math.max(Math.floor(now() / 1000), observation.observedAt ?? observation.executedAt ?? 0);
   const receipt = privateKeyPem
@@ -71,6 +77,7 @@ export async function observeExecution({ input, store, observer, signal, private
     observation,
     receipt,
     ...(authorizationAssociation ? { authorizationAssociation } : {}),
+    ...(executionCorrelation ? { executionCorrelation } : {}),
     ...(verification ? { verification } : {}),
   };
   if (store.saveObservationReceipt) {
@@ -93,12 +100,38 @@ export function canClaimAuthorization(authorization, observation) {
 
 export function classifyAuthorizationAssociation(authorization, observation) {
   if (!authorization || !observation || observation.executionDataAvailable === false) return 'UNRELATED';
-  const correlated = Number(observation.chainId) === Number(authorization.intent.chainId)
-    && String(observation.sender ?? '').toLowerCase() === authorization.delegate.executor
+  const correlated = /^0x[0-9a-fA-F]{64}$/.test(observation.txHash ?? '')
+    && observation.intentHash === authorization.intentHash
+    && Number(observation.chainId) === Number(authorization.intent.chainId)
+    && same(observation.sender, authorization.delegate.executor)
     && String(observation.nonce ?? '') === String(authorization.intent.nonce);
   if (!correlated) return 'UNRELATED';
   if (['CONFIRMED', 'REVERTED'].includes(observation.status) && observation.finalityState === 'CONFIRMED') return 'FINAL';
   if (['CONFIRMED', 'REVERTED'].includes(observation.status)) return 'CANDIDATE';
   if (observation.status === 'PENDING') return 'CANDIDATE';
   return 'UNRELATED';
+}
+
+export function classifyExecutionCorrelation(authorization, observation) {
+  if (!authorization || !observation || observation.executionDataAvailable === false) return 'INDETERMINATE';
+  const intent = authorization.intent;
+  const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1';
+  const matches = /^0x[0-9a-fA-F]{64}$/.test(observation.txHash ?? '')
+    && observation.intentHash === authorization.intentHash
+    && Number(observation.chainId) === Number(intent.chainId)
+    && same(observation.sender, authorization.delegate.executor)
+    && same(observation.action, intent.action)
+    && String(observation.nonce ?? '') === String(intent.nonce)
+    && (exactCall
+      ? same(observation.target, intent.callTarget)
+        && same(observation.calldataHash, intent.calldataHash)
+        && String(observation.nativeValue ?? '') === String(intent.transactionValue)
+      : same(observation.recipient, intent.recipient)
+        && same(observation.asset, intent.asset)
+        && String(observation.amount ?? '') === String(intent.amount));
+  return matches ? 'MATCH' : 'MISMATCH';
+}
+
+function same(left, right) {
+  return String(left ?? '').toLowerCase() === String(right ?? '').toLowerCase();
 }

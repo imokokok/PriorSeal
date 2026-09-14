@@ -1,11 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { observeEvm } from '../../src/infrastructure/blockchain/evm/observer.mjs';
+import { getRpcUrls, SUPPORTED_CHAINS } from '../../src/infrastructure/blockchain/evm/chains.mjs';
 
 const txHash = `0x${'1'.repeat(64)}`;
 const sender = `0x${'a'.repeat(40)}`;
 const recipient = `0x${'b'.repeat(40)}`;
 const blockHash = `0x${'c'.repeat(64)}`;
+
+test('Base Sepolia is an explicit optional observation network', () => {
+  assert.equal(SUPPORTED_CHAINS[84532].name, 'Base Sepolia');
+  assert.deepEqual(getRpcUrls(84532, { PRIORSEAL_RPC_BASE_SEPOLIA: 'https://one.invalid, https://two.invalid' }), ['https://one.invalid', 'https://two.invalid']);
+  assert.deepEqual(getRpcUrls(84532, {}), []);
+});
 const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const addressTopic = (value) => `0x${'0'.repeat(24)}${value.slice(2)}`;
 test('EVM observer validates endpoint chain identity and falls back safely', async () => {

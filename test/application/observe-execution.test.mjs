@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
 import { authorizationTypedData, authorizeIntent, buildAuthorization, buildIntent, createMemoryStore } from '../../src/index.mjs';
-import { observeExecution } from '../../src/application/observations/observe-execution.mjs';
+import { classifyExecutionCorrelation, observeExecution } from '../../src/application/observations/observe-execution.mjs';
 
 const sender = `0x${'a'.repeat(40)}`;
 const recipient = `0x${'b'.repeat(40)}`;
@@ -54,7 +54,7 @@ test('pending transactions remain candidates and only final correlated execution
   await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: hostileHash }, store, observer: async () => ({ chainId: 8453, txHash: hostileHash, status: 'PENDING', executionDataAvailable: true, sender: `0x${'d'.repeat(40)}`, nonce: '4', observedAt: 1_002 }) });
   assert.equal((await store.getAuthorization(authorization.authorizationId)).status, 'ACCEPTED');
   const expectedHash = `0x${'7'.repeat(64)}`;
-  await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: expectedHash }, store, observer: async () => ({ chainId: 8453, txHash: expectedHash, status: 'PENDING', executionDataAvailable: true, sender, nonce: '4', observedAt: 1_003 }) });
+  await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: expectedHash }, store, observer: async () => ({ chainId: 8453, txHash: expectedHash, status: 'PENDING', executionDataAvailable: true, action: 'TRANSFER', sender, recipient, asset: authorization.intent.asset, amount: authorization.intent.amount, nonce: '4', observedAt: 1_003 }) });
   const candidate = await store.getAuthorization(authorization.authorizationId);
   assert.equal(candidate.status, 'ACCEPTED');
   assert.equal(candidate.boundTxHash, null);
@@ -64,6 +64,49 @@ test('pending transactions remain candidates and only final correlated execution
   const claimed = await store.getAuthorization(authorization.authorizationId);
   assert.equal(claimed.status, 'BOUND');
   assert.equal(claimed.boundTxHash, replacementHash);
+});
+
+test('complete exact-call correlation is reported without reopening a final mismatched attempt', async () => {
+  const store = createMemoryStore();
+  const callTarget = `0x${'d'.repeat(40)}`;
+  const calldataHash = `0x${'2'.repeat(64)}`;
+  const authorization = buildAuthorization({ intent: { schema: 'priorseal.intent.v2', executionProfile: 'priorseal.execution-profile.exact-call.v1', intentId: 'exact-correlation', chainId: 8453, action: 'CONTRACT_CALL', asset: 'eip155:8453/native', amount: '0', sender, recipient: callTarget, validUntil: 2_000, nonce: '9', callTarget, calldataHash, transactionValue: '3' }, principal: { type: 'user', id: 'user-1', account: `0x${'c'.repeat(40)}` }, authorizer: { type: 'eip712', address: `0x${'c'.repeat(40)}` }, delegate: { agentId: 'agent-1', executor: sender }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'3'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}`, signature: '0x01' });
+  await store.saveIntent(authorization.intent);
+  await store.saveAuthorization({ authorization, acceptance: { acceptedAt: 1_001 }, policyEvidence: { schema: 'priorseal.policy-evidence.v1', policyHash: authorization.policyHash, document: null, result: { allowed: true, reasonCodes: [], policyId: null, evaluatedAt: 1_001 } }, status: 'ACCEPTED', boundTxHash: null, uses: 0 });
+  const finalObservation = (hash, overrides = {}) => ({ chainId: 8453, txHash: hash, intentHash: authorization.intentHash, status: 'CONFIRMED', executionDataAvailable: true, action: 'CONTRACT_CALL', sender, recipient: callTarget, target: callTarget, calldataHash, nativeValue: '3', nonce: '9', executedAt: 1_100, observedAt: 1_101, confirmations: 12, finalityState: 'CONFIRMED', ...overrides });
+  const matchingHash = `0x${'f'.repeat(64)}`;
+  assert.equal(classifyExecutionCorrelation(authorization, finalObservation(matchingHash)), 'MATCH');
+  const mismatches = [
+    { target: recipient },
+    { calldataHash: `0x${'4'.repeat(64)}` },
+    { nativeValue: '4' },
+    { action: 'TRANSFER' },
+    { sender: recipient },
+    { nonce: '10' },
+  ];
+  for (const [index, mismatch] of mismatches.entries()) {
+    const hash = `0x${String(index + 2).repeat(64)}`;
+    assert.equal(classifyExecutionCorrelation(authorization, finalObservation(hash, mismatch)), 'MISMATCH');
+  }
+  const mutatedHash = `0x${'e'.repeat(64)}`;
+  const mutated = await observeExecution({ input: { authorizationId: authorization.authorizationId, txHash: mutatedHash }, store, observer: async () => finalObservation(mutatedHash, { calldataHash: `0x${'4'.repeat(64)}` }) });
+  assert.equal(mutated.response.authorizationAssociation, 'FINAL');
+  assert.equal(mutated.response.executionCorrelation, 'MISMATCH');
+  assert.equal((await store.getAuthorization(authorization.authorizationId)).boundTxHash, mutatedHash);
+});
+
+test('observer responses cannot substitute another transaction or chain', async () => {
+  const store = createMemoryStore();
+  const intent = buildIntent({ intentId: 'observer-identity', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '1', sender, recipient, validUntil: 2_000, nonce: '0' });
+  await store.saveIntent(intent);
+  await assert.rejects(
+    () => observeExecution({ input: { intentId: intent.intentId, txHash }, store, observer: async () => ({ chainId: 8453, txHash: `0x${'2'.repeat(64)}`, status: 'PENDING' }) }),
+    (error) => error.code === 'OBSERVATION_TX_HASH_MISMATCH',
+  );
+  await assert.rejects(
+    () => observeExecution({ input: { intentId: intent.intentId, txHash }, store, observer: async () => ({ chainId: 1, txHash, status: 'PENDING' }) }),
+    (error) => error.code === 'OBSERVATION_CHAIN_MISMATCH',
+  );
 });
 
 test('pending candidate reports non-assessable compliance without consuming authorization', async () => {

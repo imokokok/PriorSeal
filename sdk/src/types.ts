@@ -1,4 +1,4 @@
-export type ChainId = 1 | 8453 | 42161
+export type ChainId = 1 | 8453 | 84532 | 42161
 
 export type ContextCommitment = { namespace: string; algorithm: 'keccak256' | 'sha256'; digest: string }
 export type ContextCommitmentMatch = {
@@ -184,7 +184,7 @@ export type WalletAuthorizationInput = {
 
 export type PreparedAuthorization = { authorization: Authorization; typedData: Record<string, unknown>; requestId?: string }
 export type AcceptedAuthorization = { authorization: Authorization; acceptance: AuthorizationReceipt; policyEvidence?: PolicyEvidence; timestampEvidence?: TimestampEvidence; witnessEvidence?: WitnessEvidence; policy: { allowed: boolean; reasonCodes: string[]; policyId: string | null }; requestId?: string }
-export type ObservationResult = { observation: Execution; receipt: Receipt | null; authorizationAssociation?: 'CANDIDATE' | 'FINAL' | 'UNRELATED'; verification?: VerificationResult; observationJob?: ObservationJob; requestId?: string }
+export type ObservationResult = { observation: Execution; receipt: Receipt | null; authorizationAssociation?: 'CANDIDATE' | 'FINAL' | 'UNRELATED'; executionCorrelation?: 'MATCH' | 'MISMATCH' | 'INDETERMINATE'; verification?: VerificationResult; observationJob?: ObservationJob; requestId?: string }
 
 export type ExactCallTransaction = { chainId: ChainId | number; from: string; to: string; data: `0x${string}`; value?: bigint | number | string; nonce: bigint | number | string }
 export type ExactCallIntentInput = { transaction: ExactCallTransaction; intentId: string; asset: string; amount: bigint | number | string; validUntil: number; contextCommitments?: ContextCommitment[]; constraints?: Intent['constraints'] }
