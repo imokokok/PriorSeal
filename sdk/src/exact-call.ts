@@ -3,7 +3,7 @@ import type { ContextCommitment, ExactCallIntentInput, Intent } from './types.js
 
 export function buildExactCallIntent(input: ExactCallIntentInput): Intent {
   const transaction = input.transaction
-  if (!Number.isSafeInteger(Number(transaction.chainId)) || Number(transaction.chainId) < 1) throw new TypeError('transaction.chainId must be a positive integer')
+  if (typeof transaction.chainId !== 'number' || !Number.isSafeInteger(transaction.chainId) || transaction.chainId < 1) throw new TypeError('transaction.chainId must be a positive JSON integer')
   const sender = address(transaction.from, 'transaction.from')
   const callTarget = address(transaction.to, 'transaction.to')
   if (!/^0x(?:[0-9a-fA-F]{2})*$/.test(transaction.data)) throw new TypeError('transaction.data must be 0x-prefixed bytes')
@@ -12,7 +12,7 @@ export function buildExactCallIntent(input: ExactCallIntentInput): Intent {
     schema: 'priorseal.intent.v2',
     executionProfile: 'priorseal.execution-profile.exact-call.v1',
     intentId: input.intentId,
-    chainId: Number(transaction.chainId),
+    chainId: transaction.chainId,
     action: 'CONTRACT_CALL',
     asset: input.asset,
     amount: uintString(input.amount, 'amount'),

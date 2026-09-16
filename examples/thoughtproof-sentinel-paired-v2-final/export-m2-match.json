@@ -1,0 +1,12 @@
+{
+  "exportSchema": "thoughtproof.sentinel.export.v1",
+  "artifactSchema": "sentinel.verdict.canonical.v1",
+  "verificationId": "sent_m2_tp_match",
+  "canonical": "{\"apiVersion\":\"sentinel-api-0.1.0\",\"artifactSchema\":\"sentinel.verdict.canonical.v1\",\"confidence\":84,\"decisionSubject\":{\"callTarget\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"calldataHash\":\"0x39cf794737b371f8ad484ba1c38727413ebea6d5bc4e9fb43206b119a643b076\",\"chainId\":8453,\"executor\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"EVM_EXACT_CALL\",\"schema\":\"thoughtproof.sentinel-subject.evm-exact-call.v1\",\"transactionNonce\":\"1003\",\"transactionValue\":\"100000000000000000\"},\"evaluatedAt\":1789520340,\"mode\":\"trade_execution\",\"models\":{\"primary\":\"serv-nano\",\"secondary\":\"serv-swift\"},\"objections\":[\"step_0: Exact-call subject bound under M2 working contract.\"],\"reasoning\":\"ThoughtProof-issued M2 matching vector. Not a production decision.\",\"tier\":\"standard\",\"verdict\":\"ALLOW\",\"verificationId\":\"sent_m2_tp_match\"}",
+  "digest": "0xa5bbfe64ca3864d7cf6d5ba0f5af1992b55d15100e0d716bd9e426b5812877a9",
+  "keyId": "tp-sentinel-export-ed25519-2026-09-vector",
+  "alg": "Ed25519",
+  "signedAt": 1789520340,
+  "validUntil": 1789606740,
+  "signature": "0xe948f19a199bda88c01c2f94e004c7c0c6ee3c17abbe650a9b0bbf1b38883509e8199bda9ffd9ed5be3eaffb29908ffcee54bf6ca11ad4e493de3d09b6b0d502"
+}

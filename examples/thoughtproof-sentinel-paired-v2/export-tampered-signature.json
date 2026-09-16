@@ -1,0 +1,12 @@
+{
+  "exportSchema": "thoughtproof.sentinel.export.v1",
+  "artifactSchema": "sentinel.verdict.canonical.v1",
+  "verificationId": "sent_m2_tampered_signature",
+  "canonical": "{\"apiVersion\":\"sentinel-api-0.1.0\",\"artifactSchema\":\"sentinel.verdict.canonical.v1\",\"confidence\":84,\"decisionSubject\":{\"callTarget\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"calldataHash\":\"0x39cf794737b371f8ad484ba1c38727413ebea6d5bc4e9fb43206b119a643b076\",\"chainId\":8453,\"executor\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"EVM_EXACT_CALL\",\"schema\":\"thoughtproof.sentinel-subject.evm-exact-call.v1\",\"transactionNonce\":\"1003\",\"transactionValue\":\"100000000000000000\"},\"evaluatedAt\":1789520340,\"mode\":\"trade_execution\",\"models\":{\"primary\":\"contract-proposal-vector\",\"secondary\":\"contract-proposal-vector\"},\"objections\":[\"Exact-call subject evaluated under the M2 working-contract proposal.\"],\"reasoning\":\"Candidate vector only. This is not a ThoughtProof-issued decision.\",\"tier\":\"standard\",\"verdict\":\"ALLOW\",\"verificationId\":\"sent_m2_tampered_signature\"}",
+  "digest": "0x8a7af77400151d6034d82c6ca720df0d1b41a56dca8deb2533bc3ef86f37e3fd",
+  "keyId": "yutao-m2-contract-proposal-vector-ed25519-1",
+  "alg": "Ed25519",
+  "signedAt": 1789520340,
+  "validUntil": 1789606740,
+  "signature": "0x00c901febac8c6da3ec3d33b5379b271146477404569981b2f59afe31aa54950e24a29ce2c836ff5c3527f0223bc734a23105ffad08383af46866d6226ebc803"
+}

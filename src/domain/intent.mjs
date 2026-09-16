@@ -30,6 +30,7 @@ export function buildIntent(input) {
   if (exactCall && input.executionProfile !== EXACT_CALL_PROFILE) throw new PriorSealError('INVALID_INTENT', `intent v2 requires executionProfile ${EXACT_CALL_PROFILE}`);
   if (!exactCall && input.executionProfile != null) throw new PriorSealError('INVALID_INTENT', 'executionProfile requires priorseal.intent.v2');
   if (exactCall && input.action !== 'CONTRACT_CALL') throw new PriorSealError('INVALID_INTENT', 'exact-call intents require action CONTRACT_CALL');
+  if (exactCall && (typeof input.chainId !== 'number' || !Number.isSafeInteger(input.chainId) || input.chainId < 1)) throw new PriorSealError('INVALID_CHAIN_ID', 'exact-call intent chainId must be a positive JSON integer');
   if (exactCall && input.nonce == null) throw new PriorSealError('INVALID_INTENT', 'exact-call intents require an explicit transaction nonce');
   if (exactCall && (input.callTarget == null || input.calldataHash == null || input.transactionValue == null)) throw new PriorSealError('INVALID_INTENT', 'exact-call intents require callTarget, calldataHash, and transactionValue');
   if (input.chainIds != null && !Array.isArray(input.chainIds)) throw new PriorSealError('INVALID_INTENT', 'chainIds must be an array when provided');

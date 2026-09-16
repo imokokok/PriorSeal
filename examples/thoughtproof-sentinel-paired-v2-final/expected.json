@@ -1,0 +1,61 @@
+{
+  "schema": "priorseal.thoughtproof-sentinel-paired-fixture.v2.final",
+  "status": "FINAL_PAIR_CANDIDATE",
+  "sourceArchiveSha256": "e18d84a540efc3d5fc4989942393545dd0825282607599cbcf0144310bcd3810",
+  "sourceFilesSha256": {
+    "export-m2-match.json": "0acdc832f9fddc33740033e2e4184ce37e33d5c1037e94b9e30ebdd5059303b9",
+    "export-m2-missing-subject.json": "ae8952c5e94354c9a441a8121a92617f457c70bcae4e10c0546b513542028353",
+    "thoughtproof-keys.json": "89ee418621200c709886416ccf3bf539fae37463f8278421f8206113c6592bfc"
+  },
+  "exportSchema": "thoughtproof.sentinel.export.v1",
+  "artifactSchema": "sentinel.verdict.canonical.v1",
+  "exportDomain": "thoughtproof.sentinel.export.v1",
+  "namespace": "thoughtproof.sentinel-decision.v1",
+  "algorithm": "sha256",
+  "subjectSchema": "thoughtproof.sentinel-subject.evm-exact-call.v1",
+  "calldataFixtures": "calldata-fixtures.json",
+  "trustedThoughtProofKeys": [
+    {
+      "kid": "tp-sentinel-export-ed25519-2026-09-vector",
+      "x": "IuMSTQMowwaP3yaOmlf9unkZAVjvc9MwOOqluXCjFDs",
+      "use": "vector-only"
+    }
+  ],
+  "priorSeal": {
+    "issuer": "priorseal.thoughtproof-m2-final-vector-fixture",
+    "keyId": "priorseal-thoughtproof-m2-final-ed25519-1",
+    "publicKeySpkiSha256": "55ddbb3ea4e4011206a0eab2aa2aeb47104d64fd58b4811ba91adcca7ebac23d",
+    "receiptSchema": "priorseal.execution-receipt.v3",
+    "intentSchema": "priorseal.intent.v2",
+    "executionProfile": "priorseal.execution-profile.exact-call.v1"
+  },
+  "effectMap": {
+    "ALLOW": "RECOMMEND",
+    "BLOCK": "DO_NOT_RECOMMEND",
+    "UNCERTAIN": "REVIEW_REQUIRED"
+  },
+  "cases": [
+    {
+      "name": "TP-issued M2 exact-call matching pair",
+      "export": "export-m2-match.json",
+      "receipt": "priorseal-receipt-matching.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_COMMITMENT_VERIFIED",
+      "expectedSubjectBindingCode": "DECISION_SUBJECT_VERIFIED"
+    },
+    {
+      "name": "TP-issued M2 missing-subject negative pair",
+      "export": "export-m2-missing-subject.json",
+      "receipt": "priorseal-receipt-missing-subject.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_MISSING"
+    },
+    {
+      "name": "TP vector kid rejected without explicit allowance",
+      "export": "export-m2-match.json",
+      "receipt": "priorseal-receipt-matching.json",
+      "allowVectorOnly": false,
+      "expectedCode": "DECISION_SIGNER_UNTRUSTED"
+    }
+  ]
+}

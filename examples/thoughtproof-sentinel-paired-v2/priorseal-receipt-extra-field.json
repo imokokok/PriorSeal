@@ -1,0 +1,138 @@
+{
+  "schema": "priorseal.execution-receipt.v3",
+  "domain": "priorseal/execution-receipt/v3",
+  "receiptId": "psr_0f76e704d9ad09162016f2db8b857c72",
+  "intentHash": "83f8544d4ba9ca137f32eef005f5d7e3a5d55a5a8f77743baedbaa98949493e5",
+  "authorizationHash": "859864e80a8050f9ff288d2e220e220007f48de4c0d43b8f50518d9d3d12ad5a",
+  "executionHash": "09548d9659782ad2745fc1f44b5da638e5c0f2f0b9d1f267f75d1a753afdb255",
+  "authorizationEvidence": {
+    "authorization": {
+      "schema": "priorseal.authorization.v2",
+      "domain": "priorseal/authorization/v2",
+      "intent": {
+        "schema": "priorseal.intent.v2",
+        "executionProfile": "priorseal.execution-profile.exact-call.v1",
+        "intentId": "thoughtproof-m2-extra-field",
+        "chainId": 8453,
+        "action": "CONTRACT_CALL",
+        "asset": "eip155:8453/native",
+        "amount": "100000000000000000",
+        "sender": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "recipient": "0xcccccccccccccccccccccccccccccccccccccccc",
+        "validUntil": 1789606680,
+        "nonce": "1003",
+        "callTarget": "0xcccccccccccccccccccccccccccccccccccccccc",
+        "calldataHash": "0x39cf794737b371f8ad484ba1c38727413ebea6d5bc4e9fb43206b119a643b076",
+        "transactionValue": "100000000000000000",
+        "contextCommitments": [
+          {
+            "namespace": "thoughtproof.sentinel-decision.v1",
+            "algorithm": "sha256",
+            "digest": "0x28b03e4c0520a9fbca206c0c50e7fb1efe0a4af8e3bad71e6fa072cd4eaec048"
+          }
+        ],
+        "constraints": {
+          "minConfirmations": 12
+        },
+        "intentHash": "83f8544d4ba9ca137f32eef005f5d7e3a5d55a5a8f77743baedbaa98949493e5"
+      },
+      "intentHash": "83f8544d4ba9ca137f32eef005f5d7e3a5d55a5a8f77743baedbaa98949493e5",
+      "principal": {
+        "type": "user",
+        "id": "thoughtproof-m2-proposal-user",
+        "account": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
+      },
+      "authorizer": {
+        "type": "eip712",
+        "address": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
+      },
+      "delegate": {
+        "agentId": "thoughtproof-m2-proposal-agent",
+        "executor": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "issuedAt": 1789520400,
+      "notBefore": 1789520400,
+      "expiresAt": 1789606680,
+      "authorizationNonce": "0xdd35e63560deb6f25d4fda612b76e4879606502b3d4bed3cf2c16aec3d3ad36a",
+      "maxUses": "1",
+      "audience": "priorseal",
+      "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "signature": "0xff3817fc00f302cc2213be2ea52a7b024fe24731184dc4988c5b364669330dbd1937a1d8fe176c07776598b9237d4e19bee4c09d6da7bf085c05961d7f47d3031b",
+      "authorizationId": "auth_56348555694f2f8aaf2277a757cb839f"
+    },
+    "acceptance": {
+      "schema": "priorseal.authorization-receipt.v1",
+      "domain": "priorseal/authorization-receipt/v1",
+      "authorizationId": "auth_56348555694f2f8aaf2277a757cb839f",
+      "authorizationHash": "859864e80a8050f9ff288d2e220e220007f48de4c0d43b8f50518d9d3d12ad5a",
+      "intentHash": "83f8544d4ba9ca137f32eef005f5d7e3a5d55a5a8f77743baedbaa98949493e5",
+      "acceptedAt": 1789520401,
+      "sequence": 1,
+      "previousEntryHash": null,
+      "entryHash": "3bd2a13d904f51ee7404f6662eb24469dde8e52d22018e0d4dae2be24b6e5988",
+      "status": "ACCEPTED",
+      "issuer": "priorseal.thoughtproof-m2-proposal-fixture",
+      "algorithm": "Ed25519",
+      "keyId": "priorseal-thoughtproof-m2-proposal-ed25519-1",
+      "signature": "CwIDoyHwUKQCroCn0CO2XOu98G2ui6NqMuaz83KaNhL3siaG_aq2dTZRxqAQqRGNh9UNPgcz1hwtz-Pbh-vEBg"
+    },
+    "policy": {
+      "schema": "priorseal.policy-evidence.v1",
+      "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "document": null,
+      "result": {
+        "allowed": true,
+        "reasonCodes": [],
+        "policyId": null,
+        "evaluatedAt": 1789520401
+      }
+    }
+  },
+  "execution": {
+    "schema": "priorseal.execution-observation.v1",
+    "chainId": 8453,
+    "txHash": "0xd044ae304135adc01da931fbd8bc5502a3b66efa939f4f7d16c5f927c9dfa669",
+    "status": "CONFIRMED",
+    "blockNumber": 35237982,
+    "blockHash": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "executedAt": 1789520460,
+    "observedAt": 1789520465,
+    "action": "CONTRACT_CALL",
+    "nonce": "1003",
+    "sender": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "recipient": "0xcccccccccccccccccccccccccccccccccccccccc",
+    "target": "0xcccccccccccccccccccccccccccccccccccccccc",
+    "calldataHash": "0x39cf794737b371f8ad484ba1c38727413ebea6d5bc4e9fb43206b119a643b076",
+    "asset": "eip155:8453/native",
+    "amount": "100000000000000000",
+    "transfers": [],
+    "transferMatchUnique": false,
+    "nativeValue": "100000000000000000",
+    "tokenValue": null,
+    "gasUsed": "180000",
+    "fee": null,
+    "executionDataAvailable": true,
+    "observationSource": "fixture",
+    "finalityState": "CONFIRMED",
+    "confirmations": 12
+  },
+  "executionStatus": "CONFIRMED",
+  "compliance": {
+    "schema": "priorseal.compliance-assessment.v1",
+    "status": "COMPLIANT",
+    "reasonCodes": []
+  },
+  "issuer": "priorseal.thoughtproof-m2-proposal-fixture",
+  "issuedAt": 1789520465,
+  "validUntil": 1789606680,
+  "outcome": "COMPLETED",
+  "reasonCodes": [],
+  "binding": {
+    "bound": true,
+    "reasonCodes": []
+  },
+  "algorithm": "Ed25519",
+  "keyId": "priorseal-thoughtproof-m2-proposal-ed25519-1",
+  "verifierVersion": "3.0.0",
+  "signature": "9Ht1g-kaw_fjYwc6eT4-uwzm1qxP1YVZ4i7KYTz-l7aq3NbDAUq0458KAeM_HTNRk5KyhGNWA10p7cQv_1UBAg"
+}

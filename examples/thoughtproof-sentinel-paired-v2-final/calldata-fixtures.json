@@ -1,0 +1,15 @@
+{
+  "schema": "thoughtproof.sentinel-subject.calldata-keccak-fixtures.v1",
+  "cases": [
+    {
+      "name": "TP matching raw calldata derivation",
+      "data": "0x38ed17390000000000000000000000000000000000000000000000000000000000000001",
+      "expectedCalldataHash": "0x39cf794737b371f8ad484ba1c38727413ebea6d5bc4e9fb43206b119a643b076"
+    },
+    {
+      "name": "normative empty calldata derivation",
+      "data": "0x",
+      "expectedCalldataHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+    }
+  ]
+}

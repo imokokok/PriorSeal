@@ -1,0 +1,12 @@
+{
+  "exportSchema": "thoughtproof.sentinel.export.v1",
+  "artifactSchema": "sentinel.verdict.canonical.v1",
+  "verificationId": "sent_m2_tp_missing_subject",
+  "canonical": "{\"apiVersion\":\"sentinel-api-0.1.0\",\"artifactSchema\":\"sentinel.verdict.canonical.v1\",\"confidence\":84,\"evaluatedAt\":1789520340,\"mode\":\"trade_execution\",\"models\":{\"primary\":\"serv-nano\",\"secondary\":\"serv-swift\"},\"objections\":[\"step_0: M1-shaped export without decisionSubject.\"],\"reasoning\":\"ThoughtProof-issued M2 negative vector (subject omitted). Not a production decision.\",\"tier\":\"standard\",\"verdict\":\"ALLOW\",\"verificationId\":\"sent_m2_tp_missing_subject\"}",
+  "digest": "0x9a0476c3411cfdc40b59aad4e5c6ec656c662ca082e9e1ad2e28520e159de28a",
+  "keyId": "tp-sentinel-export-ed25519-2026-09-vector",
+  "alg": "Ed25519",
+  "signedAt": 1789520340,
+  "validUntil": 1789606740,
+  "signature": "0x0627216b6dce5117feb706f3175e3577f5253adff246c5d4a11ab8924ba9d3c81e1bc52f4129762bd75189a7b23105df784f569b316434dffb76a7d7b0eb8006"
+}

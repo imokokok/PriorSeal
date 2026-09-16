@@ -1,0 +1,233 @@
+{
+  "schema": "priorseal.thoughtproof-sentinel-paired-fixture.v2",
+  "status": "CONTRACT_PROPOSAL_VECTORS",
+  "vectorAuthority": "YuTao Peng contract proposal only; not ThoughtProof",
+  "exportSchema": "thoughtproof.sentinel.export.v1",
+  "artifactSchema": "sentinel.verdict.canonical.v1",
+  "exportDomain": "thoughtproof.sentinel.export.v1",
+  "namespace": "thoughtproof.sentinel-decision.v1",
+  "algorithm": "sha256",
+  "subjectSchema": "thoughtproof.sentinel-subject.evm-exact-call.v1",
+  "calldataFixtures": "calldata-fixtures.json",
+  "subjectFixtures": "subject-fixtures.json",
+  "amountBinding": "OUTSIDE_M2_SUBJECT_BINDING",
+  "nonceSemantics": {
+    "transactionNonce": "decisionSubject.transactionNonce and intent.nonce are the EVM transaction nonce",
+    "authorizationNonce": "PriorSeal authorization replay protection only"
+  },
+  "trustedThoughtProofKeys": [
+    {
+      "kid": "yutao-m2-contract-proposal-vector-ed25519-1",
+      "x": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg",
+      "use": "vector-only"
+    }
+  ],
+  "priorSeal": {
+    "issuer": "priorseal.thoughtproof-m2-proposal-fixture",
+    "keyId": "priorseal-thoughtproof-m2-proposal-ed25519-1",
+    "publicKeySpkiSha256": "66b0070d8bd75623d8ef34e077472b05a4ad70a561788bbd1c0abc20423e65de",
+    "receiptSchema": "priorseal.execution-receipt.v3",
+    "intentSchema": "priorseal.intent.v2",
+    "executionProfile": "priorseal.execution-profile.exact-call.v1"
+  },
+  "effectMap": {
+    "ALLOW": "RECOMMEND",
+    "BLOCK": "DO_NOT_RECOMMEND",
+    "UNCERTAIN": "REVIEW_REQUIRED"
+  },
+  "cases": [
+    {
+      "name": "M2 exact-call matching pair",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-matching.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_COMMITMENT_VERIFIED",
+      "expectedSubjectBindingCode": "DECISION_SUBJECT_VERIFIED"
+    },
+    {
+      "name": "intent amount is outside M2 subject binding",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-amount-outside-m2-binding.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_COMMITMENT_VERIFIED",
+      "expectedSubjectBindingCode": "DECISION_SUBJECT_VERIFIED"
+    },
+    {
+      "name": "proposal vector kid rejected without explicit allowance",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-matching.json",
+      "allowVectorOnly": false,
+      "expectedCode": "DECISION_SIGNER_UNTRUSTED"
+    },
+    {
+      "name": "signing key not yet valid at export signedAt",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-matching.json",
+      "keyDocument": "proposal-decision-keys-not-yet-valid.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SIGNER_UNTRUSTED"
+    },
+    {
+      "name": "signing key expired before export signedAt",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-matching.json",
+      "keyDocument": "proposal-decision-keys-expired.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SIGNER_UNTRUSTED"
+    },
+    {
+      "name": "missing signed export",
+      "export": null,
+      "receipt": "priorseal-receipt-matching.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_EXPORT_MISSING"
+    },
+    {
+      "name": "invalid signed export envelope",
+      "export": "export-invalid.json",
+      "receipt": "priorseal-receipt-matching.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_EXPORT_INVALID"
+    },
+    {
+      "name": "tampered export signature",
+      "export": "export-tampered-signature.json",
+      "receipt": "priorseal-receipt-matching.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SIGNATURE_INVALID"
+    },
+    {
+      "name": "M1 artifact without M2 subject",
+      "export": "export-missing-subject.json",
+      "receipt": "priorseal-receipt-missing-subject.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_MISSING"
+    },
+    {
+      "name": "subject contains authorization-only field",
+      "export": "export-extra-field.json",
+      "receipt": "priorseal-receipt-extra-field.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_INVALID"
+    },
+    {
+      "name": "unsupported subject schema",
+      "export": "export-wrong-subject-schema.json",
+      "receipt": "priorseal-receipt-wrong-subject-schema.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_INVALID"
+    },
+    {
+      "name": "uppercase subject address is non-canonical",
+      "export": "export-uppercase-address.json",
+      "receipt": "priorseal-receipt-uppercase-address.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_INVALID"
+    },
+    {
+      "name": "uppercase subject hash is non-canonical",
+      "export": "export-uppercase-hash.json",
+      "receipt": "priorseal-receipt-uppercase-hash.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_INVALID"
+    },
+    {
+      "name": "leading-zero subject uint is non-canonical",
+      "export": "export-leading-zero-uint.json",
+      "receipt": "priorseal-receipt-leading-zero-uint.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_INVALID"
+    },
+    {
+      "name": "zero chainId is invalid",
+      "export": "export-zero-chain-id.json",
+      "receipt": "priorseal-receipt-zero-chain-id.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_INVALID"
+    },
+    {
+      "name": "single missing subject field is invalid",
+      "export": "export-missing-field.json",
+      "receipt": "priorseal-receipt-missing-field.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_INVALID"
+    },
+    {
+      "name": "string PriorSeal intent chainId is rejected without coercion",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-string-chain-id.json",
+      "allowVectorOnly": true,
+      "expectedCode": "PRIORSEAL_INVALID_AUTHORIZATION"
+    },
+    {
+      "name": "chain mismatch",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-chain-mismatch.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_CHAIN_MISMATCH"
+    },
+    {
+      "name": "executor mismatch",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-executor-mismatch.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_EXECUTOR_MISMATCH"
+    },
+    {
+      "name": "call target mismatch",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-target-mismatch.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_TARGET_MISMATCH"
+    },
+    {
+      "name": "transaction nonce mismatch",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-nonce-mismatch.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_NONCE_MISMATCH"
+    },
+    {
+      "name": "transaction value mismatch",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-value-mismatch.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_VALUE_MISMATCH"
+    },
+    {
+      "name": "calldata hash mismatch",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-calldata-mismatch.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_SUBJECT_CALLDATA_MISMATCH"
+    },
+    {
+      "name": "wrong decision commitment",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-wrong-commitment.json",
+      "allowVectorOnly": true,
+      "expectedCode": "CONTEXT_COMMITMENT_DIGEST_MISMATCH"
+    },
+    {
+      "name": "ambiguous decision commitment",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-ambiguous-commitment.json",
+      "allowVectorOnly": true,
+      "expectedCode": "CONTEXT_COMMITMENT_AMBIGUOUS"
+    },
+    {
+      "name": "decision expires before authorization",
+      "export": "export-valid.json",
+      "receipt": "priorseal-receipt-decision-expires-first.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_EXPIRES_BEFORE_AUTHORIZATION"
+    },
+    {
+      "name": "unmapped advisory decision effect",
+      "export": "export-effect-unmapped.json",
+      "receipt": "priorseal-receipt-effect-unmapped.json",
+      "allowVectorOnly": true,
+      "expectedCode": "DECISION_EFFECT_UNMAPPED"
+    }
+  ]
+}

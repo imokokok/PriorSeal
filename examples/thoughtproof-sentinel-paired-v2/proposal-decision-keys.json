@@ -1,0 +1,15 @@
+{
+  "schema": "thoughtproof.keys.v1",
+  "keys": [
+    {
+      "kid": "yutao-m2-contract-proposal-vector-ed25519-1",
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "alg": "EdDSA",
+      "x": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg",
+      "status": "vector-only",
+      "notBefore": "2026-09-16T00:58:00.000Z",
+      "notAfter": "2026-09-17T01:00:00.000Z"
+    }
+  ]
+}

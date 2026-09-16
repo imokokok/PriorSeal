@@ -1,0 +1,15 @@
+{
+  "schema": "priorseal.keys.v1",
+  "issuer": "priorseal.thoughtproof-m2-final-vector-fixture",
+  "keys": [
+    {
+      "issuer": "priorseal.thoughtproof-m2-final-vector-fixture",
+      "keyId": "priorseal-thoughtproof-m2-final-ed25519-1",
+      "algorithm": "Ed25519",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEANLTZBDFWy23PC+sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y=\n-----END PUBLIC KEY-----\n",
+      "status": "active",
+      "validFrom": null,
+      "validUntil": null
+    }
+  ]
+}
