@@ -1,0 +1,76 @@
+{
+  "claim": {
+    "receipt_version": "0.2",
+    "receipt_role": "server_attested",
+    "event_id": "evt-insight-handoff-stopped",
+    "timestamp": "2026-09-17T02:59:30.000Z",
+    "action_type": "governance.decision_evidence_exported",
+    "status": "exported",
+    "decision_record": {
+      "decision_id": "decision-insight-handoff-stopped",
+      "subject": {
+        "action_ref": "insight-boundaryattest-8453-0001",
+        "action_type": "evm.exact-call"
+      },
+      "mode": "pre_authorization_gate",
+      "evidence": {
+        "bundle_digest": "keccak256:0xcbf6b9288812e2837251b50107f172aa952d11e9a3535fc95136780d4e516236",
+        "source_ref": "insight.pretrade-pair.v1:0xcbf6b9288812e2837251b50107f172aa952d11e9a3535fc95136780d4e516236",
+        "rule_ref": "fixture:insight-risk-reviewed-before-principal-authorization:v1"
+      },
+      "opened": {
+        "timestamp": "2026-09-17T02:58:00.000Z",
+        "options": [
+          "proceed_to_principal_authorization",
+          "stop_before_principal_authorization"
+        ],
+        "scope": {
+          "chainId": 8453,
+          "executor": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "transactionNonce": "2048",
+          "callTarget": "0xcccccccccccccccccccccccccccccccccccccccc",
+          "calldataHash": "0x39cf794737b371f8ad484ba1c38727413ebea6d5bc4e9fb43206b119a643b076",
+          "nativeValue": "0"
+        },
+        "resolution_rule": "single_governance_actor_review"
+      },
+      "inputs": [
+        {
+          "type": "evidence_review",
+          "decision_id": "decision-insight-handoff-stopped",
+          "evidence_bundle_digest": "keccak256:0xcbf6b9288812e2837251b50107f172aa952d11e9a3535fc95136780d4e516236",
+          "source": "governance-reviewer:fixture",
+          "selection": "stop_before_principal_authorization",
+          "confidence": 1,
+          "round": 1,
+          "timestamp": "2026-09-17T02:58:20.000Z"
+        }
+      ],
+      "resolution": {
+        "verdict": "stop_before_principal_authorization",
+        "chosen_option": "stop_before_principal_authorization",
+        "reason": "Governance review stopped the handoff before principal authorization.",
+        "tally": {
+          "proceed_to_principal_authorization": 0,
+          "stop_before_principal_authorization": 1
+        },
+        "dissent": [],
+        "timestamp": "2026-09-17T02:58:30.000Z"
+      },
+      "adjudication": {
+        "decision_id": "decision-insight-handoff-stopped",
+        "outcome": "stopped_before_principal_authorization",
+        "path": "governance_handoff",
+        "reason": "Governance review stopped the handoff before principal authorization.",
+        "timestamp": "2026-09-17T02:58:31.000Z"
+      },
+      "execution_observation": {
+        "state": "not_observed",
+        "scope": "governance_exporter_does_not_observe_execution",
+        "timestamp": "2026-09-17T02:59:30.000Z"
+      }
+    }
+  },
+  "signature": "PYJGvnyu9n66kvyVMs1usQG8IybB/Yj2wUch9fRiGfHTHchB9d2KLBCXNHWvTW3ZZlKHgI8yFdiTkd6sFH4fBw==",
+  "public_key_id": "sha256:55ddbb3ea4e4011206a0eab2aa2aeb47104d64fd58b4811ba91adcca7ebac23d"
+}

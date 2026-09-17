@@ -1,0 +1,148 @@
+{
+  "schema": "priorseal.execution-receipt.v3",
+  "domain": "priorseal/execution-receipt/v3",
+  "receiptId": "psr_5644d6c1c937c471b4fd778849302e85",
+  "intentHash": "d19f0dfbf7a21e4dba7eab5f06b54b1b8defc8d5a6cf698b1225a1c99b19d208",
+  "authorizationHash": "8576b92d07866bb12d3abe3e19112ff6b5f9ccf52f91a530b5f78f7de1138b66",
+  "executionHash": "cbbd1f62a53ca5658a35b7b912d2f9dea4b31c0686b23ab95242003f60614a47",
+  "authorizationEvidence": {
+    "authorization": {
+      "schema": "priorseal.authorization.v2",
+      "domain": "priorseal/authorization/v2",
+      "intent": {
+        "schema": "priorseal.intent.v2",
+        "executionProfile": "priorseal.execution-profile.exact-call.v1",
+        "intentId": "insight-boundaryattest-8453-0001",
+        "chainId": 8453,
+        "action": "CONTRACT_CALL",
+        "asset": "eip155:8453/erc20:0x036cbd53842c5426634e7929541ec2318f3dcf7e",
+        "amount": "1000000",
+        "sender": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "recipient": "0xcccccccccccccccccccccccccccccccccccccccc",
+        "validUntil": 1789614180,
+        "nonce": "2048",
+        "callTarget": "0xcccccccccccccccccccccccccccccccccccccccc",
+        "calldataHash": "0x39cf794737b371f8ad484ba1c38727413ebea6d5bc4e9fb43206b119a643b076",
+        "transactionValue": "0",
+        "contextCommitments": [
+          {
+            "namespace": "boundaryattest.governance-signer.spki-sha256.v1",
+            "algorithm": "sha256",
+            "digest": "0x55ddbb3ea4e4011206a0eab2aa2aeb47104d64fd58b4811ba91adcca7ebac23d"
+          },
+          {
+            "namespace": "boundaryattest.insight-handoff.jcs-claim.v0.2",
+            "algorithm": "sha256",
+            "digest": "0x5dd53b4f68ec9510a1b470f1f56231e08446f02aa70f5a05f583a53e87963f83"
+          },
+          {
+            "namespace": "insight.pretrade-pair.v1",
+            "algorithm": "keccak256",
+            "digest": "0xcbf6b9288812e2837251b50107f172aa952d11e9a3535fc95136780d4e516236"
+          }
+        ],
+        "constraints": {
+          "minConfirmations": 12
+        },
+        "intentHash": "d19f0dfbf7a21e4dba7eab5f06b54b1b8defc8d5a6cf698b1225a1c99b19d208"
+      },
+      "intentHash": "d19f0dfbf7a21e4dba7eab5f06b54b1b8defc8d5a6cf698b1225a1c99b19d208",
+      "principal": {
+        "type": "user",
+        "id": "insight-boundaryattest-fixture-user",
+        "account": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
+      },
+      "authorizer": {
+        "type": "eip712",
+        "address": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
+      },
+      "delegate": {
+        "agentId": "insight-boundaryattest-fixture-agent",
+        "executor": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "issuedAt": 1789614000,
+      "notBefore": 1789614000,
+      "expiresAt": 1789614180,
+      "authorizationNonce": "0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "maxUses": "1",
+      "audience": "priorseal",
+      "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "signature": "0x71b64fd644ac05894b75eb179184926c5e091e8a0e648266d84d1d15d498bd975aba50ec873a74bc365d239e57c06ba122b5a716bf59028b0fc53f01880f34de1c",
+      "authorizationId": "auth_816b3a5b23df72bfa2d0808bbb928ff5"
+    },
+    "acceptance": {
+      "schema": "priorseal.authorization-receipt.v1",
+      "domain": "priorseal/authorization-receipt/v1",
+      "authorizationId": "auth_816b3a5b23df72bfa2d0808bbb928ff5",
+      "authorizationHash": "8576b92d07866bb12d3abe3e19112ff6b5f9ccf52f91a530b5f78f7de1138b66",
+      "intentHash": "d19f0dfbf7a21e4dba7eab5f06b54b1b8defc8d5a6cf698b1225a1c99b19d208",
+      "acceptedAt": 1789614001,
+      "sequence": 1,
+      "previousEntryHash": null,
+      "entryHash": "6c8181fcc14bf063e31583129b4e8b99265fc99415b39999c867cbecd3774ca8",
+      "status": "ACCEPTED",
+      "issuer": "priorseal.insight-boundaryattest-fixture",
+      "algorithm": "Ed25519",
+      "keyId": "priorseal-insight-boundaryattest-ed25519-1",
+      "signature": "_bkTTxAQ_V_ClSSgpQdvp0B6mIpBottrZkwbc7nhX2DP6dzXkOx1Xi3HF_BE0nY2Pp2e_VqHxEbbNVVhnozLCg"
+    },
+    "policy": {
+      "schema": "priorseal.policy-evidence.v1",
+      "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "document": null,
+      "result": {
+        "allowed": true,
+        "reasonCodes": [],
+        "policyId": null,
+        "evaluatedAt": 1789614001
+      }
+    }
+  },
+  "execution": {
+    "schema": "priorseal.execution-observation.v1",
+    "chainId": 8453,
+    "txHash": "0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+    "status": "CONFIRMED",
+    "blockNumber": 33200011,
+    "blockHash": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "executedAt": 1789614060,
+    "observedAt": 1789614065,
+    "action": "CONTRACT_CALL",
+    "nonce": "2048",
+    "sender": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "recipient": "0xcccccccccccccccccccccccccccccccccccccccc",
+    "target": "0xcccccccccccccccccccccccccccccccccccccccc",
+    "calldataHash": "0x39cf794737b371f8ad484ba1c38727413ebea6d5bc4e9fb43206b119a643b076",
+    "asset": "eip155:8453/erc20:0x036cbd53842c5426634e7929541ec2318f3dcf7e",
+    "amount": "1000000",
+    "transfers": [],
+    "transferMatchUnique": false,
+    "nativeValue": "0",
+    "tokenValue": null,
+    "gasUsed": "180000",
+    "fee": null,
+    "executionDataAvailable": true,
+    "observationSource": "fixture",
+    "finalityState": "CONFIRMED",
+    "confirmations": 12
+  },
+  "executionStatus": "CONFIRMED",
+  "compliance": {
+    "schema": "priorseal.compliance-assessment.v1",
+    "status": "COMPLIANT",
+    "reasonCodes": []
+  },
+  "issuer": "priorseal.insight-boundaryattest-fixture",
+  "issuedAt": 1789614065,
+  "validUntil": 1789614180,
+  "outcome": "COMPLETED",
+  "reasonCodes": [],
+  "binding": {
+    "bound": true,
+    "reasonCodes": []
+  },
+  "algorithm": "Ed25519",
+  "keyId": "priorseal-insight-boundaryattest-ed25519-1",
+  "verifierVersion": "3.0.0",
+  "signature": "CZ8E248i7ip6KWlatDntIcHJ88CoCtCXbDIlVwOTxk6ekXhip6Trgnq6pIPSjOEl4VBsXGW0N0YrL7R1HfUSAg"
+}

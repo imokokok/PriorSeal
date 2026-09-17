@@ -1,0 +1,161 @@
+{
+  "schema": "priorseal.insight-boundaryattest-three-object-fixture.v1",
+  "priorSealBaseCommit": "9260a115c42358046a6af7af0c86489ec0ec252b",
+  "insightSourceCommit": "a5fe98018dc87936aad1647c8f631f1d661b0ebf",
+  "boundaryAttestSourceCommit": "fc2fb18af50458c0a6fd2489768e21fd339a621e",
+  "insight": {
+    "schemaVersion": 3,
+    "expectedAttester": "0x7564105E977516C53bE337314c7E53838967bDaC",
+    "namespace": "insight.pretrade-pair.v1",
+    "algorithm": "keccak256",
+    "digest": "0xcbf6b9288812e2837251b50107f172aa952d11e9a3535fc95136780d4e516236",
+    "maxSlippageBps": 50
+  },
+  "boundaryAttest": {
+    "receiptVersion": "0.2",
+    "namespace": "boundaryattest.insight-handoff.jcs-claim.v0.2",
+    "signerNamespace": "boundaryattest.governance-signer.spki-sha256.v1",
+    "algorithm": "sha256",
+    "publicKeyId": "sha256:55ddbb3ea4e4011206a0eab2aa2aeb47104d64fd58b4811ba91adcca7ebac23d",
+    "maxExportAgeSeconds": 300,
+    "maxDecisionAgeSeconds": 300,
+    "maxFutureSkewSeconds": 30,
+    "deletionTest": {
+      "exactFact": "The independently pinned governance signer reviewed the exact named Insight evidence for the exact proposed EVM call and resolved that it may proceed to principal authorization.",
+      "materialFactLost": true,
+      "providerReason": "Support the portable claim because it preserves an independently signed governance review and handoff fact that neither native Insight risk evidence nor native PriorSeal authorization and execution evidence establishes."
+    }
+  },
+  "priorSeal": {
+    "issuer": "priorseal.insight-boundaryattest-fixture",
+    "keyId": "priorseal-insight-boundaryattest-ed25519-1",
+    "publicKeySpkiSha256": "a492f11e4af1df7b9877c529f146d8820fbb27aacc98e7b15786452edaaa5fc1",
+    "receiptSchema": "priorseal.execution-receipt.v3",
+    "intentSchema": "priorseal.intent.v2",
+    "executionProfile": "priorseal.execution-profile.exact-call.v1"
+  },
+  "cases": [
+    {
+      "name": "fully matching three-object flow",
+      "expectedCode": "OK",
+      "expectedValueConclusion": "BOUNDARYATTEST_ADDS_GOVERNANCE_HANDOFF"
+    },
+    {
+      "name": "tampered Insight source attestation",
+      "mutation": "tamper-insight-source-verdict",
+      "expectedCode": "INSIGHT_SOURCE_UID_MISMATCH"
+    },
+    {
+      "name": "wrong-key Insight source attestation",
+      "insightSource": "insight-source-wrong-key.json",
+      "expectedCode": "INSIGHT_SOURCE_SIGNER_UNTRUSTED"
+    },
+    {
+      "name": "expired Insight source evidence",
+      "insightSource": "insight-source-stale.json",
+      "expectedCode": "INSIGHT_SOURCE_EVIDENCE_EXPIRED"
+    },
+    {
+      "name": "changed Insight pair commitment",
+      "priorSealReceipt": "priorseal-receipt-wrong-insight-commitment.json",
+      "expectedCode": "INSIGHT_CONTEXT_COMMITMENT_DIGEST_MISMATCH"
+    },
+    {
+      "name": "tampered BoundaryAttest claim",
+      "mutation": "tamper-boundary-verdict",
+      "expectedCode": "BOUNDARYATTEST_SIGNATURE_INVALID"
+    },
+    {
+      "name": "wrong-key BoundaryAttest claim",
+      "boundaryReceipt": "boundaryattest-receipt-wrong-key.json",
+      "expectedCode": "BOUNDARYATTEST_KEY_ID_MISMATCH"
+    },
+    {
+      "name": "invalid generic BoundaryAttest governance verdict",
+      "boundaryReceipt": "boundaryattest-receipt-generic-verdict.json",
+      "expectedCode": "BOUNDARYATTEST_GOVERNANCE_VERDICT_INVALID"
+    },
+    {
+      "name": "valid BoundaryAttest stop verdict blocks the executed flow",
+      "boundaryReceipt": "boundaryattest-receipt-stopped.json",
+      "priorSealReceipt": "priorseal-receipt-stopped.json",
+      "expectedCode": "BOUNDARYATTEST_GOVERNANCE_STOPPED"
+    },
+    {
+      "name": "invalid BoundaryAttest core status semantics",
+      "boundaryReceipt": "boundaryattest-receipt-wrong-core-status.json",
+      "expectedCode": "BOUNDARYATTEST_CORE_EVENT_SEMANTICS_INVALID"
+    },
+    {
+      "name": "stale BoundaryAttest export",
+      "boundaryReceipt": "boundaryattest-receipt-stale-export.json",
+      "priorSealReceipt": "priorseal-receipt-stale-export.json",
+      "expectedCode": "BOUNDARYATTEST_EXPORT_STALE"
+    },
+    {
+      "name": "stale BoundaryAttest underlying decision",
+      "boundaryReceipt": "boundaryattest-receipt-stale-decision.json",
+      "priorSealReceipt": "priorseal-receipt-stale-decision.json",
+      "expectedCode": "BOUNDARYATTEST_DECISION_STALE"
+    },
+    {
+      "name": "replayed exact BoundaryAttest export",
+      "preloadExportReplay": true,
+      "expectedCode": "BOUNDARYATTEST_EXPORT_REPLAYED"
+    },
+    {
+      "name": "replayed BoundaryAttest decision",
+      "preloadDecisionReplay": true,
+      "expectedCode": "BOUNDARYATTEST_DECISION_REPLAYED"
+    },
+    {
+      "name": "mismatched decision_record.subject.action_ref",
+      "boundaryReceipt": "boundaryattest-receipt-action-mismatch.json",
+      "priorSealReceipt": "priorseal-receipt-action-mismatch.json",
+      "expectedCode": "BOUNDARYATTEST_SUBJECT_ACTION_REF_MISMATCH"
+    },
+    {
+      "name": "changed exact-call calldata hash",
+      "boundaryReceipt": "boundaryattest-receipt-calldata-mismatch.json",
+      "priorSealReceipt": "priorseal-receipt-calldata-mismatch.json",
+      "expectedCode": "BOUNDARYATTEST_SCOPE_CALLDATA_MISMATCH"
+    },
+    {
+      "name": "changed exact-call target",
+      "boundaryReceipt": "boundaryattest-receipt-target-mismatch.json",
+      "priorSealReceipt": "priorseal-receipt-target-mismatch.json",
+      "expectedCode": "BOUNDARYATTEST_SCOPE_TARGET_MISMATCH"
+    },
+    {
+      "name": "changed BoundaryAttest Insight evidence reference",
+      "boundaryReceipt": "boundaryattest-receipt-insight-reference-mismatch.json",
+      "priorSealReceipt": "priorseal-receipt-insight-reference-mismatch.json",
+      "expectedCode": "BOUNDARYATTEST_INSIGHT_REFERENCE_MISMATCH"
+    },
+    {
+      "name": "changed BoundaryAttest claim commitment",
+      "priorSealReceipt": "priorseal-receipt-wrong-boundary-commitment.json",
+      "expectedCode": "BOUNDARYATTEST_CONTEXT_COMMITMENT_DIGEST_MISMATCH"
+    },
+    {
+      "name": "missing BoundaryAttest claim commitment",
+      "priorSealReceipt": "priorseal-receipt-missing-boundary-commitment.json",
+      "expectedCode": "BOUNDARYATTEST_CONTEXT_COMMITMENT_MISSING"
+    },
+    {
+      "name": "changed separately bound BoundaryAttest signer identity",
+      "priorSealReceipt": "priorseal-receipt-wrong-signer-commitment.json",
+      "expectedCode": "BOUNDARYATTEST_SIGNER_CONTEXT_COMMITMENT_DIGEST_MISMATCH"
+    },
+    {
+      "name": "observed execution mismatch",
+      "priorSealReceipt": "priorseal-receipt-execution-mismatch.json",
+      "expectedCode": "PRIORSEAL_RECEIPT_NOT_COMPLIANT"
+    },
+    {
+      "name": "PriorSeal validity exceeds evidence window",
+      "priorSealReceipt": "priorseal-receipt-validity-exceeds-evidence.json",
+      "expectedCode": "PRIORSEAL_VALIDITY_EXCEEDS_EVIDENCE"
+    }
+  ]
+}
