@@ -7,6 +7,55 @@ export type ContextCommitmentMatch = {
   commitment: ContextCommitment | null
 }
 
+export type HeadlessMarketStateReceipt = {
+  receipt_id: string
+  issued_at: string
+  expires_at: string
+  issuer: string
+  mic: string
+  status: string
+  source: string
+  halt_detection: string
+  coverage: string
+  receipt_mode: string
+  schema_version: string
+  public_key_id: string
+  signature: string
+}
+
+export type HeadlessMarketStateKey = {
+  key_id: string
+  algorithm: 'Ed25519'
+  public_key: string
+}
+
+export type HeadlessMarketStatePolicy = {
+  expectedMic: string
+  allowedStatuses: string[]
+  allowedReceiptModes?: string[]
+  requiredFeedState?: string
+  expectedIssuer?: string
+  expectedSchemaVersion?: string
+}
+
+export type HeadlessMarketStateCheck = {
+  valid: boolean
+  code: 'OK' | 'HEADLESS_MARKET_STATE_REJECTED'
+  reasonCodes: string[]
+  commitment: ContextCommitment
+  coverage: Record<string, unknown> | null
+}
+
+export type HeadlessMarketStatePairResult = {
+  valid: boolean
+  code: 'OK' | 'HEADLESS_MARKET_STATE_PAIR_REJECTED'
+  reasonCodes: string[]
+  authorizationBinding: ContextCommitmentMatch
+  authority: HeadlessMarketStateCheck
+  execution: HeadlessMarketStateCheck
+  executionEvidenceCommitment: ContextCommitment
+}
+
 export type Intent = {
   schema?: 'priorseal.intent.v1' | 'priorseal.intent.v2'
   executionProfile?: 'priorseal.execution-profile.exact-call.v1'

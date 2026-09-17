@@ -17,6 +17,7 @@
     "example:receipt": "node examples/create-signed-receipt.mjs",
     "example:boundaryattest-paired": "npm run sdk:build && node examples/boundaryattest-paired-v0.2/verify.mjs",
     "example:insight-boundaryattest-three-object": "npm run sdk:build && node examples/insight-boundaryattest-three-object-v0.2/verify.mjs",
+    "example:headless-market-state-pair": "npm run sdk:build && node examples/headless-market-state-pair-v1/verify.mjs",
     "example:thoughtproof-paired": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v1/verify.mjs",
     "example:thoughtproof-m2": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v2/verify.mjs",
     "example:thoughtproof-m2-final": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v2-final/verify.mjs",

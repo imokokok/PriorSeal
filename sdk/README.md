@@ -85,3 +85,23 @@ system remains authoritative for the digest's business meaning and may treat it
 as an advisory recommendation rather than an execution permission. Use
 `matchContextCommitment` when a protocol deliberately permits several
 commitments in the same namespace.
+
+## Short-window market-state evidence
+
+The SDK includes an offline verifier for Headless Oracle v5 market-state receipts. For a short validity window, use two receipts with different evidence roles: bind the authority-time receipt digest into the signed intent, then independently verify and retain a distinct execution-time receipt in the final evidence bundle.
+
+```ts
+import { verifyHeadlessMarketStateReceiptPair } from 'priorseal-sdk'
+
+const result = await verifyHeadlessMarketStateReceiptPair({
+  intent,
+  authorityReceipt,
+  executionReceipt,
+  key: pinnedHeadlessIssuerKey,
+  authorityTime,
+  executionTime,
+  policy: { expectedMic: 'XNYS', allowedStatuses: ['OPEN'], requiredFeedState: 'live' },
+})
+```
+
+The default accepts only `live` receipt mode. Opting into `demo` is explicit and suitable only for fixtures. The verifier makes no network requests and reports signature, commitment, key, time-window, venue, mode, status, coverage, uniqueness, and pair-timeline failures. The execution-time digest is deliberately returned as `executionEvidenceCommitment`; it is not claimed to have existed in the earlier authorization.
