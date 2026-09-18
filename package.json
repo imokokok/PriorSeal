@@ -20,6 +20,7 @@
     "example:headless-market-state-pair": "npm run sdk:build && node examples/headless-market-state-pair-v1/verify.mjs",
     "example:web3-agent-kit-base-swap": "npm run sdk:build && node examples/web3-agent-kit-base-swap-v1/verify.mjs",
     "example:web3-agent-kit-base-swap-v2": "npm run sdk:build && node examples/web3-agent-kit-base-swap-v2/verify.mjs",
+    "example:web3-agent-kit-context-binding": "npm run sdk:build && node examples/web3-agent-kit-context-binding-v1/verify.mjs",
     "verify:web3-agent-kit-base-sepolia-live": "npm run sdk:build && node examples/web3-agent-kit-base-sepolia-live-v1/verify.mjs",
     "verify:web3-agent-kit-base-sepolia-live:online": "npm run sdk:build && node examples/web3-agent-kit-base-sepolia-live-v1/verify.mjs --online",
     "example:thoughtproof-paired": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v1/verify.mjs",

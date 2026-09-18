@@ -1,0 +1,41 @@
+{
+  "schema": "priorseal.web3-agent-kit-context-binding-vector.v1",
+  "source": {
+    "package": "web3-agent-kit",
+    "version": "1.18.1",
+    "commit": "1ea0a7acb5d02c5a35ca4e59e4c562c34255a216"
+  },
+  "callEnvelope": {
+    "domain": "agent-call-envelope.v1",
+    "payload": {
+      "schema": "agent-call-envelope.v1",
+      "chainId": 8453,
+      "executionProfile": "call",
+      "executor": "0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc",
+      "nonce": "265",
+      "calldataHash": "0xd4fd4e189132273036449fc9e11198c739161b4c0116a9a2dccdfa1c492006f1",
+      "nativeValue": "1000000000000",
+      "target": "0x94cc0aac535ccdb3c01d6787d6413c739ae12bc4"
+    },
+    "digest": "0x86959d3ac803b33342b9aa33afb8dc12665a7258df69b91f838c34620bb4fbb8"
+  },
+  "policyDecision": {
+    "domain": "web3-agent-kit.policy-decision.v1",
+    "digest": "0xd1bfd4403cd8b94fa93fae95c2459c714c83247eabcdafa4317134258d2693ad"
+  },
+  "priorSeal": {
+    "rule": "DIRECT_DIGEST_NO_SECOND_NORMALIZATION_OR_REHASH",
+    "contextCommitments": [
+      {
+        "namespace": "agent-call-envelope.v1",
+        "algorithm": "sha256",
+        "digest": "0x86959d3ac803b33342b9aa33afb8dc12665a7258df69b91f838c34620bb4fbb8"
+      },
+      {
+        "namespace": "web3-agent-kit.policy-decision.v1",
+        "algorithm": "sha256",
+        "digest": "0xd1bfd4403cd8b94fa93fae95c2459c714c83247eabcdafa4317134258d2693ad"
+      }
+    ]
+  }
+}
