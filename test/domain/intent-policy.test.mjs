@@ -16,9 +16,27 @@ test('authorization policy binds a reviewed principal identity to its account ty
   assert.deepEqual(evaluateAuthorizationPolicy({ ...authorization, principal: { ...authorization.principal, id: 'lookalike' } }, policy, 1000).reasonCodes, ['POLICY_PRINCIPAL_NOT_ALLOWED']);
 });
 
+test('authorization policy can require the authorizer and executor to be distinct', () => {
+  const authorizer = `0x${'a'.repeat(40)}`;
+  const executor = `0x${'b'.repeat(40)}`;
+  const authorization = {
+    intent,
+    principal: { id: 'operator', type: 'user', account: authorizer },
+    authorizer: { type: 'eip712', address: authorizer },
+    delegate: { agentId: 'agent', executor },
+  };
+  const policy = { requireDistinctAuthorizerAndExecutor: true };
+  assert.equal(evaluateAuthorizationPolicy(authorization, policy, 1000).allowed, true);
+  assert.deepEqual(
+    evaluateAuthorizationPolicy({ ...authorization, delegate: { agentId: 'agent', executor: authorizer } }, policy, 1000).reasonCodes,
+    ['POLICY_AUTHORIZER_EXECUTOR_NOT_DISTINCT'],
+  );
+});
+
 test('runtime policy evaluation fails closed on malformed restrictions', () => {
   assert.deepEqual(evaluateIntentPolicy(intent, { allowedRecipients: '0xcc' }, 1000).reasonCodes, ['POLICY_INVALID']);
   assert.deepEqual(evaluateAuthorizationPolicy({ intent, principal: { id: 'user', type: 'user', account: '0xaa' }, authorizer: { type: 'eip712' } }, { principals: 'everyone' }, 1000).reasonCodes, ['POLICY_INVALID']);
+  assert.deepEqual(evaluateIntentPolicy(intent, { requireDistinctAuthorizerAndExecutor: 'yes' }, 1000).reasonCodes, ['POLICY_INVALID']);
 });
 
 test('new exact-call authorizations reject policies that imply unenforced transfer semantics', () => {

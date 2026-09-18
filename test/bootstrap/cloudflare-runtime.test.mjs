@@ -55,4 +55,6 @@ test('authorization policy parsing rejects malformed allowlists instead of disab
   assert.throws(() => parsePolicyDocument({ allowedSenders: [`0x${'a'.repeat(39)}`] }), /20-byte EVM address/);
   assert.throws(() => parsePolicyDocument({ maxAmount: '-1' }), /unsigned base-10 integer/);
   assert.throws(() => parsePolicyDocument({ maxValiditySeconds: '900' }), /non-negative safe integer/);
+  assert.throws(() => parsePolicyDocument({ requireDistinctAuthorizerAndExecutor: 'yes' }), /must be a boolean/);
+  assert.equal(parsePolicyDocument({ requireDistinctAuthorizerAndExecutor: true }).requireDistinctAuthorizerAndExecutor, true);
 });

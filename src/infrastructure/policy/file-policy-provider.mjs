@@ -12,7 +12,7 @@ export function readPolicyFile(file) {
 export function parsePolicyDocument(policy) {
   if (policy == null) return null;
   assertSafeJson(policy);
-  assertOnlyFields(policy, ['policyId', 'principals', 'allowedChainIds', 'allowedActions', 'allowedAssets', 'allowedSenders', 'allowedRecipients', 'maxAmount', 'maxValiditySeconds', 'minConfirmations', 'witnessQuorum', 'timestampPolicy'], 'policy');
+  assertOnlyFields(policy, ['policyId', 'principals', 'allowedChainIds', 'allowedActions', 'allowedAssets', 'allowedSenders', 'allowedRecipients', 'maxAmount', 'maxValiditySeconds', 'minConfirmations', 'requireDistinctAuthorizerAndExecutor', 'witnessQuorum', 'timestampPolicy'], 'policy');
   const policyId = policy.policyId == null ? undefined : protocolId(policy.policyId, 'policy.policyId');
   const allowedChainIds = normalizeList(policy.allowedChainIds, 'policy.allowedChainIds', chainId);
   const allowedActions = normalizeList(policy.allowedActions, 'policy.allowedActions', (value) => protocolId(value, 'policy.allowedActions entry'));
@@ -22,6 +22,7 @@ export function parsePolicyDocument(policy) {
   const maxAmount = policy.maxAmount == null ? undefined : uintString(policy.maxAmount, 'policy.maxAmount');
   if (policy.maxValiditySeconds != null && (!Number.isSafeInteger(policy.maxValiditySeconds) || policy.maxValiditySeconds < 0)) throw new TypeError('policy.maxValiditySeconds must be a non-negative safe integer');
   if (policy.minConfirmations != null && (!Number.isSafeInteger(policy.minConfirmations) || policy.minConfirmations < 1 || policy.minConfirmations > 10_000)) throw new TypeError('policy.minConfirmations must be an integer between 1 and 10000');
+  if (policy.requireDistinctAuthorizerAndExecutor != null && typeof policy.requireDistinctAuthorizerAndExecutor !== 'boolean') throw new TypeError('policy.requireDistinctAuthorizerAndExecutor must be a boolean');
   const witnessQuorum = policy.witnessQuorum ? buildWitnessPolicy(policy.witnessQuorum) : undefined;
   const timestampPolicy = policy.timestampPolicy ? buildTimestampPolicy(policy.timestampPolicy) : undefined;
   let principals;
@@ -45,6 +46,7 @@ export function parsePolicyDocument(policy) {
     ...(maxAmount != null ? { maxAmount } : {}),
     ...(policy.maxValiditySeconds != null ? { maxValiditySeconds: policy.maxValiditySeconds } : {}),
     ...(policy.minConfirmations != null ? { minConfirmations: policy.minConfirmations } : {}),
+    ...(policy.requireDistinctAuthorizerAndExecutor != null ? { requireDistinctAuthorizerAndExecutor: policy.requireDistinctAuthorizerAndExecutor } : {}),
     ...(witnessQuorum ? { witnessQuorum } : {}),
     ...(timestampPolicy ? { timestampPolicy } : {}),
   };

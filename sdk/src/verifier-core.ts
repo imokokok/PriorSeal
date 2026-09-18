@@ -437,6 +437,7 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
     || (policy.maxAmount != null && !/^(0|[1-9][0-9]*)$/.test(String(policy.maxAmount)))
     || (policy.maxValiditySeconds != null && (typeof policy.maxValiditySeconds !== 'number' || !Number.isSafeInteger(policy.maxValiditySeconds) || policy.maxValiditySeconds < 0))
     || (policy.minConfirmations != null && (typeof policy.minConfirmations !== 'number' || !Number.isSafeInteger(policy.minConfirmations) || policy.minConfirmations < 1 || policy.minConfirmations > 10_000))
+    || (policy.requireDistinctAuthorizerAndExecutor != null && typeof policy.requireDistinctAuthorizerAndExecutor !== 'boolean')
   if (invalidPolicy) reasons.push('POLICY_INVALID')
   if (listMisses(policy.allowedChainIds, intent.chainId)) reasons.push('POLICY_CHAIN_NOT_ALLOWED')
   if (listMisses(policy.allowedActions, intent.action)) reasons.push('POLICY_ACTION_NOT_ALLOWED')
@@ -457,5 +458,6 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
     })
     if (!matched) reasons.push('POLICY_PRINCIPAL_NOT_ALLOWED')
   }
+  if (policy.requireDistinctAuthorizerAndExecutor === true && authorization.authorizer.address.toLowerCase() === authorization.delegate.executor.toLowerCase()) reasons.push('POLICY_AUTHORIZER_EXECUTOR_NOT_DISTINCT')
   return { allowed: reasons.length === 0, reasonCodes: [...new Set(reasons)], policyId: typeof policy.policyId === 'string' ? policy.policyId : null, evaluatedAt }
 }

@@ -7,6 +7,7 @@ export const POLICY_CODES = Object.freeze({
   AMOUNT_EXCEEDED: 'POLICY_AMOUNT_EXCEEDED',
   EXPIRY_TOO_FAR: 'POLICY_EXPIRY_TOO_FAR',
   PRINCIPAL_NOT_ALLOWED: 'POLICY_PRINCIPAL_NOT_ALLOWED',
+  AUTHORIZER_EXECUTOR_NOT_DISTINCT: 'POLICY_AUTHORIZER_EXECUTOR_NOT_DISTINCT',
   MIN_CONFIRMATIONS_REQUIRED: 'POLICY_MIN_CONFIRMATIONS_REQUIRED',
   INVALID_POLICY: 'POLICY_INVALID',
   EXACT_CALL_SEMANTICS_UNSUPPORTED: 'POLICY_EXACT_CALL_SEMANTICS_UNSUPPORTED',
@@ -41,6 +42,10 @@ export function evaluateAuthorizationPolicy(authorization, policy = {}, now = Ma
       && principal.authorizerType === authorization.authorizer.type);
     if (!matched) reasonCodes.push(POLICY_CODES.PRINCIPAL_NOT_ALLOWED);
   }
+  if (policy.requireDistinctAuthorizerAndExecutor === true
+    && String(authorization.authorizer?.address ?? '').toLowerCase() === String(authorization.delegate?.executor ?? '').toLowerCase()) {
+    reasonCodes.push(POLICY_CODES.AUTHORIZER_EXECUTOR_NOT_DISTINCT);
+  }
   return { ...intentResult, allowed: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
 }
 
@@ -64,5 +69,6 @@ function validRuntimePolicy(policy) {
   if (policy.maxAmount != null && !/^(0|[1-9][0-9]*)$/.test(String(policy.maxAmount))) return false;
   if (policy.maxValiditySeconds != null && (!Number.isSafeInteger(policy.maxValiditySeconds) || policy.maxValiditySeconds < 0)) return false;
   if (policy.minConfirmations != null && (!Number.isSafeInteger(policy.minConfirmations) || policy.minConfirmations < 1 || policy.minConfirmations > 10_000)) return false;
+  if (policy.requireDistinctAuthorizerAndExecutor != null && typeof policy.requireDistinctAuthorizerAndExecutor !== 'boolean') return false;
   return true;
 }

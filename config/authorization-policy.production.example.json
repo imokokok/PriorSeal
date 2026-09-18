@@ -9,6 +9,7 @@
   "maxAmount": "0",
   "maxValiditySeconds": 900,
   "minConfirmations": 12,
+  "requireDistinctAuthorizerAndExecutor": true,
   "timestampPolicy": {
     "schema": "priorseal.timestamp-policy.v1",
     "profile": "digicert-rfc3161-v1",
