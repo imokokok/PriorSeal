@@ -1,0 +1,119 @@
+{
+  "schema": "priorseal.402signal-eip3009-offline-cases.v1",
+  "categories": 6,
+  "vectors": [
+    {
+      "id": "matching",
+      "paymentVariant": "matching",
+      "now": 1788566402,
+      "settlementVariant": "matching",
+      "expected": {
+        "release": "PAYLOAD_RELEASED",
+        "settlement": "SETTLED_CONFIRMED",
+        "replacement": "NOT_REQUIRED",
+        "reason": "OK"
+      }
+    },
+    {
+      "id": "changed-terms",
+      "paymentVariant": "matching",
+      "now": 1788566402,
+      "mutation": {
+        "paymentValue": "10001"
+      },
+      "expected": {
+        "release": "BLOCKED_BEFORE_RELEASE",
+        "settlement": "NOT_CHECKED",
+        "replacement": "NOT_APPLICABLE",
+        "reason": "PAYMENT_SIGNATURE_INVALID"
+      }
+    },
+    {
+      "id": "authorization-nonce-replay",
+      "paymentVariant": "matching",
+      "now": 1788566402,
+      "preReleaseState": {
+        "authorizationUsed": true,
+        "bindingNonceSeen": false
+      },
+      "expected": {
+        "release": "BLOCKED_BEFORE_RELEASE",
+        "settlement": "NOT_CHECKED",
+        "replacement": "NOT_APPLICABLE",
+        "reason": "AUTHORIZATION_ALREADY_USED"
+      }
+    },
+    {
+      "id": "binding-nonce-replay",
+      "paymentVariant": "matching",
+      "now": 1788566402,
+      "preReleaseState": {
+        "authorizationUsed": false,
+        "bindingNonceSeen": true
+      },
+      "expected": {
+        "release": "BLOCKED_BEFORE_RELEASE",
+        "settlement": "NOT_CHECKED",
+        "replacement": "NOT_APPLICABLE",
+        "reason": "BINDING_NONCE_ALREADY_USED"
+      }
+    },
+    {
+      "id": "timeout-reconciliation",
+      "paymentVariant": "matching",
+      "now": 1788566402,
+      "settlementVariant": "timeout",
+      "expected": {
+        "release": "PAYLOAD_RELEASED",
+        "settlement": "SETTLEMENT_PENDING",
+        "replacement": "BLOCKED",
+        "reason": "RECONCILIATION_REQUIRED"
+      }
+    },
+    {
+      "id": "reorg-reconciliation",
+      "paymentVariant": "matching",
+      "now": 1788566402,
+      "settlementVariant": "reorg",
+      "expected": {
+        "release": "PAYLOAD_RELEASED",
+        "settlement": "REORGED",
+        "replacement": "BLOCKED",
+        "reason": "REORG_RECONCILIATION_REQUIRED"
+      }
+    },
+    {
+      "id": "signed-recipient-mismatch",
+      "paymentVariant": "recipientMismatch",
+      "now": 1788566402,
+      "expected": {
+        "release": "BLOCKED_BEFORE_RELEASE",
+        "settlement": "NOT_CHECKED",
+        "replacement": "NOT_APPLICABLE",
+        "reason": "PAYMENT_RECIPIENT_MISMATCH"
+      }
+    },
+    {
+      "id": "signed-amount-mismatch",
+      "paymentVariant": "amountMismatch",
+      "now": 1788566402,
+      "expected": {
+        "release": "BLOCKED_BEFORE_RELEASE",
+        "settlement": "NOT_CHECKED",
+        "replacement": "NOT_APPLICABLE",
+        "reason": "PAYMENT_AMOUNT_MISMATCH"
+      }
+    },
+    {
+      "id": "expired-route-valid-payment",
+      "paymentVariant": "matching",
+      "now": 1788566460,
+      "expected": {
+        "release": "BLOCKED_BEFORE_RELEASE",
+        "settlement": "NOT_CHECKED",
+        "replacement": "NOT_APPLICABLE",
+        "reason": "ROUTE_EVIDENCE_EXPIRED"
+      }
+    }
+  ]
+}

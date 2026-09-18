@@ -1,0 +1,93 @@
+{
+  "url": "https://example.com/api",
+  "live": true,
+  "payable": true,
+  "invocable": true,
+  "status": 402,
+  "payTo": "0xb18fc2275f36dae99eb215caeff03b431f887d16",
+  "envelope": {
+    "x402Version": 2,
+    "accepts": [
+      {
+        "scheme": "exact",
+        "network": "eip155:8453",
+        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "currency": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "amount": "10000",
+        "payTo": "0xb18fc2275f36dae99eb215caeff03b431f887d16",
+        "maxTimeoutSeconds": 60
+      }
+    ]
+  },
+  "selected_payment": {
+    "rail": "base",
+    "network": "eip155:8453",
+    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "amount_atomic": 10000,
+    "display_amount": "$0.01",
+    "normalized_usd": 0.01,
+    "payTo": "0xb18fc2275f36dae99eb215caeff03b431f887d16",
+    "facilitator": null
+  },
+  "probed_at": "2026-09-05T00:00:00Z",
+  "latency_ms": 12,
+  "applied_constraints": {
+    "max_price_usd": 0.02
+  },
+  "decision_binding": {
+    "model": "proof_carrying_route_v1",
+    "observed_at": 1788566400,
+    "expires_at": 1788566460,
+    "request": {
+      "url": "https://example.com/api",
+      "method": "GET",
+      "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "quote_sha256": "a685c8dc55c793fd047c27cc8cf3f6067deef2a667b37c237af634d5c5c8e1fe",
+    "selected_index": 0
+  },
+  "payment_authorization": {
+    "pq_native": false
+  },
+  "pq_trust": {
+    "transparency": {
+      "log_origin": "402signal.com/pq/log",
+      "leaf_type": "402signal.route_decision.v4",
+      "reveal": {
+        "type": "402signal.route_decision.v4",
+        "ts": "2026-09-05T00:00:00Z",
+        "nonce": "0000000000000000000000000000000000000000000000000000000000000001",
+        "commitment": "17b26aba6fa2fc6f728bd602d4666ba03a8cb4340814c758fad57181666aeb5d",
+        "event_version": "402signal.route_decision.v4",
+        "evidence": {
+          "evidence_version": 2,
+          "routing_evidence_json": "{\"comparison\":{\"candidate_count\":null,\"candidate_set_digest\":null,\"observation_batch_hash\":null,\"probe_batch_id\":null},\"decision\":{\"miss_reason\":null,\"outcome\":\"winner\",\"winner_url\":\"https://example.com/api\"},\"evidence_version\":1,\"observation\":{\"challenge_observed\":true,\"http_status\":402,\"invocable\":true,\"latency_ms\":12,\"live\":true,\"observed_at\":\"2026-09-05T00:00:00Z\",\"payable\":true},\"policy\":{\"constraints\":{\"max_price_usd\":0.02},\"objective\":null,\"unresolved\":[]},\"request\":{\"need\":\"weather\",\"url\":\"https://example.com/api\"},\"scoring\":{\"model_hash\":\"499ecdaf05b310ee79634f5d5faff77d77d7d5c84be9f81a7cebd9f64b3ad7f3\",\"model_id\":\"reputation-v1\"},\"selected_payment\":{\"amount_atomic\":\"10000\",\"asset\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"network\":\"eip155:8453\",\"payTo\":\"0xb18fc2275f36dae99eb215caeff03b431f887d16\",\"rail\":\"base\",\"scheme\":null}}",
+          "request_json": "{\"max_price_usd\":0.02,\"need\":\"weather\",\"require_route_binding\":true}",
+          "binding": {
+            "model": "proof_carrying_route_v1",
+            "observed_at": 1788566400,
+            "expires_at": 1788566460,
+            "request": {
+              "url": "https://example.com/api",
+              "method": "GET",
+              "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "quote_sha256": "a685c8dc55c793fd047c27cc8cf3f6067deef2a667b37c237af634d5c5c8e1fe",
+            "selected_index": 0
+          }
+        },
+        "salt": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "status": "pending",
+      "state": "checkpoint_signed",
+      "index": 0,
+      "checkpoint_size": 1,
+      "receipt": {
+        "index": 0,
+        "inclusion_path": [],
+        "checkpoint": "402signal.com/pq/log\n1\n807YGwnMFg80xKfBQkHH6nz6WLYL8Pk8ZP+wyJqiteU=\n\n— 402signal.com/pq/log bMKVpNUKqL3Z1GL0wjzFw4xIFe3ZUnowYiZ2GP/S0PXdn2N4ts48kdbACumQZvS5bDoXU0KasK5naxtVnXh5eVOzFw8=\n",
+        "leaf_hash": "f34ed81b09cc160f34c4a7c14241c7ea7cfa58b60bf0f93c64ffb0c89aa2b5e5"
+      }
+    }
+  }
+}

@@ -16,6 +16,7 @@
   "scripts": {
     "example:receipt": "node examples/create-signed-receipt.mjs",
     "example:boundaryattest-paired": "npm run sdk:build && node examples/boundaryattest-paired-v0.2/verify.mjs",
+    "example:402signal-eip3009": "node examples/402signal-eip3009-settlement-binding-v1/verify.mjs",
     "example:thoughtproof-paired": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v1/verify.mjs",
     "example:thoughtproof-m2": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v2/verify.mjs",
     "example:thoughtproof-m2-final": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v2-final/verify.mjs",

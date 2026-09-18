@@ -1,0 +1,68 @@
+{
+  "schema": "priorseal.offline-fixture-manifest.v1",
+  "profile": "priorseal.execution-profile.eip3009-settlement-binding.v1",
+  "nonproduction": true,
+  "exactRunCommand": "node verify.mjs",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 6404,
+      "sha256": "c233b1f7f702e0a60b73b7552d8039e39ce4860874652aca00ed0ec710fc3498"
+    },
+    {
+      "path": "TEST-RECORD.md",
+      "bytes": 1520,
+      "sha256": "faea0b43eb12484e2d512041ade72e0b27555f6ba87621ccda7173774b8085ad"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 1605,
+      "sha256": "c75eb53ecff3438da2671783e28eb246b59048359521f98da23865f74b3244a3"
+    },
+    {
+      "path": "verify.mjs",
+      "bytes": 199427,
+      "sha256": "3be08214bf410adbe3b452cd603cd1462762233bacd9c30b8db758d38f4c1218"
+    },
+    {
+      "path": "fixture/generated/cases.json",
+      "bytes": 3218,
+      "sha256": "97a2ed361bb44badb6f4fce25cd3276c16e4efdf654a1c02639c58062de89526"
+    },
+    {
+      "path": "fixture/generated/settlement-evidence.json",
+      "bytes": 4939,
+      "sha256": "d94790ac63f9e32235fc6c091c4edd50585f2b8f54f251b4cfd23acf2423d19d"
+    },
+    {
+      "path": "fixture/generated/signed-authorizations.json",
+      "bytes": 13476,
+      "sha256": "94d0dcb5c81e2c428781a774739c4417cc336613ede5a1f9f1f398818e060fc0"
+    },
+    {
+      "path": "fixture/raw/route-context.json",
+      "bytes": 897,
+      "sha256": "1c289f11b33b8d3bbab9505210c70595de8371c89620fdf3fbbc92d0a4eacf6a"
+    },
+    {
+      "path": "fixture/raw/route-request.json",
+      "bytes": 82,
+      "sha256": "c95395c4c764618b9696c9e58a7f804a5f365632b4a3e15c3047abe1d9721a62"
+    },
+    {
+      "path": "fixture/raw/route-response.json",
+      "bytes": 4184,
+      "sha256": "c50d89a031a9e3ef4e934b08c20d96cca92926a90c18f68ecb226892a16c5468"
+    },
+    {
+      "path": "fixture/raw/seller-challenge.json",
+      "bytes": 353,
+      "sha256": "d7074b5efba1b133498f37eb4ec00a9a90919f898fe89a9f3ffcf0cd891fc8e9"
+    },
+    {
+      "path": "vendor/route-guard-v0.7.3.mjs",
+      "bytes": 19337,
+      "sha256": "0bba41fdef48966e5b9622e62933f37eff38dbf05a9ace8d68d0ceb24205b62d"
+    }
+  ]
+}

@@ -1,0 +1,321 @@
+{
+  "schema": "priorseal.eip3009-settlement-binding-fixtures.v1",
+  "nonproduction": true,
+  "privateKeyIncluded": false,
+  "buyer": "0x6A7D7bC60a931b1155546e483e60F034987D7BAd",
+  "routeReceiptDigest": "0xf34ed81b09cc160f34c4a7c14241c7ea7cfa58b60bf0f93c64ffb0c89aa2b5e5",
+  "variants": {
+    "matching": {
+      "payment": {
+        "domain": {
+          "name": "USD Coin",
+          "version": "2",
+          "chainId": 8453,
+          "verifyingContract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+        },
+        "types": {
+          "TransferWithAuthorization": [
+            {
+              "name": "from",
+              "type": "address"
+            },
+            {
+              "name": "to",
+              "type": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "name": "validAfter",
+              "type": "uint256"
+            },
+            {
+              "name": "validBefore",
+              "type": "uint256"
+            },
+            {
+              "name": "nonce",
+              "type": "bytes32"
+            }
+          ]
+        },
+        "primaryType": "TransferWithAuthorization",
+        "message": {
+          "from": "0x6A7D7bC60a931b1155546e483e60F034987D7BAd",
+          "to": "0xb18fc2275f36dae99eb215caeff03b431f887d16",
+          "value": "10000",
+          "validAfter": 1788566390,
+          "validBefore": 1788566520,
+          "nonce": "0x1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "digest": "0xc259ae3eeb82074a5ef6a3484ab879451bcae0928d3dc40da981a74f047742c4",
+        "signature": "0xc04151f4d1456da4684543384acc0d16962af4765c2467d31edc4730202911bd3a6f87e69e2edf309c91638fe505e3c798beb98c52d9696a669bd8717d13112e1c"
+      },
+      "binding": {
+        "domain": {
+          "name": "PriorSeal EIP-3009 Settlement Binding",
+          "version": "1",
+          "chainId": 8453
+        },
+        "types": {
+          "PriorSealEip3009SettlementBinding": [
+            {
+              "name": "routeReceiptDigest",
+              "type": "bytes32"
+            },
+            {
+              "name": "paymentAuthorizationDigest",
+              "type": "bytes32"
+            },
+            {
+              "name": "authorizationNonce",
+              "type": "bytes32"
+            },
+            {
+              "name": "bindingNonce",
+              "type": "bytes32"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint256"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint256"
+            },
+            {
+              "name": "audience",
+              "type": "string"
+            }
+          ]
+        },
+        "primaryType": "PriorSealEip3009SettlementBinding",
+        "message": {
+          "routeReceiptDigest": "0xf34ed81b09cc160f34c4a7c14241c7ea7cfa58b60bf0f93c64ffb0c89aa2b5e5",
+          "paymentAuthorizationDigest": "0xc259ae3eeb82074a5ef6a3484ab879451bcae0928d3dc40da981a74f047742c4",
+          "authorizationNonce": "0x1111111111111111111111111111111111111111111111111111111111111111",
+          "bindingNonce": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "issuedAt": 1788566402,
+          "expiresAt": 1788566460,
+          "audience": "402signal.route-binding-receipt.v1"
+        },
+        "digest": "0x03f0d4b177125c41379b7936ba24ab4fba1ded325943c86523fab9140e991500",
+        "signature": "0xa99ece22f6786bd525d7ba6dbcfa8f9d8e2a9e0023112127803cc3eaa631bcd024f2b01661121c1ee128029dc63f5ce78d8df78ed2b9a64cbcec1961d0ff60721b"
+      },
+      "wire": {
+        "headerName": "PAYMENT-SIGNATURE",
+        "headerValue": "eyJ4NDAyVmVyc2lvbiI6MiwiYWNjZXB0ZWQiOnsic2NoZW1lIjoiZXhhY3QiLCJuZXR3b3JrIjoiZWlwMTU1Ojg0NTMiLCJhc3NldCI6IjB4ODMzNTg5ZkNENmVEYjZFMDhmNGM3QzMyRDRmNzFiNTRiZEEwMjkxMyIsImN1cnJlbmN5IjoiMHg4MzM1ODlmQ0Q2ZURiNkUwOGY0YzdDMzJENGY3MWI1NGJkQTAyOTEzIiwiYW1vdW50IjoiMTAwMDAiLCJwYXlUbyI6IjB4YjE4ZmMyMjc1ZjM2ZGFlOTllYjIxNWNhZWZmMDNiNDMxZjg4N2QxNiIsIm1heFRpbWVvdXRTZWNvbmRzIjo2MH0sInBheWxvYWQiOnsiYXV0aG9yaXphdGlvbiI6eyJmcm9tIjoiMHg2QTdEN2JDNjBhOTMxYjExNTU1NDZlNDgzZTYwRjAzNDk4N0Q3QkFkIiwidG8iOiIweGIxOGZjMjI3NWYzNmRhZTk5ZWIyMTVjYWVmZjAzYjQzMWY4ODdkMTYiLCJ2YWx1ZSI6IjEwMDAwIiwidmFsaWRBZnRlciI6MTc4ODU2NjM5MCwidmFsaWRCZWZvcmUiOjE3ODg1NjY1MjAsIm5vbmNlIjoiMHgxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIn0sInNpZ25hdHVyZSI6IjB4YzA0MTUxZjRkMTQ1NmRhNDY4NDU0MzM4NGFjYzBkMTY5NjJhZjQ3NjVjMjQ2N2QzMWVkYzQ3MzAyMDI5MTFiZDNhNmY4N2U2OWUyZWRmMzA5YzkxNjM4ZmU1MDVlM2M3OThiZWI5OGM1MmQ5Njk2YTY2OWJkODcxN2QxMzExMmUxYyJ9fQ=="
+      }
+    },
+    "recipientMismatch": {
+      "payment": {
+        "domain": {
+          "name": "USD Coin",
+          "version": "2",
+          "chainId": 8453,
+          "verifyingContract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+        },
+        "types": {
+          "TransferWithAuthorization": [
+            {
+              "name": "from",
+              "type": "address"
+            },
+            {
+              "name": "to",
+              "type": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "name": "validAfter",
+              "type": "uint256"
+            },
+            {
+              "name": "validBefore",
+              "type": "uint256"
+            },
+            {
+              "name": "nonce",
+              "type": "bytes32"
+            }
+          ]
+        },
+        "primaryType": "TransferWithAuthorization",
+        "message": {
+          "from": "0x6A7D7bC60a931b1155546e483e60F034987D7BAd",
+          "to": "0x2222222222222222222222222222222222222222",
+          "value": "10000",
+          "validAfter": 1788566390,
+          "validBefore": 1788566520,
+          "nonce": "0x2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "digest": "0x823c6757b236f85f65c68742d1d597ea8242901174baef3e4261c09362d51962",
+        "signature": "0x5a6d5a897c0980bb4ae65ae70f21482f03d9d0f9f0236ca27eed978be67240ac67dcfe104de1c523bf245db2cd9613bbf22b0bd7c4e6901429dfa915f3bdd5951b"
+      },
+      "binding": {
+        "domain": {
+          "name": "PriorSeal EIP-3009 Settlement Binding",
+          "version": "1",
+          "chainId": 8453
+        },
+        "types": {
+          "PriorSealEip3009SettlementBinding": [
+            {
+              "name": "routeReceiptDigest",
+              "type": "bytes32"
+            },
+            {
+              "name": "paymentAuthorizationDigest",
+              "type": "bytes32"
+            },
+            {
+              "name": "authorizationNonce",
+              "type": "bytes32"
+            },
+            {
+              "name": "bindingNonce",
+              "type": "bytes32"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint256"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint256"
+            },
+            {
+              "name": "audience",
+              "type": "string"
+            }
+          ]
+        },
+        "primaryType": "PriorSealEip3009SettlementBinding",
+        "message": {
+          "routeReceiptDigest": "0xf34ed81b09cc160f34c4a7c14241c7ea7cfa58b60bf0f93c64ffb0c89aa2b5e5",
+          "paymentAuthorizationDigest": "0x823c6757b236f85f65c68742d1d597ea8242901174baef3e4261c09362d51962",
+          "authorizationNonce": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "bindingNonce": "0xa2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+          "issuedAt": 1788566402,
+          "expiresAt": 1788566460,
+          "audience": "402signal.route-binding-receipt.v1"
+        },
+        "digest": "0x2279786b4b94a140f0b1562f4739c0c5c545cbe6d73025aa060886cdbf94e715",
+        "signature": "0xaa99dae70d204e22cdf44c2baa2436a24726598f63cc9509909fe255deaa15ac6664673e3348110b4e609e581ad3d6771e98d4f8e702405b2f5945215dc348f91c"
+      },
+      "wire": {
+        "headerName": "PAYMENT-SIGNATURE",
+        "headerValue": "eyJ4NDAyVmVyc2lvbiI6MiwiYWNjZXB0ZWQiOnsic2NoZW1lIjoiZXhhY3QiLCJuZXR3b3JrIjoiZWlwMTU1Ojg0NTMiLCJhc3NldCI6IjB4ODMzNTg5ZkNENmVEYjZFMDhmNGM3QzMyRDRmNzFiNTRiZEEwMjkxMyIsImN1cnJlbmN5IjoiMHg4MzM1ODlmQ0Q2ZURiNkUwOGY0YzdDMzJENGY3MWI1NGJkQTAyOTEzIiwiYW1vdW50IjoiMTAwMDAiLCJwYXlUbyI6IjB4YjE4ZmMyMjc1ZjM2ZGFlOTllYjIxNWNhZWZmMDNiNDMxZjg4N2QxNiIsIm1heFRpbWVvdXRTZWNvbmRzIjo2MH0sInBheWxvYWQiOnsiYXV0aG9yaXphdGlvbiI6eyJmcm9tIjoiMHg2QTdEN2JDNjBhOTMxYjExNTU1NDZlNDgzZTYwRjAzNDk4N0Q3QkFkIiwidG8iOiIweDIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIiLCJ2YWx1ZSI6IjEwMDAwIiwidmFsaWRBZnRlciI6MTc4ODU2NjM5MCwidmFsaWRCZWZvcmUiOjE3ODg1NjY1MjAsIm5vbmNlIjoiMHgyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyIn0sInNpZ25hdHVyZSI6IjB4NWE2ZDVhODk3YzA5ODBiYjRhZTY1YWU3MGYyMTQ4MmYwM2Q5ZDBmOWYwMjM2Y2EyN2VlZDk3OGJlNjcyNDBhYzY3ZGNmZTEwNGRlMWM1MjNiZjI0NWRiMmNkOTYxM2JiZjIyYjBiZDdjNGU2OTAxNDI5ZGZhOTE1ZjNiZGQ1OTUxYiJ9fQ=="
+      }
+    },
+    "amountMismatch": {
+      "payment": {
+        "domain": {
+          "name": "USD Coin",
+          "version": "2",
+          "chainId": 8453,
+          "verifyingContract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+        },
+        "types": {
+          "TransferWithAuthorization": [
+            {
+              "name": "from",
+              "type": "address"
+            },
+            {
+              "name": "to",
+              "type": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "name": "validAfter",
+              "type": "uint256"
+            },
+            {
+              "name": "validBefore",
+              "type": "uint256"
+            },
+            {
+              "name": "nonce",
+              "type": "bytes32"
+            }
+          ]
+        },
+        "primaryType": "TransferWithAuthorization",
+        "message": {
+          "from": "0x6A7D7bC60a931b1155546e483e60F034987D7BAd",
+          "to": "0xb18fc2275f36dae99eb215caeff03b431f887d16",
+          "value": "10001",
+          "validAfter": 1788566390,
+          "validBefore": 1788566520,
+          "nonce": "0x3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        "digest": "0x04788946e76ebf41469ffa230afff9afe1cfc9599eb1fa08f21865b162f1c03f",
+        "signature": "0xeeaf291b770e70fb71abe68419f4dce576a5a6c39addafb27fd8ff1573a610df12431a4359f1299fb4b5f27e022d3d72167b1256b85a284d6590e08e5ace174b1c"
+      },
+      "binding": {
+        "domain": {
+          "name": "PriorSeal EIP-3009 Settlement Binding",
+          "version": "1",
+          "chainId": 8453
+        },
+        "types": {
+          "PriorSealEip3009SettlementBinding": [
+            {
+              "name": "routeReceiptDigest",
+              "type": "bytes32"
+            },
+            {
+              "name": "paymentAuthorizationDigest",
+              "type": "bytes32"
+            },
+            {
+              "name": "authorizationNonce",
+              "type": "bytes32"
+            },
+            {
+              "name": "bindingNonce",
+              "type": "bytes32"
+            },
+            {
+              "name": "issuedAt",
+              "type": "uint256"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint256"
+            },
+            {
+              "name": "audience",
+              "type": "string"
+            }
+          ]
+        },
+        "primaryType": "PriorSealEip3009SettlementBinding",
+        "message": {
+          "routeReceiptDigest": "0xf34ed81b09cc160f34c4a7c14241c7ea7cfa58b60bf0f93c64ffb0c89aa2b5e5",
+          "paymentAuthorizationDigest": "0x04788946e76ebf41469ffa230afff9afe1cfc9599eb1fa08f21865b162f1c03f",
+          "authorizationNonce": "0x3333333333333333333333333333333333333333333333333333333333333333",
+          "bindingNonce": "0xa3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+          "issuedAt": 1788566402,
+          "expiresAt": 1788566460,
+          "audience": "402signal.route-binding-receipt.v1"
+        },
+        "digest": "0xe2d62c7a6ac56644aeff224691995f3ad0951660463feef08a5b262ee2503641",
+        "signature": "0x8f70d09b3e5de9df9975644b4ca4f2b763ed24b8e6b9f949a374897965885f0632d55beec31651fc5e66c51112c265472f359186b4ca9fedbfafd9bb17b1a3f81c"
+      },
+      "wire": {
+        "headerName": "PAYMENT-SIGNATURE",
+        "headerValue": "eyJ4NDAyVmVyc2lvbiI6MiwiYWNjZXB0ZWQiOnsic2NoZW1lIjoiZXhhY3QiLCJuZXR3b3JrIjoiZWlwMTU1Ojg0NTMiLCJhc3NldCI6IjB4ODMzNTg5ZkNENmVEYjZFMDhmNGM3QzMyRDRmNzFiNTRiZEEwMjkxMyIsImN1cnJlbmN5IjoiMHg4MzM1ODlmQ0Q2ZURiNkUwOGY0YzdDMzJENGY3MWI1NGJkQTAyOTEzIiwiYW1vdW50IjoiMTAwMDAiLCJwYXlUbyI6IjB4YjE4ZmMyMjc1ZjM2ZGFlOTllYjIxNWNhZWZmMDNiNDMxZjg4N2QxNiIsIm1heFRpbWVvdXRTZWNvbmRzIjo2MH0sInBheWxvYWQiOnsiYXV0aG9yaXphdGlvbiI6eyJmcm9tIjoiMHg2QTdEN2JDNjBhOTMxYjExNTU1NDZlNDgzZTYwRjAzNDk4N0Q3QkFkIiwidG8iOiIweGIxOGZjMjI3NWYzNmRhZTk5ZWIyMTVjYWVmZjAzYjQzMWY4ODdkMTYiLCJ2YWx1ZSI6IjEwMDAxIiwidmFsaWRBZnRlciI6MTc4ODU2NjM5MCwidmFsaWRCZWZvcmUiOjE3ODg1NjY1MjAsIm5vbmNlIjoiMHgzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzIn0sInNpZ25hdHVyZSI6IjB4ZWVhZjI5MWI3NzBlNzBmYjcxYWJlNjg0MTlmNGRjZTU3NmE1YTZjMzlhZGRhZmIyN2ZkOGZmMTU3M2E2MTBkZjEyNDMxYTQzNTlmMTI5OWZiNGI1ZjI3ZTAyMmQzZDcyMTY3YjEyNTZiODVhMjg0ZDY1OTBlMDhlNWFjZTE3NGIxYyJ9fQ=="
+      }
+    }
+  }
+}

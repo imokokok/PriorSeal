@@ -1,0 +1,5 @@
+{
+  "need": "weather",
+  "max_price_usd": 0.02,
+  "require_route_binding": true
+}
