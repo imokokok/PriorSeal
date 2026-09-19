@@ -114,7 +114,7 @@ test('archive reviewer access is scoped, excludes upload, and keeps token out of
   expect(await page.evaluate(() => JSON.stringify(localStorage) + JSON.stringify(sessionStorage))).not.toContain('fixture-review-token')
 })
 
-test('missing timestamp configuration never appears ready and exact-call mobile preview stays within viewport', async ({ page }) => {
+test('missing timestamp configuration never appears ready and exact-call mobile preview stays within viewport', async ({ page }, testInfo) => {
   await page.route('**/v1/capabilities', (route) => route.fulfill({ json: { ...caps, workflowReady: false, dependencies: { ...caps.dependencies, timestamp: 'unavailable' } } }))
   await page.goto('/app/quickstart')
   await expect(page.getByText('Required configuration is missing', { exact: true })).toBeVisible()
@@ -123,11 +123,11 @@ test('missing timestamp configuration never appears ready and exact-call mobile 
   await page.goto('/app/intents/exact-call')
   await page.getByLabel('Transaction JSON', { exact: true }).fill(JSON.stringify({ chainId: 8453, from: `0x${'a'.repeat(40)}`, to: `0x${'b'.repeat(40)}`, nonce: '7', value: '0', data: `0x${'ab'.repeat(500)}` }))
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
-  await page.screenshot({ path: '/private/tmp/priorseal-exact-call-mobile.png', fullPage: true })
+  await page.screenshot({ path: testInfo.outputPath('priorseal-exact-call-mobile.png'), fullPage: true })
 })
 
 
-test('combined review preserves original bytes and keeps unsupported attachments explicitly partial', async ({ page }) => {
+test('combined review preserves original bytes and keeps unsupported attachments explicitly partial', async ({ page }, testInfo) => {
   const { bundle, profile } = await nativeFixture()
   const manifest = await buildReviewManifest({ bundle, attachments: [{ id: 'optional-note', role: 'partner.note', profile: 'partner.unknown.v1', rawJson: '{ "note": "not independently verified" }' }] })
   const raw = JSON.stringify(manifest, null, 4) + '\n'
@@ -146,7 +146,7 @@ test('combined review preserves original bytes and keeps unsupported attachments
   const download = await downloaded
   expect(await readFile((await download.path())!, 'utf8')).toBe(raw)
   await page.evaluate(() => { (document.activeElement as HTMLElement)?.blur(); window.scrollTo(0, 0) })
-  await page.screenshot({ path: '/private/tmp/priorseal-combined-review.png', fullPage: true })
+  await page.screenshot({ path: testInfo.outputPath('priorseal-combined-review.png'), fullPage: true })
 })
 
 test('undetermined observation preserves reconciliation and never suggests another broadcast', async ({ page }) => {
