@@ -3,8 +3,10 @@
 Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk
+npm install https://github.com/imokokok/PriorSeal/releases/download/sdk-v0.5.0/priorseal-sdk-0.5.0.tgz
 ```
+
+This documentation targets **0.5.0**. Use the official GitHub Release artifact above while npm registry synchronization is pending. The unversioned `npm install priorseal-sdk` command still resolves to the older registry release and does not provide all the checkpoint and combined-review APIs described here. The release includes compiled JavaScript, TypeScript declarations and third-party license notices.
 
 ## Client
 
@@ -12,8 +14,10 @@ npm install priorseal-sdk
 import { createPriorSealClient } from 'priorseal-sdk'
 
 const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.xyz' })
+const capabilities = await priorseal.capabilities()
 const flow = await priorseal.authorizeWithWallet({
   intent,
+  audience: capabilities.audience,
   principal: { type: 'user', id: 'user:42' },
   delegate: { agentId: 'agent:treasury', executor: intent.sender },
 }, window.ethereum)
@@ -46,14 +50,15 @@ The verifier performs no network requests. It recomputes canonical intent, autho
 
 `verifyReceiptRemotely` remains available as a convenience API call, but it is not independent verification.
 
-Portable bundles are available with `getVerificationBundle(receiptId)`. Verify them with `verifyVerificationBundleLocally(bundle, { trustedKeys })`; `trustedKeys` must come from an independently pinned source, never from `bundle.keyRegistry` alone.
+Portable bundles are available with `getVerificationBundle(receiptId)`. Verify them with `verifyVerificationBundleLocally(bundle, { trustedKeys: confirmedTrust.keys, expectedAudience: confirmedTrust.audience })`; both values must come from your independently confirmed trust configuration, never from `bundle.keyRegistry` or the receipt alone. The hosted deployment currently uses `priorseal.xyz`; do not assume the SDK's compatibility default `priorseal` matches a deployment.
 
 ## Deployment capabilities and resumable authorization
 
 Read `await priorseal.capabilities()` before preparing a workflow. Check its audience, execution profile, chosen chain's `chainReadiness`, and `workflowReady`. Capabilities report configuration and storage; they do not probe live RPC/TSA availability or replace request-specific policy checks.
 
 ```ts
-const flow = await priorseal.authorizeWithWallet(request, wallet, {
+const capabilities = await priorseal.capabilities()
+const flow = await priorseal.authorizeWithWallet({ ...request, audience: capabilities.audience }, wallet, {
   onCheckpoint: async checkpoint => {
     await yourPrivateStore.save(JSON.stringify(checkpoint))
   },

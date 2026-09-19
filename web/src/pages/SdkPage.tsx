@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { AppShell, CopyButton, Notice, PageHeader, Status } from '../components'
 import { api } from '../lib/api'
 
-const install = 'npm install priorseal-sdk'
+const install = 'npm install https://github.com/imokokok/PriorSeal/releases/download/sdk-v0.5.0/priorseal-sdk-0.5.0.tgz'
 
 const browserExample = `import { createPriorSealClient } from 'priorseal-sdk'
 
@@ -11,8 +11,11 @@ const priorseal = createPriorSealClient({
   baseUrl: 'https://priorseal.xyz'
 })
 
+const { audience } = await priorseal.capabilities()
+
 const { accepted } = await priorseal.authorizeWithWallet({
   intent,
+  audience,
   principal: { type: 'user', id: 'user:42' },
   delegate: {
     agentId: 'agent:treasury',
@@ -31,13 +34,16 @@ const evidence = await priorseal.observeExecution({
 console.log(evidence.receipt)`
 
 const nodeExample = `import { createPriorSealClient } from 'priorseal-sdk'
+import { authorizationSigningData } from 'priorseal-sdk/verifier'
 
 const priorseal = createPriorSealClient({
   baseUrl: process.env.PRIORSEAL_URL
 })
 
-const prepared = await priorseal.prepareAuthorization(draft)
-// Return prepared.typedData to your trusted signing surface.
+const { audience } = await priorseal.capabilities()
+const prepared = await priorseal.prepareAuthorization({ ...draft, audience })
+const signingData = await authorizationSigningData(prepared.authorization)
+// Review canonical fields against your request, then sign signingData.
 
 const accepted = await priorseal.acceptAuthorization({
   ...prepared.authorization,
@@ -51,14 +57,17 @@ const evidence = await priorseal.observeExecution({
   confirmations: 12
 })`
 
-const verificationExample = `import { verifyReceiptLocally } from 'priorseal-sdk/verifier'
+const verificationExample = `import { parseTrustProfile, verifyReceiptLocally } from 'priorseal-sdk/verifier'
 
 const receipt = await priorseal.getReceipt(receiptId)
-const pinnedKey = loadKeyFromIndependentTrustStore(receipt.issuer, receipt.keyId)
+// Your own independently confirmed store; never the received bundle.
+const trustProfile = parseTrustProfile(loadIndependentTrustProfile())
+if (!trustProfile.confirmedAt) throw new Error('Confirm the trust profile first')
 
 // No receipt bytes are sent back to PriorSeal.
 const result = await verifyReceiptLocally(receipt, {
-  trustedKeys: pinnedKey
+  trustedKeys: trustProfile.keys,
+  expectedAudience: trustProfile.audience
 })
 
 console.log(result.valid, result.requiredExternalChecks)`
@@ -84,6 +93,7 @@ export function SdkPage() {
         <p className="eyebrow">PACKAGE / {__PRIORSEAL_SDK_VERSION__}</p>
         <h2>priorseal-sdk</h2>
         <p>Universal ESM · Browser and Node.js 20+ · Typed client and local verifier</p>
+        <p>Install the 0.5.0 GitHub release package. Publication to the npm registry is pending.</p>
         <div className="sdk-install"><code>{install}</code><CopyButton value={install} /></div>
       </div>
       <div className="sdk-runtime">
