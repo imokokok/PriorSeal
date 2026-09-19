@@ -38,7 +38,11 @@ Example profile shape (replace placeholders with independently provisioned value
 
 Imported profiles require confirmation even if their JSON claims a prior confirmation time. Saving is explicit and respects the user's local-storage preference. Keys with duplicate IDs or invalid validity windows are rejected. Key fingerprints use SHA-256 over SPKI bytes. Changing evidence or trust clears prior conclusions and invalidates any verification still in progress.
 
-For combined Insight review, separately supply and confirm the Insight registry. Unsupported attachments remain partial. Reports distinguish signature checks, independently supplied trust, cross-artifact relationships and pending chain checks. Contract-wallet current-state checks do not prove historical authorization. The external check plan is a handoff artifact; this offline UI does not silently complete RPC checks.
+For combined Insight review, separately supply and confirm the Insight key registry and `insight.protocol-trust.v1` configuration. The “Insight trust for a combined review” section accepts protocol JSON or a JSON file; an imported PriorSeal trust profile can also carry `insightKeyRegistry` and `insightProtocolTrust`. Importing either still requires independent confirmation. Changing keys or protocol evidence clears that confirmation and any old conclusion.
+
+V5 checks its signed semantic profile, production environment and consumer-policy registry lineage. Historical v1–v4 semantics require exact preserved registry bytes, full SHA-256 and byte length; missing evidence stays partial. The complete two-sided manifest supports pre-trade v2/v3 with execution v3/v4/v5; a single-sided legacy execution cannot prove a two-sided workflow. See [the SDK protocol-trust shape and public discovery endpoints](../sdk/README.md#composite-review-manifests) for the precise required input and how to preserve snapshot bytes. A current registry does not replace missing historical evidence, and a manifest cannot choose its own trust policy.
+
+Reports distinguish signature checks, independently supplied key trust, protocol scope and snapshot identity, cross-artifact relationships and pending chain checks. The selected offline policy is not a claim that a live partner route is currently active. Unsupported attachments remain partial. Contract-wallet current-state checks do not prove historical authorization. The external check plan is a handoff artifact; this offline UI does not silently complete RPC checks.
 
 An imported file can be downloaded byte-for-byte. Edited/pasted JSON is exported as the current evidence text. Review reports describe local verification and do not alter signed receipts.
 
@@ -52,6 +56,6 @@ Browser local activity remains available without an archive. See the in-app priv
 
 ## Verification
 
-`npx playwright test test/e2e/product-polish.spec.ts` exercises SDK-equivalent exact-call construction, stable acceptance retries, capability rejection, independent trust and custom audiences, scoped reviewer UI, partial manifests, original-byte export, uncertain observation recovery and mobile overflow. The existing `test/e2e/site.spec.ts` covers navigation, local storage, observation resumption and visual baselines. `npm run check:web-performance` enforces the unchanged bundle budgets; heavier verifier modules are loaded only when needed.
+`npx playwright test test/e2e/product-polish.spec.ts` exercises SDK-equivalent exact-call construction, stable acceptance retries, capability rejection, independent trust and custom audiences, scoped reviewer UI, partial manifests, original-byte export, real signed v5 combined review with protocol confirmation and snapshot mismatch rejection, uncertain observation recovery and mobile overflow. The existing `test/e2e/site.spec.ts` covers navigation, local storage, observation resumption and visual baselines. `npm run check:web-performance` enforces the unchanged bundle budgets; heavier verifier modules are loaded only when needed.
 
 Browser tests use isolated synthetic data and mocked API responses; they do not perform live authorization, funds movement, or production deployment.

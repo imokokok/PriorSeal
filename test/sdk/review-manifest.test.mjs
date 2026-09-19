@@ -53,3 +53,19 @@ test('trust profile rejects ambiguous key identity and invalid windows while pre
   assert.throws(() => parseTrustProfile({ ...profile, keys: [key, key] }), /ambiguous/);
   assert.throws(() => parseTrustProfile({ ...profile, keys: [{ ...key, validFrom: 2000, validUntil: 1000 }] }), /window/);
 });
+
+test('Insight trust follows the published default attester role and rejects ambiguous registries', () => {
+  const { key } = fixture();
+  const insightKey = { key_id: 'insight-one', public_key: `0x${'a'.repeat(40)}`, role: 'attester', revoked: false, validFrom: '1970-01-01T00:00:00Z', validUntil: null };
+  const profile = { schema: 'priorseal.trust-profile.v1', issuer: 'test', audience: 'test', source: 'independent provisioning', confirmedAt: 0, keys: [key], insightKeyRegistry: { keys: [insightKey] } };
+  assert.equal(parseTrustProfile(profile).insightKeyRegistry.keys[0].role, 'attester');
+  assert.equal(parseTrustProfile({ ...profile, insightKeyRegistry: { keys: [{ ...insightKey, role: undefined }] } }).insightKeyRegistry.keys[0].role, undefined);
+  for (const registry of [
+    { keys: [{ ...insightKey, role: 'unknown-role' }] },
+    { keys: [insightKey, { ...insightKey, public_key: `0x${'b'.repeat(40)}` }] },
+    { keys: [insightKey, { ...insightKey, key_id: 'another-id' }] },
+    { keys: [insightKey], public_keys: [insightKey] },
+    { keys: [{ ...insightKey, validFrom: 'not-a-date' }] },
+    { keys: [insightKey], revoked: [], revoked_keys: [] },
+  ]) assert.throws(() => parseTrustProfile({ ...profile, insightKeyRegistry: registry }), /Insight/);
+});

@@ -96,14 +96,50 @@ const review = await verifyReviewManifestLocally(manifest, {
   trustedKeys: { schema: 'priorseal.keys.v1', issuer: profile.issuer, keys: profile.keys },
   expectedAudience: profile.audience,
   insightKeyRegistry: profile.insightKeyRegistry,
+  insightProtocolTrust: profile.insightProtocolTrust,
 })
 ```
 
 Trust profiles use `schema: 'priorseal.trust-profile.v1'`, issuer, audience, keys, source and `confirmedAt` in Unix seconds. Zero means unconfirmed. Optional Insight registries must also come from an independently established source. The browser asks for confirmation separately; a profile's self-declared timestamp does not confer trust.
 
-The manifest preserves raw attachment bytes and SHA-256 hashes. Supported native Insight roles are `insight.source`, `insight.destination` and `insight.execution`; profiles are `insight.pretrade.v2/v3` and `insight.execution.v2/v3/v4`. A complete two-sided composition requires a destination-bound execution receipt (v3 or v4), both pre-trade receipts and an independently trusted production signer. A legacy v2 execution cannot establish a two-sided pair.
+The manifest preserves raw attachment bytes and SHA-256 hashes. Supported native Insight roles are `insight.source`, `insight.destination` and `insight.execution`; profiles are `insight.pretrade.v2/v3` and `insight.execution.v2/v3/v4/v5`. A complete two-sided composition requires a destination-bound execution receipt (v3–v5), both pre-trade receipts, independently trusted production attester keys, and independently pinned Insight protocol evidence. A legacy v2 execution cannot establish a two-sided pair. Unknown versions and semantic profiles remain unverified.
 
-Verification checks each native signature, the paired UIDs, the context commitment, authorization time coverage, transaction hash, settlement chain, execution time and executor identity. A manifest hint cannot override the signed PriorSeal transaction. The result keeps signature/integrity/trust checks, cross-evidence relations and required external chain-state checks separate. Unknown attachments remain preserved and explicitly unverified; missing evidence, sample keys or unresolved external checks cannot produce a complete green result. An old but correctly signed assessment can be valid historical evidence without being usable for a new execution.
+`insightProtocolTrust` is caller configuration, never a trust root taken from the manifest. V5 requires the signed supported `profileId`, the production environment, immutable release/profile bodies and a consumer policy admitting the release through its predecessor lineage. Every release up to an admitted floor must be supplied and content-addressed correctly; missing ancestry, mismatched content or unadmitted profiles fail closed. This proves the selected offline policy, not that a partner policy is currently active on the live service.
+
+Legacy v1–v4 do not sign `profileId`. Their semantic review requires the exact independently preserved registry UTF-8 bytes, full SHA-256 and byte length. The result is relative to that snapshot, never a globally canonical legacy verdict. Missing or mismatched historical snapshots stay incomplete; a current registry cannot silently substitute for historical evidence. The manifest's two-sided support remains v3/v4 for these historical layouts.
+
+Minimal protocol-trust shape (placeholders must be replaced with independently reviewed values):
+
+```ts
+const insightProtocolTrust = {
+  schema: 'insight.protocol-trust.v1',
+  registrySnapshot: {
+    rawJson: exactRegistryText, // Preserve the downloaded bytes; do not parse/re-serialize.
+    sha256: independentlyConfirmedFullSha256,
+    byteLength: independentlyConfirmedUtf8ByteLength,
+  },
+  registryReleases: [
+    { releaseId: selectedReleaseId, rawJson: exactReleaseResponse },
+    // Include every predecessor down to a policy-admitted floor, including that floor.
+  ],
+  executionProfiles: [{ profileId: signedProfileId, rawJson: exactProfileResponse }],
+  consumerPolicy: {
+    allowedSchemaVersions: [5],
+    allowedProfileIds: [signedProfileId],
+    registryReleaseIds: independentlySelectedReleaseFloors,
+    policyId: independentlySelectedPolicyId,
+    policyRawJson: exactPolicyResponse,
+  },
+}
+```
+
+The optional `policyId` and `policyRawJson` must be supplied together; the immutable policy's hash and pins must agree with the explicit consumer pins. A caller-owned policy can instead omit both and independently choose its schema/profile/release pins. Importing or hashing a document does not establish that its source or policy is appropriate for the reviewer.
+
+Public discovery starts at `https://www.oracleinsight.xyz/.well-known/oracle-keys.json` for the key registry/snapshot. Obtain immutable bodies from `/.well-known/oracle-registry/releases/{releaseId}`, `/.well-known/oracle-registry/profiles/{profileId}` and `/.well-known/oracle-registry/integrations/{policyId}` on that same origin. Each release's `predecessorReleaseId` identifies the next required body. Preserve the actual response text and independently confirm the expected key identities, snapshot digest/byte length and policy; do not accept values merely because the evidence file supplies them. Use the independently trusted snapshot's `public_keys`/`revoked_keys` as `insightKeyRegistry`. Insight defines an omitted key role as the legacy default `attester`; explicit `sample` or unknown roles cannot establish production trust.
+
+For a locally preserved `oracle-keys.json`, `sha256sum oracle-keys.json` and `wc -c < oracle-keys.json` report the exact file digest/length. On macOS, use `shasum -a 256 oracle-keys.json`. These values identify the preserved file; they still need provenance review. The same protocol-trust object can be included in a `priorseal.trust-profile.v1` profile or entered separately in the console.
+
+Verification checks each native signature, the paired UIDs, the context commitment, authorization time coverage, transaction hash, settlement chain, execution time and executor identity. A manifest hint cannot override the signed PriorSeal transaction. The result keeps signature/integrity/key-trust checks, `artifacts[].protocol` (scope, snapshot digest/length, release and policy), cross-evidence relations and required external chain-state checks separate. Unknown attachments remain preserved and explicitly unverified; missing evidence, sample keys or unresolved external checks cannot produce a complete green result. An old but correctly signed assessment can be valid historical evidence without being usable for a new execution.
 
 The optional Headless verifier described below remains independently callable. Arbitrary partner attachments are not automatically promoted to a supported verification profile by including them in a manifest.
 

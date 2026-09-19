@@ -6,6 +6,7 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { buildExactCallIntent } from '../../sdk/dist/index.js'
 import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildVerificationBundle, createMemoryStore } from '../../src/index.mjs'
 import { signReceipt } from '../../src/domain/receipt.mjs'
+import { createJointReviewFixture } from '../helpers/joint-review-fixture.mjs'
 
 const caps = { schema: 'priorseal.capabilities.v1', issuer: 'fixture', audience: 'partner-deployment', executionProfiles: ['priorseal.execution-profile.exact-call.v1'], chains: [8453, 84532], authorizers: ['eip712'], proofMode: 'issuer', policyHash: `0x${'0'.repeat(64)}`, minConfirmations: 12, dependencies: { issuer: 'configured', timestamp: 'not_required', rpc: 'configured', storage: 'available' }, workflowReady: true, checkedAt: 1_800_000_000, archive: { enabled: true, retention: 'until_operator_deletion', scope: 'project_uploaded_evidence' } }
 
@@ -147,6 +148,52 @@ test('combined review preserves original bytes and keeps unsupported attachments
   expect(await readFile((await download.path())!, 'utf8')).toBe(raw)
   await page.evaluate(() => { (document.activeElement as HTMLElement)?.blur(); window.scrollTo(0, 0) })
   await page.screenshot({ path: testInfo.outputPath('priorseal-combined-review.png'), fullPage: true })
+})
+
+test('v5 combined review requires independent protocol trust and exposes exact snapshot scope', async ({ page }, testInfo) => {
+  const { manifest, options } = await createJointReviewFixture()
+  const key = options.trustedKeys
+  const profile = { schema: 'priorseal.trust-profile.v1', name: 'Joint v5 review', issuer: key.issuer, audience: options.expectedAudience, keys: [key], source: 'Independent synthetic test fixture', confirmedAt: 0, insightKeyRegistry: options.insightKeyRegistry, insightProtocolTrust: options.insightProtocolTrust }
+  await page.route('**/.well-known/priorseal-keys.json', route => route.fulfill({ json: { schema: 'priorseal.keys.v1', issuer: key.issuer, keys: [] } }))
+  await page.goto('/app/verify')
+  await page.getByLabel('Evidence JSON', { exact: true }).fill(JSON.stringify(manifest))
+  await page.getByText('Import a trust profile', { exact: true }).click()
+  await page.getByLabel('Trust profile JSON', { exact: true }).fill(JSON.stringify(profile))
+  await page.getByRole('button', { name: 'Import profile', exact: true }).click()
+  await page.getByLabel('I confirmed this issuer, audience and public key configuration through an independent trusted channel.').check()
+  await page.getByRole('button', { name: 'Verify locally' }).click()
+  await expect(page.locator('.verification-result > .status')).toHaveText(/PARTIAL REVIEW$/)
+  await expect(page.locator('.verification-result')).toContainText('INSIGHT_PROTOCOL_TRUST_REQUIRED')
+  await page.getByText('Insight trust for a combined review', { exact: true }).click()
+  const confirmed = page.getByLabel('I independently confirmed these Insight keys, registry bytes and consumer policy.')
+  await expect(confirmed).not.toBeChecked()
+  await confirmed.check()
+  await page.getByRole('button', { name: 'Verify locally' }).click()
+  await expect(page.locator('.verification-result > .status')).toHaveText('✓VALID')
+  await expect(page.locator('.verification-result')).toContainText('SIGNED_PROFILE_VERIFIED')
+  await expect(page.locator('.verification-result').getByTitle(options.insightProtocolTrust.registrySnapshot.sha256, { exact: true })).toBeVisible()
+  await expect(page.locator('.verification-result')).toContainText('signed-profile')
+  const downloaded = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export review report' }).click()
+  const download = await downloaded
+  const report = JSON.parse(await readFile((await download.path())!, 'utf8'))
+  expect(report.complete).toBe(true)
+  expect(report.review.artifacts[2].protocol.registrySnapshotSha256).toBe(options.insightProtocolTrust.registrySnapshot.sha256)
+  expect(report.review.artifacts[2].protocol.registrySnapshotByteLength).toBe(options.insightProtocolTrust.registrySnapshot.byteLength)
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await expect.poll(() => page.locator('#console-navigation').evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(0)
+  await page.evaluate(() => { (document.activeElement as HTMLElement)?.blur(); window.scrollTo(0, 0) })
+  await page.screenshot({ path: testInfo.outputPath('priorseal-v5-protocol-review.png'), fullPage: true, animations: 'disabled' })
+  const wrong = structuredClone(options.insightProtocolTrust)
+  wrong.registrySnapshot.byteLength++
+  await page.getByLabel('Independent Insight protocol trust', { exact: true }).fill(JSON.stringify(wrong))
+  await expect(confirmed).not.toBeChecked()
+  await expect(page.locator('.verification-result')).toHaveCount(0)
+  await confirmed.check()
+  await page.getByRole('button', { name: 'Verify locally' }).click()
+  await expect(page.locator('.verification-result > .status')).toHaveText(/PARTIAL REVIEW$/)
+  await expect(page.locator('.verification-result')).toContainText('REGISTRY_SNAPSHOT_MISMATCH')
 })
 
 test('undetermined observation preserves reconciliation and never suggests another broadcast', async ({ page }) => {

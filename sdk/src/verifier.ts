@@ -1,5 +1,6 @@
 import type { KeyEntry, KeyRegistry, Receipt, VerificationBundle, VerificationResult } from './types.js'
 export { buildReviewManifest, verifyReviewManifestLocally, parseTrustProfile } from './review-manifest.js'
+export type { InsightProtocolTrust, InsightProtocolResult } from './insight-protocol-trust.js'
 export type { ReviewManifest, ReviewAttachment, ReviewAttachmentInput, ReviewArtifactResult, ReviewResult, TrustProfile } from './review-manifest.js'
 import {
   hashJson as hashCanonicalJson,
