@@ -140,14 +140,7 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   const requiresContractVerification = authorization.authorizer.type === 'eip1271'
   const authorizationValid = requiresContractVerification || await verifyTypedData({
     address: authorization.authorizer.address as `0x${string}`,
-    domain: { name: 'PriorSeal', version: legacyAuthorization ? '1' : '2', chainId: Number(authorization.intent.chainId) },
-    types: { PriorSealAuthorization: legacyAuthorization ? [
-      { name: 'intentHash', type: 'bytes32' }, { name: 'principalId', type: 'string' }, { name: 'principalAccount', type: 'address' }, { name: 'authorizer', type: 'address' }, { name: 'executor', type: 'address' }, { name: 'issuedAt', type: 'uint256' }, { name: 'notBefore', type: 'uint256' }, { name: 'expiresAt', type: 'uint256' }, { name: 'authorizationNonce', type: 'bytes32' }, { name: 'maxUses', type: 'uint256' }, { name: 'audience', type: 'string' }, { name: 'policyHash', type: 'bytes32' },
-    ] : [
-      { name: 'intentHash', type: 'bytes32' }, { name: 'principalType', type: 'string' }, { name: 'principalId', type: 'string' }, { name: 'principalAccount', type: 'address' }, { name: 'authorizerType', type: 'string' }, { name: 'authorizer', type: 'address' }, { name: 'agentId', type: 'string' }, { name: 'executor', type: 'address' }, { name: 'issuedAt', type: 'uint256' }, { name: 'notBefore', type: 'uint256' }, { name: 'expiresAt', type: 'uint256' }, { name: 'authorizationNonce', type: 'bytes32' }, { name: 'maxUses', type: 'uint256' }, { name: 'audience', type: 'string' }, { name: 'policyHash', type: 'bytes32' },
-    ] },
-    primaryType: 'PriorSealAuthorization',
-    message: { intentHash: `0x${authorization.intentHash}` as `0x${string}`, ...(!legacyAuthorization ? { principalType: authorization.principal.type } : {}), principalId: authorization.principal.id, principalAccount: authorization.principal.account as `0x${string}`, ...(!legacyAuthorization ? { authorizerType: authorization.authorizer.type } : {}), authorizer: authorization.authorizer.address as `0x${string}`, ...(!legacyAuthorization ? { agentId: authorization.delegate.agentId } : {}), executor: authorization.delegate.executor as `0x${string}`, issuedAt: BigInt(authorization.issuedAt), notBefore: BigInt(authorization.notBefore), expiresAt: BigInt(authorization.expiresAt), authorizationNonce: authorization.authorizationNonce as `0x${string}`, maxUses: BigInt(authorization.maxUses), audience: authorization.audience, policyHash: authorization.policyHash as `0x${string}` },
+    ...authorizationTypedDataFor(authorization),
     signature: authorization.signature as `0x${string}`,
   })
   if (!authorizationValid) return fail('INVALID_AUTHORIZATION_SIGNATURE')
@@ -460,4 +453,27 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
   }
   if (policy.requireDistinctAuthorizerAndExecutor === true && authorization.authorizer.address.toLowerCase() === authorization.delegate.executor.toLowerCase()) reasons.push('POLICY_AUTHORIZER_EXECUTOR_NOT_DISTINCT')
   return { allowed: reasons.length === 0, reasonCodes: [...new Set(reasons)], policyId: typeof policy.policyId === 'string' ? policy.policyId : null, evaluatedAt }
+}
+
+function authorizationTypedDataFor(authorization: NonNullable<Receipt['authorizationEvidence']>['authorization']) {
+  const legacyAuthorization = authorization.schema === 'priorseal.authorization.v1'
+  return {
+    domain: { name: 'PriorSeal', version: legacyAuthorization ? '1' : '2', chainId: Number(authorization.intent.chainId) },
+    types: { PriorSealAuthorization: legacyAuthorization ? [
+      { name: 'intentHash', type: 'bytes32' }, { name: 'principalId', type: 'string' }, { name: 'principalAccount', type: 'address' }, { name: 'authorizer', type: 'address' }, { name: 'executor', type: 'address' }, { name: 'issuedAt', type: 'uint256' }, { name: 'notBefore', type: 'uint256' }, { name: 'expiresAt', type: 'uint256' }, { name: 'authorizationNonce', type: 'bytes32' }, { name: 'maxUses', type: 'uint256' }, { name: 'audience', type: 'string' }, { name: 'policyHash', type: 'bytes32' },
+    ] : [
+      { name: 'intentHash', type: 'bytes32' }, { name: 'principalType', type: 'string' }, { name: 'principalId', type: 'string' }, { name: 'principalAccount', type: 'address' }, { name: 'authorizerType', type: 'string' }, { name: 'authorizer', type: 'address' }, { name: 'agentId', type: 'string' }, { name: 'executor', type: 'address' }, { name: 'issuedAt', type: 'uint256' }, { name: 'notBefore', type: 'uint256' }, { name: 'expiresAt', type: 'uint256' }, { name: 'authorizationNonce', type: 'bytes32' }, { name: 'maxUses', type: 'uint256' }, { name: 'audience', type: 'string' }, { name: 'policyHash', type: 'bytes32' },
+    ] },
+    primaryType: 'PriorSealAuthorization',
+    message: { intentHash: `0x${authorization.intentHash}` as `0x${string}`, ...(!legacyAuthorization ? { principalType: authorization.principal.type } : {}), principalId: authorization.principal.id, principalAccount: authorization.principal.account as `0x${string}`, ...(!legacyAuthorization ? { authorizerType: authorization.authorizer.type } : {}), authorizer: authorization.authorizer.address as `0x${string}`, ...(!legacyAuthorization ? { agentId: authorization.delegate.agentId } : {}), executor: authorization.delegate.executor as `0x${string}`, issuedAt: BigInt(authorization.issuedAt), notBefore: BigInt(authorization.notBefore), expiresAt: BigInt(authorization.expiresAt), authorizationNonce: authorization.authorizationNonce as `0x${string}`, maxUses: BigInt(authorization.maxUses), audience: authorization.audience, policyHash: authorization.policyHash as `0x${string}` },
+  } as const
+}
+
+/** Validate hashes before showing any authorization to a wallet. Never uses supplied type layouts. */
+export async function authorizationSigningData(authorization: NonNullable<Receipt['authorizationEvidence']>['authorization']) {
+  if (!validAuthorizationShape(authorization)) throw new TypeError('Invalid prepared authorization')
+  if (authorization.notBefore < authorization.issuedAt || authorization.expiresAt < authorization.notBefore || authorization.expiresAt > authorization.intent.validUntil) throw new TypeError('Invalid authorization time window')
+  if (authorization.intentHash !== authorization.intent.intentHash || authorization.intentHash !== await hashJson(stripIntentHash(authorization.intent))) throw new TypeError('Prepared intent hash does not match its contents')
+  if (authorization.authorizationId !== `auth_${(await hashJson(stripAuthorizationMetadata(authorization))).slice(0, 32)}`) throw new TypeError('Prepared authorization ID does not match its contents')
+  return authorizationTypedDataFor(authorization)
 }

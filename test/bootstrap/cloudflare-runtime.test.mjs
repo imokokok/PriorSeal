@@ -41,6 +41,8 @@ test('Cloudflare production config accepts inline secrets and Hyperdrive without
 test('Cloudflare production config fails closed on partial key and malformed JSON secrets', () => {
   assert.throws(() => loadRuntimeConfig(workerEnvironment({ PRIORSEAL_PUBLIC_KEY_PEM: '' })), /configured together/);
   assert.throws(() => loadRuntimeConfig(workerEnvironment({ PRIORSEAL_POLICY_JSON: '{' })), /must be valid JSON/);
+  assert.throws(() => loadRuntimeConfig(workerEnvironment({ PRIORSEAL_ARCHIVE_CREDENTIALS_JSON: '[]' })), /1-1000 credentials/);
+  assert.throws(() => loadRuntimeConfig(workerEnvironment({ PRIORSEAL_ARCHIVE_CREDENTIALS_JSON: JSON.stringify([{ tokenHash: 'a'.repeat(64), role: 'writer' }]) })), /Invalid or duplicate archive credential/);
 });
 
 test('inline key registry parser rejects private or unknown fields', () => {

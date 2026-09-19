@@ -76,7 +76,7 @@ export type Intent = {
   constraints?: { minConfirmations?: number; maxGasUsed?: string }
 }
 
-export type ExecutionStatus = 'PENDING' | 'CONFIRMED' | 'REVERTED' | 'REORGED' | 'NOT_FOUND' | 'RPC_ERROR' | 'UNSUPPORTED_CHAIN'
+export type ExecutionStatus = 'PENDING' | 'CONFIRMED' | 'REVERTED' | 'REORGED' | 'NOT_FOUND' | 'RPC_ERROR' | 'RPC_TIMEOUT' | 'UNSUPPORTED_CHAIN'
 
 export type Execution = {
   schema?: string
@@ -250,3 +250,35 @@ export type ObservationJob = {
   error: { code: string; message: string } | null
 }
 export type WaitForObservationOptions = RequestOptions & { pollIntervalMs?: number; timeoutMs?: number }
+
+/** Contains signed public artifacts, never private keys. Store only with user consent. */
+export type AuthorizationCheckpoint = {
+  schema: 'priorseal.authorization-checkpoint.v1'
+  stage: 'PREPARED' | 'SIGNED' | 'ACCEPTED'
+  account: string
+  request: WalletAuthorizationInput
+  prepared: PreparedAuthorization
+  signature?: string
+  acceptIdempotencyKey: string
+}
+export type AuthorizationFlowOptions = RequestOptions & {
+  checkpoint?: AuthorizationCheckpoint
+  onCheckpoint?: (checkpoint: AuthorizationCheckpoint) => void | Promise<void>
+}
+export type DeploymentCapabilities = {
+  schema: 'priorseal.capabilities.v1'
+  issuer: string
+  audience: string
+  executionProfiles: string[]
+  chains: number[]
+  authorizers: string[]
+  proofMode: string
+  policyHash: string
+  minConfirmations: number
+  dependencies: { issuer: string; timestamp: string; rpc: string; storage: string }
+  workflowReady: boolean
+  chainReadiness: { chainId: number; rpc: 'configured' | 'unknown' | 'unavailable' }[]
+  readinessScope: string
+  checkedAt: number
+  archive: { enabled: boolean; retention: string; scope: string }
+}

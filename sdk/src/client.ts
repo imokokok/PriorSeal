@@ -18,6 +18,9 @@ import type {
   VerificationBundle,
   WalletAuthorizationInput,
   WaitForObservationOptions,
+  AuthorizationFlowOptions,
+  AuthorizationCheckpoint,
+  DeploymentCapabilities,
 } from './types.js'
 import { buildExactCallIntent } from './exact-call.js'
 
@@ -71,6 +74,10 @@ export class PriorSealClient {
 
   version(options?: RequestOptions) {
     return this.request<{ service: string; version: string; protocol: string[]; requestId?: string }>('/v1/version', {}, options)
+  }
+
+  capabilities(options?: RequestOptions) {
+    return this.request<DeploymentCapabilities>('/v1/capabilities', {}, options)
   }
 
   createIntent(intent: Intent, options?: RequestOptions) {
@@ -130,7 +137,7 @@ export class PriorSealClient {
     while (true) {
       const job = await this.observationJob(jobId, options)
       if (['COMPLETED', 'UNDETERMINED', 'FAILED'].includes(job.state)) return job
-      if (Date.now() - startedAt >= timeoutMs) throw new PriorSealApiError(`Observation job did not finish within ${timeoutMs}ms`, { code: 'OBSERVATION_WAIT_TIMEOUT' })
+      if (Date.now() - startedAt >= timeoutMs) throw new PriorSealApiError(`Observation job did not finish within ${timeoutMs}ms; resume this job instead of submitting a new transaction`, { code: 'OBSERVATION_WAIT_TIMEOUT', details: { jobId, authorizationId: job.input?.authorizationId, txHash: job.input?.txHash, job, retryAfterMs: pollIntervalMs } })
       await abortableDelay(Math.min(pollIntervalMs, Math.max(1, timeoutMs - (Date.now() - startedAt))), options.signal)
     }
   }
@@ -175,12 +182,14 @@ export class PriorSealClient {
     return this.keys(options)
   }
 
-  async authorizeWithWallet(input: WalletAuthorizationInput, provider: Eip1193Provider, options?: RequestOptions) {
-    const accounts = input.account ? [input.account] : await provider.request({ method: 'eth_requestAccounts' }) as string[]
+  async authorizeWithWallet(input: WalletAuthorizationInput, provider: Eip1193Provider, options: AuthorizationFlowOptions = {}) {
+    const checkpoint = options.checkpoint
+    if (checkpoint && (checkpoint.schema !== 'priorseal.authorization-checkpoint.v1' || stableJson(checkpoint.request) !== stableJson(input) || !checkpoint.acceptIdempotencyKey || !['PREPARED', 'SIGNED', 'ACCEPTED'].includes(checkpoint.stage))) throw new PriorSealApiError('Checkpoint does not belong to this authorization request', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
+    const accounts = checkpoint ? [checkpoint.account] : input.account ? [input.account] : await provider.request({ method: 'eth_requestAccounts' }) as string[]
     const account = accounts[0]?.toLowerCase()
     if (!/^0x[0-9a-f]{40}$/.test(account ?? '')) throw new PriorSealApiError('The wallet did not return a valid EVM account', { code: 'WALLET_ACCOUNT_UNAVAILABLE' })
-    const issuedAt = input.issuedAt ?? Math.floor(Date.now() / 1000)
-    const prepared = await this.prepareAuthorization({
+    const issuedAt = input.issuedAt ?? checkpoint?.prepared.authorization.issuedAt ?? Math.floor(Date.now() / 1000)
+    const prepared = checkpoint?.prepared ?? await this.prepareAuthorization({
       intent: input.intent,
       principal: { ...input.principal, account },
       authorizer: { type: 'eip712', address: account },
@@ -192,13 +201,46 @@ export class PriorSealClient {
       maxUses: input.maxUses ?? '1',
       audience: input.audience ?? 'priorseal',
     }, options)
-    const signature = await provider.request({ method: 'eth_signTypedData_v4', params: [account, JSON.stringify(prepared.typedData)] })
-    if (typeof signature !== 'string' || !signature.startsWith('0x')) throw new PriorSealApiError('The wallet did not return an EVM signature', { code: 'WALLET_SIGNATURE_UNAVAILABLE' })
-    const accepted = await this.authorize({ ...prepared.authorization, signature }, options)
-    return { account, signature, prepared, accepted }
+    if (stableJson(comparableIntent(prepared.authorization.intent)) !== stableJson(comparableIntent(input.intent)) || prepared.authorization.principal.account.toLowerCase() !== account || prepared.authorization.authorizer.address.toLowerCase() !== account || prepared.authorization.principal.id !== input.principal.id || prepared.authorization.principal.type !== input.principal.type || prepared.authorization.delegate.agentId !== input.delegate.agentId || prepared.authorization.delegate.executor.toLowerCase() !== input.delegate.executor.toLowerCase()) throw new PriorSealApiError('Prepared authorization does not match the requested intent and identity', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
+    const authorization = prepared.authorization
+    const expectedNotBefore = input.notBefore ?? issuedAt
+    const expectedExpiresAt = input.expiresAt ?? input.intent.validUntil
+    if (authorization.schema !== 'priorseal.authorization.v2' || authorization.authorizer.type !== 'eip712' || authorization.audience !== (input.audience ?? 'priorseal') || authorization.issuedAt !== issuedAt || authorization.notBefore !== expectedNotBefore || authorization.expiresAt !== expectedExpiresAt || authorization.maxUses !== (input.maxUses ?? '1') || (input.authorizationNonce !== undefined && authorization.authorizationNonce.toLowerCase() !== input.authorizationNonce.toLowerCase()) || (input.account && account !== input.account.toLowerCase()) || (checkpoint?.stage === 'PREPARED' && checkpoint.signature) || (checkpoint && checkpoint.stage !== 'PREPARED' && !checkpoint.signature)) throw new PriorSealApiError('Prepared authorization differs from requested audience, timing or permissions', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
+    const { hashTypedData, verifyTypedData } = await import('./authorization-signature.js')
+    let signingData: Awaited<ReturnType<typeof import('./verifier.js')['authorizationSigningData']>>
+    try {
+      const { authorizationSigningData } = await import('./verifier.js')
+      signingData = await authorizationSigningData(authorization)
+      if (hashTypedData(signingData) !== hashTypedData(prepared.typedData as unknown as Parameters<typeof hashTypedData>[0])) throw new Error('Prepared typed data does not match authorization')
+    } catch (error) {
+      throw new PriorSealApiError('Prepared authorization or wallet typed data is inconsistent', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH', cause: error })
+    }
+    const state: AuthorizationCheckpoint = { schema: 'priorseal.authorization-checkpoint.v1', stage: checkpoint?.signature ? 'SIGNED' : 'PREPARED', account, request: structuredClone(input), prepared, ...(checkpoint?.signature ? { signature: checkpoint.signature } : {}), acceptIdempotencyKey: checkpoint?.acceptIdempotencyKey ?? options.idempotencyKey ?? this.makeIdempotencyKey() }
+    await options.onCheckpoint?.(structuredClone(state))
+    if (!state.signature && prepared.authorization.expiresAt <= Math.floor(Date.now() / 1000)) throw new PriorSealApiError('Authorization expired before wallet signing; refresh and authorize again', { code: 'AUTHORIZATION_EXPIRED', details: { checkpoint: state } })
+    const signature = state.signature ?? await provider.request({ method: 'eth_signTypedData_v4', params: [account, JSON.stringify(signingData, (_key, value) => typeof value === 'bigint' ? value.toString() : value)] })
+    if (typeof signature !== 'string' || !/^0x[0-9a-fA-F]{130}$/.test(signature)) throw new PriorSealApiError('The wallet did not return an EVM signature', { code: 'WALLET_SIGNATURE_UNAVAILABLE' })
+    if (!await verifyTypedData({ ...signingData, address: account as `0x${string}`, signature: signature as `0x${string}` }).catch(() => false)) throw new PriorSealApiError('Signature does not match the requested authorization and account', { code: 'AUTHORIZATION_SIGNATURE_MISMATCH' })
+    state.signature = signature
+    state.stage = 'SIGNED'
+    await options.onCheckpoint?.(structuredClone(state))
+    // An accepted operation may be replayed after expiry. The server decides;
+    // keep exactly the same signed bytes and acceptance idempotency key.
+    let accepted: AcceptedAuthorization
+    try {
+      accepted = await this.authorize({ ...prepared.authorization, signature }, { ...options, idempotencyKey: state.acceptIdempotencyKey })
+    } catch (error) {
+      if (error instanceof PriorSealApiError) throw new PriorSealApiError(error.message, { code: error.code, status: error.status, details: { checkpoint: structuredClone(state), originalDetails: error.details }, cause: error })
+      throw error
+    }
+    if (accepted.acceptance?.status !== 'ACCEPTED' || accepted.acceptance.authorizationId !== prepared.authorization.authorizationId || stableJson(accepted.authorization) !== stableJson({ ...prepared.authorization, signature })) throw new PriorSealApiError('Accepted authorization differs from the signed authorization', { code: 'AUTHORIZATION_RESPONSE_MISMATCH', details: { checkpoint: state } })
+    state.stage = 'ACCEPTED'
+    await options.onCheckpoint?.(structuredClone(state))
+    const checkedAt = Math.floor(Date.now() / 1000)
+    return { account, signature, prepared, accepted, checkpoint: state, authorizationWindow: { checkedAt, active: prepared.authorization.notBefore <= checkedAt && checkedAt < prepared.authorization.expiresAt, expiresAt: prepared.authorization.expiresAt }, nextAction: checkedAt >= prepared.authorization.expiresAt ? 'REVIEW_ACCEPTED_HISTORY_DO_NOT_EXECUTE' as const : checkedAt < prepared.authorization.notBefore ? 'WAIT_UNTIL_AUTHORIZATION_WINDOW' as const : 'CHECK_DISPATCH_POLICY' as const }
   }
 
-  authorizeExactCallWithWallet(input: ExactCallWalletAuthorizationInput, provider: Eip1193Provider, options?: RequestOptions) {
+  authorizeExactCallWithWallet(input: ExactCallWalletAuthorizationInput, provider: Eip1193Provider, options?: AuthorizationFlowOptions) {
     const intent = buildExactCallIntent(input)
     return this.authorizeWithWallet({
       intent,
@@ -271,6 +313,18 @@ function requireCrypto() {
 
 function safeJson(value: string): unknown {
   try { return JSON.parse(value) } catch { throw new PriorSealApiError('PriorSeal API returned invalid JSON', { code: 'INVALID_RESPONSE' }) }
+}
+
+function stableJson(value: unknown): string {
+  if (value === undefined) return 'null'
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  return `{${Object.keys(value).sort().filter(key => (value as Record<string, unknown>)[key] !== undefined).map(key => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(',')}}`
+}
+
+function comparableIntent(intent: Intent) {
+  const { intentHash: _hash, ...value } = intent
+  return { ...value, schema: intent.schema ?? (intent.executionProfile ? 'priorseal.intent.v2' : 'priorseal.intent.v1'), chainId: Number(intent.chainId), amount: String(intent.amount), nonce: String(intent.nonce ?? '0'), sender: intent.sender.toLowerCase(), recipient: intent.recipient.toLowerCase(), ...(intent.callTarget ? { callTarget: intent.callTarget.toLowerCase() } : {}), ...(intent.calldataHash ? { calldataHash: intent.calldataHash.toLowerCase() } : {}), ...(intent.contextCommitments ? { contextCommitments: intent.contextCommitments.map(c => ({ ...c, digest: c.digest.toLowerCase() })).sort((a, b) => `${a.namespace}:${a.algorithm}:${a.digest}`.localeCompare(`${b.namespace}:${b.algorithm}:${b.digest}`)) } : {}) }
 }
 
 function abortableDelay(milliseconds: number, signal?: AbortSignal) {

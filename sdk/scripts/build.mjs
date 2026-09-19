@@ -7,10 +7,13 @@ import { build } from 'esbuild'
 const sdkRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 execFileSync('tsc', ['-p', resolve(sdkRoot, 'tsconfig.json')], { cwd: sdkRoot, stdio: 'inherit' })
+rmSync(resolve(sdkRoot, 'dist/verifier-chunks'), { force: true, recursive: true })
 
 await build({
   entryPoints: [resolve(sdkRoot, 'src/verifier.ts')],
-  outfile: resolve(sdkRoot, 'dist/verifier.js'),
+  outdir: resolve(sdkRoot, 'dist'),
+  splitting: true,
+  chunkNames: 'verifier-chunks/[name]-[hash]',
   bundle: true,
   format: 'esm',
   platform: 'browser',
@@ -22,6 +25,7 @@ await build({
   treeShaking: true,
 })
 
-for (const extension of ['js', 'js.map', 'd.ts', 'd.ts.map']) {
+// Keep declarations used by the public signing-data export; runtime code is bundled.
+for (const extension of ['js', 'js.map']) {
   rmSync(resolve(sdkRoot, `dist/verifier-core.${extension}`), { force: true })
 }

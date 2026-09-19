@@ -1,13 +1,14 @@
 {
   "name": "priorseal-sdk",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "TypeScript SDK for PriorSeal verifiable agent authorization and execution evidence.",
   "type": "module",
   "license": "MIT",
   "sideEffects": false,
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -36,6 +37,7 @@
     "access": "public"
   },
   "dependencies": {
+    "verify-insight-receipt": "0.2.0",
     "viem": "2.56.3"
   },
   "devDependencies": {

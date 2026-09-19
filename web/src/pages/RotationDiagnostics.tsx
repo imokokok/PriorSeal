@@ -1,0 +1,17 @@
+import { useEffect, useState } from 'react'
+import { CodeValue, Notice, Status } from '../components'
+import { downloadJson } from '../lib/download'
+import { dateTime } from '../lib/format'
+import { activityChangeEvent, getActivity } from '../lib/storage'
+import type { KeyRegistry } from '../types'
+
+export function RotationDiagnostics({ registry }: { registry: KeyRegistry }) {
+  const [activity, setActivity] = useState(getActivity)
+  useEffect(() => { const refresh = () => setActivity(getActivity()); window.addEventListener(activityChangeEvent, refresh); return () => window.removeEventListener(activityChangeEvent, refresh) }, [])
+  const now = Math.floor(Date.now() / 1000)
+  const pending = activity.authorizations.filter((record) => (record.status ?? 'ACCEPTED') === 'ACCEPTED' && !record.boundTxHash && record.authorization.expiresAt > now)
+  const affected = pending.filter((record) => !registry.keys.some((key) => key.issuer === record.acceptance.issuer && key.keyId === record.acceptance.keyId && key.status === 'active' && (key.validFrom === null || key.validFrom <= now) && (key.validUntil === null || key.validUntil >= now)))
+  return <section className="panel"><div className="panel-head"><div><h2>In-flight authorization and key rotation</h2><p>Local workspace only; this is not a complete server-wide count. Current receipt profiles require acceptance and receipt to use the same issuer key.</p></div><Status value={affected.length ? 'REVIEW REQUIRED' : 'LOCAL CHECK CLEAR'} /></div><dl className="data-grid"><div><dt>Locally known pending authorizations</dt><dd>{pending.length}</dd></div><div><dt>Acceptance key no longer active</dt><dd>{affected.length}</dd></div><div><dt>Earliest local expiry</dt><dd>{pending.length ? dateTime(Math.min(...pending.map((record) => record.authorization.expiresAt))) : '—'}</dd></div><div><dt>Last local expiry / drain horizon</dt><dd>{pending.length ? dateTime(Math.max(...pending.map((record) => record.authorization.expiresAt))) : '—'}</dd></div></dl>
+    {pending.length > 0 && <><Notice tone="warning" title="Plan a drain window before changing the signing key">Complete or explicitly reauthorize pending work before rotating. A successor key cannot replace an old acceptance signature. Revoked keys remain revoked; historical receipts must be checked against their original key and validity window.</Notice><div className="table-scroll"><table className="evidence-table"><thead><tr><th>Authorization</th><th>Acceptance key</th><th>Expiry</th><th>Action</th></tr></thead><tbody>{pending.map((record) => <tr key={record.authorization.authorizationId}><td><CodeValue value={record.authorization.authorizationId} /></td><td>{record.acceptance.keyId}</td><td>{dateTime(record.authorization.expiresAt)}</td><td>{affected.includes(record) ? 'Reconcile before execution; operator review required' : 'Finish before rotation or plan fresh authorization'}</td></tr>)}</tbody></table></div><button className="button secondary" onClick={() => downloadJson({ schema: 'priorseal.rotation-diagnostic.v1', scope: 'LOCAL_WORKSPACE_ONLY', checkedAt: now, pending: pending.map((record) => ({ authorizationId: record.authorization.authorizationId, acceptanceIssuer: record.acceptance.issuer, acceptanceKeyId: record.acceptance.keyId, expiresAt: record.authorization.expiresAt, requiresReview: affected.includes(record) })) }, 'rotation-diagnostic.json')}>Export local rotation checklist</button></>}
+  </section>
+}

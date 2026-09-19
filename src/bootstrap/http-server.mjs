@@ -6,7 +6,7 @@ import { createFileKeyProvider } from '../infrastructure/keys/file-key-provider.
 import { parseKeyRegistryDocument, readFileKeyRegistry } from '../infrastructure/keys/file-key-registry.mjs';
 import { createPostgresStore } from '../infrastructure/persistence/postgres-store.mjs';
 import { createRpcClient } from '../infrastructure/blockchain/evm/rpc-client.mjs';
-import { getRpcUrls } from '../infrastructure/blockchain/evm/chains.mjs';
+import { getRpcUrls, SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
 import { PriorSealError } from '../domain/errors.mjs';
 import { parsePolicyDocument, readPolicyFile } from '../infrastructure/policy/file-policy-provider.mjs';
 import { createObservationWorker } from '../application/observations/observation-worker.mjs';
@@ -24,7 +24,7 @@ import { assertEd25519KeyPair } from '../domain/ed25519.mjs';
 const { Pool } = pg;
 const config = loadRuntimeConfig();
 const pool = config.databaseUrl ? new Pool({ connectionString: config.databaseUrl }) : null;
-if (config.environment === 'production') await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode });
+if (config.environment === 'production') await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
 const store = pool ? createPostgresStore(pool) : undefined;
 const keyProvider = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
 const privateKeyPem = config.privateKeyPem ?? keyProvider.getPrivateKey();
@@ -56,7 +56,7 @@ const transparencyProvider = store && privateKeyPem ? async (acceptance, { befor
 } : null;
 const worker = store ? createObservationWorker({ store, observe: async (input) => (await observeExecution({ input, store, observer: observeEvm, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response, saveObservation: (observation) => store.saveObservation(observation) }) : null;
 const stopWorker = worker?.start();
-const server = createHttpServer({ store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker: worker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir: resolve('web/dist') });
+const server = createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => (getRpcUrls(id) ?? []).length > 0), store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker: worker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir: resolve('web/dist') });
 server.listen(config.port, () => console.log(JSON.stringify({ level: 'info', event: 'server.started', port: config.port, storage: pool ? 'postgresql' : 'memory' })));
 function shutdown(signal) {
   stopWorker?.();

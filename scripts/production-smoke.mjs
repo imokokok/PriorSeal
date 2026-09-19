@@ -2,6 +2,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
 import { canonicalize, verifyAuthorization, verifyAuthorizationReceipt, verifyTimestampEvidence } from '../src/index.mjs';
 
+if (process.argv.includes('--read-only')) {
+  const { runReadOnlySmoke } = await import('./production-smoke-readonly.mjs');
+  await runReadOnlySmoke();
+  process.exit(0);
+}
+
 const baseUrl = new URL(process.env.PRIORSEAL_BASE_URL ?? 'https://priorseal.xyz');
 const expectedVersion = process.env.PRIORSEAL_EXPECTED_VERSION?.trim();
 const runPendingFlow = process.argv.includes('--pending');

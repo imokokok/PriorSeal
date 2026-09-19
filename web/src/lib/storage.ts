@@ -94,7 +94,9 @@ export function setStoragePreference(choice: StoragePreference) {
 }
 export function hasStoredActivity() {
   const activity = readStoredActivity()
-  return activity.intents.length + activity.authorizations.length + activity.receipts.length + activity.observations.length > 0
+  let hasProfiles = false
+  try { hasProfiles = (JSON.parse(localStorage.getItem('priorseal.trust-profiles.v1') ?? '[]') as unknown[]).length > 0 } catch { /* Ignore invalid optional profile storage. */ }
+  return hasProfiles || activity.intents.length + activity.authorizations.length + activity.receipts.length + activity.observations.length > 0
 }
 
 export function openStoragePreferences() {
@@ -130,7 +132,8 @@ export const session = {
   export() { return JSON.stringify({ schema: 'priorseal.local-session.v4', exportedAt: new Date().toISOString(), activity: getActivity() }, null, 2) },
   clear() {
     memoryActivity = empty()
-    try { localStorage.removeItem(key); previousKeys.forEach((candidate) => localStorage.removeItem(candidate)) } catch { /* Storage is best effort. */ }
+    emit('priorseal:trust-clear')
+    try { localStorage.removeItem(key); localStorage.removeItem('priorseal.trust-profiles.v1'); previousKeys.forEach((candidate) => localStorage.removeItem(candidate)) } catch { /* Storage is best effort. */ }
     emit(activityChangeEvent)
   },
   getActivity,

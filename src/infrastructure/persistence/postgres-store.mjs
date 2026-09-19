@@ -1,10 +1,28 @@
 import { hashJson } from '../../domain/hashing.mjs';
 import { randomUUID } from 'node:crypto';
+import { archivePage } from '../../application/archive/evidence-archive.mjs';
 
 // The adapter accepts an injected pg Pool, keeping PostgreSQL optional for the offline verifier.
 export function createPostgresStore(pool) {
   if (!pool?.query) throw new TypeError('createPostgresStore requires a pg-compatible pool');
   return {
+    archiveRetention: 'until_operator_deletion',
+    async saveArchiveEntry(entry) {
+      const result = await pool.query('INSERT INTO project_evidence_archive (project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (project_id,environment,entry_id) DO NOTHING RETURNING entry_json,sequence', [entry.projectId, entry.environment, entry.id, entry.artifactHash, entry.kind, entry.createdAt, entry.txHash, entry.authorizationId, entry.status, entry.supersedesId, entry]);
+      if (result.rows[0]) return { ...result.rows[0].entry_json, sequence: Number(result.rows[0].sequence) };
+      const existing = await this.getArchiveEntry(entry, entry.id);
+      if (existing?.supersedesId !== entry.supersedesId) { const error = new Error('Archive entry already has a different supersession relationship'); error.code = 'ARCHIVE_CONFLICT'; throw error; }
+      return existing;
+    },
+    async getArchiveEntry(access, id) {
+      const result = await pool.query('SELECT entry_json,sequence FROM project_evidence_archive WHERE project_id=$1 AND environment=$2 AND entry_id=$3', [access.projectId, access.environment, id]);
+      return result.rows[0] && { ...result.rows[0].entry_json, sequence: Number(result.rows[0].sequence) };
+    },
+    async listArchiveEntries(query) {
+      const snapshot = query.cursor?.snapshot ?? Number((await pool.query('SELECT COALESCE(MAX(sequence),0) AS snapshot FROM project_evidence_archive WHERE project_id=$1 AND environment=$2', [query.projectId, query.environment])).rows[0]?.snapshot ?? 0);
+      const result = await pool.query('SELECT entry_json,sequence FROM project_evidence_archive WHERE project_id=$1 AND environment=$2 AND sequence <= $3 AND ($4::bigint IS NULL OR sequence < $4) AND ($5::text IS NULL OR tx_hash=$5) AND ($6::text IS NULL OR authorization_id=$6) AND ($7::text IS NULL OR status=$7) AND ($8::bigint IS NULL OR created_at >= $8) AND ($9::bigint IS NULL OR created_at <= $9) ORDER BY sequence DESC LIMIT $10', [query.projectId, query.environment, snapshot, query.cursor?.after ?? null, query.filters.txHash, query.filters.authorizationId, query.filters.status, query.filters.from, query.filters.to, query.limit + 1]);
+      return archivePage(result.rows.map(row => ({ ...row.entry_json, sequence: Number(row.sequence) })), query, snapshot);
+    },
     async saveIntent(intent) {
       const result = await pool.query(`INSERT INTO intents (intent_id,intent_hash,schema_version,chain_id,action,sender,recipient,asset,amount,nonce,valid_until,constraints_json,intent_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (intent_id) DO UPDATE SET intent_id=EXCLUDED.intent_id WHERE intents.intent_hash=EXCLUDED.intent_hash RETURNING intent_json`, [intent.intentId, intent.intentHash, intent.schema, intent.chainId, intent.action, intent.sender, intent.recipient, intent.asset, intent.amount, intent.nonce, intent.validUntil, intent.constraints ?? null, intent]);
       if (result.rows[0]) return result.rows[0].intent_json;

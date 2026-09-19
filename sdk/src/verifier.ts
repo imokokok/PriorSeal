@@ -1,4 +1,6 @@
 import type { KeyEntry, KeyRegistry, Receipt, VerificationBundle, VerificationResult } from './types.js'
+export { buildReviewManifest, verifyReviewManifestLocally, parseTrustProfile } from './review-manifest.js'
+export type { ReviewManifest, ReviewAttachment, ReviewAttachmentInput, ReviewArtifactResult, ReviewResult, TrustProfile } from './review-manifest.js'
 import {
   hashJson as hashCanonicalJson,
   verifyReceiptOffline as verifyWithTrustedKey,
@@ -96,3 +98,5 @@ function externalRequirements(receipt: Receipt): ExternalVerificationRequirement
   }
   return requirements
 }
+
+export { authorizationSigningData } from './verifier-core.js'

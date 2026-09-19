@@ -1,3 +1,5 @@
+import { createArchiveAccess } from '../application/archive/evidence-archive.mjs';
+
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 /**
@@ -20,6 +22,8 @@ export function loadRuntimeConfig(environment = process.env) {
   const transparencyAnchorJson = optionalJson(environment.PRIORSEAL_TRANSPARENCY_ANCHOR_JSON, 'PRIORSEAL_TRANSPARENCY_ANCHOR_JSON');
   const witnessEndpointsFile = optionalValue(environment.PRIORSEAL_WITNESS_ENDPOINTS_FILE);
   const witnessEndpointsJson = optionalJson(environment.PRIORSEAL_WITNESS_ENDPOINTS_JSON, 'PRIORSEAL_WITNESS_ENDPOINTS_JSON');
+  const archiveCredentials = optionalJson(environment.PRIORSEAL_ARCHIVE_CREDENTIALS_JSON, 'PRIORSEAL_ARCHIVE_CREDENTIALS_JSON');
+  createArchiveAccess(archiveCredentials); // Readiness and startup share strict credential validation.
   const anchorConfirmations = confirmationValue(environment.PRIORSEAL_ANCHOR_CONFIRMATIONS);
   if (Boolean(privateKeyFile) !== Boolean(publicKeyFile)) {
     throw new TypeError('PRIORSEAL_PRIVATE_KEY_FILE and PRIORSEAL_PUBLIC_KEY_FILE must be configured together');
@@ -37,6 +41,7 @@ export function loadRuntimeConfig(environment = process.env) {
   const allowSelfAssertedPrincipals = booleanValue(environment.PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS, 'PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS', false);
   const config = {
     environment: runtimeEnvironment,
+    ...(archiveCredentials ? { archiveCredentials } : {}),
     ...(runtime !== 'node' ? { runtime } : {}),
     port: portValue(environment.PORT),
     issuer: identifierValue(environment.PRIORSEAL_ISSUER, 'PRIORSEAL_ISSUER', 'priorseal-local'),

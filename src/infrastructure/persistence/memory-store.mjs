@@ -1,6 +1,22 @@
 import { hashJson } from '../../domain/hashing.mjs';
+import { archivePage } from '../../application/archive/evidence-archive.mjs';
 
-export function createMemoryStore({ clock = () => Date.now() } = {}) { const intents = new Map(), receipts = new Map(), observations = new Map(), idempotency = new Map(), jobs = new Map(), authorizations = new Map(), authorizationLog = []; return {
+export function createMemoryStore({ clock = () => Date.now() } = {}) { const intents = new Map(), receipts = new Map(), observations = new Map(), idempotency = new Map(), jobs = new Map(), authorizations = new Map(), archive = new Map(), authorizationLog = []; return {
+  archiveRetention: 'process_lifetime',
+  async saveArchiveEntry(entry) {
+    const key = JSON.stringify([entry.projectId, entry.environment, entry.id]);
+    const existing = archive.get(key);
+    if (existing) { if (existing.supersedesId !== entry.supersedesId) { const error = new Error('Archive entry already has a different supersession relationship'); error.code = 'ARCHIVE_CONFLICT'; throw error; } return structuredClone(existing); }
+    if (entry.supersedesId && !archive.has(JSON.stringify([entry.projectId, entry.environment, entry.supersedesId]))) { const error = new Error('Superseded entry is not in this project'); error.code = 'NOT_FOUND'; throw error; }
+    const saved = { ...structuredClone(entry), sequence: archive.size + 1 };
+    archive.set(key, saved); return structuredClone(saved);
+  },
+  async getArchiveEntry(access, id) { const entry = archive.get(JSON.stringify([access.projectId, access.environment, id])); return entry && structuredClone(entry); },
+  async listArchiveEntries(query) {
+    const snapshot = query.cursor?.snapshot ?? archive.size;
+    const rows = [...archive.values()].filter(entry => entry.projectId === query.projectId && entry.environment === query.environment && entry.sequence <= snapshot && (!query.cursor || entry.sequence < query.cursor.after) && (!query.filters.txHash || entry.txHash === query.filters.txHash) && (!query.filters.authorizationId || entry.authorizationId === query.filters.authorizationId) && (!query.filters.status || entry.status === query.filters.status) && (query.filters.from === null || entry.createdAt >= query.filters.from) && (query.filters.to === null || entry.createdAt <= query.filters.to)).sort((a, b) => b.sequence - a.sequence).slice(0, query.limit + 1);
+    return { ...archivePage(rows, query, snapshot), retention: 'process_lifetime' };
+  },
   async saveIntent(intent) { const existing = intents.get(intent.intentId); if (existing && existing.intentHash !== intent.intentHash) throw new Error('DUPLICATE_INTENT'); intents.set(intent.intentId, intent); return intent; },
   async getIntent(id) { return intents.get(id); }, async saveObservation(value) { const compound = `${value.chainId}:${value.txHash}`; const versions = observations.get(compound) ?? []; versions.push(value); observations.set(compound, versions); return value; },
   async getObservation(chainId, txHash) { return observations.get(`${chainId}:${txHash}`)?.at(-1); },

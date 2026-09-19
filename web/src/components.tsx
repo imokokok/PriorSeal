@@ -22,11 +22,12 @@ export function Empty({ title, children, action }: { title: string; children: Re
 export function LoadingState({ label }: { label: string }) { return <div className="loading" role="status" aria-live="polite"><span>{label}</span><span className="loading-lines" aria-hidden="true"><i /><i /><i /></span></div> }
 export function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
   const descriptionId = useId()
-  const child = isValidElement(children) ? cloneElement(children as ReactElement<{ 'aria-describedby'?: string; 'aria-invalid'?: boolean }>, {
+  const child = isValidElement(children) ? cloneElement(children as ReactElement<{ 'aria-describedby'?: string; 'aria-labelledby'?: string; 'aria-invalid'?: boolean }>, {
     'aria-describedby': error || hint ? descriptionId : undefined,
+    'aria-labelledby': `${descriptionId}-label`,
     'aria-invalid': error ? true : undefined,
   }) : children
-  return <label className="field"><span className="field-label">{label}</span>{child}{error ? <span id={descriptionId} className="field-error">{error}</span> : hint && <span id={descriptionId} className="field-hint">{hint}</span>}</label>
+  return <label className="field"><span className="field-label" id={`${descriptionId}-label`}>{label}</span>{child}{error ? <span id={descriptionId} className="field-error">{error}</span> : hint && <span id={descriptionId} className="field-hint">{hint}</span>}</label>
 }
 export function PageHeader({ eyebrow, title, children, actions }: { eyebrow?: string; title: string; children?: ReactNode; actions?: ReactNode }) { return <div className="page-header"><div className="page-heading">{eyebrow && <p className="eyebrow">{eyebrow}</p>}<h1 data-route-heading tabIndex={-1}>{title}</h1>{children && <p className="lede">{children}</p>}</div>{actions && <div className="header-actions">{actions}</div>}</div> }
 
@@ -56,7 +57,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   const menuButton = useRef<HTMLButtonElement>(null)
   const sidebar = useRef<HTMLElement>(null)
   const restoreFocus = useRef<HTMLElement | null>(null)
-  const current = [...nav].reverse().find((item) => item.to === '/app' ? location.pathname === '/app' : location.pathname.startsWith(item.to)) ?? nav[0]
+  const current = location.pathname === '/app/intents/exact-call' ? nav[1] : location.pathname === '/app/archive' ? { ...nav[4], label: 'Project archive' } : [...nav].reverse().find((item) => item.to === '/app' ? location.pathname === '/app' : location.pathname.startsWith(item.to)) ?? nav[0]
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 980px)')
@@ -115,4 +116,4 @@ function AppShellFrame({ children }: { children: ReactNode }) {
 }
 
 export const receiptPrimaryStatus = (receipt: Receipt) => receipt.compliance?.status ?? receipt.outcome
-export function ReceiptSummary({ receipt, timestampStatus }: { receipt: Receipt; timestampStatus?: 'VALID' | 'INVALID' | 'MISSING' | 'NOT_REQUIRED' | 'CHECKING' }) { const navigate = useNavigate(); const timestampLabel = timestampStatus === 'NOT_REQUIRED' ? 'TIMESTAMP N/A' : `TIMESTAMP ${timestampStatus ?? (receipt.authorizationEvidence?.timestamp ? 'ATTACHED' : 'N/A')}`; return <article className="receipt-row"><div><div className="receipt-badges"><Status value={receiptPrimaryStatus(receipt)} />{receipt.executionStatus && <Status value={receipt.executionStatus} small />}<Status value={timestampLabel} small /></div><strong>{receipt.receiptId}</strong><span>{chains[Number(receipt.execution.chainId)] ?? 'Chain ' + receipt.execution.chainId} · {dateTime(receipt.issuedAt)}</span></div><div className="receipt-row-actions"><CodeValue value={receipt.intentHash} /><button type="button" className="text-link" onClick={() => navigate('/app/receipts/' + encodeURIComponent(receipt.receiptId))}>View</button></div></article> }
+export function ReceiptSummary({ receipt, timestampStatus }: { receipt: Receipt; timestampStatus?: 'VALID' | 'INVALID' | 'MISSING' | 'NOT_REQUIRED' | 'CHECKING' }) { const navigate = useNavigate(); const timestampLabel = timestampStatus === 'NOT_REQUIRED' ? 'TIMESTAMP N/A' : `TIMESTAMP ${timestampStatus ?? (receipt.authorizationEvidence?.timestamp ? 'ATTACHED' : 'N/A')}`; return <article className="receipt-row"><div><div className="receipt-badges"><Status value={receiptPrimaryStatus(receipt)} />{receipt.executionStatus && <Status value={receipt.executionStatus} small />}<Status value={timestampLabel} small /></div><strong>{receipt.receiptId}</strong><span>{chains[Number(receipt.execution.chainId)] ?? 'Chain ' + receipt.execution.chainId} · {dateTime(receipt.issuedAt)} · receipt claim</span></div><div className="receipt-row-actions"><CodeValue value={receipt.intentHash} /><button type="button" className="text-link" onClick={() => navigate('/app/receipts/' + encodeURIComponent(receipt.receiptId))}>View</button></div></article> }

@@ -509,3 +509,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .retry-action { margin-top: 14px; }
 
 .retry-button { margin-top: 16px; }
+
+/* Evidence import and review use the console's existing panel and form system. */
+.review-json { max-height: 540px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.7 "JetBrains Mono", monospace; background: var(--stone); padding: 16px; }
+.polish-details { margin: 22px 0; border-top: 1px solid var(--rule-soft); padding-top: 16px; }
+.polish-details summary { cursor: pointer; font-weight: 600; margin-bottom: 14px; }
+.trust-key { padding: 12px 0; border-bottom: 1px solid var(--rule-soft); font-size: 12px; }
+.trust-key p, .fingerprint { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.context-review { margin-top: 24px; overflow-wrap: anywhere; }
+.archive-query { display: flex; align-items: end; gap: 16px; }
+.archive-query .field { flex: 1; margin: 0; }
+.archive-query button { margin-bottom: 2px; }
+@media (max-width: 700px) { .archive-query { display: block; } .archive-query button { margin-top: 16px; } .review-json { max-height: 380px; } }
+
+.polish-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+
+.verify-layout > .panel .data-grid { grid-template-columns: 1fr; margin-top: 16px; }
+.verification-result dl.data-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0; }
+.verification-result .data-grid dd { margin-top: 10px; overflow-wrap: anywhere; }
+.evidence-table { width: 100%; min-width: 560px; border-collapse: collapse; text-align: left; font-size: 12px; }
+.evidence-table th { padding: 12px; background: var(--ink); color: var(--porcelain); font: 600 10px "JetBrains Mono", monospace; text-transform: uppercase; }
+.evidence-table td { padding: 14px 12px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+.evidence-table td small { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; }
+.evidence-table .code-value { display: flex; margin-top: 6px; }
+@media (max-width: 720px) { .verification-result dl.data-grid { grid-template-columns: 1fr; } }
