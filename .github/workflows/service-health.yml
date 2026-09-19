@@ -15,7 +15,8 @@ concurrency:
 jobs:
   readiness:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Five 30-second reads, one-minute confirmation delay, then a full retry.
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
