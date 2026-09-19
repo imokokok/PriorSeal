@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -24,6 +24,50 @@ async function request(server, path, { method = 'GET', headers = {}, body } = {}
   const res = new EventEmitter(); res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
   const done = new Promise((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers, buffer: () => Buffer.from(res.body ?? ''), json: () => JSON.parse(res.body), text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
+test('private archive enforces credentials, reviewer scope, tenant isolation and no-store HTTP responses', async (t) => {
+  const writer = 'w'.repeat(48), reviewer = 'r'.repeat(48), other = 'o'.repeat(48);
+  const credential = (token, role, projectId = 'alpha') => ({ tokenHash: createHash('sha256').update(token).digest('hex'), projectId, environment: 'test', role });
+  const server = createHttpServer({ archiveCredentials: [credential(writer, 'writer'), credential(reviewer, 'reviewer'), credential(other, 'writer', 'beta')] });
+  t.after(() => server.close());
+  const headers = token => ({ 'content-type': 'application/json', authorization: `Bearer ${token}` });
+  const artifact = n => ({ schema: 'priorseal.verification-bundle.v1', receipt: { receiptId: `private-${n}`, execution: { txHash: `0x${String(n).repeat(64)}`, status: 'CONFIRMED' } } });
+  const upload = (token, n, extra = {}) => request(server, '/v1/archive', { method: 'POST', headers: headers(token), body: JSON.stringify({ artifact: artifact(n), ...extra }) });
+  const anonymous = await request(server, '/v1/archive');
+  assert.equal(anonymous.status, 401);
+  assert.equal(anonymous.headers['cache-control'], 'private, no-store');
+  assert.match(anonymous.headers.vary, /Authorization/);
+  assert.equal((await upload(reviewer, 1)).status, 403);
+  const saved = await upload(writer, 1);
+  assert.equal(saved.status, 201);
+  assert.equal(saved.json().verification, 'NOT_VERIFIED_BY_ARCHIVE');
+  const entryId = saved.json().id;
+  assert.equal((await request(server, `/v1/archive/${entryId}`, { headers: headers(reviewer) })).status, 200);
+  assert.equal((await request(server, `/v1/archive/${entryId}`, { headers: headers(other) })).status, 404);
+  assert.equal((await upload(other, 2, { supersedesId: entryId })).status, 404);
+  assert.equal((await request(server, '/v1/receipts/private-1')).status, 404);
+  assert.equal((await upload(writer, 2, { projectId: 'beta' })).status, 400);
+  await upload(writer, 2);
+  const page = (await request(server, '/v1/archive?limit=1', { headers: headers(reviewer) })).json();
+  assert.equal(page.items[0].artifact, undefined);
+  assert.equal(page.role, 'reviewer');
+  assert.equal(page.retention, 'process_lifetime');
+  assert.ok(page.nextCursor);
+  const exported = await request(server, '/v1/archive/export?limit=1', { headers: headers(reviewer) });
+  assert.equal(exported.status, 200);
+  assert.equal(exported.headers['cache-control'], 'private, no-store');
+  assert.deepEqual(exported.json().items[0].artifact, artifact(2));
+  const continuation = await request(server, `/v1/archive/export?limit=1&cursor=${exported.json().nextCursor}`, { headers: headers(reviewer) });
+  assert.deepEqual(continuation.json().items[0].artifact, artifact(1));
+  assert.equal(continuation.json().nextCursor, null);
+  assert.equal((await request(server, '/v1/archive/export', { headers: headers(other) })).json().items.length, 0);
+  assert.equal((await request(server, '/v1/archive/export?limit=26', { headers: headers(writer) })).status, 400);
+  assert.equal((await request(server, `/v1/archive?limit=1&cursor=${page.nextCursor}`, { headers: headers(other) })).status, 400);
+  assert.equal((await request(server, '/v1/archive?projectId=beta', { headers: headers(writer) })).status, 400);
+  const caps = await request(server, '/v1/capabilities');
+  assert.equal(caps.status, 200);
+  assert.equal(caps.headers['cache-control'], 'no-store');
+  assert.equal(JSON.stringify(caps.json()).includes(writer), false);
+});
 test('API matches pathnames with query strings and uses idempotency safely', async (t) => {
   const server = await serverFor(t); const options = { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'intent-1' }, body: JSON.stringify(intent) };
   const first = await request(server, '/v1/intents?source=test', options); assert.equal(first.status, 201); assert.equal(first.headers['x-content-type-options'], 'nosniff');

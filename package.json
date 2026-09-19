@@ -14,12 +14,24 @@
   },
   "type": "module",
   "scripts": {
+    "example:aps-priorseal": "npm --prefix examples/aps-priorseal-decision-binding-v1 run verify",
+    "test:aps-priorseal": "npm --prefix examples/aps-priorseal-decision-binding-v1 run verify:producer && npm --prefix examples/aps-priorseal-decision-binding-v1 test",
     "example:receipt": "node examples/create-signed-receipt.mjs",
     "example:boundaryattest-paired": "npm run sdk:build && node examples/boundaryattest-paired-v0.2/verify.mjs",
+    "example:insight-boundaryattest-three-object": "npm run sdk:build && node examples/insight-boundaryattest-three-object-v0.2/verify.mjs",
+    "example:headless-market-state-pair": "npm run sdk:build && node examples/headless-market-state-pair-v1/verify.mjs",
+    "example:web3-agent-kit-base-swap": "npm run sdk:build && node examples/web3-agent-kit-base-swap-v1/verify.mjs",
+    "example:web3-agent-kit-base-swap-v2": "npm run sdk:build && node examples/web3-agent-kit-base-swap-v2/verify.mjs",
+    "example:web3-agent-kit-context-binding": "npm run sdk:build && node examples/web3-agent-kit-context-binding-v1/verify.mjs",
+    "verify:web3-agent-kit-base-sepolia-live": "npm run sdk:build && node examples/web3-agent-kit-base-sepolia-live-v1/verify.mjs",
+    "verify:web3-agent-kit-base-sepolia-live:online": "npm run sdk:build && node examples/web3-agent-kit-base-sepolia-live-v1/verify.mjs --online",
     "example:thoughtproof-paired": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v1/verify.mjs",
     "example:thoughtproof-m2": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v2/verify.mjs",
     "example:thoughtproof-m2-final": "npm run sdk:build && node examples/thoughtproof-sentinel-paired-v2-final/verify.mjs",
     "generate:thoughtproof-paired": "node scripts/generate-thoughtproof-sentinel-paired-vectors.mjs",
+    "generate:insight-boundaryattest-three-object": "node scripts/generate-insight-boundaryattest-three-object-vectors.mjs",
+    "generate:web3-agent-kit-base-swap": "node scripts/generate-web3-agent-kit-base-swap-vectors.mjs",
+    "generate:web3-agent-kit-base-swap-v2": "node scripts/generate-web3-agent-kit-base-swap-v2-vectors.mjs",
     "generate:thoughtproof-m2": "node scripts/generate-thoughtproof-sentinel-m2-vectors.mjs",
     "generate:thoughtproof-m2-final": "node scripts/generate-thoughtproof-sentinel-m2-final-pairs.mjs",
     "verify:receipt": "node examples/verify-signed-receipt.mjs",
@@ -39,6 +51,7 @@
     "anchor:prepare": "node --env-file=.env.local scripts/prepare-transparency-anchor.mjs",
     "anchor:record": "node --env-file=.env.local scripts/record-transparency-anchor.mjs",
     "production:check": "node --env-file=.env.local scripts/production-readiness.mjs",
+    "rotation:impact": "node --env-file=.env.local scripts/rotation-impact.mjs",
     "production:smoke": "node scripts/production-smoke.mjs",
     "production:smoke:pending": "node scripts/production-smoke.mjs --pending",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm run contracts:check && npm test && npm run build && npm run check:web-performance",
@@ -49,7 +62,8 @@
     "start:witness": "node --env-file=.env.witness.local src/bootstrap/witness-server.mjs",
     "worker:check": "npm run build && wrangler deploy --dry-run --outdir .wrangler/dist",
     "worker:dev": "npm run build && wrangler dev",
-    "worker:deploy": "npm run build && node scripts/deploy-worker.mjs"
+    "worker:deploy": "npm run build && node scripts/deploy-worker.mjs",
+    "integration:doctor": "node scripts/integration-doctor.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -66,6 +80,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
+    "@electric-sql/pglite": "^0.5.8",
     "@neon/config": "^1.3.0",
     "@neon/env": "^1.2.1",
     "@playwright/test": "^1.63.0",

@@ -2,6 +2,8 @@
 
 PriorSeal authorization v2 separates an agent proposal from authority and signs the agent ID, executor, principal type and authorizer type. Legacy authorization v1 remains verifiable but is no longer issued by default. A draft intent is not authorization. An accepted authorization contains the complete canonical intent, an EIP-712 or ERC-1271 signature, the principal and delegated executor, a validity window, an audience, the active policy hash, and a single-use authorization nonce.
 
+The protocol represents the principal authorizer and transaction executor as separate roles, but it does not require them to use different accounts by default. Deployments that need authorization authority to be structurally separate from transaction-key custody should set `requireDistinctAuthorizerAndExecutor: true` in the authorization policy. Preparation, acceptance, portable policy evidence and offline receipt verification then fail closed when the authorizer address equals the delegated executor. Process, hardware-wallet, HSM, MPC and private-key handling boundaries remain the integrator's responsibility; a distinct address proves role separation in the signed evidence, not operational custody quality by itself.
+
 Wallet control alone is not a civil-identity proof. Deployments that need a named real user or organization must configure `policy.principals` as a change-controlled identity registry. Each entry binds one reviewed principal ID and type to one EVM account and authorizer type; PriorSeal rejects a signed authorization that does not match it, and the registry is covered by the signed `policyHash`. For organizations, the account should normally be the published Safe/ERC-1271 account rather than an employee wallet.
 
 ```text

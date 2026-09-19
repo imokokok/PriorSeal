@@ -7,6 +7,55 @@ export type ContextCommitmentMatch = {
   commitment: ContextCommitment | null
 }
 
+export type HeadlessMarketStateReceipt = {
+  receipt_id: string
+  issued_at: string
+  expires_at: string
+  issuer: string
+  mic: string
+  status: string
+  source: string
+  halt_detection: string
+  coverage: string
+  receipt_mode: string
+  schema_version: string
+  public_key_id: string
+  signature: string
+}
+
+export type HeadlessMarketStateKey = {
+  key_id: string
+  algorithm: 'Ed25519'
+  public_key: string
+}
+
+export type HeadlessMarketStatePolicy = {
+  expectedMic: string
+  allowedStatuses: string[]
+  allowedReceiptModes?: string[]
+  requiredFeedState?: string
+  expectedIssuer?: string
+  expectedSchemaVersion?: string
+}
+
+export type HeadlessMarketStateCheck = {
+  valid: boolean
+  code: 'OK' | 'HEADLESS_MARKET_STATE_REJECTED'
+  reasonCodes: string[]
+  commitment: ContextCommitment
+  coverage: Record<string, unknown> | null
+}
+
+export type HeadlessMarketStatePairResult = {
+  valid: boolean
+  code: 'OK' | 'HEADLESS_MARKET_STATE_PAIR_REJECTED'
+  reasonCodes: string[]
+  authorizationBinding: ContextCommitmentMatch
+  authority: HeadlessMarketStateCheck
+  execution: HeadlessMarketStateCheck
+  executionEvidenceCommitment: ContextCommitment
+}
+
 export type Intent = {
   schema?: 'priorseal.intent.v1' | 'priorseal.intent.v2'
   executionProfile?: 'priorseal.execution-profile.exact-call.v1'
@@ -27,7 +76,7 @@ export type Intent = {
   constraints?: { minConfirmations?: number; maxGasUsed?: string }
 }
 
-export type ExecutionStatus = 'PENDING' | 'CONFIRMED' | 'REVERTED' | 'REORGED' | 'NOT_FOUND' | 'RPC_ERROR' | 'UNSUPPORTED_CHAIN'
+export type ExecutionStatus = 'PENDING' | 'CONFIRMED' | 'REVERTED' | 'REORGED' | 'NOT_FOUND' | 'RPC_ERROR' | 'RPC_TIMEOUT' | 'UNSUPPORTED_CHAIN'
 
 export type Execution = {
   schema?: string
@@ -201,3 +250,35 @@ export type ObservationJob = {
   error: { code: string; message: string } | null
 }
 export type WaitForObservationOptions = RequestOptions & { pollIntervalMs?: number; timeoutMs?: number }
+
+/** Contains signed public artifacts, never private keys. Store only with user consent. */
+export type AuthorizationCheckpoint = {
+  schema: 'priorseal.authorization-checkpoint.v1'
+  stage: 'PREPARED' | 'SIGNED' | 'ACCEPTED'
+  account: string
+  request: WalletAuthorizationInput
+  prepared: PreparedAuthorization
+  signature?: string
+  acceptIdempotencyKey: string
+}
+export type AuthorizationFlowOptions = RequestOptions & {
+  checkpoint?: AuthorizationCheckpoint
+  onCheckpoint?: (checkpoint: AuthorizationCheckpoint) => void | Promise<void>
+}
+export type DeploymentCapabilities = {
+  schema: 'priorseal.capabilities.v1'
+  issuer: string
+  audience: string
+  executionProfiles: string[]
+  chains: number[]
+  authorizers: string[]
+  proofMode: string
+  policyHash: string
+  minConfirmations: number
+  dependencies: { issuer: string; timestamp: string; rpc: string; storage: string }
+  workflowReady: boolean
+  chainReadiness: { chainId: number; rpc: 'configured' | 'unknown' | 'unavailable' }[]
+  readinessScope: string
+  checkedAt: number
+  archive: { enabled: boolean; retention: string; scope: string }
+}

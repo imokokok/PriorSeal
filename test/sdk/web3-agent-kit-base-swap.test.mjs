@@ -1,0 +1,26 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+import { runFixtureChecks } from '../../examples/web3-agent-kit-base-swap-v1/verify.mjs'
+
+test('Web3 Agent Kit Base swap evidence is independently reproducible and fails closed', async () => {
+  const result = await runFixtureChecks()
+
+  assert.equal(result.status, 'PASS')
+  assert.deepEqual(
+    result.cases.map((entry) => entry.actual),
+    [
+      'OK',
+      'GOVERNOR_DECISION_MISMATCH',
+      'DRAFT_CALLDATA_HASH_MISMATCH',
+      'INSIGHT_KEY_REVOKED',
+      'PRIORSEAL_INVALID_SIGNATURE',
+    ],
+  )
+  assert.equal(result.report.authority.finalPolicyDecisionPoint, 'web3-agent-kit-governor')
+  assert.equal(result.report.authorization.exactCallMatched, true)
+  assert.equal(result.report.timing.orderVerified, true)
+  assert.equal(result.report.compliance.status, 'COMPLIANT')
+  assert.equal(result.report.historicalVerification.oldReceiptStillVerifies, true)
+  assert.equal(result.report.historicalVerification.insightKeyRotatedByBundleAssembly, true)
+})

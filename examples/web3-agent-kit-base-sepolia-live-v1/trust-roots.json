@@ -1,0 +1,12 @@
+{
+  "schema": "web3-agent-kit.base-sepolia-live-trust-roots.v1",
+  "mode": "NONPRODUCTION_TEST_ROOTS",
+  "chainId": 84532,
+  "txHash": "0xbc290cc158ae99d67d1ef359c730ec798bb3348c8cc1e349f8fd52234ef0e246",
+  "priorSeal": {
+    "issuer": "priorseal.base-sepolia-live-test",
+    "keyId": "priorseal-base-sepolia-live-ephemeral-1",
+    "publicKeySpkiSha256": "02348c87e4db16753c06fe7b2f1627d413c624f198bef6cafa89f2a3b6b3c895"
+  },
+  "warning": "Nonproduction test roots. The public signer and ephemeral PriorSeal issuer key are unsuitable for production trust."
+}

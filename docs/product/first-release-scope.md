@@ -23,6 +23,17 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 - **Receipt:** an issuer-signed observation statement, not an economic guarantee.
 - **Local activity:** browser-local convenience data, not a complete server archive.
 - **Audit bundle:** a portable export of filtered local evidence and available context; each receipt remains independently verifiable.
+- **Review manifest:** original Insight attachments and their byte hashes alongside a native PriorSeal bundle, with explicit verification roles and cross-evidence relationships. It does not issue another authorization or verdict.
+- **Project archive:** a credential-scoped store of explicitly uploaded evidence. It is separate from local activity and the public issuance APIs.
+
+## Implemented workflow polish
+
+- The browser imports an already constructed exact EVM call using the SDK's canonical intent builder; transfer and exact-call reports show their different verification scopes.
+- Deployment capability discovery reports profiles, chain configuration, audience, proof mode, and dependencies before wallet signing. Its readiness result describes configuration and storage, not a live RPC/TSA availability guarantee.
+- Reviewers can import native bundles or composite manifests and independently confirm reusable trust profiles. Embedded discovery keys cannot approve themselves. Custom audiences and historical key windows are checked.
+- SDK authorization checkpoints preserve prepared/signed bytes and an acceptance idempotency key. Observation timeouts return job and transaction recovery handles. Recovery does not broadcast another transaction.
+- Optional private uploaded-evidence archives provide project/environment isolation, writer/reviewer roles, immutable supersession history and snapshot pagination. See the [archive runbook](../runbooks/project-evidence-archive.md).
+- Rotation diagnostics identify unresolved authorizations without changing the current same-key receipt/acceptance rule.
 
 ## First-release success criteria
 
@@ -41,7 +52,7 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 
 ## Later product milestones
 
-- Authenticated projects, environments, roles and server-side evidence archives.
+- User-account onboarding, SSO and richer project RBAC beyond the implemented credential-scoped uploaded-evidence archive.
 - Read-only receipt sharing with revocation/supersession status.
 - Policy templates, approval workflows, notifications and webhooks.
 - Published CLI distribution and future chain-state adapters for the SDK local verifier.

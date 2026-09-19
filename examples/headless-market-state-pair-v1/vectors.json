@@ -1,0 +1,49 @@
+{
+  "profile": "headlessoracle.market-state.v1",
+  "built": "2026-09-17",
+  "notice": "Public demo evidence only. This fixture proves byte, signature, venue, window, feed-state, and authorization-context binding behavior; it is not production market-state evidence.",
+  "issuer_key": {
+    "key_id": "key_2026_v1",
+    "algorithm": "Ed25519",
+    "public_key": "03dc27993a2c90856cdeb45e228ac065f18f69f0933c917b2336c1e75712f178"
+  },
+  "policy": {
+    "expectedMic": "XNYS",
+    "allowedStatuses": ["CLOSED"],
+    "allowedReceiptModes": ["demo"],
+    "requiredFeedState": "live"
+  },
+  "authority_time": "2026-09-17T09:44:10.000Z",
+  "execution_time": "2026-09-17T09:44:20.000Z",
+  "authorization_context_commitment": "0xbefea0e1d1f7d6a1bdaed8caa54454ecd3928e8c528b4266071ef40547b1c40e",
+  "authority_receipt": {
+    "receipt_id": "e1da028e-0c2c-457f-bf3f-1e1f7e63bbba",
+    "issued_at": "2026-09-17T09:44:05.185Z",
+    "expires_at": "2026-09-17T09:45:05.185Z",
+    "issuer": "headlessoracle.com",
+    "mic": "XNYS",
+    "status": "CLOSED",
+    "source": "SCHEDULE",
+    "halt_detection": "active",
+    "coverage": "{\"determination_tier\":1,\"consulted\":[\"manual_override_kv\",\"realtime_halt_feed_via_override\",\"schedule\"],\"not_consulted\":[],\"realtime_halt_feed_scope\":[\"XNAS\",\"XNYS\"],\"unknown_reason\":null,\"feed_state\":\"live\",\"feed_last_run\":\"2026-09-17T09:43:40.954Z\"}",
+    "receipt_mode": "demo",
+    "schema_version": "v5.0",
+    "public_key_id": "key_2026_v1",
+    "signature": "04cb1dff089ef2c833e95a69ff93e7c69e1908f139aa8a76b603d211f108a0c452c4ee75908d5527c0cbeb1f892a8044cc757561ce55ef8a7f6ab11febca0c06"
+  },
+  "execution_receipt": {
+    "receipt_id": "1390fbd2-5ad5-4677-bd2c-9840b752c0cc",
+    "issued_at": "2026-09-17T09:44:11.809Z",
+    "expires_at": "2026-09-17T09:45:11.809Z",
+    "issuer": "headlessoracle.com",
+    "mic": "XNYS",
+    "status": "CLOSED",
+    "source": "SCHEDULE",
+    "halt_detection": "active",
+    "coverage": "{\"determination_tier\":1,\"consulted\":[\"manual_override_kv\",\"realtime_halt_feed_via_override\",\"schedule\"],\"not_consulted\":[],\"realtime_halt_feed_scope\":[\"XNAS\",\"XNYS\"],\"unknown_reason\":null,\"feed_state\":\"live\",\"feed_last_run\":\"2026-09-17T09:43:40.954Z\"}",
+    "receipt_mode": "demo",
+    "schema_version": "v5.0",
+    "public_key_id": "key_2026_v1",
+    "signature": "aefd5a2ebc3c7327f9e6a64bccbac32c7a5f6d4fefa4a63ac871a3a7a596b95d2d4f177dab3a3aee4108db5ad28935fd86237f7a97ebfcb7fd7c536a1051940d"
+  }
+}

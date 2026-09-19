@@ -1,0 +1,16 @@
+{
+  "name": "priorseal-aps-decision-binding-example",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "verify:producer": "node aps-inputs/verify-from-package-root.mjs aps-inputs",
+    "verify": "node verify.mjs",
+    "test": "node --test adapter.test.mjs"
+  },
+  "dependencies": {
+    "agent-passport-system": "6.0.1",
+    "priorseal-sdk": "0.4.0",
+    "viem": "2.56.3"
+  }
+}

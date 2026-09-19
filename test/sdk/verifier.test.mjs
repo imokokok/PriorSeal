@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
-import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildIntent, buildReceipt, buildTransparencyEvidence, buildVerificationBundle, canonicalize, createMemoryStore } from '../../src/index.mjs';
+import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildIntent, buildReceipt, buildTransparencyEvidence, buildVerificationBundle, canonicalize, createMemoryStore, hashJson } from '../../src/index.mjs';
 import { signReceipt } from '../../src/domain/receipt.mjs';
 import { verifyReceiptLocally, verifyVerificationBundleLocally } from '../../sdk/dist/verifier.js';
 
@@ -47,10 +47,11 @@ test('SDK verifier independently validates authorization-bound receipt v3, polic
   const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);
   const executor = `0x${'a'.repeat(40)}`;
   const intent = { intentId: 'sdk-v2', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender: executor, recipient: `0x${'b'.repeat(40)}`, validUntil: 2_000, nonce: '7' };
-  const draft = buildAuthorization({ intent, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'2'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}` });
+  const policy = { policyId: 'separated-authority-v1', requireDistinctAuthorizerAndExecutor: true };
+  const draft = buildAuthorization({ intent, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'2'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${hashJson(policy)}` });
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
   const store = createMemoryStore({ clock: () => 1_001_000 });
-  const accepted = await authorizeIntent({ input: authorization, store, privateKeyPem: keys.privateKey, issuer: 'test', keyId: 'key-1', now: () => 1_001_000 });
+  const accepted = await authorizeIntent({ input: authorization, store, privateKeyPem: keys.privateKey, issuer: 'test', keyId: 'key-1', policy, now: () => 1_001_000 });
   const execution = { chainId: 8453, txHash: `0x${'3'.repeat(64)}`, status: 'CONFIRMED', action: 'TRANSFER', sender: executor, recipient: intent.recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, executedAt: 1_100, observedAt: 1_101, confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED' };
   const entries = await store.listAuthorizationLog();
   const anchor = { type: 'eip155', chainId: 8453, contract: `0x${'c'.repeat(40)}`, txHash: `0x${'d'.repeat(64)}`, blockNumber: 10, anchoredAt: 1_099, size: 1, headEntryHash: entries[0].entryHash };
@@ -62,6 +63,7 @@ test('SDK verifier independently validates authorization-bound receipt v3, polic
   assert.equal(verified.executionStatus, 'CONFIRMED');
   assert.equal(verified.complianceStatus, 'COMPLIANT');
   assert.equal(verified.authorizationId, authorization.authorizationId);
+  assert.equal(receipt.authorizationEvidence.policy.document.requireDistinctAuthorizerAndExecutor, true);
   assert.equal(verified.verificationScope, 'EXTERNAL_CHECK_REQUIRED');
   const lateAnchorReceipt = structuredClone(receipt);
   lateAnchorReceipt.authorizationEvidence.transparency.checkpoint.anchor.anchoredAt = 1_101;

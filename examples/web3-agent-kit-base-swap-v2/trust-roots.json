@@ -1,0 +1,20 @@
+{
+  "schema": "web3-agent-kit.base-swap-trust-roots.v2",
+  "fixtureMode": "SYNTHETIC_NO_BROADCAST",
+  "expectedSourceCommits": {
+    "web3AgentKit": "b673b82e4e90dfc86942fd59533a6b3e5f32598c",
+    "insight": "840b376525d340672f4a0b18d1fd1723a74768da",
+    "priorSeal": "56d05c783f8ce0b9e040f6ef6d9f87b2ac04367e"
+  },
+  "insight": {
+    "issuer": "https://www.oracleinsight.xyz",
+    "attester": "0x7564105E977516C53bE337314c7E53838967bDaC",
+    "historicalKeyId": "insight-wak-fixture-eip712-1"
+  },
+  "priorSeal": {
+    "issuer": "priorseal.web3-agent-kit-fixture",
+    "keyId": "priorseal-wak-fixture-ed25519-1",
+    "publicKeySpkiSha256": "a492f11e4af1df7b9877c529f146d8820fbb27aacc98e7b15786452edaaa5fc1"
+  },
+  "warning": "Synthetic fixture roots. Production consumers must pin registry snapshots or key fingerprints through an independent trusted channel."
+}

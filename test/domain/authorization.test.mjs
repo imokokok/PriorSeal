@@ -223,7 +223,7 @@ test('v3 receipt embeds and verifies the principal identity policy snapshot', as
   const issuerKeys = generateKeyPairSync('ed25519');
   const privateKeyPem = issuerKeys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = issuerKeys.publicKey.export({ type: 'spki', format: 'pem' });
-  const policy = { policyId: 'identity-v1', principals: [{ id: 'verified-user', type: 'user', account: account.address, authorizerType: 'eip712' }], allowedChainIds: [8453] };
+  const policy = { policyId: 'identity-v1', principals: [{ id: 'verified-user', type: 'user', account: account.address, authorizerType: 'eip712' }], allowedChainIds: [8453], requireDistinctAuthorizerAndExecutor: true };
   const draft = buildAuthorization({ intent: { ...intentInput, intentId: 'identity-policy-1' }, principal: { type: 'user', id: 'verified-user', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'f'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${hashJson(policy)}` });
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
   const store = createMemoryStore({ clock: () => 1_001_000 });
@@ -231,6 +231,7 @@ test('v3 receipt embeds and verifies the principal identity policy snapshot', as
   const execution = { chainId: 8453, txHash: `0x${'1'.repeat(64)}`, status: 'CONFIRMED', action: 'TRANSFER', sender: executor, recipient: intentInput.recipient, asset: intentInput.asset, amount: intentInput.amount, nonce: intentInput.nonce, executedAt: 1_100, observedAt: 1_101, confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED' };
   const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, policyEvidence: accepted.response.policyEvidence, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), privateKeyPem);
   assert.equal(receipt.authorizationEvidence.policy.document.policyId, 'identity-v1');
+  assert.equal(receipt.authorizationEvidence.policy.document.requireDistinctAuthorizerAndExecutor, true);
   assert.equal((await verifyAuthorizedReceipt(receipt, publicKeyPem)).valid, true);
   const mutated = structuredClone(receipt);
   mutated.authorizationEvidence.policy.document.principals[0].id = 'lookalike';

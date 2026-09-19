@@ -1,6 +1,6 @@
 # APS decision evidence × PriorSeal exact-call authorization
 
-Status: pre-implementation claim-boundary design. The direction was accepted by the APS maintainer in [agent-passport-system issue #163](https://github.com/aeoess/agent-passport-system/issues/163#issuecomment-5732627215). The runnable example remains blocked on the committed APS inputs that the maintainer agreed to produce.
+Status: implemented as an [offline sibling adapter](../../examples/aps-priorseal-decision-binding-v1/README.md). The direction was accepted by the APS maintainer in [agent-passport-system issue #163](https://github.com/aeoess/agent-passport-system/issues/163#issuecomment-5732627215). His [committed inputs](https://github.com/aeoess/agent-passport-system/issues/163#issuecomment-5744177491) are preserved from commit `948f99b85343bef2c6fa677c8543965caacfc087`. APS 6.0.1 and PriorSeal SDK 0.4.0 are installed in an isolated example package with a lockfile.
 
 This design describes a sibling adapter, not an `execution-envelope.v0.1` example and not an extension of either project's core protocol. The adapter correlates an independently signed APS decision with a principal-signed PriorSeal exact-call authorization across two trust domains. APS and PriorSeal artifacts, signatures, verification keys, verdicts, and trust roots remain separate.
 
@@ -13,20 +13,24 @@ This design describes a sibling adapter, not an `execution-envelope.v0.1` exampl
 | PriorSeal dependency | Exact released `priorseal-sdk@0.4.0` for the initial example |
 | Commitment | Exactly one `aps.decision-ref.v1` / `sha256` context commitment |
 | Digest representation | `0x` followed by the unchanged lowercase `ReceiptV1.decision_ref`; no re-hash |
-| Placement | `examples/aps-priorseal-decision-binding-v1/` after the APS inputs arrive |
+| Placement | `examples/aps-priorseal-decision-binding-v1/` |
 | Runtime | Deterministic, offline, Node.js 22+, with no external service |
 
 The adapter must not construct `aps-decision-ref-v1`, deep-import its builder, or regenerate APS decision artifacts. The decision-ref builder is not part of the APS 6.0.1 public export surface. The APS maintainer owns the committed `permit`, `narrow`, `deny`, and `expired` inputs, each with `DecisionEvidenceV1`, a signed `ReceiptV1`, and the independently pinned verifying key. PriorSeal consumes those bytes without silently replacing or normalizing the producer artifacts.
 
 ## Verification and authorization flow
 
-1. Load one committed APS receipt, its decision evidence, and the separately pinned APS verification key.
+1. Check the pinned producer manifest, load both committed APS receipts and decision evidence, and resolve verification keys from the adapter's independent configuration. Verify the exact serialized receipt bytes, then enforce the receipt-type rules and cross-receipt relationship described in draft-03 §5.3. The three APS test keys do not establish real-world signer authority.
 2. Call the APS package-root `verifyReceiptWithDecisionV1` API. Reject unless `valid === true`, `decision_ref_present === true`, `decision_ref_bound === true`, and `temporal_relation_valid === true`.
 3. Apply the adapter decision gate. A `permit` may continue. A `narrow` may continue only when every constraint used by the fixture has an explicit deterministic mapping to an exact-call predicate and every predicate passes. Unknown or unmapped constraints fail closed. A `deny` never reaches PriorSeal authorization.
 4. At the verifier-supplied fixed reference time, require the APS decision to be unexpired. Separately require the PriorSeal intent's `validUntil` not to exceed the APS decision's `valid_until`. The APS composite verifier proves only that `valid_until` is after the receipt's `issued_at`; it does not establish freshness at authorization or chain execution and does not recheck revocation. Any claim about revocation is limited to separately verified state supplied with the fixture and never implies live freshness.
 5. Build one `priorseal.intent.v2` exact-call intent carrying `{ namespace: "aps.decision-ref.v1", algorithm: "sha256", digest: "0x<ReceiptV1.decision_ref>" }`. Require `matchUniqueContextCommitment` to pass so a missing, changed, or duplicate namespace fails closed.
 6. The principal signs the PriorSeal authorization. PriorSeal then applies its own validity, authorization, exact-call observation, finality, compliance, and per-authorization use rules.
 7. Verify the APS artifacts and PriorSeal authorization/receipt independently, then report the cross-system commitment match as a separate result.
+
+In the producer's 6.0.1 inputs, `deny` has a valid signature and bound decision ref but returns `valid: false` with `valid_until_absent` at step 2. `expired` returns `valid: true` there and fails the reference-time check. The reference time is fixed at `2026-09-19T10:05:00.000Z`. The delegation verifier checks the selected chain against its separately pinned principal key and the bundled revocation observation; this reports only the supplied state, not live revocation.
+
+The adapter maps `policy_input.requested_call`, which is included in the verified decision evidence, to chain, target, calldata hash and value. It does not trust the unsigned `case.json` summary as the call source. The original `action_ref` is not independently recomputed because that builder is not exported by 6.0.1. The `fixture:evm:call` name, `narrow` predicates and `effective_authority_ref` construction remain fixture-local. Executor and transaction nonce are selected by the PriorSeal caller and covered by the principal signature; APS does not attest those selections. PriorSeal execution observations in this example are synthetic, not independently observed chain transactions.
 
 The required description is: **execution correlated to the principal-signed authorization and the APS decision**. The adapter must not call the result “authorized execution.”
 

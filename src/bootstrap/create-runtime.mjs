@@ -5,7 +5,7 @@ import { createFileKeyProvider } from '../infrastructure/keys/file-key-provider.
 import { parseKeyRegistryDocument, readFileKeyRegistry } from '../infrastructure/keys/file-key-registry.mjs';
 import { createPostgresStore } from '../infrastructure/persistence/postgres-store.mjs';
 import { createRpcClient } from '../infrastructure/blockchain/evm/rpc-client.mjs';
-import { getRpcUrls } from '../infrastructure/blockchain/evm/chains.mjs';
+import { getRpcUrls, SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
 import { PriorSealError } from '../domain/errors.mjs';
 import { parsePolicyDocument, readPolicyFile } from '../infrastructure/policy/file-policy-provider.mjs';
 import { createObservationWorker } from '../application/observations/observation-worker.mjs';
@@ -27,7 +27,7 @@ export async function createPriorSealRuntime({ config, environment = process.env
   const ownsPool = !database;
   const pool = database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
   try {
-    if (assertSchema && config.environment === 'production') await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode });
+    if (assertSchema && config.environment === 'production') await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
     const store = pool ? createPostgresStore(pool) : undefined;
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();
@@ -69,7 +69,7 @@ export async function createPriorSealRuntime({ config, environment = process.env
         return job;
       },
     } : baseObservationWorker;
-    const server = createHttpServer({ store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter });
+    const server = createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter });
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {});

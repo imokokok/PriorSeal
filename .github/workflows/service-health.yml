@@ -1,0 +1,39 @@
+name: Public service health
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-service-health
+  cancel-in-progress: false
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    # Five 30-second reads, one-minute confirmation delay, then a full retry.
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check both public services; confirm failures after one minute
+        shell: bash
+        run: |
+          if node scripts/integration-doctor.mjs > health-first.json; then
+            exit 0
+          fi
+          sleep 60
+          node scripts/integration-doctor.mjs > health-confirmation.json
+      - name: Retain diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-service-health
+          path: health-*.json
+          retention-days: 14

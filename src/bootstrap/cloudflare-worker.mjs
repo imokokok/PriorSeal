@@ -18,9 +18,9 @@ function databaseAdapter(client) {
 
 async function assertSchemaCached(database, config, context) {
   const cache = caches.default;
-  const cacheKey = new Request(`https://priorseal.internal/schema/${REQUIRED_PRODUCTION_MIGRATION}/${config.preExecutionProofMode}`);
+  const cacheKey = new Request(`https://priorseal.internal/schema/${REQUIRED_PRODUCTION_MIGRATION}/${config.preExecutionProofMode}/${config.archiveCredentials ? 'archive-009' : 'public'}`);
   if (await cache.match(cacheKey)) return;
-  await assertProductionSchema(database, { preExecutionProofMode: config.preExecutionProofMode });
+  await assertProductionSchema(database, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
   context.waitUntil(cache.put(cacheKey, new Response('ready', { headers: { 'cache-control': 'public, max-age=300' } })));
 }
 
