@@ -153,3 +153,7 @@ Read the [collaboration guide](COLLABORATING.md) for the suggested two-week pilo
 ## License
 
 MIT
+
+## Integration reliability
+
+See the [integration and recovery runbook](docs/runbooks/reliability.md) for the integration doctor, durable authorization state, local EVM/database recovery drill and production health checks.

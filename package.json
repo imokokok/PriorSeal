@@ -60,7 +60,8 @@
     "start:witness": "node --env-file=.env.witness.local src/bootstrap/witness-server.mjs",
     "worker:check": "npm run build && wrangler deploy --dry-run --outdir .wrangler/dist",
     "worker:dev": "npm run build && wrangler dev",
-    "worker:deploy": "npm run build && node scripts/deploy-worker.mjs"
+    "worker:deploy": "npm run build && node scripts/deploy-worker.mjs",
+    "integration:doctor": "node scripts/integration-doctor.mjs"
   },
   "engines": {
     "node": ">=22"
