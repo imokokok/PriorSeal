@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { AppShell, CopyButton, Notice, PageHeader, Status } from '../components'
 import { api } from '../lib/api'
 
-const install = 'npm install https://github.com/imokokok/PriorSeal/releases/download/sdk-v0.5.0/priorseal-sdk-0.5.0.tgz'
+const install = 'npm install priorseal-sdk@0.5.0'
 
 const browserExample = `import { createPriorSealClient } from 'priorseal-sdk'
 
@@ -93,7 +93,7 @@ export function SdkPage() {
         <p className="eyebrow">PACKAGE / {__PRIORSEAL_SDK_VERSION__}</p>
         <h2>priorseal-sdk</h2>
         <p>Universal ESM · Browser and Node.js 20+ · Typed client and local verifier</p>
-        <p>Install the 0.5.0 GitHub release package. Publication to the npm registry is pending.</p>
+        <p>Install the official 0.5.0 npm release. The identical package is also available on GitHub Releases.</p>
         <div className="sdk-install"><code>{install}</code><CopyButton value={install} /></div>
       </div>
       <div className="sdk-runtime">
