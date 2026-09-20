@@ -16,3 +16,7 @@ export {
 } from './headless-market-state.js'
 export type { PriorSealClientOptions } from './client.js'
 export type * from './types.js'
+export { buildCoverageBoundIntent, withCoverageBoundIntent } from './coverage-binding.js'
+export type { CoverageRequirement } from './coverage-binding.js'
+export { verifyCoverageReport, coveragePolicyId, coverageReportDigest } from './insight-coverage.js'
+export type { CoverageTrust, CoveragePolicy, SignedCoverageReport } from './insight-coverage.js'

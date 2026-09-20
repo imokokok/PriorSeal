@@ -101,3 +101,5 @@ function externalRequirements(receipt: Receipt): ExternalVerificationRequirement
 }
 
 export { authorizationSigningData } from './verifier-core.js'
+export { verifyCoverageReport, coveragePolicyId, coverageReportDigest } from './insight-coverage.js'
+export type { CoverageTrust, CoveragePolicy, SignedCoverageReport } from './insight-coverage.js'
