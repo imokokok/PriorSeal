@@ -1,0 +1,20 @@
+{
+  "schema": "priorseal.402signal-route-context.v1",
+  "upstream": {
+    "repository": "https://github.com/402signalhq/402signal",
+    "commit": "ca6e2f1ee806bec6621487338ba6ed3f1ac09352",
+    "source": "tests/fixtures/route-binding-v1.json",
+    "sourceSha256": "cb40034ae6ada72a6267ff426591b36ea7d5afcf28002f9ebc4ac959bd2f00b3",
+    "routeGuardVersion": "0.7.3",
+    "routeGuardIndexSha256": "c3ee556e0e9a66f24e9579a536f929f2d4ab3bb75d47200a7e7ece470f1247e3",
+    "routeGuardInternalJsonSha256": "3620a93d28bed6ee1992f085345deb5321f8966e2febf6c6a8a991109917105b"
+  },
+  "trustedLogVkey": "402signal.com/pq/log+6cc295a4+AQOhB7/zzhC+HXDdGOdLwJln5NYwm6UNXx3chmQSVTG4",
+  "sellerRequest": {
+    "url": "https://example.com/api",
+    "method": "GET",
+    "bodyBase64": ""
+  },
+  "evaluationNow": 1788566402,
+  "expectedLeafHash": "f34ed81b09cc160f34c4a7c14241c7ea7cfa58b60bf0f93c64ffb0c89aa2b5e5"
+}
