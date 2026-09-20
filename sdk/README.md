@@ -3,10 +3,10 @@
 Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.5.0
+npm install priorseal-sdk@0.6.0
 ```
 
-This documentation targets **0.5.0**, available from npm. The identical published tarball is also available from the [official GitHub Release](https://github.com/imokokok/PriorSeal/releases/tag/sdk-v0.5.0). The release includes compiled JavaScript, TypeScript declarations and third-party license notices.
+This documentation targets **0.6.0**, available from npm. The identical published tarball is also available from the [official GitHub Release](https://github.com/imokokok/PriorSeal/releases/tag/sdk-v0.6.0). The release adds independently verified Insight coverage binding for exact-call authorization and includes compiled JavaScript, TypeScript declarations and third-party license notices.
 
 ## Client
 

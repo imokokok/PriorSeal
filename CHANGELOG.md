@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added opt-in exact-call coverage commitments that independently verify Insight source/destination readiness, cap authorization lifetime and recheck before provider entry without changing existing authorization or receipt formats.
 - Require an observed transaction to match the requested transaction hash and chain before persistence, and report complete transfer or exact-call correlation separately from one-use authorization consumption so a final mismatched attempt cannot reopen permission to retry.
 - Add optional Base Sepolia observation support for bounded nonproduction pilots without making its RPC a production deployment requirement.
 - Hardened receipt and authorization verification across Node and the browser: canonical Ed25519 signatures, exact schema fields, issuer-key status and pair validation, signed validity/timeline invariants, transparent-log metadata checks, immutable receipt-ID collision handling, and explicit external-check/trust-source states in the console.

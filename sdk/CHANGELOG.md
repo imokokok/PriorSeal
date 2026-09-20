@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 — 2026-09-20
+
+- Add exact-call coverage commitments that bind independently verified Insight source and destination report digests into the signed PriorSeal intent.
+- Cap authorization expiry to the earliest coverage report expiry and revalidate both reports immediately before provider entry.
+- Require caller-owned policy and signer trust pins; unsigned, stale, scope-mismatched, untrusted or insufficient coverage fails before execution.
+- Keep coverage evidence optional and external to the core PriorSeal receipt so existing authorization and verification contracts remain unchanged.
+
 ## 0.5.0 — 2026-09-19
 
 - Add deployment capabilities and resumable wallet-authorization checkpoints with stable idempotency keys.
