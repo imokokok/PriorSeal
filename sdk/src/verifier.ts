@@ -1,4 +1,10 @@
 import type { KeyEntry, KeyRegistry, Receipt, VerificationBundle, VerificationResult } from './types.js'
+export { verifyRwaReceiptBundle, inspectRwaReceiptBundle } from './rwa-receipt.js'
+import { verifyEd25519 } from './verifier-core.js'
+/** Signature only. Does not establish issuer trust, claims, authorization or finality. */
+export async function verifyReceiptSignature(receipt: Receipt, publicKey: string): Promise<boolean> {
+  try { return await verifyEd25519(receipt, publicKey) } catch { return false }
+}
 export { buildReviewManifest, verifyReviewManifestLocally, parseTrustProfile } from './review-manifest.js'
 export type { InsightProtocolTrust, InsightProtocolResult } from './insight-protocol-trust.js'
 export type { ReviewManifest, ReviewAttachment, ReviewAttachmentInput, ReviewArtifactResult, ReviewResult, TrustProfile } from './review-manifest.js'
@@ -101,5 +107,7 @@ function externalRequirements(receipt: Receipt): ExternalVerificationRequirement
 }
 
 export { authorizationSigningData } from './verifier-core.js'
+export { verifyRwaReport, rwaInstrumentId, rwaPolicyId, rwaReportDigest } from './insight-rwa.js'
+export type { RwaTrust, RwaPolicy, SignedRwaReport } from './insight-rwa.js'
 export { verifyCoverageReport, coveragePolicyId, coverageReportDigest } from './insight-coverage.js'
 export type { CoverageTrust, CoveragePolicy, SignedCoverageReport } from './insight-coverage.js'

@@ -1,0 +1,25 @@
+{
+  "environment": "SIMULATION",
+  "networkCalls": 0,
+  "producer": "Insight actual built SDK",
+  "sameSecondLinkedAssessments": true,
+  "principalAuthorized": true,
+  "semanticCallValidated": true,
+  "durableSubmissionCount": 1,
+  "restartReplayBlocked": true,
+  "observationReconciled": true,
+  "verification": {
+    "integrity": "PASS",
+    "trust": "PASS",
+    "claims": "PASS",
+    "time": "PASS",
+    "policy": "PASS",
+    "execution": "SATISFIED",
+    "externalChecks": "NONE",
+    "admissible": true,
+    "reasons": [],
+    "executionEvidenceDigest": "0x9ea9ec241240257ad9a21a1eccd64b5baf7e102da0981908fa5f348e826bdb3a"
+  },
+  "authenticInsufficientOutputRejected": true,
+  "productionReadiness": "NOT_ACTIVATED"
+}

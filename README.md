@@ -1,5 +1,10 @@
 # PriorSeal
 
+[Unreleased, opt-in RWA integration](examples/rwa-v1/README.md) adds assessment-bound
+exact calls and combined verification while retaining the existing Agent workflows.
+The [RWA v2 hardening](docs/rwa-hardening.md) adds semantic call profiles, receiver
+checks, a durable Node execution boundary and detailed failure verification.
+
 [![CI](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml/badge.svg)](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
 [![MIT License](https://img.shields.io/badge/license-MIT-151513.svg)](LICENSE)

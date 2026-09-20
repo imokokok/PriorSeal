@@ -1,5 +1,14 @@
 # Included software notices
 
+## Insight RWA assessment
+
+The opt-in `insight-rwa`, `insight-rwa-call` and `insight-rwa-v2` modules are vendored
+from Insight's matching `sdk/src/rwa*.ts` modules,
+Copyright (c) 2026 Insight, under the MIT license reproduced below.
+The joint RWA example checks content-pinned source parity (only relative module
+import paths differ), frozen v1/v2 vectors and cross-SDK report digests.
+Its separate domain does not replace any historical Insight receipt schema.
+
 ## Insight execution receipt verifier
 
 The `insight-execution-v5` module adapts the pure offline execution receipt verifier from Insight, originally at:

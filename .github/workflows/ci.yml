@@ -30,6 +30,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run release gate
         run: npm run release:check
+      - name: RWA v2 durable authorization and receipt workflow (simulation)
+        run: npm run rwa:verify
       - name: Install isolated execution drill dependency
         run: npm install --prefix "$RUNNER_TEMP/local-evm" --ignore-scripts --no-audit --no-fund ganache@7.9.2
       - name: Exercise local execution and database recovery

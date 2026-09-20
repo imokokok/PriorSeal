@@ -1,4 +1,6 @@
 /** Public, stable library surface. Internal modules are intentionally not re-exported. */
+export { executeRwaAuthorized, reconcileRwaAttempt } from './application/rwa/execute-rwa.mjs';
+export { createRwaAttemptStore } from './infrastructure/persistence/rwa-attempt-store.mjs';
 export { createHttpServer } from './interfaces/http/create-http-server.mjs';
 export { createObservationWorker } from './application/observations/observation-worker.mjs';
 export { createMemoryStore } from './infrastructure/persistence/memory-store.mjs';

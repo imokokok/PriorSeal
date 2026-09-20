@@ -1,5 +1,14 @@
 # priorseal-sdk
 
+Workspace-only, unreleased: [RWA exact-call binding and combined receipt verification](../examples/rwa-v1/README.md).
+These opt-in additions are not yet in the published 0.6.0 package and do not alter
+existing authorization or receipt semantics.
+RWA v2 adds linked same-second assessments, admitted calldata/receiver checks and
+`inspectRwaReceiptBundle` for separate integrity/trust/time/policy/execution results.
+For safe submission use the Node application entry described in
+[RWA v2 hardening](../docs/rwa-hardening.md); SDK low-level callbacks alone do not
+enforce principal authorization or durable replay protection.
+
 Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
