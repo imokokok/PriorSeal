@@ -162,7 +162,7 @@ export type WitnessRequest = { schema: 'priorseal.witness-request.v1'; domain: s
 export type WitnessAttestation = { schema: 'priorseal.witness-attestation.v1'; domain: string; witnessId: string; keyId: string; algorithm: 'Ed25519'; requestHash: string; authorizationId: string; authorizationHash: string; intentHash: string; observedAt: number; expiresAt: number; signature: string }
 export type WitnessEvidence = { schema: 'priorseal.witness-evidence.v1'; domain: string; policyHash: string; request: WitnessRequest; attestations: WitnessAttestation[] }
 export type TransparencyEntry = { sequence: number; authorizationHash: string; acceptedAt: number; previousEntryHash: string | null; entryHash: string }
-export type TransparencyEvidence = { checkpoint: { schema: string; domain: string; size: number; headEntryHash: string; issuedAt: number; issuer: string; algorithm: string; keyId: string; anchor: null | { type: 'eip155'; chainId: number; contract: string; txHash: string; blockNumber: number; anchoredAt: number; size: number; headEntryHash: string }; signature: string }; chain: TransparencyEntry[] }
+export type TransparencyEvidence = { checkpoint: { schema: string; domain: string; size: number; headEntryHash: string; merkleRoot?: string; issuedAt: number; issuer: string; algorithm: string; keyId: string; anchor: null | { type: 'eip155'; chainId: number; contract: string; txHash: string; blockNumber: number; anchoredAt: number; size: number; headEntryHash: string; merkleRoot?: string }; signature: string }; chain?: TransparencyEntry[]; proof?: { side: 'left' | 'right'; hash: string }[] }
 
 export type AuthorizationRecord = {
   authorization: Authorization

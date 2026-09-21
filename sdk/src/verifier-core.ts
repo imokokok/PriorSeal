@@ -351,6 +351,8 @@ function encodeBase64Url(value: Uint8Array) {
 }
 
 async function verifyTransparency(evidence: NonNullable<Receipt['authorizationEvidence']>['transparency'], acceptance: NonNullable<Receipt['authorizationEvidence']>['acceptance'], publicKey: string, executedAt: number) {
+  if (!evidence) return false
+  if (evidence.checkpoint?.schema === 'priorseal.transparency-checkpoint.v2') return verifyMerkleTransparency(evidence, acceptance, publicKey, executedAt)
   if (!hasOnlyFields(evidence, ['chain', 'checkpoint']) || !hasOnlyFields(evidence.checkpoint, ['algorithm', 'anchor', 'domain', 'headEntryHash', 'issuedAt', 'issuer', 'keyId', 'schema', 'signature', 'size'])) return false
   if (!evidence.checkpoint.signature || evidence.checkpoint.schema !== 'priorseal.transparency-checkpoint.v1' || evidence.checkpoint.domain !== 'priorseal/transparency-checkpoint/v1' || evidence.checkpoint.algorithm !== 'Ed25519' || evidence.checkpoint.issuer !== acceptance.issuer || evidence.checkpoint.keyId !== acceptance.keyId || !positiveUnixSeconds(evidence.checkpoint.issuedAt) || evidence.checkpoint.issuedAt < acceptance.acceptedAt || !Number.isSafeInteger(evidence.checkpoint.size) || evidence.checkpoint.size < 1 || !hashPattern.test(evidence.checkpoint.headEntryHash) || !Array.isArray(evidence.chain) || !evidence.chain.length) return false
   const first = evidence.chain[0]
@@ -363,12 +365,42 @@ async function verifyTransparency(evidence: NonNullable<Receipt['authorizationEv
   }
   const last = evidence.chain.at(-1)!
   if (last.entryHash !== evidence.checkpoint.headEntryHash || last.sequence !== evidence.checkpoint.size) return false
-  if (evidence.checkpoint.anchor && (!validTransparencyAnchor(evidence.checkpoint.anchor) || evidence.checkpoint.anchor.size !== evidence.checkpoint.size || evidence.checkpoint.anchor.headEntryHash !== evidence.checkpoint.headEntryHash || evidence.checkpoint.anchor.anchoredAt > executedAt)) return false
+  if (evidence.checkpoint.anchor && (!validTransparencyAnchor(evidence.checkpoint.anchor) || evidence.checkpoint.anchor.merkleRoot || evidence.checkpoint.anchor.size !== evidence.checkpoint.size || evidence.checkpoint.anchor.headEntryHash !== evidence.checkpoint.headEntryHash || evidence.checkpoint.anchor.anchoredAt > executedAt)) return false
   return verifyEd25519(evidence.checkpoint, publicKey)
 }
 
+async function verifyMerkleTransparency(evidence: NonNullable<Receipt['authorizationEvidence']>['transparency'], acceptance: NonNullable<Receipt['authorizationEvidence']>['acceptance'], publicKey: string, executedAt: number) {
+  if (!evidence) return false
+  const checkpoint = evidence.checkpoint
+  if (!hasOnlyFields(evidence, ['checkpoint', 'proof']) || !hasOnlyFields(checkpoint, ['algorithm', 'anchor', 'domain', 'headEntryHash', 'issuedAt', 'issuer', 'keyId', 'merkleRoot', 'schema', 'signature', 'size'])) return false
+  if (!checkpoint.signature || checkpoint.domain !== 'priorseal/transparency-checkpoint/v2' || checkpoint.algorithm !== 'Ed25519' || checkpoint.issuer !== acceptance.issuer || checkpoint.keyId !== acceptance.keyId || !positiveUnixSeconds(checkpoint.issuedAt) || checkpoint.issuedAt < acceptance.acceptedAt || !Number.isSafeInteger(checkpoint.size) || checkpoint.size < acceptance.sequence || !hashPattern.test(checkpoint.headEntryHash) || !hashPattern.test(checkpoint.merkleRoot ?? '')) return false
+  if (acceptance.entryHash !== await hashJson({ sequence: acceptance.sequence, authorizationHash: acceptance.authorizationHash, acceptedAt: acceptance.acceptedAt, previousEntryHash: acceptance.previousEntryHash })) return false
+  if (!Array.isArray(evidence.proof)) return false
+  let start = 1
+  let count = checkpoint.size
+  const sides: ('left' | 'right')[] = []
+  while (count > 1) {
+    const leftCount = 2 ** Math.floor(Math.log2(count - 1))
+    const containsLeft = acceptance.sequence < start + leftCount
+    sides.push(containsLeft ? 'right' : 'left')
+    if (!containsLeft) start += leftCount
+    count = containsLeft ? leftCount : count - leftCount
+  }
+  sides.reverse()
+  if (evidence.proof.length !== sides.length) return false
+  let root = await hashJson({ domain: 'priorseal/transparency-leaf/v1', entryHash: acceptance.entryHash })
+  for (const [index, step] of evidence.proof.entries()) {
+    if (!hasOnlyFields(step, ['hash', 'side']) || step.side !== sides[index] || !hashPattern.test(step.hash)) return false
+    root = step.side === 'left' ? await hashJson({ domain: 'priorseal/transparency-node/v1', left: step.hash, right: root }) : await hashJson({ domain: 'priorseal/transparency-node/v1', left: root, right: step.hash })
+  }
+  if (root !== checkpoint.merkleRoot) return false
+  const anchor = checkpoint.anchor
+  if (anchor && (!validTransparencyAnchor(anchor) || !anchor.merkleRoot || anchor.merkleRoot !== checkpoint.merkleRoot || anchor.headEntryHash !== checkpoint.headEntryHash || anchor.size !== checkpoint.size || anchor.anchoredAt > executedAt)) return false
+  return verifyEd25519(checkpoint, publicKey)
+}
+
 function validTransparencyAnchor(anchor: NonNullable<NonNullable<Receipt['authorizationEvidence']>['transparency']>['checkpoint']['anchor']) {
-  return hasOnlyFields(anchor, ['anchoredAt', 'blockNumber', 'chainId', 'contract', 'headEntryHash', 'size', 'txHash', 'type'])
+  return hasOnlyFields(anchor, ['anchoredAt', 'blockNumber', 'chainId', 'contract', 'headEntryHash', 'merkleRoot', 'size', 'txHash', 'type'])
     && anchor.type === 'eip155'
     && positiveChainId(anchor.chainId)
     && canonicalAddress(anchor.contract)
@@ -377,6 +409,7 @@ function validTransparencyAnchor(anchor: NonNullable<NonNullable<Receipt['author
     && Number.isSafeInteger(anchor.anchoredAt) && anchor.anchoredAt >= 0
     && Number.isSafeInteger(anchor.size) && anchor.size > 0
     && hashPattern.test(anchor.headEntryHash)
+    && (anchor.merkleRoot === undefined || hashPattern.test(anchor.merkleRoot))
 }
 
 async function verifyWitnessEvidence(evidence: NonNullable<Receipt['authorizationEvidence']>['witnesses'], authorization: NonNullable<Receipt['authorizationEvidence']>['authorization'], acceptedAt: number, executedAt: number, inputPolicy: Record<string, unknown>) {

@@ -3,10 +3,10 @@
 Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.6.0
+npm install priorseal-sdk@0.6.1
 ```
 
-This documentation targets **0.6.0**, available from npm. The identical published tarball is also available from the [official GitHub Release](https://github.com/imokokok/PriorSeal/releases/tag/sdk-v0.6.0). The release adds independently verified Insight coverage binding for exact-call authorization and includes compiled JavaScript, TypeScript declarations and third-party license notices.
+This documentation targets **0.6.1**. This patch retains the 0.6.0 API and adds independent verification of compact v2 Merkle transparency receipts; it does not issue v2 receipts. It includes compiled JavaScript, TypeScript declarations and third-party license notices.
 
 ## Client
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 — 2026-09-21
+
+- Verify compact v2 Merkle transparency checkpoints and Merkle-root EVM anchors
+  while retaining historical v1 hash-chain proof support. This verifier-only
+  patch does not enable new receipt issuance or include the optional RWA APIs.
+
 ## 0.6.0 — 2026-09-20
 
 - Add exact-call coverage commitments that bind independently verified Insight source and destination report digests into the signed PriorSeal intent.
