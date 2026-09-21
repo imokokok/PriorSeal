@@ -70,6 +70,12 @@ const evidence = await priorseal.observeExecution({
 
 The SDK handles typed API calls, exact-call intent construction, wallet authorization, durable observation polling, idempotency, timeouts and structured errors. Import `verifyReceiptLocally` or `verifyVerificationBundleLocally` from `priorseal-sdk/verifier` to verify evidence without sending receipt bytes to PriorSeal. It does not sign or submit transactions. ERC-1271 and EVM anchors are reported as explicit external chain-state requirements. See [`sdk/README.md`](sdk/README.md) and the console route `/app/sdk`.
 
+Optional Insight coverage binding recognizes Band Protocol as an independent
+source group. BandChain v3 source age is evaluated through Insight's shared
+freshness rules; PriorSeal's default signed coverage gate is 300 seconds and
+still requires matching evidence-chain scope, quorum and independent groups. See the
+[coverage-readiness runbook](docs/runbooks/coverage-readiness.md).
+
 ## Quality checks
 
 ```bash

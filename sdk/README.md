@@ -17,6 +17,11 @@ npm install priorseal-sdk@0.6.0
 
 This documentation targets **0.6.0**, available from npm. The identical published tarball is also available from the [official GitHub Release](https://github.com/imokokok/PriorSeal/releases/tag/sdk-v0.6.0). The release adds independently verified Insight coverage binding for exact-call authorization and includes compiled JavaScript, TypeScript declarations and third-party license notices.
 
+The workspace coverage policy also recognizes Band Protocol as an independent
+source group. Insight carries BandChain v3 source age into its shared freshness
+checks, while the default PriorSeal coverage verifier applies the 300-second
+policy carried in the independently pinned policy bytes.
+
 ## Client
 
 ```ts

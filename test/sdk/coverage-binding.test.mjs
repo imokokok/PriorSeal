@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { privateKeyToAccount } from 'viem/accounts';
-import { buildCoverageReport, STRICT_COVERAGE_POLICY as policy, coveragePolicyId, coverageReportDigest, coverageSigningData } from '../../sdk/dist/insight-coverage.js';
+import { buildCoverageReport, evaluateCoverage, STRICT_COVERAGE_POLICY as policy, coveragePolicyId, coverageReportDigest, coverageSigningData } from '../../sdk/dist/insight-coverage.js';
 import { buildCoverageBoundIntent, withCoverageBoundIntent } from '../../sdk/dist/index.js';
 
 const key = privateKeyToAccount(`0x${'12'.repeat(32)}`), now = 1800000000;
@@ -36,4 +36,11 @@ test('does not permit empty or same-side requirements', async () => {
   await assert.rejects(buildCoverageBoundIntent(input, [], now));
   const req = await requirements();
   await assert.rejects(buildCoverageBoundIntent(input, [...req, ...req], now));
+});
+
+test('recognizes Band as independent but keeps the strict 300-second freshness gate', () => {
+  assert.deepEqual(policy.sources.band, { group: 'band', derived: false });
+  const observation = age => ({ provider: 'band', evidenceChainId: 1, price: 1, status: 'success', observedAt: now - age, retrievedAt: now, timestampProvenance: 'provider_timestamp', excluded: false });
+  assert.deepEqual(evaluateCoverage([observation(300)], { ...policy, minProviders: 3 }, 1, now).providers[0].reasons, []);
+  assert.deepEqual(evaluateCoverage([observation(301)], { ...policy, minProviders: 3 }, 1, now).providers[0].reasons, ['SOURCE_TOO_OLD']);
 });
