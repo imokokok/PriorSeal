@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 — 2026-09-21
 
 - Verify compact v2 Merkle transparency checkpoints and Merkle-root EVM anchors
   while retaining historical v1 hash-chain proof support. Issuers need migration
@@ -16,6 +16,12 @@
   authorization-time and execution-time assessments.
 - Add combined RWA receipt verification with out-of-band assessment and issuer pins.
 - Preserve core receipt/authorization schemas and vendored Insight protocol semantics.
+
+## 0.6.1 — 2026-09-21
+
+- Verify compact v2 Merkle transparency checkpoints and Merkle-root EVM anchors
+  while retaining historical v1 hash-chain proof support. This verifier-only
+  patch does not enable new receipt issuance or include the optional RWA APIs.
 
 ## 0.6.0 — 2026-09-20
 

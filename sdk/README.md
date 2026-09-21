@@ -1,21 +1,20 @@
 # priorseal-sdk
 
-Workspace-only, unreleased: [RWA exact-call binding and combined receipt verification](../examples/rwa-v1/README.md).
-These opt-in additions are not yet in the published 0.6.0 package and do not alter
-existing authorization or receipt semantics.
-RWA v2 adds linked same-second assessments, admitted calldata/receiver checks and
+The opt-in [RWA exact-call binding and combined receipt verification](https://github.com/imokokok/PriorSeal/tree/main/examples/rwa-v1)
+do not alter existing authorization or receipt semantics. RWA v2 adds linked
+same-second assessments, admitted calldata/receiver checks and
 `inspectRwaReceiptBundle` for separate integrity/trust/time/policy/execution results.
 For safe submission use the Node application entry described in
-[RWA v2 hardening](../docs/rwa-hardening.md); SDK low-level callbacks alone do not
+[RWA v2 hardening](https://github.com/imokokok/PriorSeal/blob/main/docs/rwa-hardening.md); SDK low-level callbacks alone do not
 enforce principal authorization or durable replay protection.
 
 Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.6.0
+npm install priorseal-sdk@0.7.0
 ```
 
-This documentation targets **0.6.0**, available from npm. The identical published tarball is also available from the [official GitHub Release](https://github.com/imokokok/PriorSeal/releases/tag/sdk-v0.6.0). The release adds independently verified Insight coverage binding for exact-call authorization and includes compiled JavaScript, TypeScript declarations and third-party license notices.
+This documentation targets **0.7.0**. It includes v2 Merkle transparency verification, the optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
 
 The workspace coverage policy also recognizes Band Protocol as an independent
 source group. Insight carries BandChain v3 source age into its shared freshness
