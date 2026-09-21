@@ -4,7 +4,7 @@ PriorSeal deploys the web console and API as one Cloudflare Worker. `wrangler.js
 
 ## Release
 
-1. Apply database migrations through `009_project_evidence_archive.sql` with the direct Neon connection and run `npm run production:check` from the controlled migration environment.
+1. After publishing the v2-aware SDK/verifier, apply database migrations through `010_authorization_merkle_index.sql` with the direct Neon connection and run `npm run production:check` from the controlled migration environment.
 2. Run `npm ci` and `npm run release:check`. Do not deploy if lint, types, tests, browser E2E, coverage, dependency audit, frontend build, or the Wrangler dry-run fails.
 3. Confirm the Worker Secrets named in `wrangler.jsonc` exist. To enable the optional private uploaded-evidence archive, also set `PRIORSEAL_ARCHIVE_CREDENTIALS_JSON` as a Worker secret after migration 009 is applied; configure only token hashes, never raw bearer tokens. Follow [the archive runbook](project-evidence-archive.md) for scoped writer/reviewer credentials. Never copy their values into the manifest, logs, issue trackers, or this runbook.
 4. Commit the exact release contents, ensure the worktree is clean, and deploy with `npm run worker:deploy`. The command tags the Worker version with the full Git SHA; record the resulting Worker version ID and SHA together.
