@@ -52,6 +52,18 @@ test('full v2 flow: same-second linked assessments, principal, persisted submit,
   const replay=await executeRwaAuthorized(x.input,{...x.deps,attempts:createRwaAttemptStore({directory:x.directory})});
   assert.equal(replay.replay,true);assert.equal(x.calls,1);
 });
+test('completed replay rejects a different execution digest without resubmitting',async t=>{
+  const x=await setup(t);await executeRwaAuthorized(x.input,x.deps);
+  const changed=structuredClone(x.input);changed.execution.proof.digest='0x'+'00'.repeat(32);
+  await assert.rejects(executeRwaAuthorized(changed,x.deps),/RWA_REPLAY_EVIDENCE_MISMATCH/);
+  assert.equal(x.calls,1);
+});
+test('reserve race rejects a different execution digest without submitting',async t=>{
+  const x=await setup(t), stored={authorizationId:x.input.authorizationId,transaction:x.f.transaction,executionDigest:'0x'+'00'.repeat(32),status:'RESERVED'};
+  const attempts={get:async()=>null,reserve:async()=>({claimed:false,attempt:stored})};
+  await assert.rejects(executeRwaAuthorized(x.input,{...x.deps,attempts}),/RWA_REPLAY_EVIDENCE_MISMATCH/);
+  assert.equal(x.calls,0);
+});
 test('two simultaneous callers with independent store handles cannot broadcast twice',async t=>{
   const x=await setup(t);
   const results=await Promise.allSettled([executeRwaAuthorized(x.input,x.deps),executeRwaAuthorized(x.input,{...x.deps,attempts:createRwaAttemptStore({directory:x.directory})})]);

@@ -5,6 +5,10 @@ import { evaluateAuthorizationPolicy } from '../../domain/intent-policy.mjs';
 // SDK build is a prerequisite, as for the existing application examples.
 
 const need = (ok, code) => { if (!ok) throw new Error(code); };
+function checkReplayAttempt(attempt, transaction, executionDigest) {
+  need(hashJson(attempt.transaction) === hashJson(transaction), 'RWA_REPLAY_SCOPE_MISMATCH');
+  need(attempt.executionDigest === executionDigest, 'RWA_REPLAY_EVIDENCE_MISMATCH');
+}
 function keyAdmits(k, a) {
   return k && k.issuer === a.issuer && k.keyId === a.keyId && k.algorithm === 'Ed25519' &&
     ['active', 'retired'].includes(k.status) &&
@@ -44,7 +48,7 @@ export async function executeRwaAuthorized(input, { authorizationStore, attempts
   // A known claim is returned for observation, never retried through submit.
   const existing = await attempts.get(p.authorizationId);
   if (existing) {
-    need(hashJson(existing.transaction) === hashJson(p.transaction), 'RWA_REPLAY_SCOPE_MISMATCH');
+    checkReplayAttempt(existing, p.transaction, p.execution.proof.digest);
     return { replay: true, attempt: existing };
   }
   need(!record.boundTxHash && record.uses === 0 && record.status === 'ACCEPTED', 'AUTHORIZATION_ALREADY_USED');
@@ -53,6 +57,7 @@ export async function executeRwaAuthorized(input, { authorizationStore, attempts
     const claim = await attempts.reserve({ authorizationId: p.authorizationId, transaction, executionDigest: p.execution.proof.digest, now: clock() });
     if (!claim.claimed) {
       need(!claim.code, claim.code);
+      checkReplayAttempt(claim.attempt, transaction, p.execution.proof.digest);
       return { replay: true, attempt: claim.attempt };
     }
     let started = false;
