@@ -27,3 +27,10 @@ test('peer comparison rejects different lock versions even with matching local s
   const lock=JSON.parse(await readFile(path,'utf8'));lock.version='unreviewed';
   await writeFile(path,JSON.stringify(lock));await assert.rejects(x.check(),/RWA_LOCK_DIVERGENCE/);
 });
+test('source lock cannot silently omit a protected input',async t=>{
+  const x=await fixture(t), path=join(x.dir,'protocol/rwa-source-lock.json');
+  const lock=JSON.parse(await readFile(path,'utf8'));
+  delete lock.sha256['protocol/rwa-execution-profiles.v1.json'];
+  await writeFile(path,JSON.stringify(lock));
+  await assert.rejects(x.check(),/RWA_LOCK_PATHS_INVALID/);
+});

@@ -60,7 +60,7 @@
     "production:smoke": "node scripts/production-smoke.mjs",
     "production:smoke:pending": "node scripts/production-smoke.mjs --pending",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm run contracts:check && npm test && npm run build && npm run check:web-performance",
-    "release:check": "npm run check && npm run worker:check && npm run test:e2e && npm run test:coverage && npm audit --omit=dev",
+    "release:check": "npm run check && npm run worker:check && npm run test:e2e && npm run test:coverage && npm run rwa:execution:check && npm audit --omit=dev",
     "audit": "npm audit --omit=dev",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "start:api": "node --env-file=.env.local src/bootstrap/http-server.mjs",
