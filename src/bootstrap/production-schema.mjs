@@ -1,4 +1,4 @@
-export const REQUIRED_PRODUCTION_MIGRATION = '008_observation_job_leases.sql';
+export const REQUIRED_PRODUCTION_MIGRATION = '010_authorization_merkle_index.sql';
 export const REQUIRED_WITNESS_MIGRATION = '005_witness_quorum.sql';
 
 export async function assertProductionSchema(pool, { preExecutionProofMode, archiveEnabled = false }) {
@@ -8,7 +8,7 @@ export async function assertProductionSchema(pool, { preExecutionProofMode, arch
   }
 
   if (archiveEnabled && !migrations.rows.some(row => row.name === '009_project_evidence_archive.sql')) throw new TypeError('009_project_evidence_archive.sql is not applied');
-  const requiredTables = ['authorization_log', 'authorizations', 'observation_jobs'];
+  const requiredTables = ['authorization_log', 'authorization_log_merkle_nodes', 'authorizations', 'observation_jobs'];
   if (archiveEnabled) requiredTables.push('project_evidence_archive');
   if (preExecutionProofMode === 'witness-quorum') requiredTables.push('witness_attestations');
   const tables = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY($1)", [requiredTables]);

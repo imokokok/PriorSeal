@@ -1,6 +1,19 @@
 import { hashJson } from '../../domain/hashing.mjs';
 import { randomUUID } from 'node:crypto';
 import { archivePage } from '../../application/archive/evidence-archive.mjs';
+import { createMerkleProof, merkleLeafHash, merkleNodeKey, merkleParentHash, requiredMerkleNodes } from '../../domain/merkle-log.mjs';
+
+async function appendMerkleIndex(client, sequence, entryHash) {
+  let node = { start: sequence, level: 0, hash: merkleLeafHash(entryHash) };
+  await client.query('INSERT INTO authorization_log_merkle_nodes (start_sequence,level,node_hash) VALUES ($1,$2,$3)', [node.start, node.level, node.hash]);
+  while (sequence % (2 ** (node.level + 1)) === 0) {
+    const leftStart = node.start - 2 ** node.level;
+    const left = await client.query('SELECT node_hash FROM authorization_log_merkle_nodes WHERE start_sequence=$1 AND level=$2', [leftStart, node.level]);
+    if (!left.rows[0]) throw new TypeError('Authorization Merkle index is incomplete');
+    node = { start: leftStart, level: node.level + 1, hash: merkleParentHash(left.rows[0].node_hash, node.hash) };
+    await client.query('INSERT INTO authorization_log_merkle_nodes (start_sequence,level,node_hash) VALUES ($1,$2,$3)', [node.start, node.level, node.hash]);
+  }
+}
 
 // The adapter accepts an injected pg Pool, keeping PostgreSQL optional for the offline verifier.
 export function createPostgresStore(pool) {
@@ -45,11 +58,28 @@ export function createPostgresStore(pool) {
         const previousEntryHash = previous.rows[0]?.entry_hash ?? null;
         const entryHash = hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash });
         await client.query('INSERT INTO authorization_log (sequence,authorization_hash,accepted_at,previous_entry_hash,entry_hash) VALUES ($1,$2,$3,$4,$5)', [sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash]);
+        await appendMerkleIndex(client, sequence, entryHash);
         await client.query('COMMIT');
         return { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash };
       } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
     },
     async listAuthorizationLog() { const result = await pool.query('SELECT sequence,authorization_hash,accepted_at,previous_entry_hash,entry_hash FROM authorization_log ORDER BY sequence'); return result.rows.map((row) => ({ sequence: Number(row.sequence), authorizationHash: row.authorization_hash, acceptedAt: Number(row.accepted_at), previousEntryHash: row.previous_entry_hash, entryHash: row.entry_hash })); },
+    async getAuthorizationMerkleSnapshot(acceptance, size = null) {
+      const accepted = await pool.query('SELECT entry_hash FROM authorization_log WHERE sequence=$1', [acceptance.sequence]);
+      if (accepted.rows[0]?.entry_hash !== acceptance.entryHash) throw new TypeError('Authorization acceptance does not match the local log');
+      const head = await pool.query(size == null ? 'SELECT sequence,entry_hash FROM authorization_log ORDER BY sequence DESC LIMIT 1' : 'SELECT sequence,entry_hash FROM authorization_log WHERE sequence=$1', size == null ? [] : [size]);
+      const row = head.rows[0];
+      if (!row || Number(row.sequence) < acceptance.sequence) throw new TypeError('Authorization is not present in the Merkle checkpoint');
+      const checkpointSize = Number(row.sequence);
+      const required = requiredMerkleNodes(acceptance.sequence, checkpointSize);
+      const nodes = new Map();
+      if (required.length) {
+        const hashes = await pool.query('SELECT n.start_sequence,n.level,n.node_hash FROM authorization_log_merkle_nodes n JOIN unnest($1::bigint[],$2::integer[]) AS wanted(start_sequence,level) USING (start_sequence,level)', [required.map(node => node.start), required.map(node => node.level)]);
+        for (const node of hashes.rows) nodes.set(merkleNodeKey(Number(node.start_sequence), Number(node.level)), node.node_hash);
+      }
+      const { root, path } = createMerkleProof(acceptance.entryHash, acceptance.sequence, checkpointSize, nodes);
+      return { size: checkpointSize, headEntryHash: row.entry_hash, merkleRoot: root, proof: path };
+    },
     async saveAcceptedAuthorization({ authorization, acceptedAt, createRecord }) {
       const client = await pool.connect();
       try {
@@ -70,6 +100,7 @@ export function createPostgresStore(pool) {
           const previous = await client.query('SELECT sequence,entry_hash FROM authorization_log ORDER BY sequence DESC LIMIT 1');
           const sequence = Number(previous.rows[0]?.sequence ?? 0) + 1; const previousEntryHash = previous.rows[0]?.entry_hash ?? null; const entryHash = hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash });
           await client.query('INSERT INTO authorization_log (sequence,authorization_hash,accepted_at,previous_entry_hash,entry_hash) VALUES ($1,$2,$3,$4,$5)', [sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash]);
+          await appendMerkleIndex(client, sequence, entryHash);
           log = { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash };
         }
         const record = createRecord(log); const value = record.authorization;

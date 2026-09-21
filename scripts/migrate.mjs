@@ -2,11 +2,12 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import pg from 'pg';
+import { backfillAuthorizationMerkleIndex } from '../src/infrastructure/persistence/backfill-merkle-index.mjs';
 
 const { Pool } = pg;
-const configuredConnectionString = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+const configuredConnectionString = process.env.DATABASE_URL_UNPOOLED;
 const connectionString = secureConnectionString(configuredConnectionString);
-if (!connectionString) throw new Error('DATABASE_URL_UNPOOLED or DATABASE_URL is required for migrations');
+if (!connectionString) throw new Error('DATABASE_URL_UNPOOLED is required for migrations');
 
 const migrationsDirectory = new URL('../migrations/', import.meta.url);
 const files = (await readdir(migrationsDirectory)).filter((file) => /^\d+_.+\.sql$/.test(file)).sort();
@@ -26,7 +27,9 @@ try {
     }
     await client.query('BEGIN');
     try {
+      if (name === '010_authorization_merkle_index.sql') await client.query("SELECT pg_advisory_xact_lock(hashtext('priorseal:authorization-log'))");
       await client.query(sql);
+      if (name === '010_authorization_merkle_index.sql') await backfillAuthorizationMerkleIndex(client);
       await client.query('INSERT INTO schema_migrations (name, checksum) VALUES ($1, $2)', [name, checksum]);
       await client.query('COMMIT');
       console.log(`Applied ${name}`);
@@ -44,6 +47,7 @@ try {
 function secureConnectionString(value) {
   if (!value) return value;
   const url = new URL(value);
+  if (url.hostname.includes('-pooler')) throw new Error('Migrations require a direct, non-pooled DATABASE_URL_UNPOOLED');
   if (['prefer', 'require', 'verify-ca'].includes(url.searchParams.get('sslmode'))) url.searchParams.set('sslmode', 'verify-full');
   return url.toString();
 }

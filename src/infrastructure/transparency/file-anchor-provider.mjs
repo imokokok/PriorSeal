@@ -12,8 +12,8 @@ export function readTransparencyAnchor(file) {
 export function parseTransparencyAnchor(anchor) {
   if (anchor == null) return null;
   assertSafeJson(anchor);
-  assertOnlyFields(anchor, ['type', 'chainId', 'contract', 'txHash', 'blockNumber', 'anchoredAt', 'size', 'headEntryHash'], 'transparency anchor');
-  if (anchor.type !== 'eip155' || !Number.isSafeInteger(anchor.chainId) || anchor.chainId < 1 || !/^0x[0-9a-fA-F]{40}$/.test(anchor.contract) || !/^0x[0-9a-fA-F]{64}$/.test(anchor.txHash) || !Number.isSafeInteger(anchor.blockNumber) || anchor.blockNumber < 0 || !Number.isSafeInteger(anchor.anchoredAt) || anchor.anchoredAt < 0 || !Number.isSafeInteger(anchor.size) || anchor.size < 1 || !/^[0-9a-f]{64}$/.test(anchor.headEntryHash)) throw new TypeError('Transparency anchor file is invalid');
+  assertOnlyFields(anchor, ['type', 'chainId', 'contract', 'txHash', 'blockNumber', 'anchoredAt', 'size', 'headEntryHash', 'merkleRoot'], 'transparency anchor');
+  if (anchor.type !== 'eip155' || !Number.isSafeInteger(anchor.chainId) || anchor.chainId < 1 || !/^0x[0-9a-fA-F]{40}$/.test(anchor.contract) || !/^0x[0-9a-fA-F]{64}$/.test(anchor.txHash) || !Number.isSafeInteger(anchor.blockNumber) || anchor.blockNumber < 0 || !Number.isSafeInteger(anchor.anchoredAt) || anchor.anchoredAt < 0 || !Number.isSafeInteger(anchor.size) || anchor.size < 1 || !/^[0-9a-f]{64}$/.test(anchor.headEntryHash ?? '') || (anchor.merkleRoot !== undefined && !/^[0-9a-f]{64}$/.test(anchor.merkleRoot))) throw new TypeError('Transparency anchor file is invalid');
   return { ...anchor, contract: anchor.contract.toLowerCase(), txHash: anchor.txHash.toLowerCase() };
 }
 
@@ -40,7 +40,7 @@ export async function verifyTransparencyAnchor(anchor, { rpcClient, rpcUrls = []
       const confirmations = BigInt(head) - BigInt(receipt.blockNumber) + 1n;
       if (confirmations < BigInt(minConfirmations)) continue;
       const decoded = decodeFunctionData({ abi: ANCHOR_ABI, data: transaction.input ?? transaction.data });
-      if (decoded.functionName !== 'anchor' || Number(decoded.args[0]) !== anchor.size || String(decoded.args[1]).slice(2).toLowerCase() !== anchor.headEntryHash) continue;
+      if (decoded.functionName !== 'anchor' || Number(decoded.args[0]) !== anchor.size || String(decoded.args[1]).slice(2).toLowerCase() !== (anchor.merkleRoot ?? anchor.headEntryHash)) continue;
       return anchor;
     } catch { /* Try the next explicitly configured source. */ }
   }

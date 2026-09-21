@@ -2,10 +2,22 @@ import { hashJson } from './hashing.mjs';
 import { PriorSealError } from './errors.mjs';
 import { signEd25519Statement, verifyEd25519Statement } from './ed25519.mjs';
 import { assertOnlyFields, assertSafeJson } from '../shared/safe-json.mjs';
+import { verifyMerkleProof } from './merkle-log.mjs';
 
 export const TRANSPARENCY_CHECKPOINT_SCHEMA = 'priorseal.transparency-checkpoint.v1';
+export const MERKLE_TRANSPARENCY_CHECKPOINT_SCHEMA = 'priorseal.transparency-checkpoint.v2';
+
+export function buildMerkleTransparencyEvidence({ acceptance, snapshot, issuer, keyId, privateKeyPem, issuedAt, anchor = null, before }) {
+  if (!snapshot || snapshot.size < acceptance.sequence || !privateKeyPem) throw new TypeError('Authorization Merkle proof is unavailable');
+  if (anchor) {
+    if (!anchor.merkleRoot || anchor.size !== snapshot.size || anchor.merkleRoot !== snapshot.merkleRoot || anchor.headEntryHash !== snapshot.headEntryHash || (before !== undefined && anchor.anchoredAt > before)) throw new PriorSealError('TRANSPARENCY_AFTER_EXECUTION', 'Verified Merkle anchor must cover the authorization before execution');
+  }
+  const checkpoint = { schema: MERKLE_TRANSPARENCY_CHECKPOINT_SCHEMA, domain: 'priorseal/transparency-checkpoint/v2', size: snapshot.size, headEntryHash: snapshot.headEntryHash, merkleRoot: snapshot.merkleRoot, issuedAt, issuer, algorithm: 'Ed25519', keyId, anchor };
+  return { checkpoint: signEd25519Statement(checkpoint, privateKeyPem), proof: snapshot.proof };
+}
 
 export function buildTransparencyEvidence({ entries, acceptance, issuer, keyId, privateKeyPem, issuedAt, anchor = null, before }) {
+  if (anchor?.merkleRoot) throw new TypeError('A Merkle root anchor requires a v2 transparency checkpoint');
   const acceptedIndex = entries.findIndex((entry) => entry.sequence === acceptance.sequence && entry.entryHash === acceptance.entryHash);
   if (acceptedIndex < 0) throw new TypeError('Authorization acceptance is not present in the transparency log');
   let checkpointEntries = entries;
@@ -25,6 +37,7 @@ export function buildTransparencyEvidence({ entries, acceptance, issuer, keyId, 
 }
 
 export function verifyTransparencyEvidence(evidence, acceptance, publicKeyPem, { before } = {}) {
+  if (evidence?.checkpoint?.schema === MERKLE_TRANSPARENCY_CHECKPOINT_SCHEMA) return verifyMerkleTransparencyEvidence(evidence, acceptance, publicKeyPem, { before });
   const checkpoint = evidence?.checkpoint;
   const chain = evidence?.chain;
   try {
@@ -43,7 +56,22 @@ export function verifyTransparencyEvidence(evidence, acceptance, publicKeyPem, {
     if (index > 0 && (entry.sequence !== chain[index - 1].sequence + 1 || entry.previousEntryHash !== chain[index - 1].entryHash)) return false;
   }
   if (chain.at(-1).entryHash !== checkpoint.headEntryHash || chain.at(-1).sequence !== checkpoint.size) return false;
-  if (checkpoint.anchor && (!validAnchor(checkpoint.anchor) || checkpoint.anchor.size !== checkpoint.size || checkpoint.anchor.headEntryHash !== checkpoint.headEntryHash || (before !== undefined && checkpoint.anchor.anchoredAt > before))) return false;
+  if (checkpoint.anchor && (!validAnchor(checkpoint.anchor) || checkpoint.anchor.merkleRoot || checkpoint.anchor.size !== checkpoint.size || checkpoint.anchor.headEntryHash !== checkpoint.headEntryHash || (before !== undefined && checkpoint.anchor.anchoredAt > before))) return false;
+  return verifyEd25519Statement(checkpoint, publicKeyPem);
+}
+
+function verifyMerkleTransparencyEvidence(evidence, acceptance, publicKeyPem, { before }) {
+  const checkpoint = evidence?.checkpoint;
+  try {
+    assertSafeJson(evidence);
+    assertOnlyFields(evidence, ['checkpoint', 'proof'], 'transparency evidence');
+    assertOnlyFields(checkpoint, ['schema', 'domain', 'size', 'headEntryHash', 'merkleRoot', 'issuedAt', 'issuer', 'algorithm', 'keyId', 'anchor', 'signature'], 'transparency checkpoint');
+    if (checkpoint.anchor) assertOnlyFields(checkpoint.anchor, ['type', 'chainId', 'contract', 'txHash', 'blockNumber', 'anchoredAt', 'size', 'headEntryHash', 'merkleRoot'], 'transparency anchor');
+  } catch { return false; }
+  if (!checkpoint?.signature || checkpoint.domain !== 'priorseal/transparency-checkpoint/v2' || checkpoint.algorithm !== 'Ed25519' || checkpoint.issuer !== acceptance.issuer || checkpoint.keyId !== acceptance.keyId || !Number.isSafeInteger(checkpoint.issuedAt) || checkpoint.issuedAt < acceptance.acceptedAt || !Number.isSafeInteger(checkpoint.size) || checkpoint.size < acceptance.sequence || !/^[0-9a-f]{64}$/.test(checkpoint.headEntryHash ?? '') || !/^[0-9a-f]{64}$/.test(checkpoint.merkleRoot ?? '')) return false;
+  if (acceptance.entryHash !== hashJson({ sequence: acceptance.sequence, authorizationHash: acceptance.authorizationHash, acceptedAt: acceptance.acceptedAt, previousEntryHash: acceptance.previousEntryHash })) return false;
+  if (!verifyMerkleProof(acceptance.entryHash, acceptance.sequence, checkpoint.size, evidence.proof, checkpoint.merkleRoot)) return false;
+  if (checkpoint.anchor && (!validAnchor(checkpoint.anchor) || !checkpoint.anchor.merkleRoot || checkpoint.anchor.merkleRoot !== checkpoint.merkleRoot || checkpoint.anchor.headEntryHash !== checkpoint.headEntryHash || checkpoint.anchor.size !== checkpoint.size || (before !== undefined && checkpoint.anchor.anchoredAt > before))) return false;
   return verifyEd25519Statement(checkpoint, publicKeyPem);
 }
 
@@ -55,5 +83,5 @@ function validAnchor(anchor) {
     && Number.isSafeInteger(anchor.blockNumber) && anchor.blockNumber >= 0
     && Number.isSafeInteger(anchor.anchoredAt) && anchor.anchoredAt >= 0
     && Number.isSafeInteger(anchor.size) && anchor.size > 0
-    && /^[0-9a-f]{64}$/.test(anchor.headEntryHash);
+    && (anchor.merkleRoot ? /^[0-9a-f]{64}$/.test(anchor.merkleRoot) && (anchor.headEntryHash === undefined || /^[0-9a-f]{64}$/.test(anchor.headEntryHash)) : /^[0-9a-f]{64}$/.test(anchor.headEntryHash));
 }

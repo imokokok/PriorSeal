@@ -13,7 +13,7 @@ import { createObservationWorker } from '../application/observations/observation
 import { observeExecution } from '../application/observations/observe-execution.mjs';
 import { observeEvm } from '../infrastructure/blockchain/evm/observer.mjs';
 import { parseTransparencyAnchor, readTransparencyAnchor, verifyTransparencyAnchor } from '../infrastructure/transparency/file-anchor-provider.mjs';
-import { buildTransparencyEvidence } from '../domain/transparency.mjs';
+import { buildMerkleTransparencyEvidence, buildTransparencyEvidence } from '../domain/transparency.mjs';
 import { createHttpWitnessProvider, parseWitnessEndpoints, readWitnessEndpoints } from '../infrastructure/witness/http-witness-client.mjs';
 import { createDigiCertTimestampProvider } from '../infrastructure/timestamp/digicert-rfc3161-client.mjs';
 import { loadRuntimeConfig } from './runtime-config.mjs';
@@ -50,7 +50,12 @@ if (config.transparencyAnchorFile || config.transparencyAnchorJson) await loadTr
 const verifyContractSignature = createContractSignatureVerifier({ rpcClient, rpcUrls: (chainId) => getRpcUrls(chainId) ?? [] });
 if (publicKeyPem) registry.add({ issuer: config.issuer, keyId: config.keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null });
 const transparencyProvider = store && privateKeyPem ? async (acceptance, { before } = {}) => {
-  const evidence = buildTransparencyEvidence({ entries: await store.listAuthorizationLog(), acceptance, issuer: config.issuer, keyId: config.keyId, privateKeyPem, issuedAt: Math.floor(Date.now() / 1000), anchor: await loadTransparencyAnchor(), before });
+  const anchor = await loadTransparencyAnchor();
+  const coveringAnchor = anchor?.size >= acceptance.sequence ? anchor : null;
+  const parameters = { acceptance, issuer: config.issuer, keyId: config.keyId, privateKeyPem, issuedAt: Math.floor(Date.now() / 1000), anchor: coveringAnchor, before };
+  const evidence = coveringAnchor && !coveringAnchor.merkleRoot
+    ? buildTransparencyEvidence({ ...parameters, entries: await store.listAuthorizationLog() })
+    : buildMerkleTransparencyEvidence({ ...parameters, snapshot: await store.getAuthorizationMerkleSnapshot(acceptance, coveringAnchor?.size ?? null) });
   if (config.requireExternalAnchor && !evidence.checkpoint.anchor) throw new PriorSealError('TRANSPARENCY_ANCHOR_REQUIRED', 'A verified external anchor covering this authorization is required before execution');
   return evidence;
 } : null;

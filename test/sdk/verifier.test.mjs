@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
-import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildIntent, buildReceipt, buildTransparencyEvidence, buildVerificationBundle, canonicalize, createMemoryStore, hashJson } from '../../src/index.mjs';
+import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildIntent, buildReceipt, buildMerkleTransparencyEvidence, buildTransparencyEvidence, buildVerificationBundle, canonicalize, createMemoryStore, hashJson } from '../../src/index.mjs';
 import { signReceipt } from '../../src/domain/receipt.mjs';
 import { verifyReceiptLocally, verifyVerificationBundleLocally } from '../../sdk/dist/verifier.js';
 
@@ -65,6 +65,16 @@ test('SDK verifier independently validates authorization-bound receipt v3, polic
   assert.equal(verified.authorizationId, authorization.authorizationId);
   assert.equal(receipt.authorizationEvidence.policy.document.requireDistinctAuthorizerAndExecutor, true);
   assert.equal(verified.verificationScope, 'EXTERNAL_CHECK_REQUIRED');
+  for (let sequence = 2; sequence <= 1024; sequence += 1) await store.appendAuthorizationLog({ authorizationHash: sequence.toString(16).padStart(64, '0'), acceptedAt: 1_002 });
+  const snapshot = await store.getAuthorizationMerkleSnapshot(accepted.response.acceptance);
+  const compactTransparency = buildMerkleTransparencyEvidence({ acceptance: accepted.response.acceptance, snapshot, issuer: 'test', keyId: 'key-1', privateKeyPem: keys.privateKey, issuedAt: 1_099 });
+  const compactReceipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, policyEvidence: accepted.response.policyEvidence, transparency: compactTransparency, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), keys.privateKey);
+  assert.ok(Buffer.byteLength(JSON.stringify(compactReceipt)) < 64 * 1024);
+  assert.equal(compactTransparency.proof.length, 10);
+  assert.equal((await verifyReceiptLocally(compactReceipt, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).valid, true);
+  const tamperedCompact = structuredClone(compactReceipt);
+  tamperedCompact.authorizationEvidence.transparency.proof[0].hash = 'f'.repeat(64);
+  assert.equal((await verifyReceiptLocally(signReceipt(tamperedCompact, keys.privateKey), { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'INVALID_TRANSPARENCY_PROOF');
   const lateAnchorReceipt = structuredClone(receipt);
   lateAnchorReceipt.authorizationEvidence.transparency.checkpoint.anchor.anchoredAt = 1_101;
   const { signature: _checkpointSignature, ...unsignedCheckpoint } = lateAnchorReceipt.authorizationEvidence.transparency.checkpoint;

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Verify compact v2 Merkle transparency checkpoints and Merkle-root EVM anchors
+  while retaining historical v1 hash-chain proof support. Issuers need migration
+  010 and must roll out this verifier before issuing v2 checkpoints.
+
 - Add sequenced RWA v2 semantic proofs, same-second pairing, receiver eligibility,
   signed fill checks and independent detailed verification axes; preserve v1 vectors.
 - Normalize trusted-key ordering without relaxing key revocation or validity checks.

@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { decodeFunctionData, isAddress } from 'viem';
+import pg from 'pg';
+import { createPostgresStore } from '../src/infrastructure/persistence/postgres-store.mjs';
 import { createRpcClient } from '../src/infrastructure/blockchain/evm/rpc-client.mjs';
 import { getRpcUrls } from '../src/infrastructure/blockchain/evm/chains.mjs';
 import { verifyTransparencyAnchor } from '../src/infrastructure/transparency/file-anchor-provider.mjs';
@@ -17,8 +19,11 @@ const rpcUrls = getRpcUrls(chainId) ?? [];
 if (!rpcUrls.length) throw new TypeError('The anchor chain RPC must be configured');
 
 const rpcClient = createRpcClient();
+const connectionString = secureConnectionString(process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL);
+if (!connectionString) throw new TypeError('DATABASE_URL_UNPOOLED is required to match an anchor to the local log');
+const pool = new pg.Pool({ connectionString });
 let evidence;
-for (const url of rpcUrls) {
+try { for (const url of rpcUrls) {
   try {
     const reportedChainId = Number(BigInt(await rpcClient.call(url, 'eth_chainId', [])));
     if (reportedChainId !== chainId) continue;
@@ -28,13 +33,21 @@ for (const url of rpcUrls) {
     if (Number(BigInt(head) - BigInt(receipt.blockNumber) + 1n) < confirmations) throw new TypeError(`Anchor has fewer than ${confirmations} confirmations`);
     const block = await rpcClient.call(url, 'eth_getBlockByNumber', [receipt.blockNumber, false]);
     const decoded = decodeFunctionData({ abi: anchorAbi(), data: transaction.input ?? transaction.data });
-    evidence = { type: 'eip155', chainId, contract: contract.toLowerCase(), txHash: txHash.toLowerCase(), blockNumber, anchoredAt: Number(BigInt(block.timestamp)), size: Number(decoded.args[0]), headEntryHash: String(decoded.args[1]).slice(2).toLowerCase() };
-    await verifyTransparencyAnchor(evidence, { rpcClient, rpcUrls: [url], minConfirmations: confirmations });
+    const size = Number(decoded.args[0]);
+    const commitment = String(decoded.args[1]).slice(2).toLowerCase();
+    const local = await pool.query('SELECT entry_hash FROM authorization_log WHERE sequence=$1', [size]);
+    if (!local.rows[0]) continue;
+    const headEntryHash = local.rows[0].entry_hash;
+    const merkleRoot = (await createPostgresStore(pool).getAuthorizationMerkleSnapshot({ sequence: size, entryHash: headEntryHash }, size)).merkleRoot;
+    if (commitment !== merkleRoot && commitment !== headEntryHash) continue;
+    const candidate = { type: 'eip155', chainId, contract: contract.toLowerCase(), txHash: txHash.toLowerCase(), blockNumber, anchoredAt: Number(BigInt(block.timestamp)), size, headEntryHash, ...(commitment === merkleRoot ? { merkleRoot } : {}) };
+    await verifyTransparencyAnchor(candidate, { rpcClient, rpcUrls: [url], minConfirmations: confirmations });
+    evidence = candidate;
     break;
   } catch (error) {
     if (String(error.message).includes('fewer than')) throw error;
   }
-}
+} } finally { await pool.end(); }
 if (!evidence) throw new TypeError('Anchor transaction could not be verified');
 const output = resolve(process.env.PRIORSEAL_TRANSPARENCY_ANCHOR_FILE ?? '.priorseal/transparency-anchor.json');
 await mkdir(dirname(output), { recursive: true });
@@ -42,3 +55,4 @@ await writeFile(output, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o644 
 console.log(`Verified anchor record written to ${output}`);
 
 function anchorAbi() { return [{ type: 'function', name: 'anchor', stateMutability: 'nonpayable', inputs: [{ name: 'size', type: 'uint256' }, { name: 'head', type: 'bytes32' }], outputs: [] }]; }
+function secureConnectionString(value) { if (!value) return value; const url = new URL(value); if (['prefer', 'require', 'verify-ca'].includes(url.searchParams.get('sslmode'))) url.searchParams.set('sslmode', 'verify-full'); return url.toString(); }

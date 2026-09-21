@@ -1,5 +1,6 @@
 import { hashJson } from '../../domain/hashing.mjs';
 import { archivePage } from '../../application/archive/evidence-archive.mjs';
+import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from '../../domain/merkle-log.mjs';
 
 export function createMemoryStore({ clock = () => Date.now() } = {}) { const intents = new Map(), receipts = new Map(), observations = new Map(), idempotency = new Map(), jobs = new Map(), authorizations = new Map(), archive = new Map(), authorizationLog = []; return {
   archiveRetention: 'process_lifetime',
@@ -22,6 +23,17 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) { const int
   async getObservation(chainId, txHash) { return observations.get(`${chainId}:${txHash}`)?.at(-1); },
   async appendAuthorizationLog({ authorizationHash, acceptedAt }) { const existing = authorizationLog.find((entry) => entry.authorizationHash === authorizationHash); if (existing) return { ...existing }; const sequence = authorizationLog.length + 1; const previousEntryHash = authorizationLog.at(-1)?.entryHash ?? null; const entryHash = hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash }); const entry = { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash }; authorizationLog.push(entry); return entry; },
   async listAuthorizationLog() { return authorizationLog.map((entry) => ({ ...entry })); },
+  async getAuthorizationMerkleSnapshot(acceptance, size = null) {
+    if (authorizationLog[acceptance.sequence - 1]?.entryHash !== acceptance.entryHash) throw new TypeError('Authorization acceptance does not match the local log');
+    const checkpointSize = size ?? authorizationLog.length;
+    if (!Number.isSafeInteger(checkpointSize) || checkpointSize < acceptance.sequence || checkpointSize > authorizationLog.length) throw new TypeError('Authorization is not present in the Merkle checkpoint');
+    const nodes = new Map();
+    for (const entry of authorizationLog.slice(0, checkpointSize)) {
+      for (const node of merkleAppendNodes(entry.sequence, entry.entryHash, (start, level) => nodes.get(merkleNodeKey(start, level)))) nodes.set(merkleNodeKey(node.start, node.level), node.hash);
+    }
+    const { root, path } = createMerkleProof(acceptance.entryHash, acceptance.sequence, checkpointSize, nodes);
+    return { size: checkpointSize, headEntryHash: authorizationLog[checkpointSize - 1].entryHash, merkleRoot: root, proof: path };
+  },
   async saveAcceptedAuthorization({ authorization, acceptedAt, createRecord }) {
     const existing = authorizations.get(authorization.authorizationId); if (existing) return structuredClone(existing);
     if ([...authorizations.values()].some((record) => record.authorization.authorizationNonce === authorization.authorizationNonce)) { const error = new Error('Authorization nonce has already been used'); error.code = 'AUTHORIZATION_NONCE_REUSED'; throw error; }
