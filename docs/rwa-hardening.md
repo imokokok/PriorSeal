@@ -6,14 +6,14 @@
 
 ## 已实现
 
-| 问题 | 处理 |
-| --- | --- |
+| 问题                             | 处理                                                                                                                                                              |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 高层入口可遗漏主体授权和原子占用 | Node 应用层 `executeRwaAuthorized` 强制验证主体签名、受信 acceptance、intent/执行人/audience/策略/时间范围，然后占用授权 ID 与 chain/sender/nonce，再进入广播回调 |
-| 同秒报告、密钥排列误拒绝 | 独立 RWA v2 EIP-712 域签入 sequence 与 previousDigest；执行报告必须严格后继且时间不倒退。同秒可配对。可信密钥数组按地址规范化排序，但不忽略撤销或有效期差异 |
-| HTTP / SDK uint256 不一致 | 同一精确十进制 uint256 正则用于 SDK、Zod、公开 JSON Schema。越界保留字段、稳定错误码和 retryable=false |
-| 只检查 calldata 哈希 | v2 解码已准入 ABI，再编码比较；核对输入/输出代币、方向、输入数量、receiver、fee、deadline、native value；接收人资格另行签入、限定来源和有效期 |
-| 真实失败混同伪造证据 | `inspectRwaReport[V2]` 和 `inspectRwaReceiptBundle` 分离完整性、信任、时间、策略、执行与外部检查；真实签名的 REVERTED / 不足到账不再等同篡改 |
-| 两仓库静默漂移和薄弱故障回归 | 两仓库共享源码摘要锁、冻结 v1/v2 签名向量、CI 检查；新加边界/性质、多进程竞争、时钟跨界、损坏日志、响应丢失、恢复测试 |
+| 同秒报告、密钥排列误拒绝         | 独立 RWA v2 EIP-712 域签入 sequence 与 previousDigest；执行报告必须严格后继且时间不倒退。同秒可配对。可信密钥数组按地址规范化排序，但不忽略撤销或有效期差异       |
+| HTTP / SDK uint256 不一致        | 同一精确十进制 uint256 正则用于 SDK、Zod、公开 JSON Schema。越界保留字段、稳定错误码和 retryable=false                                                            |
+| 只检查 calldata 哈希             | v2 解码已准入 ABI，再编码比较；核对输入/输出代币、方向、输入数量、receiver、fee、deadline、native value；接收人资格另行签入、限定来源和有效期                     |
+| 真实失败混同伪造证据             | `inspectRwaReport[V2]` 和 `inspectRwaReceiptBundle` 分离完整性、信任、时间、策略、执行与外部检查；真实签名的 REVERTED / 不足到账不再等同篡改                      |
+| 两仓库静默漂移和薄弱故障回归     | 两仓库共享源码摘要锁、冻结 v1/v2 签名向量、CI 检查；新加边界/性质、多进程竞争、时钟跨界、损坏日志、响应丢失、恢复测试                                             |
 
 ## 如何接入
 
@@ -25,18 +25,23 @@ const attempts = createRwaAttemptStore({
   directory: '/your/private/persistent/priorseal-rwa-journal',
 });
 
-const result = await executeRwaAuthorized({
-  authorizationId,              // 已由 authorizeIntent 接受的授权
-  intent, authority, execution,  // authority/execution 含 proof 与独立固定的 trust
-  authorityTime,
-  transaction,                  // 实际准备广播的完整交易
-  audience: 'priorseal',
-  acceptanceKey,                // 独立固定的 PriorSeal 发行公钥，不从 bundle 自信任
-}, {
-  authorizationStore,
-  attempts,
-  submit: broadcastExactTransaction,
-});
+const result = await executeRwaAuthorized(
+  {
+    authorizationId, // 已由 authorizeIntent 接受的授权
+    intent,
+    authority,
+    execution, // authority/execution 含 proof 与独立固定的 trust
+    authorityTime,
+    transaction, // 实际准备广播的完整交易
+    audience: 'priorseal',
+    acceptanceKey, // 独立固定的 PriorSeal 发行公钥，不从 bundle 自信任
+  },
+  {
+    authorizationStore,
+    attempts,
+    submit: broadcastExactTransaction,
+  }
+);
 ```
 
 广播函数必须使用收到的**原样交易**，不能在钱包中重选 nonce、接收人或 calldata。
@@ -65,11 +70,13 @@ const result = await executeRwaAuthorized({
 
 ## 当前语义支持范围
 
-只有原版 Uniswap V3 SwapRouter 的带 deadline 的 `exactInputSingle`，
-且是 ERC-20 → ERC-20、buy/sell、非零 amountOutMinimum。
-`request.amount` 明确是**输入代币最小单位**，buy 时通常是报价代币数量。
-不是 SwapRouter02，不支持 multicall、permit、原生币、ERC-4626、
-任意 RWA mint/redeem/transfer 或所有发行人协议。未准入方法拒绝，不猜测。
+旧模拟 profile 仍只接受原版 Uniswap V3 SwapRouter 的带 deadline
+`exactInputSingle`。新增真实 Robinhood Chain profile 固定 chain 4663、官方 USDG、
+Uniswap SwapRouter02/V3 Factory 的地址和代码哈希，以及 AAPL/NVDA/SPY 各自已核验的
+USDG 0.05% 池。由于 SwapRouter02 的 swap tuple 不含 deadline，只接受
+`multicall(deadline, [exactInputSingle])`，且数组必须恰好一个规范调用。
+任意 multicall、permit、多跳、原生币、零 minimumOutput、未知池、ERC-4626 和
+mint/redeem 仍拒绝。`request.amount` 是输入代币最小单位。
 
 消费者必须独立准入链、router 部署/实现、instrument 与 quoteToken。
 不能只因为地址或 ABI 匹配，就认定部署可信。最终成交检查基于签名观察结果中的
@@ -78,6 +85,14 @@ ERC-20 Transfer 日志：发送方输入资产净支出精确匹配、接收人�
 
 v2 同时要求发送方和实际接收人的资格证据，但资格断言仍需要发行人/合规系统真实提供；
 这不是法律合规证明。市场、储备、公司行动和证券权利仍不能由普通价格源推导。
+
+production v2 报告现在必须签入 instrument admission commitment：registry 标识和版本、
+完整 registry digest、instrumentId 与 admission digest。PriorSeal 使用独立 trust pin
+核对同一 commitment；缺失或不一致均 fail closed。simulation 历史向量继续兼容。
+
+`npm run rwa:execution:check` 做离线 profile 校验；
+`npm run rwa:execution:check:online` 只读核验当前链 ID、代码哈希、factory pool、费率、
+代币对和非零流动性。所有已提交 profile 仍为 SHADOW，不代表已激活或允许广播。
 
 ERC-1271 授权需要提供实际在线验证回调；离线回执明确显示仍需外部检查。
 新高层执行器对需要 RFC3161 / witness 策略的请求暂时 fail-closed，

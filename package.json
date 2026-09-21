@@ -38,6 +38,8 @@
     "verify:receipt": "node examples/verify-signed-receipt.mjs",
     "rwa:parity": "node scripts/check-rwa-parity.mjs",
     "rwa:verify": "npm run sdk:build && node examples/rwa-v2/verify.mjs",
+    "rwa:execution:check": "npm run sdk:build && node scripts/verify-rwa-execution-profiles.mjs",
+    "rwa:execution:check:online": "npm run sdk:build && node scripts/verify-rwa-execution-profiles.mjs --online",
     "sdk:build": "npm run rwa:parity && npm --prefix sdk run build",
     "test": "npm run sdk:build && node --test test/**/*.test.mjs",
     "test:e2e": "npm run build && playwright test",

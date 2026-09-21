@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { Readable } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   authorizationTypedData,
@@ -66,8 +66,20 @@ test('HTTP witness nodes collect a verified quorum and replay the same request s
   assert.equal(verifyWitnessEvidence(first, authorization, policy, { expectedRequestedAt: 1_001, before: 1_100 }).valid, true);
 });
 
+test('HTTP witness deadline terminates a stalled request body', async () => {
+  const witnessKeys = keys();
+  const server = createWitnessHttpServer({ witnessId: 'witness-timeout', privateKeyPem: witnessKeys.privateKey, publicKeyPem: witnessKeys.publicKey, bearerToken: 'secret', requestTimeoutMs: 20 });
+  const stalled = new PassThrough();
+  const response = await invokeServer(server, '/v1/witness/attest', { method: 'POST', headers: { authorization: 'Bearer secret', 'content-type': 'application/json' }, bodyStream: stalled });
+  assert.equal(response.status, 504);
+  assert.equal((await response.json()).error.code, 'REQUEST_TIMEOUT');
+  assert.equal(stalled.destroyed, true);
+  assert.equal(server.requestTimeout, 20);
+  server.close();
+});
+
 async function invokeServer(server, path, options) {
-  const req = Readable.from([Buffer.from(options.body)]);
+  const req = options.bodyStream ?? Readable.from([Buffer.from(options.body)]);
   Object.assign(req, { method: options.method, url: path, headers: options.headers, socket: { remoteAddress: '127.0.0.1' } });
   const res = new EventEmitter();
   res.writableEnded = false; res.destroyed = false;

@@ -1,0 +1,139 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { keccak256 } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+
+import * as sdk from '../../sdk/dist/index.js';
+import { rwaV2Fixture } from '../../examples/rwa-v2/fixture.mjs';
+
+const executionRegistry = JSON.parse(
+  readFileSync(new URL('../../protocol/rwa-execution-profiles.v1.json', import.meta.url), 'utf8')
+);
+const instrument = {
+  schema: 'insight.rwa-instrument.v1',
+  underlyingId: 'figi-share-class:BBG001S5N8V8',
+  issuer: 'robinhood-rhj',
+  tokenChainId: 4663,
+  tokenAddress: '0xaf3d76f1834a1d425780943c99ea8a608f8a93f9',
+  venueMic: 'XNAS',
+  kind: 'equity',
+  currency: 'USD',
+  priceBasis: 'underlying-spot',
+  corporateActionVersion: 'rhj-registry-20260921',
+};
+function fixture() {
+  const f = rwaV2Fixture(sdk),
+    profile = executionRegistry.profiles[0].profile,
+    instrumentId = sdk.rwaInstrumentId(instrument);
+  assert.equal(instrumentId, profile.instrumentId);
+  f.input.instrument = structuredClone(instrument);
+  f.input.request.instrumentId = instrumentId;
+  f.policy.instrumentId = instrumentId;
+  for (const price of f.input.prices) {
+    price.instrumentId = instrumentId;
+    price.currency = instrument.currency;
+    price.priceBasis = instrument.priceBasis;
+    price.corporateActionVersion = instrument.corporateActionVersion;
+  }
+  f.input.market.instrumentId = instrumentId;
+  f.input.market.mic = instrument.venueMic;
+  for (const evidence of f.input.evidence) {
+    evidence.instrumentId = instrumentId;
+    if (evidence.kind !== 'eligibility') evidence.subject = instrumentId;
+  }
+  f.receiverEvidence.instrumentId = instrumentId;
+  f.callProfile = structuredClone(profile);
+  f.transaction = sdk.buildRwaSwapRouter02Transaction(profile, {
+    from: f.transaction.from,
+    nonce: f.transaction.nonce,
+    instrument,
+    action: 'buy',
+    fee: 500,
+    amountIn: f.input.request.amount,
+    minimumOutput: '1',
+    receiver: f.receiverEvidence.subject,
+    deadline: f.now + 120,
+  });
+  f.input.request.call = {
+    chainId: f.transaction.chainId,
+    from: f.transaction.from,
+    to: f.transaction.to,
+    calldataHash: keccak256(f.transaction.data),
+    value: f.transaction.value,
+    nonce: f.transaction.nonce,
+  };
+  return f;
+}
+
+test('Robinhood production profile constructs and decodes the pinned deadline-protected call', () => {
+  const f = fixture(),
+    semantics = sdk.decodeRwaCall(
+      f.transaction,
+      f.input.request,
+      f.input.instrument,
+      f.callProfile,
+      f.now
+    );
+  assert.equal(semantics.pool, f.callProfile.pools[0].address);
+  assert.equal(semantics.deadline, f.now + 120);
+  assert.equal(semantics.minimumOutput, '1');
+});
+
+test('PriorSeal independently requires the signed production admission commitment', async () => {
+  const f = fixture(),
+    signer = privateKeyToAccount('0x' + '12'.repeat(32)),
+    instrumentAdmission = {
+      schema: 'insight.rwa-instrument-admission-commitment.v1',
+      registryId: 'insight.rwa-instrument-registry.v1',
+      registryVersion: '2026-09-29.active.1',
+      registryDigest: '0x' + '66'.repeat(32),
+      instrumentId: f.input.request.instrumentId,
+      admissionDigest: '0x' + '77'.repeat(32),
+    };
+  f.policy.environment = 'production';
+  const report = sdk.buildRwaReportV2(f.input, f.policy, f.now, {
+      sequence: '0',
+      previousDigest: null,
+      transaction: f.transaction,
+      callProfile: f.callProfile,
+      receiverEvidence: f.receiverEvidence,
+      instrumentAdmission,
+    }),
+    proof = {
+      report,
+      digest: sdk.rwaV2ReportDigest(report),
+      signer: signer.address,
+      signature: await signer.signTypedData(sdk.rwaV2SigningData(report)),
+    },
+    trust = {
+      policy: structuredClone(f.policy),
+      policyId: sdk.rwaPolicyId(f.policy),
+      request: structuredClone(f.input.request),
+      environment: 'production',
+      keys: [
+        {
+          address: signer.address,
+          validFrom: f.now - 60,
+          validUntil: f.now + 3600,
+          revoked: false,
+        },
+      ],
+      callProfile: structuredClone(f.callProfile),
+      instrumentAdmission: structuredClone(instrumentAdmission),
+    };
+  assert.equal((await sdk.verifyRwaReportV2(proof, trust, f.now)).valid, true);
+  delete trust.instrumentAdmission;
+  assert.equal((await sdk.verifyRwaReportV2(proof, trust, f.now)).valid, false);
+  assert.throws(
+    () =>
+      sdk.buildRwaReportV2(f.input, f.policy, f.now, {
+        sequence: '0',
+        previousDigest: null,
+        transaction: f.transaction,
+        callProfile: f.callProfile,
+        receiverEvidence: f.receiverEvidence,
+      }),
+    /RWA_INSTRUMENT_ADMISSION_REQUIRED/
+  );
+});

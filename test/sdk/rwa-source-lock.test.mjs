@@ -10,7 +10,7 @@ const run=promisify(execFile), root=resolve(dirname(fileURLToPath(import.meta.ur
 async function fixture(t) {
   const dir=await mkdtemp(join(tmpdir(),'rwa-source-lock-'));
   t.after(()=>rm(dir,{recursive:true,force:true}));
-  const paths=['package.json','scripts/check-rwa-parity.mjs','protocol/rwa-source-lock.json','sdk/src/insight-rwa.ts','sdk/src/insight-rwa-call.ts','sdk/src/insight-rwa-v2.ts','examples/rwa-v2/golden.json'];
+  const paths=['package.json','scripts/check-rwa-parity.mjs','protocol/rwa-source-lock.json','protocol/rwa-execution-profiles.v1.json','sdk/src/insight-rwa.ts','sdk/src/insight-rwa-call.ts','sdk/src/insight-rwa-v2.ts','examples/rwa-v2/golden.json'];
   for(const path of paths){await mkdir(dirname(join(dir,path)),{recursive:true});await copyFile(join(root,path),join(dir,path));}
   return {dir,check:()=>run(process.execPath,[join(dir,'scripts/check-rwa-parity.mjs'),'--peer',root])};
 }
