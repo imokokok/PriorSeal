@@ -1,17 +1,25 @@
-import { readFileSync } from 'node:fs';
-
+// Generated from file-key-provider.mts by npm run core:build. Do not edit directly.
+import { readFileSync } from "node:fs";
 function readPem(file) {
-  const value = readFileSync(file, 'utf8');
-  // Some secret stores preserve pasted line breaks as the two characters "\\n".
-  // Normalize that representation before handing the PEM to Node's crypto APIs.
-  return value.includes('\\n') && !value.includes('\n') ? value.replaceAll('\\n', '\n') : value;
+  const value = readFileSync(file, "utf8");
+  return value.includes("\\n") && !value.includes("\n") ? value.replaceAll("\\n", "\n") : value;
 }
-
-/** Development-only provider. It returns key material only to the signing composition root. */
-export function createFileKeyProvider({ privateKeyFile, publicKeyFile } = {}) {
-  let privateKey; let publicKey;
+function createFileKeyProvider({ privateKeyFile, publicKeyFile } = {}) {
+  let privateKey;
+  let publicKey;
   return {
-    getPrivateKey() { if (!privateKeyFile) return undefined; privateKey ??= readPem(privateKeyFile); return privateKey; },
-    getPublicKey() { if (!publicKeyFile) return undefined; publicKey ??= readPem(publicKeyFile); return publicKey; },
+    getPrivateKey() {
+      if (!privateKeyFile) return void 0;
+      privateKey ??= readPem(privateKeyFile);
+      return privateKey;
+    },
+    getPublicKey() {
+      if (!publicKeyFile) return void 0;
+      publicKey ??= readPem(publicKeyFile);
+      return publicKey;
+    }
   };
 }
+export {
+  createFileKeyProvider
+};

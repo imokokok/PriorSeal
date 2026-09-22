@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.mts"]
+  "include": ["src/**/*.mts", "worker-configuration.d.ts"]
 }

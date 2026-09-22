@@ -6,9 +6,9 @@ import { signEd25519Statement, verifyEd25519Statement } from './ed25519.mjs';
 export const RECEIPT_SCHEMA = 'priorseal.execution-receipt.v1';
 
 type ReceiptIntent = BindingIntent & { intentHash: string };
-type BuildReceiptInput = {
+type BuildReceiptInput<E extends BindingExecution> = {
   intent: ReceiptIntent;
-  execution: BindingExecution;
+  execution: E;
   issuer: string;
   keyId?: string;
   issuedAt?: number;
@@ -16,7 +16,7 @@ type BuildReceiptInput = {
   reasonCodes?: string[];
 };
 
-export function buildReceipt({ intent, execution, issuer, keyId = 'default', issuedAt = Math.floor(Date.now() / 1000), verifierVersion = '1.0.0', reasonCodes = [] }: BuildReceiptInput) {
+export function buildReceipt<E extends BindingExecution>({ intent, execution, issuer, keyId = 'default', issuedAt = Math.floor(Date.now() / 1000), verifierVersion = '1.0.0', reasonCodes = [] }: BuildReceiptInput<E>) {
   if (!Number.isSafeInteger(issuedAt) || issuedAt <= 0) throw new TypeError('Receipt issuedAt must be a positive Unix timestamp');
   const observedAt = execution?.observedAt ?? execution?.executedAt;
   if (observedAt != null && (!Number.isSafeInteger(observedAt) || issuedAt < observedAt)) throw new TypeError('Receipt cannot be issued before the execution observation');

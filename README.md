@@ -31,7 +31,7 @@ npm run start:api
 npm --prefix web run dev
 ```
 
-Migrated `src/**/*.mts` modules are TypeScript sources. After editing one, run `npm run core:build` to refresh its checked-in `.mjs` runtime artifact; both `npm run check` and `npm run build` reject stale generated files.
+All `src/` runtime modules have TypeScript sources. After editing one, run `npm run core:build` to refresh its checked-in `.mjs` runtime artifact; both `npm run check` and `npm run build` reject stale generated files. The RFC 3161 source is `src/domain/rfc3161-source.mts` and generates `src/domain/rfc3161.mjs` so the SDK can retain its existing import and declaration boundary. Regenerate Worker binding types with `wrangler types worker-configuration.d.ts` after changing `wrangler.jsonc`.
 
 The console is served by Vite on its displayed URL and proxies API calls to port 3000. It stores browser-local session activity only; it is not a server-side evidence archive. Amounts are atomic unsigned integer strings (never floats), such as `"1000000"`.
 
@@ -81,7 +81,7 @@ still requires matching evidence-chain scope, quorum and independent groups. See
 ## Quality checks
 
 ```bash
-npm run check          # JS syntax lint, SDK/web typecheck, tests, SDK/web build
+npm run check          # runtime syntax, core/SDK/web types, generated files, tests and builds
 npm run test:coverage
 npm run audit
 npm run release:check  # full gate including browser E2E, coverage and production-dependency audit

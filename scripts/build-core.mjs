@@ -19,8 +19,15 @@ function findSources(directory) {
 const sources = findSources(sourceRoot).sort();
 if (sources.length === 0) throw new Error('No TypeScript core sources found in src/');
 
+function runtimePath(sourcePath) {
+  // Keep the SDK's existing rfc3161.mjs import and its narrow declaration file.
+  // A same-name .mts would be pulled into the SDK's separate TypeScript rootDir.
+  if (sourcePath === join(sourceRoot, 'domain', 'rfc3161-source.mts')) return join(sourceRoot, 'domain', 'rfc3161.mjs');
+  return sourcePath.replace(/\.mts$/, '.mjs');
+}
+
 for (const sourcePath of sources) {
-  const outputPath = sourcePath.replace(/\.mts$/, '.mjs');
+  const outputPath = runtimePath(sourcePath);
   const outputLabel = `src/${relative(sourceRoot, outputPath).split(sep).join('/')}`;
   const name = sourcePath.slice(sourcePath.lastIndexOf(sep) + 1, -4);
   const source = readFileSync(sourcePath, 'utf8');
@@ -34,5 +41,22 @@ for (const sourcePath of sources) {
     }
   } else {
     writeFileSync(outputPath, output);
+  }
+}
+
+if (check) {
+  const outputs = new Set(sources.map(runtimePath));
+  function findRuntimeFiles(directory) {
+    return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) return findRuntimeFiles(path);
+      return entry.isFile() && entry.name.endsWith('.mjs') ? [path] : [];
+    });
+  }
+  for (const outputPath of findRuntimeFiles(sourceRoot)) {
+    if (!outputs.has(outputPath)) {
+      console.error(`src/${relative(sourceRoot, outputPath).split(sep).join('/')} has no TypeScript source`);
+      process.exitCode = 1;
+    }
   }
 }

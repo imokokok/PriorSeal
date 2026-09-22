@@ -1,3 +1,12 @@
 export type TimestampPolicy = { schema: 'priorseal.timestamp-policy.v1'; profile: 'digicert-rfc3161-v1'; maxClockSkewSeconds: number };
 export type TimestampEvidence = { schema: 'priorseal.rfc3161-evidence.v1'; domain: string; profile: string; tsaUrl: string; authorizationHash: string; requestedAt: number; nonce: string; timestamp: number; serialNumber: string; policyOid: string; digestAlgorithm: string; responseHash: string; response: string };
-export function verifyTimestampEvidence(evidence: TimestampEvidence | undefined, data: Uint8Array, policy: TimestampPolicy, options: { authorizationHash: string; requestedAt: number; before?: number; cryptoProvider?: Crypto }): Promise<{ valid: boolean; code: string; timestamp?: number; serialNumber?: string; profile?: string }>;
+export const RFC3161_POLICY_SCHEMA: 'priorseal.timestamp-policy.v1';
+export const RFC3161_EVIDENCE_SCHEMA: 'priorseal.rfc3161-evidence.v1';
+export const DIGICERT_RFC3161_PROFILE: 'digicert-rfc3161-v1';
+export const DIGICERT_RFC3161_URL: 'http://timestamp.digicert.com';
+export const DIGICERT_POLICY_OID: '2.16.840.1.114412.7.1';
+export function buildTimestampPolicy(input?: unknown): TimestampPolicy;
+export function createTimestampRequest(data: Uint8Array, cryptoProvider?: Crypto): Promise<{ body: Uint8Array<ArrayBuffer>; nonce: string }>;
+export function buildTimestampEvidence(input: { response: Uint8Array; authorizationHash: string; requestedAt: number; nonce: string; tsaUrl?: string; cryptoProvider?: Crypto }): Promise<TimestampEvidence>;
+export function validateTimestampEvidenceClaims(evidence: TimestampEvidence | null | undefined, policy: unknown, options?: { authorizationHash?: string; requestedAt?: number; before?: number }): { valid: boolean; code: string; timestamp?: number; serialNumber?: string; profile?: string };
+export function verifyTimestampEvidence(evidence: TimestampEvidence | null | undefined, data: Uint8Array, policy: unknown, options: { authorizationHash: string; requestedAt: number; before?: number; cryptoProvider?: Crypto }): Promise<{ valid: boolean; code: string; timestamp?: number; serialNumber?: string; profile?: string }>;

@@ -13,4 +13,3 @@ playwright-report/
 blob-report/
 coverage/
 .wrangler/
-worker-configuration.d.ts
