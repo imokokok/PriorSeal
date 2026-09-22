@@ -1,0 +1,76 @@
+import { hashJson } from './hashing.mjs';
+import { PriorSealError } from './errors.mjs';
+import { assertOnlyFields, assertSafeJson } from '../shared/safe-json.mjs';
+import { chainId, evmAddress, protocolId, uintString, unixSeconds } from './values.mjs';
+
+export const INTENT_SCHEMA = 'priorseal.intent.v1';
+export const EXACT_CALL_INTENT_SCHEMA = 'priorseal.intent.v2';
+export const EXACT_CALL_PROFILE = 'priorseal.execution-profile.exact-call.v1';
+const required = ['intentId', 'chainId', 'action', 'asset', 'amount', 'sender', 'recipient', 'validUntil'];
+
+type ContextCommitment = { namespace: string; algorithm: string; digest: string };
+
+/**
+ * New authorization flows accept one execution chain and typed constraint
+ * values. Historical receipt verification remains tolerant of representations
+ * accepted by older releases.
+ */
+export function assertIssuableIntentInput<T>(input: T): T {
+  const candidate = input as { chainIds?: unknown; nonce?: unknown; constraints?: { minConfirmations?: unknown } | null } | null | undefined;
+  if (candidate?.chainIds !== undefined) throw new PriorSealError('INVALID_INTENT', 'chainIds is not supported for new intents; use chainId');
+  if (candidate?.nonce == null) throw new PriorSealError('INVALID_INTENT', 'nonce is required for new intents');
+  if (candidate?.constraints?.minConfirmations != null && typeof candidate.constraints.minConfirmations !== 'number') throw new PriorSealError('INVALID_CONSTRAINT', 'minConfirmations must be a JSON number');
+  return input;
+}
+
+export function buildIntent(inputValue: unknown) {
+  assertSafeJson(inputValue);
+  const input = assertOnlyFields(inputValue, ['schema', 'executionProfile', 'intentId', 'chainId', 'chainIds', 'action', 'asset', 'amount', 'sender', 'recipient', 'validUntil', 'nonce', 'callTarget', 'calldataHash', 'transactionValue', 'contextCommitments', 'constraints'], 'intent');
+  if (required.some((key) => input[key] === undefined || input[key] === null)) throw new PriorSealError('INVALID_INTENT', `Missing intent field: ${required.find((key) => input[key] == null)}`);
+  const schema = input.schema ?? (input.executionProfile ? EXACT_CALL_INTENT_SCHEMA : INTENT_SCHEMA);
+  if (schema !== INTENT_SCHEMA && schema !== EXACT_CALL_INTENT_SCHEMA) throw new PriorSealError('INVALID_INTENT', 'intent schema is not supported');
+  const exactCall = schema === EXACT_CALL_INTENT_SCHEMA;
+  if (exactCall && input.executionProfile !== EXACT_CALL_PROFILE) throw new PriorSealError('INVALID_INTENT', `intent v2 requires executionProfile ${EXACT_CALL_PROFILE}`);
+  if (!exactCall && input.executionProfile != null) throw new PriorSealError('INVALID_INTENT', 'executionProfile requires priorseal.intent.v2');
+  if (exactCall && input.action !== 'CONTRACT_CALL') throw new PriorSealError('INVALID_INTENT', 'exact-call intents require action CONTRACT_CALL');
+  if (exactCall && (typeof input.chainId !== 'number' || !Number.isSafeInteger(input.chainId) || input.chainId < 1)) throw new PriorSealError('INVALID_CHAIN_ID', 'exact-call intent chainId must be a positive JSON integer');
+  if (exactCall && input.nonce == null) throw new PriorSealError('INVALID_INTENT', 'exact-call intents require an explicit transaction nonce');
+  if (exactCall && (input.callTarget == null || input.calldataHash == null || input.transactionValue == null)) throw new PriorSealError('INVALID_INTENT', 'exact-call intents require callTarget, calldataHash, and transactionValue');
+  const chainIds = input.chainIds;
+  if (chainIds != null && !Array.isArray(chainIds)) throw new PriorSealError('INVALID_INTENT', 'chainIds must be an array when provided');
+  const contextCommitments = normalizeContextCommitments(input.contextCommitments, exactCall);
+  const constraints = input.constraints == null ? undefined : assertOnlyFields(input.constraints, ['minConfirmations', 'maxGasUsed'], 'intent.constraints');
+  if (constraints !== undefined) {
+    if (constraints.minConfirmations != null && (!Number.isSafeInteger(Number(constraints.minConfirmations)) || Number(constraints.minConfirmations) < 0 || Number(constraints.minConfirmations) > 10_000)) throw new PriorSealError('INVALID_CONSTRAINT', 'minConfirmations must be an integer between 0 and 10000');
+    if (constraints.maxGasUsed != null) uintString(constraints.maxGasUsed, 'maxGasUsed');
+  }
+  if (input.calldataHash != null && !/^0x[0-9a-fA-F]{64}$/.test(input.calldataHash as string)) throw new PriorSealError('INVALID_INTENT', 'calldataHash must be a 32-byte hex value');
+  const intent = { schema, ...(exactCall ? { executionProfile: EXACT_CALL_PROFILE } : {}), intentId: protocolId(input.intentId, 'intentId'), chainId: chainId(input.chainId), ...(chainIds ? { chainIds: chainIds.map(chainId) } : {}), action: protocolId(input.action, 'action'), asset: String(input.asset), amount: uintString(input.amount, 'amount'), sender: evmAddress(input.sender, 'sender'), recipient: evmAddress(input.recipient, 'recipient'), validUntil: unixSeconds(input.validUntil, 'validUntil'), nonce: uintString(input.nonce ?? '0', 'nonce'), ...(input.callTarget != null ? { callTarget: evmAddress(input.callTarget, 'callTarget') } : {}), ...(input.calldataHash != null ? { calldataHash: (input.calldataHash as string).toLowerCase() } : {}), ...(input.transactionValue != null ? { transactionValue: uintString(input.transactionValue, 'transactionValue') } : {}), ...(contextCommitments ? { contextCommitments } : {}), ...(constraints ? { constraints: { ...constraints, ...(constraints.maxGasUsed != null ? { maxGasUsed: String(constraints.maxGasUsed) } : {}) } } : {}) };
+  const assetMatch = /^eip155:([1-9][0-9]*)\/(native|erc20:0x[0-9a-fA-F]{40})$/.exec(intent.asset);
+  if (!assetMatch) throw new PriorSealError('INVALID_ASSET', 'asset must be eip155:<chain>/native or eip155:<chain>/erc20:<address>');
+  if (Number(assetMatch[1]) !== intent.chainId) throw new PriorSealError('INVALID_ASSET', 'asset chain must match intent.chainId');
+  return { ...intent, intentHash: hashJson(intent) };
+}
+
+function normalizeContextCommitments(value: unknown, exactCall: boolean): ContextCommitment[] | undefined {
+  if (value == null) return undefined;
+  if (!exactCall) throw new PriorSealError('INVALID_INTENT', 'contextCommitments require priorseal.intent.v2');
+  if (!Array.isArray(value) || value.length < 1 || value.length > 16) throw new PriorSealError('INVALID_INTENT', 'contextCommitments must contain between 1 and 16 entries');
+  const normalized = value.map((entry, index) => {
+    const item = assertOnlyFields(entry, ['namespace', 'algorithm', 'digest'], `intent.contextCommitments[${index}]`);
+    const namespace = protocolId(item.namespace, `contextCommitments[${index}].namespace`);
+    const algorithm = String(item.algorithm ?? '').toLowerCase();
+    if (!['keccak256', 'sha256'].includes(algorithm)) throw new PriorSealError('INVALID_INTENT', `contextCommitments[${index}].algorithm must be keccak256 or sha256`);
+    const digest = String(item.digest ?? '').toLowerCase();
+    if (!/^0x[0-9a-f]{64}$/.test(digest)) throw new PriorSealError('INVALID_INTENT', `contextCommitments[${index}].digest must be a 32-byte hex value`);
+    return { namespace, algorithm, digest };
+  }).sort((left, right) => compareCommitmentKeys(left, right));
+  if (new Set(normalized.map((entry) => `${entry.namespace}:${entry.algorithm}:${entry.digest}`)).size !== normalized.length) throw new PriorSealError('INVALID_INTENT', 'contextCommitments must not contain duplicates');
+  return normalized;
+}
+
+function compareCommitmentKeys(left: ContextCommitment, right: ContextCommitment): number {
+  const leftKey = `${left.namespace}:${left.algorithm}:${left.digest}`;
+  const rightKey = `${right.namespace}:${right.algorithm}:${right.digest}`;
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}

@@ -31,6 +31,8 @@ npm run start:api
 npm --prefix web run dev
 ```
 
+Migrated `src/**/*.mts` modules are TypeScript sources. After editing one, run `npm run core:build` to refresh its checked-in `.mjs` runtime artifact; both `npm run check` and `npm run build` reject stale generated files.
+
 The console is served by Vite on its displayed URL and proxies API calls to port 3000. It stores browser-local session activity only; it is not a server-side evidence archive. Amounts are atomic unsigned integer strings (never floats), such as `"1000000"`.
 
 To run the receipt example (which creates its ignored temporary artifact directory):

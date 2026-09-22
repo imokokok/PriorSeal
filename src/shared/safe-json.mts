@@ -1,0 +1,29 @@
+import { PriorSealError } from '../domain/errors.mjs';
+
+const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+export function assertSafeJson<T>(value: T, { maxDepth = 16, path = '$' }: { maxDepth?: number; path?: string } = {}): T {
+  function visit(item: unknown, depth: number, itemPath: string): void {
+    if (depth > maxDepth) throw new PriorSealError('JSON_TOO_DEEP', `JSON exceeds maximum depth of ${maxDepth}`);
+    if (item === null || ['string', 'boolean'].includes(typeof item)) return;
+    if (typeof item === 'number') {
+      if (!Number.isFinite(item)) throw new PriorSealError('INVALID_JSON_VALUE', `Non-finite number at ${itemPath}`);
+      return;
+    }
+    if (Array.isArray(item)) return item.forEach((entry, index) => visit(entry, depth + 1, `${itemPath}[${index}]`));
+    if (typeof item !== 'object') throw new PriorSealError('INVALID_JSON_VALUE', `Unsupported value at ${itemPath}`);
+    for (const [key, entry] of Object.entries(item)) {
+      if (FORBIDDEN_KEYS.has(key)) throw new PriorSealError('DANGEROUS_JSON_KEY', `Dangerous key at ${itemPath}`);
+      visit(entry, depth + 1, `${itemPath}.${key}`);
+    }
+  }
+  visit(value, 0, path);
+  return value;
+}
+
+export function assertOnlyFields(value: unknown, allowed: readonly string[], label: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new PriorSealError('INVALID_REQUEST', `${label} must be an object`);
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unknown.length) throw new PriorSealError('UNKNOWN_FIELD', `${label} contains unsupported field(s)`, { fields: unknown });
+  return value as Record<string, unknown>;
+}
