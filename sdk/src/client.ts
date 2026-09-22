@@ -138,7 +138,8 @@ export class PriorSealClient {
       const job = await this.observationJob(jobId, options)
       if (['COMPLETED', 'UNDETERMINED', 'FAILED'].includes(job.state)) return job
       if (Date.now() - startedAt >= timeoutMs) throw new PriorSealApiError(`Observation job did not finish within ${timeoutMs}ms; resume this job instead of submitting a new transaction`, { code: 'OBSERVATION_WAIT_TIMEOUT', details: { jobId, authorizationId: job.input?.authorizationId, txHash: job.input?.txHash, job, retryAfterMs: pollIntervalMs } })
-      await abortableDelay(Math.min(pollIntervalMs, Math.max(1, timeoutMs - (Date.now() - startedAt))), options.signal)
+      const retryWaitMs = job.state === 'RETRY_WAIT' && Number.isFinite(job.nextAttemptAt) ? Math.max(0, job.nextAttemptAt - Date.now()) : 0
+      await abortableDelay(Math.min(Math.max(pollIntervalMs, retryWaitMs), Math.max(1, timeoutMs - (Date.now() - startedAt))), options.signal)
     }
   }
 
