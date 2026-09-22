@@ -1,4 +1,6 @@
 /** Public, stable library surface. Internal modules are intentionally not re-exported. */
+export { executeRwaAuthorized, reconcileRwaAttempt } from './application/rwa/execute-rwa.mjs';
+export { createRwaAttemptStore } from './infrastructure/persistence/rwa-attempt-store.mjs';
 export { createHttpServer } from './interfaces/http/create-http-server.mjs';
 export { createObservationWorker } from './application/observations/observation-worker.mjs';
 export { createMemoryStore } from './infrastructure/persistence/memory-store.mjs';
@@ -11,7 +13,7 @@ export { buildAuthorization, authorizationTypedData, verifyAuthorization, buildA
 export { assessCompliance, classifyExecutionOutcome, COMPLIANCE_STATUSES } from './domain/compliance.mjs';
 export { authorizeIntent } from './application/authorizations/authorize-intent.mjs';
 export { canonicalize, hashJson, sha256Hex } from './domain/canonical-json.mjs';
-export { buildTransparencyEvidence, verifyTransparencyEvidence } from './domain/transparency.mjs';
+export { buildMerkleTransparencyEvidence, buildTransparencyEvidence, verifyTransparencyEvidence } from './domain/transparency.mjs';
 export { buildWitnessPolicy, buildWitnessRequest, witnessRequestForAuthorization, buildWitnessAttestation, signWitnessAttestation, verifyWitnessAttestation, buildWitnessEvidence, verifyWitnessEvidence } from './domain/witness.mjs';
 export { createHttpWitnessProvider, readWitnessEndpoints } from './infrastructure/witness/http-witness-client.mjs';
 export { createWitnessHttpServer } from './interfaces/http/create-witness-http-server.mjs';

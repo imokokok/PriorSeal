@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { encodeFunctionData } from 'viem';
-import { buildTransparencyEvidence, hashJson, verifyTransparencyEvidence } from '../../src/index.mjs';
+import { buildMerkleTransparencyEvidence, buildTransparencyEvidence, createMemoryStore, hashJson, verifyTransparencyEvidence } from '../../src/index.mjs';
 import { verifyTransparencyAnchor } from '../../src/infrastructure/transparency/file-anchor-provider.mjs';
 
 test('transparency evidence links an acceptance entry to a signed checkpoint', () => {
@@ -21,6 +21,24 @@ test('transparency evidence links an acceptance entry to a signed checkpoint', (
   assert.equal(verifyTransparencyEvidence(wrongIssuer, acceptance, publicKeyPem), false);
 });
 
+test('Merkle checkpoints provide a bounded inclusion proof and bind a root anchor', async () => {
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
+  const store = createMemoryStore();
+  const first = await store.appendAuthorizationLog({ authorizationHash: 'a'.repeat(64), acceptedAt: 100 });
+  for (let sequence = 2; sequence <= 1024; sequence += 1) await store.appendAuthorizationLog({ authorizationHash: sequence.toString(16).padStart(64, '0'), acceptedAt: 101 });
+  const acceptance = { ...first, issuer: 'test', keyId: 'k1' };
+  const snapshot = await store.getAuthorizationMerkleSnapshot(acceptance);
+  const anchor = { type: 'eip155', chainId: 8453, contract: `0x${'1'.repeat(40)}`, txHash: `0x${'2'.repeat(64)}`, blockNumber: 100, anchoredAt: 102, size: snapshot.size, headEntryHash: snapshot.headEntryHash, merkleRoot: snapshot.merkleRoot };
+  const evidence = buildMerkleTransparencyEvidence({ acceptance, snapshot, issuer: 'test', keyId: 'k1', privateKeyPem, issuedAt: 103, anchor, before: 104 });
+  assert.ok(Buffer.byteLength(JSON.stringify(evidence)) < 2_000);
+  assert.equal(verifyTransparencyEvidence(evidence, acceptance, publicKeyPem, { before: 104 }), true);
+  assert.equal(verifyTransparencyEvidence({ ...evidence, proof: [{ ...evidence.proof[0], side: 'left' }, ...evidence.proof.slice(1)] }, acceptance, publicKeyPem), false);
+  assert.equal(verifyTransparencyEvidence(evidence, acceptance, publicKeyPem, { before: 101 }), false);
+  assert.throws(() => buildMerkleTransparencyEvidence({ acceptance, snapshot, issuer: 'test', keyId: 'k1', privateKeyPem, issuedAt: 103, anchor: { ...anchor, merkleRoot: 'f'.repeat(64) } }), /anchor/);
+});
+
 test('an external anchor is accepted only when its successful on-chain call matches', async () => {
   const contract = `0x${'1'.repeat(40)}`;
   const txHash = `0x${'2'.repeat(64)}`;
@@ -36,6 +54,12 @@ test('an external anchor is accepted only when its successful on-chain call matc
     return { hash: blockHash, timestamp: '0x3e8' };
   } };
   assert.deepEqual(await verifyTransparencyAnchor(anchor, { rpcClient, rpcUrls: ['https://rpc.invalid'], minConfirmations: 12 }), anchor);
+  const merkleRoot = '5'.repeat(64);
+  const merkleAnchor = { ...anchor, merkleRoot };
+  const merkleData = encodeFunctionData({ abi: [{ type: 'function', name: 'anchor', stateMutability: 'nonpayable', inputs: [{ name: 'size', type: 'uint256' }, { name: 'head', type: 'bytes32' }], outputs: [] }], functionName: 'anchor', args: [7n, `0x${merkleRoot}`] });
+  const merkleRpc = { call: (url, method, params) => method === 'eth_getTransactionByHash' ? Promise.resolve({ hash: txHash, to: contract, blockNumber: '0x64', blockHash, input: merkleData }) : rpcClient.call(url, method, params) };
+  assert.deepEqual(await verifyTransparencyAnchor(merkleAnchor, { rpcClient: merkleRpc, rpcUrls: ['https://rpc.invalid'], minConfirmations: 12 }), merkleAnchor);
+  await assert.rejects(() => verifyTransparencyAnchor(merkleAnchor, { rpcClient, rpcUrls: ['https://rpc.invalid'], minConfirmations: 12 }), /could not be verified/);
   await assert.rejects(() => verifyTransparencyAnchor({ ...anchor, size: 8 }, { rpcClient, rpcUrls: ['https://rpc.invalid'] }), /could not be verified/);
 });
 

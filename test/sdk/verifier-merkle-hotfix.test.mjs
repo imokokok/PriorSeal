@@ -6,7 +6,7 @@ import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAutho
 import { signReceipt } from '../../src/domain/receipt.mjs';
 import { verifyReceiptLocally } from '../../sdk/dist/verifier.js';
 
-test('0.6.1 verifier accepts signed v2 Merkle receipts but rejects tampered proofs', async () => {
+test('SDK verifier accepts signed v2 Merkle receipts but rejects tampered proofs', async () => {
   const keys = generateKeyPairSync('ed25519');
   const privateKey = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKey = keys.publicKey.export({ type: 'spki', format: 'pem' });

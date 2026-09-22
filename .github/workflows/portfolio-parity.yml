@@ -1,0 +1,31 @@
+name: Portfolio RWA parity
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out PriorSeal
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          path: priorseal
+      - name: Check out Insight
+        uses: actions/checkout@v5
+        with:
+          repository: imokokok/Insight
+          ref: main
+          path: insight
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check shared RWA source and frozen vectors across both releases
+        run: node priorseal/scripts/check-rwa-parity.mjs --peer insight

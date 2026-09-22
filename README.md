@@ -1,5 +1,10 @@
 # PriorSeal
 
+[Unreleased, opt-in RWA integration](examples/rwa-v1/README.md) adds assessment-bound
+exact calls and combined verification while retaining the existing Agent workflows.
+The [RWA v2 hardening](docs/rwa-hardening.md) adds semantic call profiles, receiver
+checks, a durable Node execution boundary and detailed failure verification.
+
 [![CI](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml/badge.svg)](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
 [![MIT License](https://img.shields.io/badge/license-MIT-151513.svg)](LICENSE)
@@ -65,6 +70,12 @@ const evidence = await priorseal.observeExecution({
 
 The SDK handles typed API calls, exact-call intent construction, wallet authorization, durable observation polling, idempotency, timeouts and structured errors. Import `verifyReceiptLocally` or `verifyVerificationBundleLocally` from `priorseal-sdk/verifier` to verify evidence without sending receipt bytes to PriorSeal. It does not sign or submit transactions. ERC-1271 and EVM anchors are reported as explicit external chain-state requirements. See [`sdk/README.md`](sdk/README.md) and the console route `/app/sdk`.
 
+Optional Insight coverage binding recognizes Band Protocol as an independent
+source group. BandChain v3 source age is evaluated through Insight's shared
+freshness rules; PriorSeal's default signed coverage gate is 300 seconds and
+still requires matching evidence-chain scope, quorum and independent groups. See the
+[coverage-readiness runbook](docs/runbooks/coverage-readiness.md).
+
 ## Quality checks
 
 ```bash
@@ -122,13 +133,13 @@ Intent `validUntil` bounds the block execution time; it does not expire a receip
 
 Issuer private keys are read only from a configured local file for development and must never enter HTTP requests, logs, the frontend bundle, database records, or Git. `PRIORSEAL_KEY_REGISTRY_FILE` may point to a public-only `priorseal.keys.v1` JSON document so retired keys remain published for historical verification. Production deployments should replace the signing provider with a KMS/HSM/secret-manager adapter. See [the threat model](docs/security/threat-model.md), [API compatibility](docs/api/compatibility.md), and [lifecycle](docs/architecture/lifecycle.md).
 
-Accepted authorizations are appended to a signed hash-chain checkpoint. `PRIORSEAL_TRANSPARENCY_ANCHOR_FILE` can attach a confirmed external EVM anchor to a checkpoint without giving PriorSeal custody of an anchoring wallet; startup verifies the successful anchor call, block and timestamp against a configured RPC. See [signed authorization](docs/architecture/signed-authorization.md). The Solidity contracts under `contracts/` are unaudited reference implementations and must not be enabled on a production Safe or funded account.
+Accepted authorizations remain in an ordered hash-chain log. New receipts use a signed Merkle checkpoint with a logarithmic inclusion proof instead of embedding the entire chain; historical chain-proof receipts remain verifiable. New external anchors commit to the Merkle root, while existing head-hash anchors retain their original proof format. Apply migration 010 before deployment; startup fails closed without its index. `PRIORSEAL_TRANSPARENCY_ANCHOR_FILE` continues to require a confirmed transaction verified through a configured RPC. See [signed authorization](docs/architecture/signed-authorization.md). The Solidity contracts under `contracts/` are unaudited reference implementations and must not be enabled on a production Safe or funded account.
 
 Production mode is fail-closed. Set `PRIORSEAL_ENVIRONMENT=production`; startup then requires explicit database URLs, issuer keys, non-default issuer/audience values, a production policy, production CORS, and `PRIORSEAL_PREEXECUTION_PROOF_MODE=rfc3161`, `witness-quorum`, or `evm-anchor`. A reviewed principal registry remains the default. Public betas must explicitly opt in with `PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS=true`; this verifies wallet control but not the user's claimed real-world identity. The production example uses `rfc3161`. EVM mode remains available for deployments that require public-chain consensus; `npm run contracts:build`, `npm run anchor:prepare`, and `npm run anchor:record` support its custody-free workflow.
 
 ## Persistence and operations
 
-Neon is the production persistence backend. The Cloudflare Worker reaches it through Hyperdrive; local Node operation uses `DATABASE_URL`, and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. Apply migrations through `008_observation_job_leases.sql`; they establish authorization, timestamp and witness evidence storage, durable intents, observation versions, idempotency records, and leased at-least-once worker results that recover after an interrupted consumer. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
+Neon is the production persistence backend. The Cloudflare Worker reaches it through Hyperdrive; local Node operation uses `DATABASE_URL`, and `DATABASE_URL_UNPOOLED` is used only by `npm run db:migrate`. Apply migrations through `010_authorization_merkle_index.sql`; they establish authorization, timestamp and witness evidence storage, durable intents, observation versions, idempotency records, leased at-least-once worker results, and the compact-proof index. Migrations are forward-only. Read [database operations](docs/runbooks/database.md) before applying them.
 
 The production web console and API run together on Cloudflare Workers. Static assets are served from `web/dist`, API and health paths run Worker-first, Hyperdrive provides the PostgreSQL connection, Cloudflare Queues dispatch durable observation jobs, and the minute cron recovers work that was persisted before a queue delivery. The production domains are `https://priorseal.xyz` and `https://www.priorseal.xyz`; `https://priorseal.priorseal.workers.dev` remains available for deployment diagnostics. Validate the bundle with `npm run worker:check`, deploy a clean commit with `npm run worker:deploy`, and pass that exact Git SHA as `PRIORSEAL_EXPECTED_VERSION` to the no-spend production smoke commands. Store every value named by `secrets.required` in Worker Secrets, never in Git. See the [Cloudflare runbook](docs/runbooks/cloudflare.md).
 

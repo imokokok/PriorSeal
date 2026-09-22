@@ -1,12 +1,25 @@
 # priorseal-sdk
 
+The opt-in [RWA exact-call binding and combined receipt verification](https://github.com/imokokok/PriorSeal/tree/main/examples/rwa-v1)
+do not alter existing authorization or receipt semantics. RWA v2 adds linked
+same-second assessments, admitted calldata/receiver checks and
+`inspectRwaReceiptBundle` for separate integrity/trust/time/policy/execution results.
+For safe submission use the Node application entry described in
+[RWA v2 hardening](https://github.com/imokokok/PriorSeal/blob/main/docs/rwa-hardening.md); SDK low-level callbacks alone do not
+enforce principal authorization or durable replay protection.
+
 Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.6.1
+npm install priorseal-sdk@0.7.0
 ```
 
-This documentation targets **0.6.1**. This patch retains the 0.6.0 API and adds independent verification of compact v2 Merkle transparency receipts; it does not issue v2 receipts. It includes compiled JavaScript, TypeScript declarations and third-party license notices.
+This documentation targets **0.7.0**. It includes v2 Merkle transparency verification, the optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+
+The workspace coverage policy also recognizes Band Protocol as an independent
+source group. Insight carries BandChain v3 source age into its shared freshness
+checks, while the default PriorSeal coverage verifier applies the 300-second
+policy carried in the independently pinned policy bytes.
 
 ## Client
 
@@ -46,7 +59,7 @@ if (result.requiredExternalChecks.length) {
 }
 ```
 
-The verifier performs no network requests. It recomputes canonical intent, authorization and execution hashes, policy results, binding reason codes, outcomes and identifiers; it also checks the authorization against `expectedAudience` (defaulting to `priorseal`) and verifies EIP-712 EOA, Ed25519, RFC 3161, witness and transparency-chain evidence. Set the deployment-specific audience explicitly in production. ERC-1271 signatures and EVM anchor inclusion require chain state and are returned in `requiredExternalChecks` rather than being treated as offline facts.
+The verifier performs no network requests. It recomputes canonical intent, authorization and execution hashes, policy results, binding reason codes, outcomes and identifiers; it also checks the authorization against `expectedAudience` (defaulting to `priorseal`) and verifies EIP-712 EOA, Ed25519, RFC 3161, witness, legacy hash-chain and compact Merkle transparency evidence. Set the deployment-specific audience explicitly in production. ERC-1271 signatures and EVM anchor inclusion require chain state and are returned in `requiredExternalChecks` rather than being treated as offline facts.
 
 `verifyReceiptRemotely` remains available as a convenience API call, but it is not independent verification.
 

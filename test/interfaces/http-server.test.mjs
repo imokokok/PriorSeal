@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Readable } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import { brotliDecompressSync } from 'node:zlib';
 import { createHttpServer } from '../../src/index.mjs';
 import { authorizationTypedData, buildAuthorization, hashJson } from '../../src/index.mjs';
@@ -19,11 +19,27 @@ async function serverFor(testContext) {
   const server = createHttpServer({ observer: async () => ({ chainId: 8453, txHash: `0x${'1'.repeat(64)}`, status: 'PENDING', sender, recipient, finalityState: 'PENDING' }) });
   testContext.after(() => server.close()); return server;
 }
-async function request(server, path, { method = 'GET', headers = {}, body } = {}) {
-  const req = Readable.from(body ? [Buffer.from(body)] : []); Object.assign(req, { method, url: path, headers, socket: { remoteAddress: '127.0.0.1' } });
+async function request(server, path, { method = 'GET', headers = {}, body, stream } = {}) {
+  const req = stream ?? Readable.from(body ? [Buffer.from(body)] : []); Object.assign(req, { method, url: path, headers, socket: { remoteAddress: '127.0.0.1' } });
   const res = new EventEmitter(); res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
   const done = new Promise((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers, buffer: () => Buffer.from(res.body ?? ''), json: () => JSON.parse(res.body), text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
+test('request deadline terminates stalled bodies and rejects slow route work', async (t) => {
+  const store = { async health() { await new Promise(resolve => setTimeout(resolve, 80)); return 'ok'; } };
+  const server = createHttpServer({ store, requestTimeoutMs: 20 });
+  t.after(() => server.close());
+  assert.equal(server.requestTimeout, 20);
+
+  const stalled = new PassThrough();
+  const bodyTimeout = await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, stream: stalled });
+  assert.equal(bodyTimeout.status, 504);
+  assert.equal(bodyTimeout.json().error.code, 'REQUEST_TIMEOUT');
+  assert.equal(stalled.destroyed, true);
+
+  const routeTimeout = await request(server, '/health/ready');
+  assert.equal(routeTimeout.status, 504);
+  assert.equal(routeTimeout.json().error.code, 'REQUEST_TIMEOUT');
+});
 test('private archive enforces credentials, reviewer scope, tenant isolation and no-store HTTP responses', async (t) => {
   const writer = 'w'.repeat(48), reviewer = 'r'.repeat(48), other = 'o'.repeat(48);
   const credential = (token, role, projectId = 'alpha') => ({ tokenHash: createHash('sha256').update(token).digest('hex'), projectId, environment: 'test', role });

@@ -13,13 +13,13 @@ function database({ migration = true, resultColumn = true, leaseColumns = true, 
   };
 }
 
-test('production schema requires migration 008 and its durable result and lease columns', async () => {
-  await assert.rejects(() => assertProductionSchema(database({ migration: false }), { preExecutionProofMode: 'rfc3161' }), /008_observation_job_leases/);
+test('production schema requires the Merkle index migration and durable observation columns', async () => {
+  await assert.rejects(() => assertProductionSchema(database({ migration: false }), { preExecutionProofMode: 'rfc3161' }), /010_authorization_merkle_index/);
   await assert.rejects(() => assertProductionSchema(database({ resultColumn: false }), { preExecutionProofMode: 'rfc3161' }), /Durable observation result column/);
   await assert.rejects(() => assertProductionSchema(database({ leaseColumns: false }), { preExecutionProofMode: 'rfc3161' }), /lease columns/);
   const ready = await assertProductionSchema(database(), { preExecutionProofMode: 'rfc3161' });
   assert.equal(ready.migration, REQUIRED_PRODUCTION_MIGRATION);
-  assert.deepEqual(ready.requiredTables, ['authorization_log', 'authorizations', 'observation_jobs']);
+  assert.deepEqual(ready.requiredTables, ['authorization_log', 'authorization_log_merkle_nodes', 'authorizations', 'observation_jobs']);
 });
 
 test('enabling the project archive requires its recorded migration and scoped table', async () => {

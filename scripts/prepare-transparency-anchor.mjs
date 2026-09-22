@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { encodeFunctionData, isAddress } from 'viem';
+import { createPostgresStore } from '../src/infrastructure/persistence/postgres-store.mjs';
 
 const { Pool } = pg;
 const contract = process.env.PRIORSEAL_ANCHOR_CONTRACT;
@@ -16,8 +17,9 @@ try {
   if (!row) throw new TypeError('The authorization log is empty');
   const size = Number(row.sequence);
   const headEntryHash = String(row.entry_hash);
-  const data = encodeFunctionData({ abi: anchorAbi(), functionName: 'anchor', args: [BigInt(size), `0x${headEntryHash}`] });
-  console.log(JSON.stringify({ chainId, to: contract.toLowerCase(), value: '0x0', data, checkpoint: { size, headEntryHash } }, null, 2));
+  const { merkleRoot } = await createPostgresStore(pool).getAuthorizationMerkleSnapshot({ sequence: size, entryHash: headEntryHash }, size);
+  const data = encodeFunctionData({ abi: anchorAbi(), functionName: 'anchor', args: [BigInt(size), `0x${merkleRoot}`] });
+  console.log(JSON.stringify({ chainId, to: contract.toLowerCase(), value: '0x0', data, checkpoint: { size, headEntryHash, merkleRoot } }, null, 2));
 } finally {
   await pool.end();
 }

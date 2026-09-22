@@ -1,5 +1,10 @@
 export { PriorSealApiError, PriorSealClient, createPriorSealClient, generateAuthorizationNonce } from './client.js'
 export { buildExactCallIntent } from './exact-call.js'
+export * from './rwa-binding.js'
+export { verifyRwaReceiptBundle, inspectRwaReceiptBundle } from './rwa-receipt.js'
+export * from './insight-rwa.js'
+export * from './insight-rwa-call.js'
+export * from './insight-rwa-v2.js'
 export { matchContextCommitment, matchUniqueContextCommitment } from './context-commitment.js'
 export {
   matchWeb3AgentKitCallEnvelope,

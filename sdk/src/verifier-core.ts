@@ -335,7 +335,7 @@ function receiptResultFields(receipt: Receipt) {
   return { outcome: receipt?.outcome, executionStatus: receipt?.executionStatus ?? receipt?.execution?.status, complianceStatus: receipt?.compliance?.status, receiptId: receipt?.receiptId }
 }
 
-async function verifyEd25519(statement: object & { signature?: string }, publicKey: string) {
+export async function verifyEd25519(statement: object & { signature?: string }, publicKey: string) {
   const { signature, ...unsigned } = statement
   if (!signature || !/^[A-Za-z0-9_-]{86}$/.test(signature)) return false
   const signatureBytes = decodeBase64(signature)

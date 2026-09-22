@@ -1,0 +1,15 @@
+{
+  "environment": "SIMULATION",
+  "networkCalls": 0,
+  "sourceParity": true,
+  "crossSdkSignature": true,
+  "principalAuthorized": true,
+  "exactCallCallbacks": 1,
+  "receiptVerified": true,
+  "replayRejected": true,
+  "haltBeforeExecutionRejected": true,
+  "receiptTamperRejected": true,
+  "productionTrustRejectsSimulation": true,
+  "missingIssuerKeyRejected": true,
+  "productionReadiness": "NOT_ACTIVATED"
+}
