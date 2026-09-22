@@ -43,7 +43,7 @@ test('expired prepare never opens wallet signing and observation timeout preserv
   const f = setup({ expire: true });
   await assert.rejects(f.client.authorizeWithWallet(f.input, f.provider), { code: 'AUTHORIZATION_EXPIRED' });
   assert.equal(f.stats().signs, 0);
-  const job = { jobId: 'job-1', input: { authorizationId: 'auth-1', txHash: `0x${'1'.repeat(64)}` }, state: 'RETRY_WAIT' };
+  const job = { jobId: 'job-1', input: { authorizationId: 'auth-1', txHash: `0x${'1'.repeat(64)}` }, state: 'RETRY_WAIT', nextAttemptAt: Date.now() + 60_000 };
   const client = createPriorSealClient({ fetch: async () => Response.json(job) });
   await assert.rejects(client.waitForObservationJob('job-1', { timeoutMs: 1, pollIntervalMs: 10 }), error => error.code === 'OBSERVATION_WAIT_TIMEOUT' && error.details.jobId === 'job-1' && error.details.authorizationId === 'auth-1');
 });

@@ -111,3 +111,24 @@ test('SDK waits for a durable observation job and returns its final receipt', as
   assert.equal(result.observation.status, 'CONFIRMED');
   assert.equal(result.observationJob.state, 'COMPLETED');
 });
+
+test('SDK waits until the retry is due without repeatedly fetching the same job', async () => {
+  const nextAttemptAt = Date.now() + 100;
+  const pollTimes = [];
+  const client = createPriorSealClient({ fetch: async () => {
+    pollTimes.push(Date.now());
+    return response({ jobId: 'job-retry', state: Date.now() >= nextAttemptAt ? 'COMPLETED' : 'RETRY_WAIT', nextAttemptAt, input: {}, observation: null, result: null, error: null });
+  } });
+  const job = await client.waitForObservationJob('job-retry', { pollIntervalMs: 10, timeoutMs: 1000 });
+  assert.equal(job.state, 'COMPLETED');
+  assert.ok(pollTimes.length <= 3, `Expected at most three polls, received ${pollTimes.length}`);
+  assert.ok(pollTimes.at(-1) >= nextAttemptAt);
+});
+
+test('SDK polling remains abortable while waiting for a retry', async () => {
+  const controller = new AbortController();
+  const client = createPriorSealClient({ fetch: async () => response({ jobId: 'job-retry', state: 'RETRY_WAIT', nextAttemptAt: Date.now() + 60_000, input: {} }) });
+  const waiting = client.waitForObservationJob('job-retry', { pollIntervalMs: 10, timeoutMs: 120_000, signal: controller.signal });
+  setTimeout(() => controller.abort(), 10);
+  await assert.rejects(waiting, { code: 'REQUEST_ABORTED' });
+});

@@ -158,7 +158,11 @@ if (runPendingFlow) {
     }, `smoke-pending-observe-${pendingSuffix}`)).body;
     const expectedOutcome = observed.observation?.status === 'PENDING' ? 'PENDING' : 'UNDETERMINED';
     assert(observed.receipt?.outcome === expectedOutcome, 'Non-final execution was incorrectly classified');
-    assert(observed.receipt?.compliance?.status === 'NOT_ASSESSABLE', 'Non-final execution was incorrectly assessed for compliance');
+    if (observed.receipt.schema === 'priorseal.execution-receipt.v1') {
+      assert(observed.receipt.compliance === undefined, 'Legacy receipt unexpectedly included v3 compliance claims');
+    } else {
+      assert(observed.receipt.schema === 'priorseal.execution-receipt.v3' && observed.receipt.compliance?.status === 'NOT_ASSESSABLE', 'Non-final execution was incorrectly assessed for compliance');
+    }
     assert(observed.authorizationAssociation !== 'FINAL', 'Non-final execution incorrectly claimed the authorization');
     assert(observed.observationJob?.jobId, 'Pending execution did not return a durable job');
     receiptId = observed.receipt.receiptId;

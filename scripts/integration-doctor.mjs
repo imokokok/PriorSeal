@@ -15,7 +15,6 @@ export async function integrationDoctor(options = {}) {
   if (!Number.isSafeInteger(chainId) || chainId <= 0 || !Number.isSafeInteger(maxSourceAgeSeconds) || maxSourceAgeSeconds < 1) throw new Error('chain and freshness must be positive integers');
   if (!/^[A-Za-z0-9._-]{1,40}$/.test(asset)) throw new Error('Invalid asset symbol');
   if (probe && (offer === 'priorseal' || !apiKey)) throw new Error('An Insight offer and INSIGHT_API_KEY are required for the explicit, billable probe');
-  const checks = [];
   const read = async (base, path, authenticated = false) => {
     const startedAt = performance.now();
     try {
@@ -23,20 +22,21 @@ export async function integrationDoctor(options = {}) {
       const body = await response.json();
       const check = { path: path.split('?')[0], status: response.status, durationMs: Math.round(performance.now() - startedAt), ok: response.ok };
       if (authenticated) check.billing = { requestId: response.headers.get('x-request-id'), cost: response.headers.get('x-credit-cost'), status: response.headers.get('x-credit-status'), receipt: response.headers.get('x-credit-receipt'), balanceAfter: response.headers.get('x-credit-balance-after') };
-      checks.push(check);
       return { check, body };
     } catch {
       const check = { path: path.split('?')[0], ok: false, status: null, durationMs: Math.round(performance.now() - startedAt), error: 'REQUEST_UNAVAILABLE' };
-      checks.push(check);
       return { check, body: null };
     }
   };
-  if (offer !== 'priorseal') {
+  const insightChecksPromise = offer !== 'priorseal' ? (async () => {
     const base = origin(insightUrl);
-    const live = await read(base, '/api/v1/health');
+    const [live, ready] = await Promise.all([
+      read(base, '/api/v1/health'),
+      read(base, '/api/v1/health/ready'),
+    ]);
     live.check.ok &&= live.body?.data?.status === 'ok';
-    const ready = await read(base, '/api/v1/health/ready');
     ready.check.ok &&= ready.body?.data?.status === 'ready';
+    const checks = [live.check, ready.check];
     if (probe) for (let i = 0; i < samples; i++) {
       if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000));
       const query = new URLSearchParams({ asset: asset.toUpperCase(), chainId: String(chainId), probe: 'true', maxSourceAgeSeconds: String(maxSourceAgeSeconds) });
@@ -49,19 +49,26 @@ export async function integrationDoctor(options = {}) {
         freshnessShortfall: diagnostic.freshnessShortfall,
         providers: diagnostic.providers?.map(p => ({ provider: p.provider, reason: p.reason, dataAgeSeconds: p.dataAgeSeconds, fetchDurationMs: p.fetchDurationMs, fresh: p.fresh, included: p.included })),
       } : null;
+      checks.push(check);
     }
-  }
-  if (offer !== 'insight') {
+    return checks;
+  })() : Promise.resolve([]);
+  const priorsealChecksPromise = offer !== 'insight' ? (async () => {
     const base = origin(priorsealUrl);
-    const live = await read(base, '/health/live');
+    const [live, ready, capabilities] = await Promise.all([
+      read(base, '/health/live'),
+      read(base, '/health/ready'),
+      read(base, '/v1/capabilities'),
+    ]);
     live.check.ok &&= live.body?.status === 'ok';
-    const ready = await read(base, '/health/ready');
     ready.check.ok &&= ready.body?.status === 'ready';
-    const capabilities = await read(base, '/v1/capabilities');
     capabilities.check.capabilities = capabilities.body;
     // Discovery is intentionally not a declaration of signer trust or live RPC availability.
     capabilities.check.ok &&= typeof capabilities.body?.audience === 'string';
-  }
+    return [live.check, ready.check, capabilities.check];
+  })() : Promise.resolve([]);
+  const [insightChecks, priorsealChecks] = await Promise.all([insightChecksPromise, priorsealChecksPromise]);
+  const checks = [...insightChecks, ...priorsealChecks];
   return { schema: 'workflow.integration-diagnostic.v1', checkedAt: new Date().toISOString(), offer, ok: checks.every(c => c.ok), scope: probe ? 'PUBLIC_HEALTH_AND_BILLABLE_COVERAGE_NOT_SIGNED_ASSESSMENT' : 'PUBLIC_HEALTH_AND_CONFIGURATION_ONLY', checks };
 }
 
