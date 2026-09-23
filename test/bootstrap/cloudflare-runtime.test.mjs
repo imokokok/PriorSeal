@@ -11,6 +11,7 @@ const policy = { policyId: 'public-beta', allowedChainIds: [8453], allowedAction
 function workerEnvironment(overrides = {}) {
   return {
     PRIORSEAL_RUNTIME: 'cloudflare-workers',
+    PRIORSEAL_DATABASE_BACKEND: 'd1',
     PRIORSEAL_ENVIRONMENT: 'production',
     PRIORSEAL_ISSUER: 'priorseal.xyz',
     PRIORSEAL_KEY_ID: 'production-1',
@@ -23,18 +24,18 @@ function workerEnvironment(overrides = {}) {
     PRIORSEAL_PREEXECUTION_PROOF_MODE: 'rfc3161',
     PRIORSEAL_CORS_ORIGINS: 'https://priorseal.xyz',
     PRIORSEAL_TRUST_PROXY: 'true',
-    DATABASE_URL: 'postgresql://worker:secret@example.neon.tech/priorseal?sslmode=require',
     ...overrides,
   };
 }
 
-test('Cloudflare production config accepts inline secrets and Hyperdrive without a migration URL', () => {
+test('Cloudflare production config accepts inline secrets and D1 without PostgreSQL URLs', () => {
   const config = loadRuntimeConfig(workerEnvironment());
   assert.equal(config.runtime, 'cloudflare-workers');
+  assert.equal(config.databaseBackend, 'd1');
+  assert.equal(config.databaseUrl, undefined);
   assert.equal(config.databaseDirectUrl, undefined);
   assert.equal(config.privateKeyPem, privateKeyPem);
   assert.equal(config.publicKeyPem, publicKeyPem);
-  assert.equal(config.databaseUrl.includes('sslmode=verify-full'), true);
   assert.equal(parsePolicyDocument(config.policyJson).timestampPolicy.profile, 'digicert-rfc3161-v1');
 });
 

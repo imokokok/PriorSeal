@@ -1,5 +1,7 @@
 # ADR 011: Cloudflare Worker production adapter
 
+**Status:** Superseded for production persistence by [ADR 012](012-cloudflare-d1.md). The Worker, Static Assets, Rate Limiting, Queue, cron, routes, and secret-management decisions remain active.
+
 **Context:** the container host sleeps on the free tier, while PriorSeal needs an always-addressable API, static console delivery, recoverable observation processing, and the existing Neon database without adding a paid server.
 
 **Decision:** deploy the modular monolith as one Cloudflare Worker and attach the apex and `www` hostnames as Worker Custom Domains because the Worker is the application origin. Serve the Vite build with Workers Static Assets, connect to Neon through Hyperdrive, use the native Rate Limiting binding for dynamic API routes, use Cloudflare Queues to prompt observation processing, and run a one-minute scheduled recovery scan. PostgreSQL remains authoritative for leased job ownership, attempts, idempotency, terminal results, and receipts; queue messages are at-least-once delivery hints and may be replayed safely. Each nonterminal delivery schedules a fresh delayed message before acknowledging the current message, and an expired `RUNNING` lease can be reclaimed after an interrupted consumer. Runtime configuration accepts Worker Secrets and bindings while retaining the Node bootstrap for local development.

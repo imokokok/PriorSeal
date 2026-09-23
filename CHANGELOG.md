@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Completed the production persistence cutover to Cloudflare D1, verified the former database contents as a preserved subset of D1, and removed obsolete Neon configuration, dependencies, migration tooling, and local credentials.
 - Added opt-in exact-call coverage commitments that independently verify Insight source/destination readiness, cap authorization lifetime and recheck before provider entry without changing existing authorization or receipt formats.
 - Require an observed transaction to match the requested transaction hash and chain before persistence, and report complete transfer or exact-call correlation separately from one-use authorization consumption so a final mismatched attempt cannot reopen permission to retry.
 - Add optional Base Sepolia observation support for bounded nonproduction pilots without making its RPC a production deployment requirement.
