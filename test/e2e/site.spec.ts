@@ -83,6 +83,19 @@ test('reduced-motion preference disables route and reveal animation', async ({ p
   expect(['0.01ms', '1e-05s']).toContain(duration)
 })
 
+test('public proof scope separates established claims from external decision use', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Use without saving' }).click()
+  const scope = page.locator('#boundaries')
+  await expect(scope.getByRole('heading', { name: 'What a receipt proves. And what it does not.' })).toBeVisible()
+  await expect(scope).toContainText('Artifact integrity & authority')
+  await expect(scope).toContainText('Cross-evidence binding')
+  await expect(scope).toContainText('Observed execution & compliance')
+  await expect(scope).toContainText('External decision use')
+  await expect(scope).toContainText('SEPARATE EVIDENCE')
+  await expect(scope).toContainText('does not prove that another application read a decision')
+})
+
 test('persists and resumes a pending observation until a receipt is issued', async ({ page }) => {
   const authorizationId = 'auth_pending_test'
   const txHash = `0x${'1'.repeat(64)}`

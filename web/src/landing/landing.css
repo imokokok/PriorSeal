@@ -144,7 +144,8 @@
 .claim-boundaries dl > div { min-height: 108px; padding: 26px 0; display: grid; grid-template-columns: 55px minmax(180px,.52fr) minmax(380px,1.48fr); align-items: start; gap: 28px; border-top: 1px solid var(--line); }
 .claim-boundaries dl > div:last-child { border-bottom: 1px solid var(--line); }
 .claim-boundaries dl span { color: var(--wine); font: 600 12px "JetBrains Mono", monospace; }
-.claim-boundaries dt { font: 400 26px "Iowan Old Style", Baskerville, Georgia, serif; }
+.claim-boundaries dt { display: grid; gap: 9px; font: 400 26px "Iowan Old Style", Baskerville, Georgia, serif; }
+.claim-boundaries dt small { color: var(--wine); font: 650 10px/1.4 "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
 .claim-boundaries dd { margin: 0; color: var(--quiet); font-size: 16px; line-height: 1.65; }
 
 .evidence-audiences { padding: clamp(105px, 11vw, 170px) clamp(26px, 7vw, 118px); display: grid; grid-template-columns: minmax(390px,.8fr) minmax(530px,1.2fr); align-items: start; gap: clamp(65px, 10vw, 165px); color: var(--gallery); background: var(--wine-dark); }

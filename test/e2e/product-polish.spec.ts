@@ -108,6 +108,17 @@ test('native bundle never self-trusts and custom audience is enforced after inde
   await expect(page.locator('.verification-result')).toContainText('AUTHORIZATION_AUDIENCE_MISMATCH')
 })
 
+test('receipt detail presents unverified receipt fields as signed claims', async ({ page }) => {
+  const { bundle } = await nativeFixture()
+  await page.route(`**/v1/receipts/${encodeURIComponent(bundle.receipt.receiptId)}`, route => route.fulfill({ json: bundle.receipt }))
+  await page.goto(`/app/receipts/${encodeURIComponent(bundle.receipt.receiptId)}`)
+  const relationship = page.locator('.evidence-relationship')
+  await expect(relationship.getByRole('heading', { name: 'Evidence relationship' })).toBeVisible()
+  await expect(relationship.locator('.relationship-chain li').filter({ hasText: 'Receipt identifier' })).toContainText('SIGNED CLAIM')
+  await expect(relationship.locator('.relationship-assessments > div').filter({ hasText: 'Cryptographic evidence' })).toContainText('NOT VERIFIED HERE')
+  await expect(relationship.locator('.relationship-assessments > div').filter({ hasText: 'External decision use' })).toContainText('NOT ESTABLISHED')
+})
+
 test('archive reviewer access is scoped, excludes upload, and keeps token out of browser storage', async ({ page }) => {
   await page.route('**/v1/archive?*', async (route) => { expect(route.request().headers().authorization).toBe('Bearer fixture-review-token'); await route.fulfill({ json: { schema: 'priorseal.archive-page.v1', projectId: 'project-a', environment: 'test', role: 'reviewer', items: [], nextCursor: null, scope: 'uploaded_evidence', retention: 'until_operator_deletion' } }) })
   await page.goto('/app/archive')
@@ -145,6 +156,7 @@ test('combined review preserves original bytes and keeps unsupported attachments
   await expect(page.getByRole('heading', { name: 'Combined evidence review' })).toBeVisible()
   await expect(page.locator('.verification-result')).toContainText('PARTIAL REVIEW')
   await expect(page.locator('.verification-result')).toContainText('UNSUPPORTED_VERIFIER_PROFILE')
+  await expect(page.locator('.relationship-assessments > div').filter({ hasText: 'Cross-evidence relationships' })).toContainText('NOT ESTABLISHED')
   const downloaded = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export original bytes' }).click()
   const download = await downloaded
@@ -199,6 +211,26 @@ test('v5 combined review requires independent protocol trust and exposes exact s
   await page.getByRole('button', { name: 'Verify locally' }).click()
   await expect(page.locator('.verification-result > .status')).toHaveText(/PARTIAL REVIEW$/)
   await expect(page.locator('.verification-result')).toContainText('REGISTRY_SNAPSHOT_MISMATCH')
+})
+
+test('combined review exposes a cross-evidence mismatch without upgrading external decision use', async ({ page }) => {
+  const fixture = await createJointReviewFixture()
+  const manifest = await buildReviewManifest({ bundle: fixture.bundle, attachments: fixture.attachments, expectedTxHash: `0x${'2'.repeat(64)}`, assembledAt: fixture.manifest.assembledAt })
+  const key = fixture.options.trustedKeys
+  const profile = { schema: 'priorseal.trust-profile.v1', name: 'Mismatch review', issuer: key.issuer, audience: fixture.options.expectedAudience, keys: [key], source: 'Independent synthetic test fixture', confirmedAt: 0, insightKeyRegistry: fixture.options.insightKeyRegistry, insightProtocolTrust: fixture.options.insightProtocolTrust }
+  await page.route('**/.well-known/priorseal-keys.json', route => route.fulfill({ json: { schema: 'priorseal.keys.v1', issuer: key.issuer, keys: [] } }))
+  await page.goto('/app/verify')
+  await page.getByLabel('Evidence JSON', { exact: true }).fill(JSON.stringify(manifest))
+  await page.getByText('Import a trust profile', { exact: true }).click()
+  await page.getByLabel('Trust profile JSON', { exact: true }).fill(JSON.stringify(profile))
+  await page.getByRole('button', { name: 'Import profile', exact: true }).click()
+  await page.getByLabel('I confirmed this issuer, audience and public key configuration through an independent trusted channel.').check()
+  await page.getByText('Insight trust for a combined review', { exact: true }).click()
+  await page.getByLabel('I independently confirmed these Insight keys, registry bytes and consumer policy.').check()
+  await page.getByRole('button', { name: 'Verify locally' }).click()
+  await expect(page.locator('.verification-result')).toContainText('EVIDENCE_RELATION_MISMATCH')
+  await expect(page.locator('.relationship-assessments > div').filter({ hasText: 'Cross-evidence relationships' })).toContainText('MISMATCH')
+  await expect(page.locator('.relationship-assessments > div').filter({ hasText: 'External decision use' })).toContainText('NOT ESTABLISHED')
 })
 
 test('undetermined observation preserves reconciliation and never suggests another broadcast', async ({ page }) => {

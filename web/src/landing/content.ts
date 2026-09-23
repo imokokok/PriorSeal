@@ -2,7 +2,7 @@ export const sectionLinks = [
   ['System', 'system'],
   ['Evidence chain', 'chain'],
   ['Receipt', 'receipt'],
-  ['Boundaries', 'boundaries'],
+  ['Proof scope', 'boundaries'],
 ] as const
 
 export const proofSequence = [
@@ -54,10 +54,10 @@ export const audiences = [
 ] as const
 
 export const boundaries = [
-  ['Authority', 'A valid v3 receipt can prove that the controlling account approved the exact canonical intent.'],
-  ['Ordering', 'When RFC 3161 evidence is present, it can prove that the authorization digest existed before execution.'],
-  ['Execution', 'Binding can establish whether the observed EVM transaction matched the signed constraints.'],
-  ['Limit', 'PriorSeal does not establish economic safety, token legitimacy or an infallible view of the chain.'],
+  ['Artifact integrity & authority', 'CAN ESTABLISH', 'Local verification can recompute the receipt and check its signatures against independently selected trust. It establishes only the claims covered by those artifacts and keys.'],
+  ['Cross-evidence binding', 'CAN ESTABLISH', 'A signed context commitment can bind an exact external digest. A supported review can match related artifacts without merging their trust roots or business semantics.'],
+  ['Observed execution & compliance', 'CAN ESTABLISH', 'PriorSeal can correlate an observed EVM transaction with signed constraints and report execution state separately from authorization compliance.'],
+  ['External decision use', 'SEPARATE EVIDENCE', 'A commitment does not prove that another application read a decision or placed every signer path behind it. That requires separately reviewed integration evidence.'],
 ] as const
 
 export const receiptLines = [

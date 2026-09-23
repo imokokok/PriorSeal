@@ -165,12 +165,12 @@ export function LandingPage() {
 
         <section className="claim-boundaries" id="boundaries">
           <header data-reveal>
-            <div className="museum-section-id"><span>05</span><p>Boundaries</p></div>
-            <div><p className="museum-kicker">SCOPE OF THE CLAIM</p><h2>Precise evidence.<br /><em>Explicit limits.</em></h2></div>
+            <div className="museum-section-id"><span>05</span><p>Proof scope</p></div>
+            <div><p className="museum-kicker">WHAT THE RECORD ESTABLISHES</p><h2>What a receipt proves.<br /><em>And what it does not.</em></h2></div>
           </header>
           <dl data-reveal>
-            {boundaries.map(([term, description], index) => (
-              <div key={term}><span>0{index + 1}</span><dt>{term}</dt><dd>{description}</dd></div>
+            {boundaries.map(([term, status, description], index) => (
+              <div key={term}><span>0{index + 1}</span><dt><small>{status}</small>{term}</dt><dd>{description}</dd></div>
             ))}
           </dl>
         </section>
