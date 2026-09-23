@@ -22,7 +22,7 @@ Entries are content-addressed within each project/environment. Re-uploading an i
 
 Retention is explicitly `until_operator_deletion`. The service does not silently expire uploaded evidence and exposes no deletion endpoint. Establish and document the operator's retention and backup policy before hosting customer records. This is a minimal credential-scoped archive, without user accounts, SSO, automatic ingestion, complex RBAC, or billing entitlements.
 
-Development without PostgreSQL uses memory storage and explicitly reports `process_lifetime`: it loses entries when the process restarts. Production configuration requires PostgreSQL. Do not use the in-memory adapter as a durable archive.
+Development without durable storage uses memory and explicitly reports `process_lifetime`: it loses entries when the process restarts. Cloudflare production uses D1; the separate Node path uses PostgreSQL. Do not use the in-memory adapter as a durable archive.
 
 `NOT_VERIFIED_BY_ARCHIVE` is always preserved. An export proves neither completeness outside the named upload snapshot nor correctness of any uploaded statement. Use independently obtained keys, audience and the appropriate verifier profiles after downloading.
 
