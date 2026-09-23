@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   release-check:
     runs-on: ubuntu-latest
@@ -22,14 +26,16 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Run non-browser release gates
+        run: npm run release:check:pre-browser
       - name: Install pinned APS sibling adapter dependencies
         run: npm ci --prefix examples/aps-priorseal-decision-binding-v1 --ignore-scripts
       - name: Verify APS producer inputs and adapter boundaries
         run: npm run test:aps-priorseal
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - name: Run release gate
-        run: npm run release:check
+      - name: Run browser release gate
+        run: npm run test:e2e:prepared
       - name: RWA v2 durable authorization and receipt workflow (simulation)
         run: npm run rwa:verify:prepared
       - name: Install isolated execution drill dependency

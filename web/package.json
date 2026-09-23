@@ -8,7 +8,8 @@
     "dev": "vite",
     "prebuild": "npm --prefix ../sdk run build",
     "build": "npm run build:prepared",
-    "build:prepared": "tsc -b && vite build",
+    "build:prepared": "tsc -b && npm run bundle:prepared",
+    "bundle:prepared": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
