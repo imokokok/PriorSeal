@@ -12,7 +12,7 @@ type ArchiveCredential = ArchiveAccess & { tokenHash: string };
 type ArchiveFilters = { txHash: string | null; authorizationId: string | null; status: string | null; from: number | null; to: number | null };
 type ArchiveCursor = { filterHash: string; after: number; snapshot: number };
 export type ArchiveQuery = ArchiveAccess & { filters: ArchiveFilters; filterHash: string; cursor: ArchiveCursor | null; limit: number; includeArtifacts?: boolean };
-type ArchiveRow = { sequence: number; artifact: unknown; [field: string]: unknown };
+type ArchiveRow = Omit<ReturnType<typeof archiveEntry>, 'artifact'> & { sequence: number; artifact?: unknown };
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const asRecord = (value: unknown): Record<string, unknown> | undefined => record(value) ? value : undefined;
 

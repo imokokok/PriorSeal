@@ -24,8 +24,12 @@ async function authorizeIntent({ input, idempotencyKey, store, privateKeyPem, is
   const compatibility = evaluateNewIntentPolicyCompatibility(authorization.intent, policy ?? {});
   if (!compatibility.allowed) throw new PriorSealError("POLICY_REJECTED", "Authorization policy cannot enforce descriptive exact-call semantics", { ...policyResult, ...compatibility, policyId: policyResult.policyId ?? null });
   if (!policyResult.allowed) throw new PriorSealError("POLICY_REJECTED", "Intent rejected by policy", policyResult);
+  const witnessPolicy = policy?.witnessQuorum;
   const existing = await store.getAuthorization?.(authorization.authorizationId);
-  if (existing) return { replay: true, response: { authorization: existing.authorization, acceptance: existing.acceptance, policy: existing.policyEvidence?.result ?? existing.policy, policyEvidence: existing.policyEvidence, ...existing.timestampEvidence ? { timestampEvidence: existing.timestampEvidence } : {}, ...existing.witnessEvidence ? { witnessEvidence: existing.witnessEvidence } : {} } };
+  if (existing) {
+    const existingWitnessEvidence = verifiedWitnessEvidence(existing.witnessEvidence, existing.authorization, witnessPolicy, existing.acceptance.acceptedAt);
+    return { replay: true, response: { authorization: existing.authorization, acceptance: existing.acceptance, policy: existing.policyEvidence?.result ?? existing.policy, policyEvidence: existing.policyEvidence, ...existing.timestampEvidence ? { timestampEvidence: existing.timestampEvidence } : {}, ...existingWitnessEvidence ? { witnessEvidence: existingWitnessEvidence } : {} } };
+  }
   const orderingReference = { acceptedAt };
   const policyEvidence = { schema: "priorseal.policy-evidence.v1", policyHash: expectedPolicyHash, document: policy, result: policyResult };
   const timestampPolicy = policy?.timestampPolicy;
@@ -36,7 +40,6 @@ async function authorizeIntent({ input, idempotencyKey, store, privateKeyPem, is
     const timestampVerification = await verifyTimestampEvidence(timestampEvidence, new TextEncoder().encode(canonicalize(authorization)), timestampPolicy, { authorizationHash: hashJson(authorization), requestedAt: orderingReference.acceptedAt });
     if (!timestampVerification.valid) throw new PriorSealError(timestampVerification.code, "RFC 3161 timestamp could not be verified", timestampVerification);
   }
-  const witnessPolicy = policy?.witnessQuorum;
   if (requireWitnessQuorum && !witnessPolicy) throw new PriorSealError("INVALID_WITNESS_POLICY", "The active authorization policy must define witnessQuorum");
   if (witnessPolicy && !witnessProvider) throw new PriorSealError("WITNESS_NOT_CONFIGURED", "Witness quorum collection is required by the signed policy");
   const witnessEvidence = witnessPolicy ? await witnessProvider({ authorization, acceptance: orderingReference }) : null;
@@ -56,8 +59,15 @@ async function authorizeIntent({ input, idempotencyKey, store, privateKeyPem, is
     saved = await store.saveAuthorization(createRecord(log));
   }
   if (!saved) throw new Error("Authorization store did not return a record");
-  const response = { authorization: saved.authorization, acceptance: saved.acceptance, policy: saved.policyEvidence?.result ?? saved.policy, policyEvidence: saved.policyEvidence, ...saved.timestampEvidence ? { timestampEvidence: saved.timestampEvidence } : {}, ...saved.witnessEvidence ? { witnessEvidence: saved.witnessEvidence } : {} };
+  const savedWitnessEvidence = verifiedWitnessEvidence(saved.witnessEvidence, saved.authorization, witnessPolicy, saved.acceptance.acceptedAt);
+  const response = { authorization: saved.authorization, acceptance: saved.acceptance, policy: saved.policyEvidence?.result ?? saved.policy, policyEvidence: saved.policyEvidence, ...saved.timestampEvidence ? { timestampEvidence: saved.timestampEvidence } : {}, ...savedWitnessEvidence ? { witnessEvidence: savedWitnessEvidence } : {} };
   return reserveIdempotentResponse({ scope: "authorize-intent", key: idempotencyKey, request: input, requestHash: idempotency.requestHash, response, store, now });
+}
+function verifiedWitnessEvidence(value, authorization, policy, acceptedAt) {
+  if (!value) return void 0;
+  const verification = verifyWitnessEvidence(value, authorization, policy, { expectedRequestedAt: acceptedAt });
+  if (!verification.valid) throw new PriorSealError(verification.code, "Stored witness quorum evidence could not be verified", verification);
+  return value;
 }
 export {
   authorizeIntent

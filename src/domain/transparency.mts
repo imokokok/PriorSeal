@@ -2,7 +2,7 @@ import { hashJson } from './hashing.mjs';
 import { PriorSealError } from './errors.mjs';
 import { signEd25519Statement, verifyEd25519Statement } from './ed25519.mjs';
 import { assertOnlyFields, assertSafeJson } from '../shared/safe-json.mjs';
-import { verifyMerkleProof } from './merkle-log.mjs';
+import { verifyMerkleProof, type MerkleProofStep } from './merkle-log.mjs';
 
 export const TRANSPARENCY_CHECKPOINT_SCHEMA = 'priorseal.transparency-checkpoint.v1';
 export const MERKLE_TRANSPARENCY_CHECKPOINT_SCHEMA = 'priorseal.transparency-checkpoint.v2';
@@ -15,7 +15,7 @@ type Checkpoint = Record<string, unknown> & { schema: string; domain: string; si
 type TransparencyEvidence = { checkpoint?: Checkpoint | null; chain?: TransparencyEntry[]; proof?: unknown };
 type VerifyOptions = { before?: number };
 
-export function buildMerkleTransparencyEvidence({ acceptance, snapshot, issuer, keyId, privateKeyPem, issuedAt, anchor = null, before }: { acceptance: Acceptance; snapshot: { size: number; headEntryHash: string; merkleRoot: string; proof: unknown } | null; issuer: string; keyId: string; privateKeyPem: string; issuedAt: number; anchor?: Anchor | null; before?: number }) {
+export function buildMerkleTransparencyEvidence({ acceptance, snapshot, issuer, keyId, privateKeyPem, issuedAt, anchor = null, before }: { acceptance: Acceptance; snapshot: { size: number; headEntryHash: string; merkleRoot: string; proof: MerkleProofStep[] } | null; issuer: string; keyId: string; privateKeyPem: string; issuedAt: number; anchor?: Anchor | null; before?: number }) {
   if (!snapshot || snapshot.size < acceptance.sequence || !privateKeyPem) throw new TypeError('Authorization Merkle proof is unavailable');
   if (anchor) {
     if (!anchor.merkleRoot || anchor.size !== snapshot.size || anchor.merkleRoot !== snapshot.merkleRoot || anchor.headEntryHash !== snapshot.headEntryHash || (before !== undefined && anchor.anchoredAt > before)) throw new PriorSealError('TRANSPARENCY_AFTER_EXECUTION', 'Verified Merkle anchor must cover the authorization before execution');

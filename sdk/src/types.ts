@@ -80,7 +80,7 @@ export type ExecutionStatus = 'PENDING' | 'CONFIRMED' | 'REVERTED' | 'REORGED' |
 
 export type Execution = {
   schema?: string
-  chainId: ChainId | string
+  chainId: number | string
   txHash?: string
   status: ExecutionStatus
   blockNumber?: number | null

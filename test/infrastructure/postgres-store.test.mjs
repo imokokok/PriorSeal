@@ -1,62 +1,83 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { createPostgresStore } from '../../src/index.mjs';
-
-test('Postgres store rejects a receipt ID collision but permits an identical replay', async () => {
-  const original = { receiptId: 'psr_same', intentHash: 'intent', execution: { txHash: '0x1' }, schema: 'v1', issuer: 'test', keyId: 'k1', outcome: 'COMPLETED', signature: 'original' };
-  const pool = { async query(sql) { if (sql.startsWith('INSERT INTO receipts')) return { rows: [] }; if (sql.startsWith('SELECT receipt_json FROM receipts')) return { rows: [{ receipt_json: original }] }; throw new Error(`Unexpected query: ${sql}`); } };
+// Generated from postgres-store.test.mts by npm run core:build. Do not edit directly.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createPostgresStore } from "../../src/index.mjs";
+import { testPostgresPool } from "../support/postgres.mjs";
+const hasCode = (error, code) => typeof error === "object" && error !== null && "code" in error && error.code === code;
+test("Postgres store rejects a receipt ID collision but permits an identical replay", async () => {
+  const original = { receiptId: "psr_same", intentHash: "intent", execution: { txHash: "0x1" }, schema: "v1", issuer: "test", keyId: "k1", outcome: "COMPLETED", signature: "original" };
+  const pool = testPostgresPool({ query: async (sql) => {
+    if (sql.startsWith("INSERT INTO receipts")) return { rows: [] };
+    if (sql.startsWith("SELECT receipt_json FROM receipts")) return { rows: [{ receipt_json: original }] };
+    throw new Error(`Unexpected query: ${sql}`);
+  } });
   const store = createPostgresStore(pool);
-  await assert.rejects(() => store.saveReceipt({ receiptId: 'psr_same', intentHash: 'intent', execution: { txHash: '0x1' }, schema: 'v1', issuer: 'test', keyId: 'k1', outcome: 'COMPLETED', signature: 'new' }), (error) => error.code === 'RECEIPT_ID_CONFLICT');
+  await assert.rejects(() => store.saveReceipt({ receiptId: "psr_same", intentHash: "intent", execution: { txHash: "0x1" }, schema: "v1", issuer: "test", keyId: "k1", outcome: "COMPLETED", signature: "new" }), (error) => hasCode(error, "RECEIPT_ID_CONFLICT"));
   assert.equal(await store.saveReceipt(original), original);
 });
-
-test('Postgres idempotency rows can be read and expired rows can be replaced', async () => {
-  const expiresAt = new Date(2_000);
+test("Postgres idempotency rows can be read and expired rows can be replaced", async () => {
+  const expiresAt = /* @__PURE__ */ new Date(2e3);
   const calls = [];
-  const pool = { async query(sql) { calls.push(sql); if (sql.startsWith('SELECT request_hash')) return { rows: [{ request_hash: 'hash', response_json: { ok: true }, expires_at: expiresAt }] }; if (sql.startsWith('INSERT INTO idempotency_records')) return { rows: [{ response_json: { ok: false } }] }; throw new Error(`Unexpected query: ${sql}`); } };
+  const pool = testPostgresPool({ query: async (sql) => {
+    calls.push(sql);
+    if (sql.startsWith("SELECT request_hash")) return { rows: [{ request_hash: "hash", response_json: { ok: true }, expires_at: expiresAt }] };
+    if (sql.startsWith("INSERT INTO idempotency_records")) return { rows: [{ response_json: { ok: false } }] };
+    throw new Error(`Unexpected query: ${sql}`);
+  } });
   const store = createPostgresStore(pool);
-  assert.deepEqual(await store.getIdempotency('scope', 'key'), { requestHash: 'hash', response: { ok: true }, expiresAt: 2_000 });
-  assert.deepEqual(await store.reserveIdempotency({ scope: 'scope', key: 'key', requestHash: 'new', response: { ok: false }, expiresAt: 3_000 }), { replay: false, response: { ok: false } });
+  assert.deepEqual(await store.getIdempotency("scope", "key"), { requestHash: "hash", response: { ok: true }, expiresAt: 2e3 });
+  assert.deepEqual(await store.reserveIdempotency({ scope: "scope", key: "key", requestHash: "new", response: { ok: false }, expiresAt: 3e3 }), { replay: false, response: { ok: false } });
   assert.match(calls[1], /expires_at <= now\(\)/);
 });
-
-test('Postgres observation persistence rolls back the authorization claim with evidence', async () => {
-  const calls = []; let released = false;
-  const client = { async query(sql) { calls.push(sql); if (sql.startsWith('UPDATE authorizations')) return { rows: [{}] }; if (sql.startsWith('INSERT INTO receipts')) throw new Error('receipt insert failed'); return { rows: [] }; }, release() { released = true; } };
-  const pool = { query: async () => ({ rows: [] }), connect: async () => client };
+test("Postgres observation persistence rolls back the authorization claim with evidence", async () => {
+  const calls = [];
+  let released = false;
+  const client = { async query(sql) {
+    calls.push(sql);
+    if (sql.startsWith("UPDATE authorizations")) return { rows: [{}] };
+    if (sql.startsWith("INSERT INTO receipts")) throw new Error("receipt insert failed");
+    return { rows: [] };
+  }, release() {
+    released = true;
+  } };
+  const pool = testPostgresPool({ query: async () => ({ rows: [] }), connect: async () => client });
   const store = createPostgresStore(pool);
-  await assert.rejects(() => store.saveObservationReceipt({ authorizationId: 'auth_1', claimAuthorization: true, observation: { intentHash: 'intent', chainId: 8453, txHash: '0x1', status: 'CONFIRMED', blockNumber: 1, observedAt: 1, finalityState: 'CONFIRMED' }, receipt: { receiptId: 'psr_1', intentHash: 'intent', execution: { txHash: '0x1' }, schema: 'v2', issuer: 'test', keyId: 'k1', outcome: 'COMPLETED', signature: 'sig' } }), /receipt insert failed/);
-  assert.ok(calls.includes('BEGIN'));
-  assert.ok(calls.includes('ROLLBACK'));
-  assert.equal(calls.includes('COMMIT'), false);
+  await assert.rejects(() => store.saveObservationReceipt({ authorizationId: "auth_1", claimAuthorization: true, observation: { intentHash: "intent", chainId: 8453, txHash: "0x1", status: "CONFIRMED", blockNumber: 1, observedAt: 1, finalityState: "CONFIRMED" }, receipt: { receiptId: "psr_1", intentHash: "intent", execution: { txHash: "0x1" }, schema: "v2", issuer: "test", keyId: "k1", outcome: "COMPLETED", signature: "sig" } }), /receipt insert failed/);
+  assert.ok(calls.includes("BEGIN"));
+  assert.ok(calls.includes("ROLLBACK"));
+  assert.equal(calls.includes("COMMIT"), false);
   assert.equal(released, true);
 });
-
-test('Postgres observation claims recover expired leases and reject a stale owner update', async () => {
+test("Postgres observation claims recover expired leases and reject a stale owner update", async () => {
   const calls = [];
-  const claimedRow = { job_id: 'job-1', idempotency_key: 'same', input_json: { chainId: 8453, txHash: '0x1' }, state: 'RUNNING', attempts: 2, next_attempt_at: new Date(1_000), observation_json: null, result_json: null, error_json: null, created_at: new Date(0), lease_token: 'lease-token', lease_expires_at: new Date(901_000) };
+  const claimedRow = { job_id: "job-1", idempotency_key: "same", input_json: { chainId: 8453, txHash: "0x1" }, state: "RUNNING", attempts: 2, next_attempt_at: /* @__PURE__ */ new Date(1e3), observation_json: null, result_json: null, error_json: null, created_at: /* @__PURE__ */ new Date(0), lease_token: "lease-token", lease_expires_at: /* @__PURE__ */ new Date(901e3) };
   const client = {
     async query(sql, parameters) {
       calls.push({ sql, parameters });
-      if (sql.startsWith('WITH due AS')) return { rows: [claimedRow] };
+      if (sql.startsWith("WITH due AS")) return { rows: [claimedRow] };
       return { rows: [] };
     },
-    release() {},
+    release() {
+    }
   };
-  const pool = {
+  const pool = testPostgresPool({
     connect: async () => client,
     async query(sql, parameters) {
       calls.push({ sql, parameters });
-      if (sql.startsWith('UPDATE observation_jobs')) return { rows: [] };
+      if (sql.startsWith("UPDATE observation_jobs")) return { rows: [] };
       throw new Error(`Unexpected query: ${sql}`);
-    },
-  };
+    }
+  });
   const store = createPostgresStore(pool);
-  const [claim] = await store.claimDueJobs(1_000, 10, 900_000);
-  assert.equal(claim.leaseToken, 'lease-token');
-  assert.match(calls.find((call) => call.sql.startsWith('WITH due AS')).sql, /state='RUNNING' AND lease_expires_at <=/);
-  assert.equal(await store.saveJob({ ...claim, state: 'COMPLETED' }), undefined);
-  const save = calls.find((call) => call.sql.startsWith('UPDATE observation_jobs'));
+  const [claim] = await store.claimDueJobs(1e3, 10, 9e5);
+  assert.ok(claim);
+  assert.equal(claim.leaseToken, "lease-token");
+  const claimCall = calls.find((call) => call.sql.startsWith("WITH due AS"));
+  assert.ok(claimCall);
+  assert.match(claimCall.sql, /state='RUNNING' AND lease_expires_at <=/);
+  assert.equal(await store.saveJob({ ...claim, state: "COMPLETED" }), void 0);
+  const save = calls.find((call) => call.sql.startsWith("UPDATE observation_jobs"));
+  assert.ok(save?.parameters);
   assert.match(save.sql, /lease_token=\$8/);
-  assert.equal(save.parameters[7], 'lease-token');
+  assert.equal(save.parameters[7], "lease-token");
 });

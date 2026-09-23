@@ -8,7 +8,7 @@ import type { buildIntent } from '../../domain/intent.mjs';
 
 type Intent = ReturnType<typeof buildIntent>;
 type LogEntry = { sequence: number; authorizationHash: string; acceptedAt: number; previousEntryHash: string | null; entryHash: string };
-type AuthorizationRecord = { authorization: Authorization; acceptance: AuthorizationAcceptance; policy?: unknown; policyEvidence?: { schema?: string; result?: unknown; document?: Record<string, unknown> | null }; timestampEvidence?: unknown; witnessEvidence?: unknown; status: string; boundTxHash: string | null; uses: number };
+type AuthorizationRecord = { authorization: Authorization; acceptance: AuthorizationAcceptance; policy?: unknown; policyEvidence?: { schema: string; policyHash: string; result: unknown; document: Record<string, unknown> | null }; timestampEvidence?: unknown; witnessEvidence?: unknown; status: string; boundTxHash: string | null; uses: number };
 type ArchiveEntry = ReturnType<typeof archiveEntry> & { sequence: number };
 type Observation = WorkerObservation & { chainId: number | string };
 type Receipt = Record<string, unknown> & { receiptId: string };

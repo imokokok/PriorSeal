@@ -15,6 +15,9 @@ const HASH = /^[0-9a-f]{64}$/;
 type Witness = { witnessId: string; keyId: string; algorithm: string; publicKey: string };
 type WitnessAuthorization = { authorizationId: string; intentHash: string; expiresAt: number; issuedAt: number };
 type WitnessOptions = { expectedRequestedAt?: number; before?: number };
+export type WitnessPolicy = ReturnType<typeof buildWitnessPolicy>;
+export type WitnessRequest = ReturnType<typeof buildWitnessRequest>;
+export type WitnessEvidence = ReturnType<typeof buildWitnessEvidence>;
 
 export function buildWitnessPolicy(inputValue: unknown) {
   assertSafeJson(inputValue);

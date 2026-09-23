@@ -11,6 +11,7 @@
   },
   "include": [
     "scripts/**/*.mts",
+    "sdk/scripts/**/*.mts",
     "examples/**/*.mts",
     "test/**/*.mts",
     "worker-configuration.d.ts"

@@ -6,14 +6,15 @@ export const VERIFICATION_BUNDLE_TRUST = Object.freeze({
   notice: 'Bundled keys are discovery metadata, not an independent trust anchor.',
 });
 
-type BuildVerificationBundleInput = { receipt: unknown; keyRegistry: unknown; assembledAt?: number };
+type BuildVerificationBundleInput<R, K> = { receipt: R; keyRegistry: K; assembledAt?: number };
+type VerificationBundle<R, K> = { schema: typeof VERIFICATION_BUNDLE_SCHEMA; receipt: R; keyRegistry: K; assembledAt: number; trust: typeof VERIFICATION_BUNDLE_TRUST; bundleHash: string };
 
-export function buildVerificationBundle({ receipt, keyRegistry, assembledAt = Math.floor(Date.now() / 1000) }: BuildVerificationBundleInput) {
+export function buildVerificationBundle<R, K>({ receipt, keyRegistry, assembledAt = Math.floor(Date.now() / 1000) }: BuildVerificationBundleInput<R, K>): VerificationBundle<R, K> {
   if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) throw new TypeError('receipt must be an object');
   const registry = keyRegistry as { schema?: unknown; keys?: unknown } | null | undefined;
   if (!registry || registry.schema !== 'priorseal.keys.v1' || !Array.isArray(registry.keys)) throw new TypeError('keyRegistry must be a PriorSeal key registry');
   if (!Number.isSafeInteger(assembledAt) || assembledAt < 0) throw new TypeError('assembledAt must be a non-negative integer');
-  const unsigned = {
+  const unsigned: Omit<VerificationBundle<R, K>, 'bundleHash'> = {
     schema: VERIFICATION_BUNDLE_SCHEMA,
     receipt,
     keyRegistry,

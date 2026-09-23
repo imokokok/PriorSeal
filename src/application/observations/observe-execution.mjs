@@ -63,7 +63,11 @@ async function observeExecution({ input: inputValue, store, observer, signal, pr
   const executionCorrelation = authorizationRecord ? classifyExecutionCorrelation(authorizationRecord.authorization, observation) : null;
   const claimAuthorization = authorizationAssociation === "FINAL";
   const receiptIssuedAt = Math.max(Math.floor(now() / 1e3), observation.observedAt ?? observation.executedAt ?? 0);
-  const receipt = privateKeyPem ? signReceipt(authorizationRecord ? buildAuthorizedReceipt({ authorization: authorizationRecord.authorization, acceptance: authorizationRecord.acceptance, policyEvidence: authorizationRecord.policyEvidence, timestampEvidence: authorizationRecord.timestampEvidence, witnessEvidence: authorizationRecord.witnessEvidence, transparency, execution: observation, issuer, keyId, issuedAt: receiptIssuedAt }) : buildReceipt({ intent, execution: observation, issuer, keyId, issuedAt: receiptIssuedAt }), privateKeyPem) : null;
+  let receipt = null;
+  if (privateKeyPem) {
+    if (!issuer || !keyId) throw new TypeError("Issuer and keyId are required for signed receipts");
+    receipt = signReceipt(authorizationRecord ? buildAuthorizedReceipt({ authorization: authorizationRecord.authorization, acceptance: authorizationRecord.acceptance, policyEvidence: authorizationRecord.policyEvidence, timestampEvidence: authorizationRecord.timestampEvidence, witnessEvidence: authorizationRecord.witnessEvidence, transparency, execution: observation, issuer, keyId, issuedAt: receiptIssuedAt }) : buildReceipt({ intent, execution: observation, issuer, keyId, issuedAt: receiptIssuedAt }), privateKeyPem);
+  }
   let verification = null;
   if (receipt) {
     if (!publicKeyPem) throw new TypeError("Issuer public key is required for receipt verification");

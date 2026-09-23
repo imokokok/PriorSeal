@@ -12,6 +12,7 @@ import { assertOnlyFields } from '../../shared/safe-json.mjs';
 import { findIdempotentReplay, reserveIdempotentResponse } from '../idempotency.mjs';
 import type { Authorization } from '../../domain/authorization.mjs';
 import type { BindingExecution } from '../../domain/binding.mjs';
+import type { ExecutionInput } from '../../domain/execution.mjs';
 import type { AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { WorkerObservation } from './observation-worker.mjs';
 import type { IdempotencyStore } from '../idempotency.mjs';
@@ -22,9 +23,17 @@ type Observation = WorkerObservation & { chainId: number | string; intentHash?: 
 type PolicyEvidence = NonNullable<Parameters<typeof buildAuthorizedReceipt>[0]['policyEvidence']>;
 type TimestampEvidence = NonNullable<Parameters<typeof buildAuthorizedReceipt>[0]['timestampEvidence']>;
 type TransparencyEvidence = NonNullable<Parameters<typeof buildAuthorizedReceipt>[0]['transparency']>;
-type AcceptanceRecord = { authorization: Authorization; acceptance: AuthorizationAcceptance; policyEvidence?: { schema?: string; result?: unknown; document?: Record<string, unknown> | null }; timestampEvidence?: unknown; witnessEvidence?: unknown };
+type AcceptanceRecord = { authorization: Authorization; acceptance: AuthorizationAcceptance; policyEvidence?: { schema?: string; policyHash?: string; result?: unknown; document?: Record<string, unknown> | null }; timestampEvidence?: unknown; witnessEvidence?: unknown };
 type SignedReceipt = Record<string, unknown> & { receiptId: string; intentHash: string; execution: Observation; schema: string; issuer: string; keyId: string; outcome: string; signature?: string };
-type ObservationStore = IdempotencyStore<Record<string, unknown>> & {
+type ObservationVerification = Awaited<ReturnType<typeof verifyAuthorizedReceipt>> | ReturnType<typeof verifyReceipt>;
+type ObservationResponse = {
+  observation: Observation;
+  receipt: SignedReceipt | null;
+  authorizationAssociation?: 'FINAL' | 'CANDIDATE' | 'UNRELATED';
+  executionCorrelation?: 'MATCH' | 'MISMATCH' | 'INDETERMINATE';
+  verification?: ObservationVerification;
+};
+type ObservationStore = IdempotencyStore<ObservationResponse> & {
   getAuthorization?: (id: string) => Promise<AcceptanceRecord | null | undefined>;
   getIntent: (id: string) => Promise<ReturnType<typeof buildIntent> | null | undefined>;
   getObservation?: (chainId: number | string, txHash: string) => Promise<Observation | null | undefined>;
@@ -33,11 +42,11 @@ type ObservationStore = IdempotencyStore<Record<string, unknown>> & {
   saveObservation: (observation: Observation) => Promise<unknown>;
   saveReceipt: (receipt: SignedReceipt) => Promise<unknown>;
 };
-type Observer = (input: { chainId: number; txHash: string; confirmations: number; signal?: AbortSignal }) => Promise<ReturnType<typeof normalizeExecution>>;
+type Observer = (input: { chainId: number; txHash: string; confirmations: number; signal?: AbortSignal }) => Promise<ExecutionInput>;
 type ContractSignatureVerifier = NonNullable<NonNullable<Parameters<typeof verifyAuthorizedReceipt>[2]>['verifyContractSignature']>;
 
 /** Observes an execution, records evidence, and optionally issues a signed receipt. */
-export async function observeExecution({ input: inputValue, store, observer, signal, privateKeyPem, publicKeyPem, issuer, keyId, idempotencyKey, transparencyProvider, authorizationAudience = 'priorseal', verifyContractSignature, now = () => Date.now() }: { input: unknown; store: ObservationStore; observer: Observer; signal?: AbortSignal; privateKeyPem?: string; publicKeyPem?: string; issuer: string; keyId: string; idempotencyKey?: string | null; transparencyProvider?: ((acceptance: AuthorizationAcceptance, options?: { before?: number }) => Promise<TransparencyEvidence>) | null; authorizationAudience?: string; verifyContractSignature?: ContractSignatureVerifier; now?: () => number }) {
+export async function observeExecution({ input: inputValue, store, observer, signal, privateKeyPem, publicKeyPem, issuer, keyId, idempotencyKey, transparencyProvider, authorizationAudience = 'priorseal', verifyContractSignature, now = () => Date.now() }: { input: unknown; store: ObservationStore; observer: Observer; signal?: AbortSignal; privateKeyPem?: string; publicKeyPem?: string; issuer?: string; keyId?: string; idempotencyKey?: string | null; transparencyProvider?: ((acceptance: AuthorizationAcceptance, options?: { before?: number }) => Promise<TransparencyEvidence>) | null; authorizationAudience?: string; verifyContractSignature?: ContractSignatureVerifier; now?: () => number }) {
   if (privateKeyPem && !publicKeyPem) throw new TypeError('Issuer public key is required for receipt verification');
   const input = assertOnlyFields(inputValue, ['intentId', 'authorizationId', 'intent', 'chainId', 'txHash', 'confirmations'], 'observation request');
   if (input.authorizationId != null && typeof input.authorizationId !== 'string') throw new PriorSealError('INVALID_REQUEST', 'authorizationId must be a string');
@@ -91,12 +100,14 @@ export async function observeExecution({ input: inputValue, store, observer, sig
   const executionCorrelation = authorizationRecord ? classifyExecutionCorrelation(authorizationRecord.authorization, observation) : null;
   const claimAuthorization = authorizationAssociation === 'FINAL';
   const receiptIssuedAt = Math.max(Math.floor(now() / 1000), observation.observedAt ?? observation.executedAt ?? 0);
-  const receipt = privateKeyPem
-    ? signReceipt(authorizationRecord
+  let receipt: SignedReceipt | null = null;
+  if (privateKeyPem) {
+    if (!issuer || !keyId) throw new TypeError('Issuer and keyId are required for signed receipts');
+    receipt = signReceipt(authorizationRecord
       ? buildAuthorizedReceipt({ authorization: authorizationRecord.authorization, acceptance: authorizationRecord.acceptance, policyEvidence: authorizationRecord.policyEvidence as PolicyEvidence | undefined, timestampEvidence: authorizationRecord.timestampEvidence as TimestampEvidence | undefined, witnessEvidence: authorizationRecord.witnessEvidence, transparency, execution: observation, issuer, keyId, issuedAt: receiptIssuedAt })
-      : buildReceipt({ intent, execution: observation, issuer, keyId, issuedAt: receiptIssuedAt }), privateKeyPem)
-    : null;
-  let verification: Awaited<ReturnType<typeof verifyAuthorizedReceipt>> | ReturnType<typeof verifyReceipt> | null = null;
+      : buildReceipt({ intent, execution: observation, issuer, keyId, issuedAt: receiptIssuedAt }), privateKeyPem) as SignedReceipt;
+  }
+  let verification: ObservationVerification | null = null;
   if (receipt) {
     if (!publicKeyPem) throw new TypeError('Issuer public key is required for receipt verification');
     verification = authorizationRecord
@@ -104,7 +115,7 @@ export async function observeExecution({ input: inputValue, store, observer, sig
       : verifyReceipt(receipt, publicKeyPem, { keyId });
   }
   if (verification && !verification.valid) throw new PriorSealError(verification.code, 'The generated receipt failed self-verification and was not persisted');
-  const response = {
+  const response: ObservationResponse = {
     observation,
     receipt,
     ...(authorizationAssociation ? { authorizationAssociation } : {}),
@@ -129,7 +140,7 @@ export function canClaimAuthorization(authorization: Authorization | null | unde
   return classifyAuthorizationAssociation(authorization, observation) === 'FINAL';
 }
 
-export function classifyAuthorizationAssociation(authorization: Authorization | null | undefined, observation: CorrelatedObservation | null | undefined) {
+export function classifyAuthorizationAssociation(authorization: Authorization | null | undefined, observation: CorrelatedObservation | null | undefined): 'FINAL' | 'CANDIDATE' | 'UNRELATED' {
   if (!authorization || !observation || observation.executionDataAvailable === false) return 'UNRELATED';
   const correlated = /^0x[0-9a-fA-F]{64}$/.test(observation.txHash ?? '')
     && observation.intentHash === authorization.intentHash
@@ -143,7 +154,7 @@ export function classifyAuthorizationAssociation(authorization: Authorization | 
   return 'UNRELATED';
 }
 
-export function classifyExecutionCorrelation(authorization: Authorization | null | undefined, observation: CorrelatedObservation | null | undefined) {
+export function classifyExecutionCorrelation(authorization: Authorization | null | undefined, observation: CorrelatedObservation | null | undefined): 'MATCH' | 'MISMATCH' | 'INDETERMINATE' {
   if (!authorization || !observation || observation.executionDataAvailable === false) return 'INDETERMINATE';
   const intent = authorization.intent;
   const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1';

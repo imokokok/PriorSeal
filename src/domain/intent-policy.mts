@@ -31,7 +31,7 @@ type AuthorizationForPolicy = {
   intent: IntentForPolicy;
   principal: { id: string; type: string; account: string };
   authorizer: { type: string; address?: string | null };
-  delegate?: { executor?: string | null };
+  delegate?: { agentId?: string | null; executor?: string | null };
 };
 
 type RuntimePolicy = Record<string, unknown>;

@@ -1,7 +1,7 @@
 import { hashJson } from '../domain/hashing.mjs';
 import { SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
 
-type CapabilityPolicy = { allowedChainIds?: number[]; allowedActions?: unknown[]; allowedAssets?: string[]; allowedRecipients?: string[]; maxAmount?: string; minConfirmations?: number };
+type CapabilityPolicy = { allowedChainIds?: number[]; allowedActions?: unknown; allowedAssets?: string[]; allowedRecipients?: string[]; maxAmount?: string; minConfirmations?: number };
 type CapabilityStore = { health?: () => Promise<unknown> | unknown; archiveRetention?: string };
 export async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, store, archiveEnabled, contractSignatureConfigured = false, now }: { issuer: string; audience: string; keyConfigured: boolean; policy?: CapabilityPolicy | null; proofMode: string; timestampConfigured: boolean; witnessConfigured: boolean; anchorConfigured: boolean; rpcChainIds?: number[]; store: CapabilityStore; archiveEnabled: boolean; contractSignatureConfigured?: boolean; now: number }) {
   let storage = 'available';

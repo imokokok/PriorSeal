@@ -39,7 +39,13 @@ export type LocalVerifierOptions = {
   expectedAudience?: string
 }
 
-export async function verifyReceiptLocally(receipt: Receipt, options: LocalVerifierOptions = {}): Promise<LocalVerificationResult> {
+export async function verifyReceiptLocally(receiptValue: unknown, options: LocalVerifierOptions = {}): Promise<LocalVerificationResult> {
+  if (!isRecord(receiptValue)) {
+    return { valid: false, code: 'INVALID_RECEIPT', verificationScope: 'LOCAL_COMPLETE', requiredExternalChecks: [] }
+  }
+  // The core verifier performs the complete schema validation. This initial
+  // object check keeps the public offline boundary safe for untrusted JSON.
+  const receipt = receiptValue as Receipt
   const requiredExternalChecks = externalRequirements(receipt)
   const keyResolution = resolveTrustedKey(receipt, options.trustedKeys)
   const result = keyResolution.key
@@ -52,7 +58,13 @@ export async function verifyReceiptLocally(receipt: Receipt, options: LocalVerif
   }
 }
 
-export async function verifyVerificationBundleLocally(bundle: VerificationBundle, options: LocalVerifierOptions = {}): Promise<LocalVerificationResult> {
+export async function verifyVerificationBundleLocally(bundleValue: unknown, options: LocalVerifierOptions = {}): Promise<LocalVerificationResult> {
+  if (!isRecord(bundleValue)) {
+    return { valid: false, code: 'INVALID_VERIFICATION_BUNDLE', verificationScope: 'LOCAL_COMPLETE', requiredExternalChecks: [] }
+  }
+  // The checks below validate every bundle field before the embedded receipt
+  // is handed to the receipt verifier.
+  const bundle = bundleValue as VerificationBundle
   const receipt = bundle?.receipt
   const fail = (code: string): LocalVerificationResult => ({ valid: false, code, outcome: receipt?.outcome, receiptId: receipt?.receiptId, verificationScope: 'LOCAL_COMPLETE', requiredExternalChecks: [] })
   if (!bundle || bundle.schema !== 'priorseal.verification-bundle.v1' || bundle.trust?.model !== 'PIN_ISSUER_KEY_OUT_OF_BAND' || bundle.keyRegistry?.schema !== 'priorseal.keys.v1' || !Array.isArray(bundle.keyRegistry.keys) || bundle.keyRegistry.issuer !== receipt?.issuer || !Number.isSafeInteger(bundle.assembledAt) || bundle.assembledAt < 0 || !/^[0-9a-f]{64}$/.test(bundle.bundleHash ?? '')) return fail('INVALID_VERIFICATION_BUNDLE')
@@ -83,18 +95,24 @@ function isKeyRegistry(source?: KeyEntry | readonly KeyEntry[] | KeyRegistry): s
   return Boolean(source && !Array.isArray(source) && 'keys' in source)
 }
 
-function externalRequirements(receipt: Receipt): ExternalVerificationRequirement[] {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function externalRequirements(receipt: unknown): ExternalVerificationRequirement[] {
   const requirements: ExternalVerificationRequirement[] = []
-  const authorization = receipt?.authorizationEvidence?.authorization
-  if (authorization?.authorizer?.type === 'eip1271') {
-    requirements.push({
-      type: 'ERC1271',
-      chainId: Number(authorization.intent.chainId),
-      address: authorization.authorizer.address,
-    })
+  if (!isRecord(receipt) || !isRecord(receipt.authorizationEvidence)) return requirements
+  const authorization = receipt.authorizationEvidence.authorization
+  if (isRecord(authorization) && isRecord(authorization.authorizer) && authorization.authorizer.type === 'eip1271' && typeof authorization.authorizer.address === 'string' && isRecord(authorization.intent)) {
+    const chainId = Number(authorization.intent.chainId)
+    if (Number.isSafeInteger(chainId) && chainId > 0) {
+      requirements.push({ type: 'ERC1271', chainId, address: authorization.authorizer.address })
+    }
   }
-  const anchor = receipt?.authorizationEvidence?.transparency?.checkpoint?.anchor
-  if (anchor) {
+  const transparency = receipt.authorizationEvidence.transparency
+  const checkpoint = isRecord(transparency) ? transparency.checkpoint : undefined
+  const anchor = isRecord(checkpoint) ? checkpoint.anchor : undefined
+  if (isRecord(anchor) && anchor.type === 'eip155' && typeof anchor.chainId === 'number' && Number.isSafeInteger(anchor.chainId) && typeof anchor.contract === 'string' && typeof anchor.txHash === 'string' && typeof anchor.blockNumber === 'number' && Number.isSafeInteger(anchor.blockNumber)) {
     requirements.push({
       type: 'EVM_ANCHOR',
       chainId: anchor.chainId,

@@ -20,6 +20,7 @@ function findSources(directory) {
 const sources = [
   ...findSources(sourceRoot),
   ...findSources(join(projectRoot, 'scripts')),
+  ...findSources(join(projectRoot, 'sdk', 'scripts')),
   ...findSources(join(projectRoot, 'examples')),
   ...findSources(join(projectRoot, 'test')),
 ].sort();
