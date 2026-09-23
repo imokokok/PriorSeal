@@ -5,6 +5,7 @@ import { createKeyRegistry } from "../domain/key-registry.mjs";
 import { createFileKeyProvider } from "../infrastructure/keys/file-key-provider.mjs";
 import { parseKeyRegistryDocument, readFileKeyRegistry } from "../infrastructure/keys/file-key-registry.mjs";
 import { createPostgresStore } from "../infrastructure/persistence/postgres-store.mjs";
+import { createD1Store } from "../infrastructure/persistence/d1-store.mjs";
 import { createRpcClient } from "../infrastructure/blockchain/evm/rpc-client.mjs";
 import { getRpcUrls, SUPPORTED_CHAINS } from "../infrastructure/blockchain/evm/chains.mjs";
 import { PriorSealError } from "../domain/errors.mjs";
@@ -20,13 +21,13 @@ import { assertProductionSchema } from "./production-schema.mjs";
 import { createContractSignatureVerifier } from "../infrastructure/blockchain/evm/contract-signature-verifier.mjs";
 import { assertEd25519KeyPair } from "../domain/ed25519.mjs";
 const { Pool } = pg;
-async function createPriorSealRuntime({ config, environment = process.env, database, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, assertSchema = true } = {}) {
+async function createPriorSealRuntime({ config, environment = process.env, database, d1, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, assertSchema = true } = {}) {
   if (!config) throw new TypeError("Runtime config is required");
   const ownsPool = !database;
-  const pool = database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
+  const pool = d1 ? null : database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
   try {
-    if (assertSchema && config.environment === "production") await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
-    const store = pool ? createPostgresStore(pool) : void 0;
+    if (assertSchema && config.environment === "production" && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
+    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : void 0;
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();
     const publicKeyPem = config.publicKeyPem ?? fileKeys.getPublicKey();

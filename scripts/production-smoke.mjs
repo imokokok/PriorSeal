@@ -73,7 +73,7 @@ const home = await fetch(baseUrl);
 const homeText = await home.text();
 
 assert(live.body.status === 'ok', 'Liveness check failed');
-assert(ready.body.status === 'ready' && ready.body.storage === 'postgresql', 'PostgreSQL readiness check failed');
+assert(ready.body.status === 'ready' && ready.body.storage === 'd1', 'D1 readiness check failed');
 assert(version.body.service === 'priorseal' && version.body.version === expectedVersion, `Unexpected production build: ${version.body.version}`);
 assert(!version.response.headers.has('x-render-origin-server') && !version.response.headers.has('rndr-id'), 'Request still reached Render');
 assert(home.ok && /PriorSeal/i.test(homeText), 'Production console is unavailable');

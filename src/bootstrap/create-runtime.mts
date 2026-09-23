@@ -4,6 +4,7 @@ import { createKeyRegistry } from '../domain/key-registry.mjs';
 import { createFileKeyProvider } from '../infrastructure/keys/file-key-provider.mjs';
 import { parseKeyRegistryDocument, readFileKeyRegistry } from '../infrastructure/keys/file-key-registry.mjs';
 import { createPostgresStore } from '../infrastructure/persistence/postgres-store.mjs';
+import { createD1Store } from '../infrastructure/persistence/d1-store.mjs';
 import { createRpcClient } from '../infrastructure/blockchain/evm/rpc-client.mjs';
 import { getRpcUrls, SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
 import { PriorSealError } from '../domain/errors.mjs';
@@ -26,14 +27,14 @@ import type { AuthorizationAcceptance } from '../domain/authorization.mjs';
 const { Pool } = pg;
 
 /** Composes the protocol once for Node or Cloudflare without leaking runtime details into the domain. */
-type RuntimeOptions = { config?: ReturnType<typeof loadRuntimeConfig>; environment?: object; database?: InstanceType<typeof Pool>; databaseConnectionString?: string; poolOptions?: PoolConfig; staticDir?: string; dispatchObservationJob?: (job: ObservationJob) => Promise<unknown>; rateLimiter?: NonNullable<Parameters<typeof createHttpServer>[0]>['rateLimiter']; assertSchema?: boolean };
-export async function createPriorSealRuntime({ config, environment = process.env, database, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, assertSchema = true }: RuntimeOptions = {}) {
+type RuntimeOptions = { config?: ReturnType<typeof loadRuntimeConfig>; environment?: object; database?: InstanceType<typeof Pool>; d1?: D1Database; databaseConnectionString?: string; poolOptions?: PoolConfig; staticDir?: string; dispatchObservationJob?: (job: ObservationJob) => Promise<unknown>; rateLimiter?: NonNullable<Parameters<typeof createHttpServer>[0]>['rateLimiter']; assertSchema?: boolean };
+export async function createPriorSealRuntime({ config, environment = process.env, database, d1, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, assertSchema = true }: RuntimeOptions = {}) {
   if (!config) throw new TypeError('Runtime config is required');
   const ownsPool = !database;
-  const pool = database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
+  const pool = d1 ? null : database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
   try {
-    if (assertSchema && config.environment === 'production') await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
-    const store = pool ? createPostgresStore(pool) : undefined;
+    if (assertSchema && config.environment === 'production' && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
+    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : undefined;
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();
     const publicKeyPem = config.publicKeyPem ?? fileKeys.getPublicKey();

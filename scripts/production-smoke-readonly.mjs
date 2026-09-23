@@ -49,7 +49,7 @@ export async function runReadOnlySmoke({ env = process.env, fetcher = fetch, log
   const registry = await get('/.well-known/priorseal-keys.json');
   const capabilities = (await get('/v1/capabilities')).body;
   assert(live.body.status === 'ok', 'Liveness check failed');
-  assert(ready.body.status === 'ready' && ready.body.storage === 'postgresql', 'PostgreSQL readiness check failed');
+  assert(ready.body.status === 'ready' && ready.body.storage === 'd1', 'D1 readiness check failed');
   assert(version.body.service === 'priorseal' && version.body.version === expectedVersion, 'Production version does not match the exact requested SHA');
   assert(!version.response.headers.has('x-render-origin-server') && !version.response.headers.has('rndr-id'), 'A request reached the previous origin');
   assert(registry.body.issuer === expectedIssuer && registry.body.keys?.some((key) => key.issuer === expectedIssuer && key.status === 'active'), 'Expected issuer has no published active key');

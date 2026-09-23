@@ -4,7 +4,7 @@ import { assertCloudflareBindings, cloudflareRuntimeEnvironment, createCloudflar
 
 function bindings(overrides = {}) {
   return {
-    HYPERDRIVE: { connectionString: 'postgresql://example.test/priorseal' },
+    DB: { prepare() {} },
     OBSERVATION_QUEUE: { async send() {} },
     HTTP_RATE_LIMITER: { async limit() { return { success: true }; } },
     CF_VERSION_METADATA: { id: 'version-id', tag: '0123456789abcdef0123456789abcdef01234567' },
@@ -16,8 +16,10 @@ test('Cloudflare runtime requires production bindings and uses the Git version t
   const environment = bindings();
   assert.doesNotThrow(() => assertCloudflareBindings(environment));
   assert.equal(cloudflareRuntimeEnvironment(environment).PRIORSEAL_BUILD_VERSION, environment.CF_VERSION_METADATA.tag);
+  assert.equal(cloudflareRuntimeEnvironment(environment).PRIORSEAL_DATABASE_BACKEND, 'd1');
   assert.equal(cloudflareRuntimeEnvironment(bindings({ CF_VERSION_METADATA: { id: 'version-only' } })).PRIORSEAL_BUILD_VERSION, 'version-only');
   assert.throws(() => assertCloudflareBindings(bindings({ HTTP_RATE_LIMITER: undefined })), /HTTP_RATE_LIMITER/);
+  assert.throws(() => assertCloudflareBindings(bindings({ DB: undefined })), /DB D1 binding/);
   assert.throws(() => assertCloudflareBindings(bindings({ CF_VERSION_METADATA: undefined })), /CF_VERSION_METADATA/);
 });
 

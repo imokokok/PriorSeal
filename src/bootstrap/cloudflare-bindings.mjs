@@ -1,7 +1,7 @@
 // Generated from cloudflare-bindings.mts by npm run core:build. Do not edit directly.
 import { PriorSealError } from "../domain/errors.mjs";
 function assertCloudflareBindings(environment) {
-  if (!environment.HYPERDRIVE?.connectionString) throw new TypeError("HYPERDRIVE binding is required");
+  if (!environment.DB?.prepare) throw new TypeError("DB D1 binding is required");
   if (!environment.OBSERVATION_QUEUE?.send) throw new TypeError("OBSERVATION_QUEUE binding is required");
   if (!environment.HTTP_RATE_LIMITER?.limit) throw new TypeError("HTTP_RATE_LIMITER binding is required");
   if (!environment.CF_VERSION_METADATA?.id) throw new TypeError("CF_VERSION_METADATA binding is required");
@@ -11,7 +11,7 @@ function cloudflareRuntimeEnvironment(environment) {
   return {
     ...environment,
     PRIORSEAL_RUNTIME: "cloudflare-workers",
-    DATABASE_URL: environment.HYPERDRIVE.connectionString,
+    PRIORSEAL_DATABASE_BACKEND: "d1",
     PRIORSEAL_BUILD_VERSION: environment.CF_VERSION_METADATA.tag || environment.CF_VERSION_METADATA.id
   };
 }

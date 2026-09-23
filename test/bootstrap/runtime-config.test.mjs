@@ -35,6 +35,7 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     anchorConfirmations: 12,
     databaseUrl: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
     databaseDirectUrl: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
+    databaseBackend: 'postgresql',
     corsOrigins: ['https://console.example'],
     trustProxy: true,
   });
@@ -47,6 +48,7 @@ test('runtime configuration rejects ambiguous or invalid values before startup',
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_TRUST_PROXY: 'yes' }), /true or false/);
   assert.throws(() => loadRuntimeConfig({ DATABASE_URL: 'https://db.example' }), /PostgreSQL/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ENVIRONMENT: 'live' }), /development, test, or production/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_DATABASE_BACKEND: 'mysql' }), /DATABASE_BACKEND/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_POLICY_FILE: '/policy.json', PRIORSEAL_POLICY_JSON: '{}' }), /file or inline JSON/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_KEY_REGISTRY_FILE: '/keys.json', PRIORSEAL_KEY_REGISTRY_JSON: '{"schema":"priorseal.keys.v1","keys":[]}' }), /file or inline JSON/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ENVIRONMENT: 'production' }), /Production requires/);
@@ -60,6 +62,8 @@ test('production runtime fails closed unless security dependencies are explicit'
     DATABASE_URL: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full', DATABASE_URL_UNPOOLED: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
   };
   assert.equal(loadRuntimeConfig(base).environment, 'production');
+  const { DATABASE_URL: _pooled, DATABASE_URL_UNPOOLED: _direct, ...d1Base } = base;
+  assert.equal(loadRuntimeConfig({ ...d1Base, PRIORSEAL_RUNTIME: 'cloudflare-workers', PRIORSEAL_DATABASE_BACKEND: 'd1' }).databaseBackend, 'd1');
   const { PRIORSEAL_TRANSPARENCY_ANCHOR_FILE: _anchor, ...withoutAnchor } = base;
   assert.throws(() => loadRuntimeConfig(withoutAnchor), /requires a transparency anchor/);
   assert.equal(loadRuntimeConfig({ ...base, PRIORSEAL_ANCHOR_CONFIRMATIONS: '24' }).anchorConfirmations, 24);

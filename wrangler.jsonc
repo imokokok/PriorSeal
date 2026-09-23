@@ -42,10 +42,12 @@
       "PRIORSEAL_RPC_ARBITRUM"
     ]
   },
-  "hyperdrive": [
+  "d1_databases": [
     {
-      "binding": "HYPERDRIVE",
-      "id": "f6c475a02da44a868caf997dbcf00785"
+      "binding": "DB",
+      "database_name": "priorseal-production",
+      "database_id": "5d1d57aa-0a67-48e6-a60f-8015b079d3bb",
+      "migrations_dir": "d1/migrations"
     }
   ],
   "version_metadata": { "binding": "CF_VERSION_METADATA" },

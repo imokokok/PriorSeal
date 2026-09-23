@@ -3,6 +3,7 @@ import { createArchiveAccess } from '../application/archive/evidence-archive.mjs
 type RuntimeEnvironmentInput = Partial<Record<
   'DATABASE_URL' |
   'DATABASE_URL_UNPOOLED' |
+  'PRIORSEAL_DATABASE_BACKEND' |
   'PORT' |
   'PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS' |
   'PRIORSEAL_ANCHOR_CONFIRMATIONS' |
@@ -97,11 +98,18 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
     anchorConfirmations,
     databaseUrl: databaseUrl(environment.DATABASE_URL, 'DATABASE_URL'),
     databaseDirectUrl: databaseUrl(environment.DATABASE_URL_UNPOOLED, 'DATABASE_URL_UNPOOLED'),
+    databaseBackend: databaseBackendValue(environment.PRIORSEAL_DATABASE_BACKEND),
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
     trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, 'PRIORSEAL_TRUST_PROXY', false),
   };
   if (runtimeEnvironment === 'production') validateProductionConfig(config);
   return config;
+}
+
+function databaseBackendValue(value: unknown): 'postgresql' | 'd1' {
+  const backend = optionalValue(value) ?? 'postgresql';
+  if (backend !== 'postgresql' && backend !== 'd1') throw new TypeError('PRIORSEAL_DATABASE_BACKEND must be postgresql or d1');
+  return backend;
 }
 
 function databaseUrl(value: unknown, name: string) {
@@ -149,7 +157,7 @@ function environmentValue(value: unknown) {
 }
 
 type ProductionConfig = {
-  databaseUrl?: string; databaseDirectUrl?: string; runtime?: string;
+  databaseUrl?: string; databaseDirectUrl?: string; databaseBackend?: string; runtime?: string;
   privateKeyFile?: string; publicKeyFile?: string; privateKeyPem?: string; publicKeyPem?: string;
   keyId: string; buildVersion: string; policyFile?: string; policyJson?: unknown;
   issuer: string; authorizationAudience: string; preExecutionProofMode: string;
@@ -157,7 +165,7 @@ type ProductionConfig = {
   transparencyAnchorFile?: string; transparencyAnchorJson?: unknown; corsOrigins: string[];
 };
 function validateProductionConfig(config: ProductionConfig) {
-  if (!config.databaseUrl) throw new TypeError('Production requires a database connection');
+  if (config.databaseBackend !== 'd1' && !config.databaseUrl) throw new TypeError('Production requires a database connection');
   if ((config.runtime ?? 'node') === 'node' && !config.databaseDirectUrl) throw new TypeError('Production Node runtime requires DATABASE_URL_UNPOOLED');
   if (!(config.privateKeyFile && config.publicKeyFile) && !(config.privateKeyPem && config.publicKeyPem)) throw new TypeError('Production requires issuer signing keys');
   if (config.keyId === 'default') throw new TypeError('Production requires a deployment-specific PRIORSEAL_KEY_ID');

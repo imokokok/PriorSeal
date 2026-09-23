@@ -1,44 +1,31 @@
 // Generated from cloudflare-worker.mts by npm run core:build. Do not edit directly.
-import pg from "pg";
 import { httpServerHandler } from "cloudflare:node";
 import { createPriorSealRuntime } from "./create-runtime.mjs";
 import { loadRuntimeConfig } from "./runtime-config.mjs";
-import { assertProductionSchema, REQUIRED_PRODUCTION_MIGRATION } from "./production-schema.mjs";
 import { retryDelaySeconds, shouldRedeliverJob } from "./cloudflare-retry.mjs";
 import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter } from "./cloudflare-bindings.mjs";
 import { errorMessage } from "../shared/error-code.mjs";
-const { Client } = pg;
-function databaseAdapter(client) {
-  const query = client.query.bind(client);
-  return {
-    query,
-    async connect() {
-      return { query, release() {
-      } };
-    }
-  };
-}
 async function assertSchemaCached(database, config, context) {
   const cache = caches.default;
-  const cacheKey = new Request(`https://priorseal.internal/schema/${REQUIRED_PRODUCTION_MIGRATION}/${config.preExecutionProofMode}/${config.archiveCredentials ? "archive-009" : "public"}`);
+  const cacheKey = new Request(`https://priorseal.internal/schema/d1-0001/${config.preExecutionProofMode}/${config.archiveCredentials ? "archive" : "public"}`);
   if (await cache.match(cacheKey)) return;
-  await assertProductionSchema(database, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
+  const required = ["authorization_log", "authorization_log_merkle_nodes", "authorizations", "observation_jobs", "receipts"];
+  if (config.archiveCredentials) required.push("project_evidence_archive");
+  if (config.preExecutionProofMode === "witness-quorum") required.push("witness_attestations");
+  const rows = await database.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${required.map(() => "?").join(",")})`).bind(...required).all();
+  if (rows.results.length !== required.length) throw new TypeError("Required D1 production tables are missing");
   context.waitUntil(cache.put(cacheKey, new Response("ready", { headers: { "cache-control": "public, max-age=300" } })));
 }
 async function withRuntime(environment, context, operation) {
   const runtimeEnvironment = cloudflareRuntimeEnvironment(environment);
   const config = loadRuntimeConfig(runtimeEnvironment);
-  const client = new Client({ connectionString: environment.HYPERDRIVE.connectionString });
-  await client.connect();
-  const database = databaseAdapter(client);
   let runtime;
   try {
-    await assertSchemaCached(database, config, context);
+    await assertSchemaCached(environment.DB, config, context);
     runtime = await createPriorSealRuntime({
       config,
       environment: runtimeEnvironment,
-      // This adapter supplies the Pool operations consumed by the store.
-      database,
+      d1: environment.DB,
       assertSchema: false,
       rateLimiter: createCloudflareRateLimiter(environment.HTTP_RATE_LIMITER),
       dispatchObservationJob: (job) => environment.OBSERVATION_QUEUE.send({ jobId: job.jobId })
@@ -47,8 +34,6 @@ async function withRuntime(environment, context, operation) {
   } finally {
     const server = runtime?.server;
     if (server?.listening) await new Promise((resolve) => server.close(() => resolve()));
-    await client.end().catch(() => {
-    });
   }
 }
 function unavailable(error) {
