@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { LocalVerificationResult, ReviewResult } from 'priorseal-sdk/verifier'
 import { AppShell, CodeValue, Field, Notice, PageHeader, Status } from '../components'
+import { EvidenceRelationshipView } from '../EvidenceRelationshipView'
 import { api } from '../lib/api'
 import { downloadJson } from '../lib/download'
 import { dateTime, verificationText } from '../lib/format'
@@ -30,6 +31,7 @@ export function VerifyPage() {
   const [verifiedWithTrust, setVerifiedWithTrust] = useState(false)
   const [result, setResult] = useState<LocalVerificationResult | null>(null)
   const [review, setReview] = useState<ReviewResult | null>(null)
+  const [reviewedReceipt, setReviewedReceipt] = useState<Receipt | null>(null)
   const [message, setMessage] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -43,7 +45,7 @@ export function VerifyPage() {
     }).catch(() => { /* Local verification remains available without registry discovery. */ })
   }, [received])
   useEffect(() => { const cleared = () => { setProfiles([]); setProfile(null); setKeyTrusted(false); setPublicKey(''); setIssuer(''); setInsightKeys(''); setInsightProtocol(''); setInsightTrusted(false) }; window.addEventListener('priorseal:trust-clear', cleared); return () => window.removeEventListener('priorseal:trust-clear', cleared) }, [])
-  useEffect(() => { verificationRun.current += 1; setResult(null); setReview(null); setVerifiedWithTrust(false) }, [raw, publicKey, issuer, audience, keyTrusted, profile, insightKeys, insightProtocol, insightTrusted])
+  useEffect(() => { verificationRun.current += 1; setResult(null); setReview(null); setReviewedReceipt(null); setVerifiedWithTrust(false) }, [raw, publicKey, issuer, audience, keyTrusted, profile, insightKeys, insightProtocol, insightTrusted])
   useEffect(() => { let active = true; const keys = profile?.keys.map((key) => key.publicKey) ?? (publicKey ? [publicKey] : []); Promise.all(keys.map(keyFingerprint)).then((values) => { if (active) setFingerprints(values) }).catch(() => { if (active) setFingerprints([]) }); return () => { active = false } }, [profile, publicKey])
 
   function loadProfile(value: unknown, alreadyConfirmed = false) {
@@ -58,7 +60,7 @@ export function VerifyPage() {
     try { if (file.size > 10_000_000) throw new Error('Use a JSON file smaller than 10 MB.'); setter(await file.text()) } catch (caught) { setMessage((caught as Error).message) }
   }
   async function verifyText(text: string) {
-    setBusy(true); setMessage(''); setNotice(''); setResult(null); setReview(null)
+    setBusy(true); setMessage(''); setNotice(''); setResult(null); setReview(null); setReviewedReceipt(null)
     const run = ++verificationRun.current
     try {
       const parsed = JSON.parse(text)
@@ -84,14 +86,14 @@ export function VerifyPage() {
         verified = evaluated.priorSeal
       } else verified = bundle ? await verifier.verifyVerificationBundleLocally(parsed as VerificationBundle, options) : await verifier.verifyReceiptLocally(receipt, options)
       if (run !== verificationRun.current) return
-      setVerifiedWithTrust(trusted); setResult(verified)
+      setVerifiedWithTrust(trusted); setResult(verified); setReviewedReceipt(receipt)
       if (verified.valid && verified.verificationScope === 'LOCAL_COMPLETE' && trusted) session.saveReceipt(receipt)
     } catch (caught) { if (run === verificationRun.current) setMessage((caught as Error).message) } finally { setBusy(false) }
   }
   async function pasteSubmit(event: FormEvent) { event.preventDefault(); await verifyText(raw) }
   async function lookupSubmit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setMessage('')
-    try { const bundle = await api.getVerificationBundle(lookup.trim()); const text = JSON.stringify(bundle, null, 2); setOriginalFile(null); setRaw(text); setNotice('Bundle retrieved. Its embedded registry is discovery material; select independent trust and verify locally.'); setResult(null); setReview(null) } catch (caught) { setMessage((caught as Error).message) } finally { setBusy(false) }
+    try { const bundle = await api.getVerificationBundle(lookup.trim()); const text = JSON.stringify(bundle, null, 2); setOriginalFile(null); setRaw(text); setNotice('Bundle retrieved. Its embedded registry is discovery material; select independent trust and verify locally.'); setResult(null); setReview(null); setReviewedReceipt(null) } catch (caught) { setMessage((caught as Error).message) } finally { setBusy(false) }
   }
   const externalPending = Boolean(result && (result.verificationScope === 'EXTERNAL_CHECK_REQUIRED' || result.code === 'AUTHORIZATION_REQUIRES_CHAIN_VERIFICATION'))
   const complete = Boolean(result?.valid && !externalPending && verifiedWithTrust && (!review || review.valid && !review.unverified.length))
@@ -110,5 +112,6 @@ export function VerifyPage() {
       {review && <><h3>Combined evidence review</h3><p>{review.code} · verification origin: {review.verificationOrigin}</p><div className="table-scroll"><table className="evidence-table"><thead><tr><th>Artifact</th><th>Integrity</th><th>Signature</th><th>Trust</th><th>Result</th></tr></thead><tbody>{review.artifacts.map((artifact) => <tr key={artifact.id}><td>{artifact.role}<small>{artifact.profile}</small></td><td>{artifact.integrityValid ? 'Verified' : 'Invalid'}</td><td>{artifact.signatureValid === null ? 'Not verified' : artifact.signatureValid ? 'Verified' : 'Invalid'}</td><td>{artifact.trusted === null ? 'Not established' : artifact.trusted ? 'Configured registry' : 'Untrusted'}</td><td>{artifact.code}</td></tr>)}</tbody></table></div><div>{review.artifacts.filter((artifact) => artifact.protocol).map((artifact) => <section className="trust-key" key={`protocol-${artifact.id}`}><h4>Insight protocol: {artifact.protocol!.code}</h4><dl className="data-grid"><div><dt>Review scope</dt><dd>{artifact.protocol!.scope}</dd></div><div><dt>Signed or snapshot profile</dt><dd><CodeValue value={artifact.protocol!.profileId ?? 'Not established'} /></dd></div><div><dt>Registry release</dt><dd><CodeValue value={artifact.protocol!.registryReleaseId ?? 'Not established'} /></dd></div><div><dt>Consumer policy</dt><dd><CodeValue value={artifact.protocol!.policyId ?? 'Independently selected admission pins'} /></dd></div><div><dt>Exact registry SHA-256</dt><dd><CodeValue value={artifact.protocol!.registrySnapshotSha256 ?? 'Not established'} /></dd></div><div><dt>Registry byte length</dt><dd>{artifact.protocol!.registrySnapshotByteLength ?? 'Not established'}</dd></div></dl>{artifact.protocol!.required.length > 0 && <p>Required: {artifact.protocol!.required.join('; ')}</p>}</section>)}</div><dl className="data-grid">{Object.entries(review.relations).map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value === null ? 'Not established' : value ? 'Matched' : 'Mismatch'}</dd></div>)}</dl>{review.unverified.length > 0 && <Notice tone="warning" title="Review remains partial">{review.unverified.join('; ')}</Notice>}</>}
       <div className="header-actions"><button className="button secondary" onClick={() => downloadJson({ schema: 'priorseal.local-review-report.v1', verifiedAt: Math.floor(Date.now() / 1000), expectedAudience: audience, trustedIssuer: verifiedWithTrust ? issuer : null, result, review, complete, verificationOrigin: 'local' }, 'local-review-report.json')}>Export review report</button>{externalPending && <button className="button secondary" onClick={() => downloadJson({ schema: 'priorseal.external-check-plan.v1', receiptId: result.receiptId, requiredChecks: result.requiredExternalChecks, completed: false, notice: 'No chain checks were performed by this offline review. Current-state results do not establish historical authority.' }, 'external-check-plan.json')}>Export external check plan</button>}{complete && result.receiptId && <button className="text-link" onClick={() => navigate(`/app/receipts/${encodeURIComponent(result.receiptId!)}`)}>Open receipt detail →</button>}</div>
     </section>}
+    {result && reviewedReceipt && <EvidenceRelationshipView receipt={reviewedReceipt} verification={{ valid: result.valid, code: result.code }} signerTrustConfirmed={verifiedWithTrust} relations={review?.relations} />}
   </AppShell>
 }
