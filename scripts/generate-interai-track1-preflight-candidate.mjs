@@ -153,9 +153,18 @@ function gitHead(directory) {
 }
 
 async function fetchBytes(url) {
-  const response = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error(`GET ${url} failed with HTTP ${response.status}`);
-  return Buffer.from(await response.arrayBuffer());
+  try {
+    const response = await fetch(url, { headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error(`GET ${url} failed with HTTP ${response.status}`);
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    const proxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+    if (!proxy) throw error;
+    return execFileSync('curl', ['-fsSL', '-x', proxy, url], {
+      encoding: 'buffer',
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  }
 }
 
 async function writeBoth(name, bytes) {
