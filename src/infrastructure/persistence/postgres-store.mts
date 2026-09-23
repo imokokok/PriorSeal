@@ -17,6 +17,7 @@ type LogEntry = Awaited<ReturnType<MemoryStore['appendAuthorizationLog']>>;
 type Receipt = Parameters<MemoryStore['saveReceipt']>[0] & { intentHash: string; execution: { txHash: string }; schema: string; issuer: string; keyId: string; outcome: string; signature?: string };
 type PgJobRow = { job_id: string; idempotency_key: string; input_json: ObservationJob['input']; state: string; attempts: number; next_attempt_at: string | Date; observation_json: ObservationJob['observation']; result_json: ObservationJob['result']; error_json: ObservationJob['error']; created_at: string | Date; lease_token: string; lease_expires_at: string | Date };
 type PgAuthorizationRow = { authorization_json: AuthorizationRecord['authorization']; acceptance_json: AuthorizationRecord['acceptance']; policy_json: AuthorizationRecord['policyEvidence']; timestamp_evidence_json: unknown; witness_evidence_json: unknown; status: string; bound_tx_hash: string | null; uses: number };
+type MerkleAcceptance = Pick<AuthorizationRecord['acceptance'], 'sequence' | 'entryHash'>;
 
 async function appendMerkleIndex(client: PoolClient, sequence: number, entryHash: string) {
   let node = { start: sequence, level: 0, hash: merkleLeafHash(entryHash) };
@@ -83,7 +84,7 @@ export function createPostgresStore(pool: Pool) {
       } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
     },
     async listAuthorizationLog() { const result = await pool.query('SELECT sequence,authorization_hash,accepted_at,previous_entry_hash,entry_hash FROM authorization_log ORDER BY sequence'); return result.rows.map((row) => ({ sequence: Number(row.sequence), authorizationHash: row.authorization_hash, acceptedAt: Number(row.accepted_at), previousEntryHash: row.previous_entry_hash, entryHash: row.entry_hash })); },
-    async getAuthorizationMerkleSnapshot(acceptance: AuthorizationRecord['acceptance'], size: number | null = null) {
+    async getAuthorizationMerkleSnapshot(acceptance: MerkleAcceptance, size: number | null = null) {
       const accepted = await pool.query('SELECT entry_hash FROM authorization_log WHERE sequence=$1', [acceptance.sequence]);
       if (accepted.rows[0]?.entry_hash !== acceptance.entryHash) throw new TypeError('Authorization acceptance does not match the local log');
       const head = await pool.query(size == null ? 'SELECT sequence,entry_hash FROM authorization_log ORDER BY sequence DESC LIMIT 1' : 'SELECT sequence,entry_hash FROM authorization_log WHERE sequence=$1', size == null ? [] : [size]);

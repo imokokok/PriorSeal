@@ -6,7 +6,8 @@ import { transformSync } from 'esbuild';
 const check = process.argv[2] === '--check';
 if (!check && process.argv.length !== 2) throw new Error('Usage: node scripts/build-core.mjs [--check]');
 
-const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url));
+const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+const sourceRoot = join(projectRoot, 'src');
 
 function findSources(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -16,8 +17,13 @@ function findSources(directory) {
   });
 }
 
-const sources = findSources(sourceRoot).sort();
-if (sources.length === 0) throw new Error('No TypeScript core sources found in src/');
+const sources = [
+  ...findSources(sourceRoot),
+  ...findSources(join(projectRoot, 'scripts')),
+  ...findSources(join(projectRoot, 'examples')),
+  ...findSources(join(projectRoot, 'test')),
+].sort();
+if (sources.length === 0) throw new Error('No TypeScript runtime sources found');
 
 function runtimePath(sourcePath) {
   // Keep the SDK's existing rfc3161.mjs import and its narrow declaration file.
@@ -28,7 +34,7 @@ function runtimePath(sourcePath) {
 
 for (const sourcePath of sources) {
   const outputPath = runtimePath(sourcePath);
-  const outputLabel = `src/${relative(sourceRoot, outputPath).split(sep).join('/')}`;
+  const outputLabel = relative(projectRoot, outputPath).split(sep).join('/');
   const name = sourcePath.slice(sourcePath.lastIndexOf(sep) + 1, -4);
   const source = readFileSync(sourcePath, 'utf8');
   const compiled = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;

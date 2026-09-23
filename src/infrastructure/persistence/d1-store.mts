@@ -145,7 +145,7 @@ export function createD1Store(database: D1Database) {
     async getObservation(chainId: number | string | undefined, txHash: string) { return parsed<Observation>((await first<{ observation_json: string }>('SELECT observation_json FROM execution_observations WHERE chain_id=? AND tx_hash=? ORDER BY id DESC LIMIT 1', Number(chainId), txHash))?.observation_json) ?? undefined; },
     async appendAuthorizationLog({ authorizationHash, acceptedAt }: { authorizationHash: string; acceptedAt: number }) { return appendLog(authorizationHash, acceptedAt); },
     async listAuthorizationLog() { return (await all<LogRow>('SELECT * FROM authorization_log ORDER BY sequence')).map(logEntry); },
-    async getAuthorizationMerkleSnapshot(acceptance: AuthorizationRecord['acceptance'], size: number | null = null) {
+    async getAuthorizationMerkleSnapshot(acceptance: Pick<AuthorizationRecord['acceptance'], 'sequence' | 'entryHash'>, size: number | null = null) {
       const accepted = await first<{ entry_hash: string }>('SELECT entry_hash FROM authorization_log WHERE sequence=?', acceptance.sequence);
       if (accepted?.entry_hash !== acceptance.entryHash) throw new TypeError('Authorization acceptance does not match the local log');
       const head = size == null ? await first<LogRow>('SELECT * FROM authorization_log ORDER BY sequence DESC LIMIT 1') : await first<LogRow>('SELECT * FROM authorization_log WHERE sequence=?', size);

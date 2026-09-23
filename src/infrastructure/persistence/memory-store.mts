@@ -13,6 +13,7 @@ type ArchiveEntry = ReturnType<typeof archiveEntry> & { sequence: number };
 type Observation = WorkerObservation & { chainId: number | string };
 type Receipt = Record<string, unknown> & { receiptId: string };
 type IdempotencyRecord = { requestHash: string; response: unknown; expiresAt: number };
+type MerkleAcceptance = Pick<AuthorizationAcceptance, 'sequence' | 'entryHash'>;
 
 export function createMemoryStore({ clock = () => Date.now() } = {}) { const intents = new Map<string, Intent>(), receipts = new Map<string, Receipt>(), observations = new Map<string, Observation[]>(), idempotency = new Map<string, IdempotencyRecord>(), jobs = new Map<string, ObservationJob>(), authorizations = new Map<string, AuthorizationRecord>(), archive = new Map<string, ArchiveEntry>(), authorizationLog: LogEntry[] = []; return {
   archiveRetention: 'process_lifetime',
@@ -35,7 +36,7 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) { const int
   async getObservation(chainId: number | string | undefined, txHash: string) { return observations.get(`${chainId}:${txHash}`)?.at(-1); },
   async appendAuthorizationLog({ authorizationHash, acceptedAt }: { authorizationHash: string; acceptedAt: number }) { const existing = authorizationLog.find((entry) => entry.authorizationHash === authorizationHash); if (existing) return { ...existing }; const sequence = authorizationLog.length + 1; const previousEntryHash = authorizationLog.at(-1)?.entryHash ?? null; const entryHash = hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash }); const entry = { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash }; authorizationLog.push(entry); return entry; },
   async listAuthorizationLog() { return authorizationLog.map((entry) => ({ ...entry })); },
-  async getAuthorizationMerkleSnapshot(acceptance: AuthorizationAcceptance, size: number | null = null) {
+  async getAuthorizationMerkleSnapshot(acceptance: MerkleAcceptance, size: number | null = null) {
     if (authorizationLog[acceptance.sequence - 1]?.entryHash !== acceptance.entryHash) throw new TypeError('Authorization acceptance does not match the local log');
     const checkpointSize = size ?? authorizationLog.length;
     if (!Number.isSafeInteger(checkpointSize) || checkpointSize < acceptance.sequence || checkpointSize > authorizationLog.length) throw new TypeError('Authorization is not present in the Merkle checkpoint');

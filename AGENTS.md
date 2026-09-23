@@ -22,3 +22,10 @@
 - For GitHub network operations, try the configured direct connection first. If it fails or times out, automatically detect and retry through the user's local proxy without waiting for another instruction. When ClashX is listening on `127.0.0.1:7890`, prefer command-scoped `git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 ...` settings; do not persist proxy settings globally.
 - Using a proxy must never change the required author or committer identity. Re-verify both identities before committing and verify the requested remote ref by SHA after pushing.
 - Preserve remote history by default. Use a force push only when the user explicitly requests a history rewrite, and prefer `--force-with-lease`.
+
+## TypeScript source policy
+
+- Write all new production, integration, deployment, migration, and operational source code in TypeScript. Use `.mts` for Node ESM code and `.ts`/`.tsx` in the SDK and web workspaces.
+- Treat checked-in `.mjs` files beside `.mts` files as generated runtime artifacts. Edit the TypeScript source and run `npm run core:build`; never edit those generated files directly.
+- JavaScript is allowed only for reviewed build tooling, frozen portable examples, generated standalone verifiers, and legacy tests that have not yet justified migration. Adding a new JavaScript exception requires an explicit repository-policy change.
+- Keep runtime validation at every untrusted JSON, signature, RPC, HTTP, environment, and persistence boundary; TypeScript types do not replace protocol validation.
