@@ -17,6 +17,10 @@ import {
 	recoverTypedDataAddress,
 } from "viem";
 import { baseSepolia } from "viem/chains";
+import {
+	assertTrack1Registry,
+	assertTrack1SignedDescriptor,
+} from "./interai-track1-registry.mjs";
 
 const CHAIN_ID = 84_532;
 const RPC_URL = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
@@ -423,6 +427,11 @@ const current = asRecord(currentRaw, "registry current");
 const audit = asRecord(auditRaw, "audit proof");
 const allowanceRecord = asRecord(allowanceRaw, "allowance record");
 const now = Math.floor(Date.now() / 1_000);
+if (options.mode === "live") {
+	assertTrack1Registry(registry, now * 1_000);
+	assertTrack1SignedDescriptor(source);
+	assertTrack1SignedDescriptor(destination);
+}
 await Promise.all([
 	verifyEnvelope(source, "source", WETH_ID, USDC_ID, registry, now),
 	verifyEnvelope(destination, "destination", USDC_ID, WETH_ID, registry, now),

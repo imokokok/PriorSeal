@@ -19,6 +19,10 @@ import {
 	recoverTypedDataAddress,
 } from "viem";
 import { baseSepolia } from "viem/chains";
+import {
+	assertTrack1Registry,
+	assertTrack1SignedDescriptor,
+} from "./interai-track1-registry.mjs";
 
 const ENDPOINT = "https://api.interailabs.dev/verify";
 const KEYCHAIN_SERVICE = "priorseal.interai.track1-pilot";
@@ -345,6 +349,7 @@ async function validateInputs(
 	const registryKeys = await jsonFile(
 		path.join(candidateDir, "oracle-keys.json"),
 	);
+	assertTrack1Registry(registryKeys, now);
 	const releaseId = string(registryCurrent.releaseId, "registry release ID");
 	const registryRelease = await jsonFile(
 		path.join(candidateDir, `oracle-registry-release-${releaseId}.json`),
@@ -393,6 +398,7 @@ async function validateInputs(
 		["source", source, sourceRef],
 		["destination", destination, destinationRef],
 	] as const) {
+		assertTrack1SignedDescriptor(assertion);
 		assert(
 			assertion.uid === ref.uid &&
 				assertion.attester === oracle.signer &&

@@ -2,8 +2,12 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { keccak256 } from "viem";
-const RELEASE_ID = "0x6e3bd18c541cc80e326754a7743f05050df348257102b93f9a13bc82c7e69f6b";
-const SIGNER = "0x6506f789edd43338a416f59822a63f309f97e8ce";
+import {
+  assertTrack1Registry,
+  assertTrack1SignedDescriptor,
+  TRACK1_RELEASE_ID,
+  TRACK1_SIGNER
+} from "./interai-track1-registry.mjs";
 const WETH_ID = "eip155:84532/erc20:0x4200000000000000000000000000000000000006";
 const USDC_ID = "eip155:84532/erc20:0x036cbd53842c5426634e7929541ec2318f3dcf7e";
 function assert(value, message) {
@@ -88,10 +92,11 @@ async function main() {
     )
   );
   const registryKeys = await json(path.join(directory, "oracle-keys.json"));
+  assertTrack1Registry(registryKeys);
   assert(
-    registryCurrent.releaseId === RELEASE_ID && registryRelease.releaseId === RELEASE_ID && object(registryKeys.registryRelease, "key registry release").releaseId === RELEASE_ID && registryKeys.attestation_enabled === true && Array.isArray(registryKeys.public_keys) && registryKeys.public_keys.some(
-      (entry) => object(entry, "registry key").public_key?.toString().toLowerCase() === SIGNER && object(entry, "registry key").revoked === false
-    ) && object(candidate.trustRoots, "trust roots").registryReleaseId === RELEASE_ID && object(candidate.oracleSafetyCheckV3, "oracle refs").signer?.toString().toLowerCase() === SIGNER,
+    registryCurrent.releaseId === TRACK1_RELEASE_ID && registryRelease.releaseId === TRACK1_RELEASE_ID && object(registryKeys.registryRelease, "key registry release").releaseId === TRACK1_RELEASE_ID && registryKeys.attestation_enabled === true && Array.isArray(registryKeys.public_keys) && registryKeys.public_keys.some(
+      (entry) => object(entry, "registry key").public_key?.toString().toLowerCase() === TRACK1_SIGNER.toLowerCase() && object(entry, "registry key").revoked === false
+    ) && object(candidate.trustRoots, "trust roots").registryReleaseId === TRACK1_RELEASE_ID && object(candidate.oracleSafetyCheckV3, "oracle refs").signer?.toString().toLowerCase() === TRACK1_SIGNER.toLowerCase(),
     "Pinned registry release or signer mismatch"
   );
   const calldata = sourceBinding.exactCalldata;
@@ -104,8 +109,9 @@ async function main() {
     ["destination", destination, destinationBinding, USDC_ID, WETH_ID]
   ].map(([label, assertion, binding, from, to]) => {
     const data = object(assertion.data, `${label}.data`);
+    assertTrack1SignedDescriptor(assertion);
     assert(
-      assertion.schemaVersion === 3 && assertion.validForSeconds === 600 && assertion.attester?.toString().toLowerCase() === SIGNER && typeof assertion.uid === "string" && typeof assertion.signature === "string" && data.schemaVersion === 3 && data.verdict === "PASS" && data.sourceAssetId?.toString().toLowerCase() === from && data.destinationAssetId?.toString().toLowerCase() === to && data.tradeAmountUsd === 4e6 && binding.role === label && binding.assertionUid === assertion.uid,
+      assertion.schemaVersion === 3 && assertion.validForSeconds === 600 && assertion.attester?.toString().toLowerCase() === TRACK1_SIGNER.toLowerCase() && typeof assertion.uid === "string" && typeof assertion.signature === "string" && data.schemaVersion === 3 && data.verdict === "PASS" && data.sourceAssetId?.toString().toLowerCase() === from && data.destinationAssetId?.toString().toLowerCase() === to && data.tradeAmountUsd === 4e6 && binding.role === label && binding.assertionUid === assertion.uid,
       `${label} assertion or binding mismatch`
     );
     return {

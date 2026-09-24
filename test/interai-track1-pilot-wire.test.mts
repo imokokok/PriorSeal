@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { keccak256 } from "viem";
+import {
+	assertTrack1Registry,
+	assertTrack1SignedDescriptor,
+	TRACK1_V3_DESCRIPTOR,
+} from "../scripts/interai-track1-registry.mjs";
 
 const releaseId =
 	"0x6e3bd18c541cc80e326754a7743f05050df348257102b93f9a13bc82c7e69f6b";
@@ -28,6 +33,7 @@ const source = {
 	attester: signer,
 	schemaVersion: 3,
 	validForSeconds: 600,
+	eip712: TRACK1_V3_DESCRIPTOR.eip712,
 	data: {
 		schemaVersion: 3,
 		verdict: "PASS",
@@ -83,9 +89,25 @@ async function fixture(
 		},
 		"oracle-registry-current.json": { releaseId },
 		"oracle-keys.json": {
-			registryRelease: { releaseId },
+			issuer: "https://www.oracleinsight.xyz",
+			registryRelease: {
+				releaseId,
+				current:
+					"https://www.oracleinsight.xyz/.well-known/oracle-registry/current.json",
+				immutable: `https://www.oracleinsight.xyz/.well-known/oracle-registry/releases/${releaseId}`,
+			},
 			attestation_enabled: true,
-			public_keys: [{ public_key: signer, revoked: false }],
+			schemas: { OracleSafetyCheck: TRACK1_V3_DESCRIPTOR },
+			public_keys: [
+				{
+					key_id: "insight-oracle-safety-v2-202609",
+					public_key: signer,
+					algorithm: "EIP-712/secp256k1",
+					validFrom: "2026-08-26T17:35:36.000Z",
+					validUntil: null,
+					revoked: false,
+				},
+			],
 		},
 		[`oracle-registry-release-${releaseId}.json`]: {
 			releaseId,
@@ -149,18 +171,67 @@ test("exact Track 1 pilot request has fixed fields and stringified ordered evide
 			JSON.parse(request.external_evidence[1].attestation_json),
 			destination,
 		);
+		const pinnedRegistry = JSON.parse(
+			await readFile(path.join(dir, "oracle-keys.json"), "utf8"),
+		);
 		for (const item of request.external_evidence) {
 			assert.equal(item.profile, "insight.oracle-safety-check.v3.pilot/v1");
-			assert.equal(
-				JSON.parse(item.registry_json).registryRelease.releaseId,
-				releaseId,
-			);
-			assert.equal(
-				JSON.parse(item.registry_json).public_keys[0].public_key,
-				signer,
-			);
+			assert.equal(typeof item.registry_json, "string");
+			assert.deepEqual(JSON.parse(item.registry_json), pinnedRegistry);
 			assert.deepEqual(item.binding, { calldata });
 		}
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+test("JIT registry and signed descriptor drift fail closed", async () => {
+	const dir = await mkdtemp(path.join(tmpdir(), "interai-pilot-registry-"));
+	try {
+		await fixture(dir);
+		const registryPath = path.join(dir, "oracle-keys.json");
+		const registry = JSON.parse(await readFile(registryPath, "utf8"));
+		assert.doesNotThrow(() => assertTrack1Registry(registry));
+		assert.doesNotThrow(() => assertTrack1SignedDescriptor(source));
+		for (const mutate of [
+			(value: typeof registry) => {
+				delete value.schemas.OracleSafetyCheck;
+			},
+			(value: typeof registry) => {
+				value.schemas.OracleSafetyCheck.eip712.types.OracleSafetyCheck[0].type =
+					"bytes32";
+			},
+			(value: typeof registry) => {
+				value.registryRelease.immutable = "https://example.com/release";
+			},
+			(value: typeof registry) => {
+				value.public_keys[0].revoked = true;
+			},
+		]) {
+			const changed = structuredClone(registry);
+			mutate(changed);
+			assert.throws(() => assertTrack1Registry(changed));
+		}
+		const changedEnvelope = structuredClone(source);
+		changedEnvelope.eip712.types.OracleSafetyCheck[0].type = "bytes32";
+		assert.throws(() => assertTrack1SignedDescriptor(changedEnvelope));
+		delete registry.schemas.OracleSafetyCheck;
+		await writeFile(registryPath, JSON.stringify(registry));
+		const output = path.join(dir, "request.json");
+		const result = spawnSync(
+			process.execPath,
+			[
+				"scripts/build-interai-track1-direct-request.mjs",
+				"--candidate-dir",
+				dir,
+				"--output",
+				output,
+			],
+			{ encoding: "utf8" },
+		);
+		assert.equal(result.status, 2);
+		assert.match(result.stderr, /v3 EIP-712 descriptor mismatch/);
+		await assert.rejects(readFile(output));
 	} finally {
 		await rm(dir, { recursive: true, force: true });
 	}
