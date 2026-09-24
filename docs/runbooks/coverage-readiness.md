@@ -52,5 +52,5 @@ cross-project tests use the same deterministic report/signature vector. Runtime 
 dependency and needs no server signing key. New SDK exports are additive and are
 not available in previously published SDK packages until a release is published.
 
-Run `npm run sdk:build` and `node --test test/sdk/coverage-binding.test.mjs`.
+Run `npm run sdk:build`, `npm run core:build:tests`, and `node --test test/sdk/coverage-binding.test.mjs`.
 Fixtures use a public test key, never production credentials or funded execution.
