@@ -1,52 +1,73 @@
 # PriorSeal
 
-[Unreleased, opt-in RWA integration](examples/rwa-v1/README.md) adds assessment-bound
-exact calls and combined verification while retaining the existing Agent workflows.
-The [RWA v2 hardening](docs/rwa-hardening.md) adds semantic call profiles, receiver
-checks, a durable Node execution boundary and detailed failure verification.
+**Verifiable authorization and execution evidence for EVM agents.**
 
 [![CI](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml/badge.svg)](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
 [![MIT License](https://img.shields.io/badge/license-MIT-151513.svg)](LICENSE)
 
-[Live console](https://priorseal.xyz/app) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [OpenAPI](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
+[Live console](https://priorseal.xyz/app) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
 
-PriorSeal creates portable evidence connecting user or organization authority to an agent's observed EVM execution:
+An agent can propose and execute a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, or whether the observed execution matched it**. PriorSeal connects those steps in a portable receipt that another party can verify independently.
 
 ```text
-Draft intent → EIP-712/ERC-1271 authorization → RFC 3161 timestamp → EVM observation → binding result → Ed25519 receipt → offline verification
+Bounded intent → Principal signature → Acceptance + time evidence
+               → EVM observation → Signed receipt → Independent review
 ```
 
-It does not custody assets, operate wallets, or hold transaction-signing keys. A valid receipt proves only that its issuer signed the included claims; it is not an economic-safety guarantee or proof that an RPC source is infallible. Local, independent receipt verification is authoritative; the HTTP verification endpoint is a convenience.
+PriorSeal is for teams building EVM agents, treasury automation, wallets, and transaction infrastructure. It sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys or move funds.
 
-## Quick start
+## What the evidence covers
 
-Repository development and deployment require Node 22+. The published SDK supports Node 20+ and modern browsers. In a clean checkout:
+1. **Authority.** A user or organization signs a time-bounded, single-use EIP-712 or ERC-1271 authorization for an agent and executor. A deployment policy can bind a reviewed principal identity to an account; without that registry, a human-readable principal ID is self-asserted.
+2. **Ordering.** PriorSeal accepts the authorization before execution. Production deployments require an independent pre-execution proof mode: RFC 3161 timestamp, witness quorum, or EVM anchor. The default development `issuer` mode provides only an issuer acceptance statement.
+3. **Execution.** PriorSeal observes a specified transaction through configured EVM RPC sources and compares the supported fields with the signed intent. Pending, unavailable, reverted, and reorged states remain explicit.
+4. **Review.** An Ed25519-signed v3 receipt separates evidence validity, execution state, and authorization compliance. A reviewer can download it and verify its hashes, signatures, policy result, and binding locally with an independently confirmed issuer key.
+
+For contract calls, the `priorseal.intent.v2` exact-call profile binds the transaction envelope: chain, executor, nonce, target, calldata hash, and native value. Optional context commitments bind digests of external decisions or assessments without claiming that PriorSeal made those decisions. See the [evidence relationship levels](docs/architecture/evidence-relationship-levels.md).
+
+**A valid receipt is evidence of signed claims, not a guarantee of economic safety or an infallible RPC view.** ERC-1271 authority and EVM anchors require additional chain-state checks for complete verification. A key included in a downloaded bundle is discovery data; the reviewer must establish trust in that key separately.
+
+## Try it
+
+### Use the hosted console
+
+Open the [PriorSeal console](https://priorseal.xyz/app). Its quickstart checks the deployment's configured capabilities before wallet signing. You can create an authorization, observe a transaction, export the receipt, and review it in the [local verifier](https://priorseal.xyz/app/verify). The console's activity list is browser-local; it is not a complete server-side history.
+
+### Run the offline example
+
+Repository development requires **Node.js 22+**. This example generates a temporary key pair and a **synthetic execution** so you can inspect the receipt and verifier without an RPC endpoint or funds:
 
 ```bash
 npm ci
-cp .env.example .env.local
-# Set development-only PRIORSEAL_* key-file paths and a configured RPC endpoint in .env.local.
-npm run start:api
-npm --prefix web run dev
-```
-
-All `src/` runtime modules have TypeScript sources. Production, integration, deployment, migration and operational code must also be added as TypeScript (`.mts` for Node ESM and `.ts`/`.tsx` in the SDK and web workspaces). Shared durable-state/RWA fixtures and selected boundary tests are TypeScript as well. After editing a checked TypeScript runtime source, run `npm run core:build` to refresh its checked-in `.mjs` runtime artifact; generated `.mjs` files must not be edited directly. Both `npm run check` and `npm run build` reject stale artifacts, and `npm run source:policy` rejects new handwritten production JavaScript. Reviewed build tooling, frozen portable examples, generated standalone verifiers and adversarial tests that deliberately use malformed or partial values remain JavaScript. The RFC 3161 source is `src/domain/rfc3161-source.mts` and generates `src/domain/rfc3161.mjs` so the SDK can retain its existing import and declaration boundary. Regenerate Worker binding types with `wrangler types worker-configuration.d.ts` after changing `wrangler.jsonc`.
-
-The console is served by Vite on its displayed URL and proxies API calls to port 3000. It stores browser-local session activity only; it is not a server-side evidence archive. Amounts are atomic unsigned integer strings (never floats), such as `"1000000"`.
-
-To run the receipt example (which creates its ignored temporary artifact directory):
-
-```bash
 npm run example:receipt
 npm run verify:receipt
-# Or verify arbitrary files:
+```
+
+The artifacts are written to the ignored `examples/receipt-artifacts/` directory. To verify a different receipt and trusted public key:
+
+```bash
 npm run verify:receipt -- /path/to/receipt.json /path/to/public-key.pem
 ```
 
-## TypeScript SDK
+### Run the API and console locally
 
-The typed `priorseal-sdk` package is the supported browser and Node.js 20+ integration surface:
+After `npm ci`, copy `.env.example` to `.env.local`, configure development issuer key-file paths and an RPC endpoint for the chain you want to observe, then start the API and UI in separate terminals:
+
+```bash
+cp .env.example .env.local
+npm run start:api
+```
+
+```bash
+npm --prefix web run dev
+```
+
+The UI uses Vite's displayed local URL and proxies API calls to port 3000. For database setup, key handling, and production configuration, use the [operations runbook](docs/runbooks/operations.md). Never put private keys, credential-bearing RPC URLs, or database secrets in Git.
+
+## Integrate with TypeScript
+
+The published [`priorseal-sdk`](sdk/README.md) supports Node.js 20+ and modern browsers. It prepares wallet authorization, calls the API, resumes durable observations, and verifies receipts locally. It does **not** sign or broadcast execution transactions.
 
 ```bash
 npm install priorseal-sdk
@@ -56,123 +77,53 @@ npm install priorseal-sdk
 import { createPriorSealClient } from 'priorseal-sdk'
 
 const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.xyz' })
-const { accepted } = await priorseal.authorizeWithWallet({
+const capabilities = await priorseal.capabilities()
+
+const flow = await priorseal.authorizeWithWallet({
   intent,
+  audience: capabilities.audience,
   principal: { type: 'user', id: 'user:42' },
-  delegate: { agentId: 'agent:treasury', executor: intent.sender }
+  delegate: { agentId: 'agent:treasury', executor: intent.sender },
 }, window.ethereum)
 
-const evidence = await priorseal.observeExecution({
-  authorizationId: accepted.authorization.authorizationId,
+// Your execution system submits the authorized transaction and supplies txHash.
+const evidence = await priorseal.observeExecutionUntilFinal({
+  authorizationId: flow.accepted.authorization.authorizationId,
   chainId: Number(intent.chainId),
   txHash,
-  confirmations: 12
+  confirmations: 12,
 })
 ```
 
-The SDK handles typed API calls, exact-call intent construction, wallet authorization, durable observation polling, idempotency, timeouts and structured errors. Import `verifyReceiptLocally` or `verifyVerificationBundleLocally` from `priorseal-sdk/verifier` to verify evidence without sending receipt bytes to PriorSeal. It does not sign or submit transactions. ERC-1271 and EVM anchors are reported as explicit external chain-state requirements. See [`sdk/README.md`](sdk/README.md) and the console route `/app/sdk`.
+The [SDK guide](sdk/README.md) covers intent construction, recovery checkpoints, exact calls, and offline verification. The HTTP contract is available as [OpenAPI](https://priorseal.xyz/openapi/v1.json); the main flow uses `POST /v1/authorizations/prepare`, `POST /v1/authorizations`, and `POST /v1/executions/observe`.
 
-Optional Insight coverage binding recognizes Band Protocol as an independent
-source group. BandChain v3 source age is evaluated through Insight's shared
-freshness rules; PriorSeal's default signed coverage gate is 300 seconds and
-still requires matching evidence-chain scope, quorum and independent groups. See the
-[coverage-readiness runbook](docs/runbooks/coverage-readiness.md).
+## Examples and integrations
 
-## Quality checks
+These examples have different evidence scopes. Read each example's README before treating its result as an integration or production claim.
 
-```bash
-npm run check          # runtime syntax, core/SDK/web types, generated files, tests and builds
-npm run test:coverage
-npm run audit
-npm run release:check  # full gate including browser E2E, coverage and production-dependency audit
-```
+| Example | What it demonstrates |
+| --- | --- |
+| [Exact-call SDK integration](examples/web3-agent-kit-context-binding-v1/README.md) | Binds a partner-owned call-envelope digest to a principal-signed authorization. |
+| [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) | Combines signed Insight advisory input, an agent-side policy decision, and PriorSeal authorization in a synthetic flow. |
+| [Base Sepolia live evidence](examples/web3-agent-kit-base-sepolia-live-v1/README.md) | Verifies one real testnet transaction authorized before signing; it does not include a live Insight attestation. |
+| [RWA v2](examples/rwa-v2/README.md) | Links assessment evidence to exact calls and reports integrity, trust, time, policy, and execution separately. |
+| [APS decision binding](examples/aps-priorseal-decision-binding-v1/README.md) | Correlates an independently verified APS decision with authorization and synthetic execution evidence. |
 
-The API contract is at `/openapi/v1.json`. Operational endpoints are `/health/live`, `/health/ready`, and `/v1/version`. The default console uses signed `priorseal.authorization.v2` authorizations; it binds the principal and authorizer types, agent ID and executor into EIP-712. Legacy authorization v1 remains verification-only, and `POST /v1/intents` remains a deprecated compatibility path for unsigned receipt v1 evidence.
+Other partner fixtures are under [`examples/`](examples/). Insight can be used independently for assessment evidence; PriorSeal can be used independently for authorization and execution evidence; a combined workflow can bind the two without merging their trust roots.
 
-## API and security boundaries
+## Documentation
 
-`POST /v1/authorizations/prepare` canonicalizes a draft and returns EIP-712 typed data. `POST /v1/authorizations` accepts the resulting EOA signature or an ERC-1271 contract-account signature, evaluates the configured policy, and issues a signed acceptance statement. A change-controlled `policy.principals` registry can bind reviewed user or organization IDs to specific accounts and authorizer types; its snapshot and independently recomputable evaluation are embedded in authorization-bound receipts. Without that registry, PriorSeal proves account control but treats the human-readable principal ID as self-asserted. `POST /v1/executions/observe` accepts `authorizationId`; the observer-returned transaction hash and chain must match the request. Pending attempts remain candidates. A confirmed or reverted transaction on the authorized chain with the delegated executor and nonce claims the single use so a material action mismatch cannot reopen permission; the additive `executionCorrelation` field separately reports `MATCH`, `MISMATCH`, or `INDETERMINATE` for the complete transfer/exact-call identity. Newly issued v3 receipts separate cryptographic evidence validity, execution state and authorization compliance. Use an `Idempotency-Key` for writes. The same key and request body replay a result for 24 hours; a different body produces `IDEMPOTENCY_CONFLICT`.
+| Topic | Start here |
+| --- | --- |
+| Product scope and evidence limits | [First-release scope](docs/product/first-release-scope.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
+| Authorization and receipt semantics | [Signed authorization](docs/architecture/signed-authorization.md) · [Lifecycle](docs/architecture/lifecycle.md) · [API compatibility](docs/api/compatibility.md) |
+| Security and operations | [Threat model](docs/security/threat-model.md) · [Operations](docs/runbooks/operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
+| SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |
 
-Authorization v2 records the principal authorizer and delegated transaction executor as separate roles. Set `requireDistinctAuthorizerAndExecutor: true` in deployments that must reject a shared authorizer/executor account. This makes role separation part of the signed, independently recomputable policy result; custody implementation and process isolation remain the integrator's responsibility.
-
-V3 verification recomputes the intent, authorization and execution hashes, binding reason codes, execution status, compliance assessment and receipt ID before checking the authorizer, acceptance and issuer signatures. A confirmed correlated execution with changed authorized fields is `NON_COMPLIANT`; missing, pending, reorged or unrelated evidence is `NOT_ASSESSABLE`, never mislabeled as a breach. Historical v2 receipts remain verifiable with their original aggregate-outcome semantics. Browser-local verification supports EIP-712 EOAs. ERC-1271 verification is contract-state dependent: the default server checks current state through a configured EVM source, while strong historical verification requires an archive-state check, module event, or a future account-state proof profile.
-
-For swaps, routers and other calls that emit several token transfers, use `priorseal.intent.v2` with `executionProfile: "priorseal.execution-profile.exact-call.v1"`. It requires an explicit transaction nonce, call target, calldata hash and native value. Optional `contextCommitments` bind up to 16 namespaced SHA-256 or Keccak-256 digests—such as quote proofs, advisory risk assessments, policy decisions or approvals—without teaching PriorSeal their business semantics. The SDK's `matchContextCommitment()` helper checks that an expected external digest is present; composition layers that require one reference per namespace can use `matchUniqueContextCommitment()`. The containing authorization or receipt must still be verified separately. Binding verifies the exact transaction envelope, execution time and finality without guessing from `Transfer` logs. PriorSeal records whether execution matched authorization but does not force an agent to follow an external recommendation.
-
-The console presents these boundaries as an evidence relationship rather than one aggregate audit result. See [`docs/architecture/evidence-relationship-levels.md`](docs/architecture/evidence-relationship-levels.md) for the separate meanings of artifact verification, cross-evidence binding, runtime decision use, and observed execution/compliance. A committed digest does not prove that an external application read it or that every external signer path enforced it.
-
-The [APS × PriorSeal sibling adapter](examples/aps-priorseal-decision-binding-v1/README.md) pins APS 6.0.1 and PriorSeal SDK 0.4.0, verifies maintainer-produced decision inputs, and correlates them with principal-signed exact-call authorizations and synthetic execution receipts. It reports both trust domains separately and does not establish APS decision-level single use. Its [claim boundary](docs/architecture/aps-priorseal-claim-boundary.md) records the offline and fixture-local limits.
-
-For Web3 Agent Kit v1.18.1+, pass its `CallEnvelopeV1` digest directly through `web3AgentKitContextCommitments()` under `agent-call-envelope.v1`; PriorSeal does not normalize or hash the envelope again. Keep the WAK policy decision in the separate `web3-agent-kit.policy-decision.v1` domain, and use `matchWeb3AgentKitCallEnvelope()` for a unique binding check. The exact cross-system contract and custody boundary are documented in [`docs/integrations/web3-agent-kit.md`](docs/integrations/web3-agent-kit.md).
-
-The [`BoundaryAttest v0.2 paired fixture`](examples/boundaryattest-paired-v0.2/README.md) demonstrates this boundary with independently pinned signer keys, an RFC 8785/JCS claim digest, action correlation, separate export-age and decision-freshness checks, signer-scoped exact-export replay protection, an optional one-time decision-consumption policy and fail-closed negative vectors. Run it with `npm run example:boundaryattest-paired`.
-
-The [`Insight–BoundaryAttest–PriorSeal three-object fixture`](examples/insight-boundaryattest-three-object-v0.2/README.md) independently verifies two Insight Oracle Safety Check v3 attestations, a BoundaryAttest v0.2 governance-evidence export and a PriorSeal exact-call receipt. It binds the expected governance signer separately from the JCS claim digest, enforces exact-call/freshness/replay rules and applies a deletion test before concluding whether BoundaryAttest adds a distinct governance handoff. Run it with `npm run example:insight-boundaryattest-three-object`.
-
-The recommended [`Web3 Agent Kit Base swap v2 fixture`](examples/web3-agent-kit-base-swap-v2/README.md) applies a single-authority composition model to one synthetic ETH → USDC call. Insight is signed advisory input, the Web3 Agent Kit governor is the final agent-side policy decision point, and every executable governor branch proceeds through a principal-signed PriorSeal exact-call authorization. Its self-contained bundle verifies after modeled ordinary key rotation and includes a fail-closed authorization-bypass mutation. Run it with `npm run example:web3-agent-kit-base-swap-v2`. The [v1 fixture](examples/web3-agent-kit-base-swap-v1/README.md) is retained as historical evidence and must not be used as the current integration policy because its no-native-confirmation branch could return `ALLOW_EXECUTION`.
-
-The separate [`Base Sepolia live evidence`](examples/web3-agent-kit-base-sepolia-live-v1/README.md) records a real Uniswap v3 WETH → USDC testnet transaction authorized before signing and verified against the chain after confirmation. Run its offline verifier with `npm run verify:web3-agent-kit-base-sepolia-live` and its RPC cross-check with `npm run verify:web3-agent-kit-base-sepolia-live:online`. It explicitly contains no live Insight attestation and makes no production, mainnet, adoption, profitability or economic-safety claim.
-
-The [`Headless Oracle market-state pair fixture`](examples/headless-market-state-pair-v1/README.md) demonstrates short-window external-fact evidence without weakening the issuer's 60-second validity window. It binds one receipt into authorization and verifies a distinct execution-time receipt for the final evidence bundle, with fail-closed signature, commitment, key, venue, time, mode, status and feed-state checks. Run it with `npm run example:headless-market-state-pair`.
-
-The [`ThoughtProof Sentinel M1 paired vectors`](examples/thoughtproof-sentinel-paired-v1/README.md) bind the exact transported canonical Sentinel export to a signed PriorSeal exact-call authorization, independently verify both issuers, enforce production/vector key separation and decision-expiry compatibility, and keep the still-unbound Sentinel exact-call subject explicit until M2. Run them with `npm run example:thoughtproof-paired`.
-
-The [`ThoughtProof Sentinel M2 bounded-edit proposal vectors`](examples/thoughtproof-sentinel-paired-v2/README.md) implement the accepted closed-whitelist structure plus strict JSON-integer chain IDs, raw calldata/keccak fixtures, key-window and non-canonical negatives, contract-creation exclusion, explicit nonce separation and the decision that `amount` remains outside M2 subject equality. The included decision key is a YuTao-authored proposal-only vector key, not a ThoughtProof key; final cross-party acceptance still requires ThoughtProof-signed M2 exports. Run them with `npm run example:thoughtproof-m2`.
-
-The [`ThoughtProof Sentinel M2 final pairs`](examples/thoughtproof-sentinel-paired-v2-final/README.md) bind PriorSeal receipts to the matching and missing-subject artifacts issued under ThoughtProof's pinned vector-only kid. The five-check portable set verifies both raw calldata derivations, the matching subject, the explicit missing-subject negative and default rejection of the non-production vector kid. Run it with `npm run example:thoughtproof-m2-final`.
-
-The [`402Signal EIP-3009 settlement-binding offline fixture`](examples/402signal-eip3009-settlement-binding-v1/README.md) runs the official pinned 402Signal v0.7.3 route guard over raw request, response and seller-challenge bytes, then verifies EOA-only payment and offchain binding signatures plus synthetic settlement evidence. Nine vectors cover matching, changed terms, both replay keys, timeout, reorg, correctly signed recipient/amount mismatches and expired route evidence with a still-valid payment authorization. The portable bundle makes no network or RPC requests and does not claim API delivery or Bankr compatibility. Run it with `npm run example:402signal-eip3009`.
-
-Pending observations return a durable `observationJob`; callers can resume by job ID or use `observeExecutionUntilFinal`. `GET /v1/receipts/{receiptId}/bundle` exports the receipt, key-discovery snapshot and an integrity hash. Bundle verification still requires a trusted issuer key pinned outside the bundle; an attacker-controlled bundle cannot establish its own trust root.
-
-The simplest Gas-free ordering mode is `rfc3161`. PriorSeal sends only the SHA-256 imprint of the canonical authorization to DigiCert's RFC 3161 TSA, verifies the returned CMS signature, timestamping certificate usage, certificate path, pinned DigiCert roots, policy OID and nonce, then stores the complete response. The signed `timestampPolicy` makes this requirement part of the principal-approved policy hash. The final receipt carries `priorseal.rfc3161-evidence.v1`, which both server and browser verifiers reject if it was changed or timestamped after execution. No wallet, contract, witness deployment or Gas is required.
-
-Gas-free multi-operator ordering remains available with a signed `2-of-3` (or stricter) witness policy. The policy hash signed by the principal commits to every witness ID and Ed25519 public key. PriorSeal sends only the authorization digest to separately operated witness services, validates the returned signatures before accepting the authorization, and embeds them in the final receipt. Both the server and browser verifier reject duplicate witnesses, changed keys, insufficient quorum, or attestations timestamped after execution. Start a witness with `npm run start:witness`; keep endpoint URLs and bearer tokens in `PRIORSEAL_WITNESS_ENDPOINTS_FILE`, outside the public signed policy.
-
-Startup configuration is validated before the HTTP server listens: `PORT` must be 1–65535, `PRIORSEAL_TRUST_PROXY` must be `true` or `false`, CORS entries must be complete HTTP(S) origins, and issuer key paths must be configured as a pair.
-
-Only configured RPC endpoints are used (`PRIORSEAL_RPC_ETHEREUM`, `PRIORSEAL_RPC_BASE`, `PRIORSEAL_RPC_BASE_SEPOLIA`, `PRIORSEAL_RPC_ARBITRUM`). Base Sepolia is an optional nonproduction pilot/testnet surface; it is not a production-validation claim. Receipts contain a non-secret configured-source identifier, never the endpoint URL. RPC timeouts, not-found states, and inconsistent/invalid responses are not treated as on-chain failure or success. Confirmed observations include the containing block timestamp and finality. A signed intent confirmation floor cannot be relaxed by the observation request, and production policies can require `minConfirmations`. Re-observing a transaction whose confirmed block hash changed—or which disappeared after prior inclusion—creates new `REORGED` evidence without overwriting the old signed receipt.
-
-Intent `validUntil` bounds the block execution time; it does not expire a receipt. Historical receipts remain cryptographically verifiable. The console verifies pasted receipts locally with browser Web Crypto; an API-fetched registry key is discovery metadata, while a complete independent result requires a public key confirmed through a separate trusted channel. Receipt bytes are not sent to the convenience verification API. ERC-1271 authority and EVM anchors remain pending until their declared chain state is checked.
-
-Issuer private keys are read only from a configured local file for development and must never enter HTTP requests, logs, the frontend bundle, database records, or Git. `PRIORSEAL_KEY_REGISTRY_FILE` may point to a public-only `priorseal.keys.v1` JSON document so retired keys remain published for historical verification. Production deployments should replace the signing provider with a KMS/HSM/secret-manager adapter. See [the threat model](docs/security/threat-model.md), [API compatibility](docs/api/compatibility.md), and [lifecycle](docs/architecture/lifecycle.md).
-
-Accepted authorizations remain in an ordered hash-chain log. New receipts use a signed Merkle checkpoint with a logarithmic inclusion proof instead of embedding the entire chain; historical chain-proof receipts remain verifiable. New external anchors commit to the Merkle root, while existing head-hash anchors retain their original proof format. The production D1 schema includes the compact-proof index; local PostgreSQL deployments require migration 010. `PRIORSEAL_TRANSPARENCY_ANCHOR_FILE` continues to require a confirmed transaction verified through a configured RPC. See [signed authorization](docs/architecture/signed-authorization.md). The Solidity contracts under `contracts/` are unaudited reference implementations and must not be enabled on a production Safe or funded account.
-
-Production mode is fail-closed. Set `PRIORSEAL_ENVIRONMENT=production`; startup then requires durable storage (the D1 binding on Workers, database URLs on Node), issuer keys, non-default issuer/audience values, a production policy, production CORS, and `PRIORSEAL_PREEXECUTION_PROOF_MODE=rfc3161`, `witness-quorum`, or `evm-anchor`. A reviewed principal registry remains the default. Public betas must explicitly opt in with `PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS=true`; this verifies wallet control but not the user's claimed real-world identity. The production example uses `rfc3161`. EVM mode remains available for deployments that require public-chain consensus; `npm run contracts:build`, `npm run anchor:prepare`, and `npm run anchor:record` support its custody-free workflow.
-
-## Persistence and operations
-
-Cloudflare D1 is the production persistence backend. The Worker uses its `DB` binding and the schema in `d1/migrations/`; D1 exports and Time Travel are the production recovery sources. Local Node operation still supports provider-neutral PostgreSQL through `DATABASE_URL`, with `DATABASE_URL_UNPOOLED` used by `npm run db:migrate`. Read [database operations](docs/runbooks/database.md) before applying migrations or restoring data.
-
-The production web console and API run together on Cloudflare Workers. Static assets are served from `web/dist`, API and health paths run Worker-first, D1 stores application state, Cloudflare Queues dispatch durable observation jobs, and the minute cron recovers work that was persisted before a queue delivery. The production domains are `https://priorseal.xyz` and `https://www.priorseal.xyz`; `https://priorseal.priorseal.workers.dev` remains available for deployment diagnostics. Validate the bundle with `npm run worker:check`, deploy a clean commit with `npm run worker:deploy`, and pass that exact Git SHA as `PRIORSEAL_EXPECTED_VERSION` to the no-spend production smoke commands. Store every value named by `secrets.required` in Worker Secrets, never in Git. See the [Cloudflare runbook](docs/runbooks/cloudflare.md).
-
-For a local container environment:
-
-```bash
-cp .env.example .env.local
-# Configure development issuer key paths in .env.local first.
-docker compose --env-file .env.local up --build
-```
-
-Compose mounts the issuer keys as read-only secrets, connects the API to its local PostgreSQL service, and applies all migrations before starting the API.
-
-Mount issuer key files read-only outside the image and inject production configuration through the deployment secret system. Do not use the compose database password outside local development. See [operations](docs/runbooks/operations.md) for RPC outage, reorg, backup/restore, and key-rotation procedures.
-
-## Architecture
-
-PriorSeal is a modular monolith with explicit dependency direction: `domain` contains pure protocol rules, `application` coordinates use cases, `infrastructure` implements persistence/blockchain/key adapters, `interfaces` exposes HTTP, and `bootstrap` wires runtime configuration. `src/index.mjs` is the stable local library surface; callers should not import internal paths. The Cloudflare adapter adds managed queue delivery, D1 persistence, and scheduling at the deployment edge without splitting the protocol into microservices. The Phase 0 audit, risk matrix, and target architecture are in [docs/architecture/phase-0-audit.md](docs/architecture/phase-0-audit.md). Design decisions are recorded under [docs/adr](docs/adr).
+Run `npm run check` for the repository checks, or `npm run release:check` for the full release gate. Production runs the API and console on Cloudflare Workers with D1 persistence; local Node deployments can use PostgreSQL.
 
 ## Work with PriorSeal
 
-PriorSeal is looking for design partners building EVM agents, treasury automation, wallets, policy or risk systems, and transaction infrastructure. A pilot connects one bounded execution path to PriorSeal and tests whether an independent reviewer can reproduce the authorization, timing, execution and compliance result from the exported evidence.
+For a pilot, choose one bounded EVM execution path and ask an independent reviewer to reproduce the authorization, timing, observation, and compliance result from its exported evidence. See the [collaboration guide](COLLABORATING.md) or [open a pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Code contributions follow [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow [SECURITY.md](SECURITY.md).
 
-Read the [collaboration guide](COLLABORATING.md) for the suggested two-week pilot, integration boundary and success criteria, or [open a pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Technical contributions can start with [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-MIT
-
-## Integration reliability
-
-See the [integration and recovery runbook](docs/runbooks/reliability.md) for the integration doctor, durable authorization state, local EVM/database recovery drill and production health checks.
+MIT licensed. See [LICENSE](LICENSE).
