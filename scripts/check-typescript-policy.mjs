@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const errors = [];
 const reviewedJavaScriptTools = /* @__PURE__ */ new Set();
-const reviewedCompatibilityLaunchers = /* @__PURE__ */ new Set([
+const generatedCompatibilityLaunchers = /* @__PURE__ */ new Set([
   "scripts/package-web3-agent-kit-integration-spike-v1.py"
 ]);
 const reviewedPortableJavaScript = /* @__PURE__ */ new Set([
@@ -46,7 +46,7 @@ for (const path of files(join(projectRoot, "src"))) {
 for (const directory of ["scripts", "sdk/scripts"]) {
   for (const path of files(join(projectRoot, directory))) {
     if (/\.(?:js|jsx|cjs)$/.test(path)) errors.push(`${label(path)}: new maintenance code must use .mts`);
-    if (path.endsWith(".py") && !reviewedCompatibilityLaunchers.has(label(path))) {
+    if (path.endsWith(".py") && !generatedCompatibilityLaunchers.has(label(path))) {
       errors.push(`${label(path)}: new maintenance code must use .mts`);
     }
     if (!path.endsWith(".mjs")) continue;
@@ -68,7 +68,7 @@ for (const [directory, reviewed, description] of [
 }
 for (const [reviewed, description] of [
   [reviewedJavaScriptTools, "tool"],
-  [reviewedCompatibilityLaunchers, "compatibility launcher"],
+  [generatedCompatibilityLaunchers, "generated compatibility launcher"],
   [reviewedPortableJavaScript, "portable example"],
   [reviewedLegacyJavaScriptTests, "legacy test"]
 ]) {

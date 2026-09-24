@@ -41,6 +41,24 @@ async function readJson(name) {
   const text = await readFile(new URL(name, output), "utf8");
   return { text, value: JSON.parse(text) };
 }
+function record(value, label) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${label}: expected object`);
+  return value;
+}
+function stringField(value, field, label) {
+  const result = value[field];
+  if (typeof result !== "string") throw new Error(`${label}: invalid ${field}`);
+  return result;
+}
+function signedExport(value, label) {
+  const data = record(value, label);
+  const signedAt = data.signedAt;
+  const validUntil = data.validUntil;
+  if (typeof signedAt !== "number" || !Number.isSafeInteger(signedAt) || typeof validUntil !== "number" || !Number.isSafeInteger(validUntil)) {
+    throw new Error(`${label}: invalid validity window`);
+  }
+  return { exportSchema: stringField(data, "exportSchema", label), digest: stringField(data, "digest", label), canonical: stringField(data, "canonical", label), signedAt, validUntil };
+}
 async function writeJson(name, value) {
   await writeFile(new URL(name, output), `${JSON.stringify(value, null, 2)}
 `);
@@ -59,12 +77,28 @@ for (const [name, expectedHash] of Object.entries(sourceExpectations)) {
   }
   source[name] = loaded.value;
 }
-const matchingExport = source["export-m2-match.json"];
-const missingSubjectExport = source["export-m2-missing-subject.json"];
-const thoughtProofKeys = source["thoughtproof-keys.json"];
-const matchingCanonical = JSON.parse(matchingExport.canonical);
-const missingCanonical = JSON.parse(missingSubjectExport.canonical);
-const subject = matchingCanonical.decisionSubject;
+const matchingExport = signedExport(source["export-m2-match.json"], "matching export");
+const missingSubjectExport = signedExport(source["export-m2-missing-subject.json"], "missing-subject export");
+const keyDocument = record(source["thoughtproof-keys.json"], "ThoughtProof keys");
+if (!Array.isArray(keyDocument.keys)) throw new Error("ThoughtProof keys: invalid keys");
+const thoughtProofKeys = { keys: keyDocument.keys.map((value) => {
+  const key = record(value, "ThoughtProof key");
+  return { kid: stringField(key, "kid", "ThoughtProof key"), status: stringField(key, "status", "ThoughtProof key"), x: stringField(key, "x", "ThoughtProof key") };
+}) };
+const matchingCanonical = record(JSON.parse(matchingExport.canonical), "matching canonical");
+const missingCanonical = record(JSON.parse(missingSubjectExport.canonical), "missing canonical");
+const rawSubject = record(matchingCanonical.decisionSubject, "decision subject");
+const chainId = rawSubject.chainId;
+if (typeof chainId !== "number" || !Number.isSafeInteger(chainId)) throw new Error("decision subject: invalid chainId");
+const subject = {
+  schema: stringField(rawSubject, "schema", "decision subject"),
+  chainId,
+  transactionValue: stringField(rawSubject, "transactionValue", "decision subject"),
+  executor: stringField(rawSubject, "executor", "decision subject"),
+  callTarget: stringField(rawSubject, "callTarget", "decision subject"),
+  transactionNonce: stringField(rawSubject, "transactionNonce", "decision subject"),
+  calldataHash: stringField(rawSubject, "calldataHash", "decision subject")
+};
 if (matchingExport.exportSchema !== exportDomain || matchingExport.digest !== "0xa5bbfe64ca3864d7cf6d5ba0f5af1992b55d15100e0d716bd9e426b5812877a9" || missingSubjectExport.digest !== "0x9a0476c3411cfdc40b59aad4e5c6ec656c662ca082e9e1ad2e28520e159de28a" || subject?.schema !== subjectSchema || missingCanonical.decisionSubject !== void 0) {
   throw new Error("ThoughtProof-issued M2 artifacts do not match the agreed final-pair inputs");
 }

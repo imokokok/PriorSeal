@@ -159,7 +159,7 @@ function iso(seconds) {
 }
 function insightMessage(data) {
   const message = { ...data };
-  for (const field of INSIGHT_UINT_FIELDS) message[field] = BigInt(data[field]);
+  for (const field of INSIGHT_UINT_FIELDS) message[field] = BigInt(String(data[field]));
   return message;
 }
 function requestHash({ sourceAssetId, destinationAssetId, tradeAmountUsd }) {
@@ -331,7 +331,8 @@ const draft = {
     path: [WETH, USDC],
     recipient: EXECUTOR,
     deadline: ROUTER_DEADLINE
-  }
+  },
+  intentId: ""
 };
 draft.intentId = wakIntentId(draft);
 const insightSource = await makeInsightAttestation({

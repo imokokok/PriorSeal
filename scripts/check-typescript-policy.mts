@@ -7,7 +7,8 @@ const errors: string[] = [];
 
 const reviewedJavaScriptTools = new Set<string>();
 
-const reviewedCompatibilityLaunchers = new Set([
+// build-core.mts emits this byte-stable shim for published WAK README commands.
+const generatedCompatibilityLaunchers = new Set([
   'scripts/package-web3-agent-kit-integration-spike-v1.py',
 ]);
 
@@ -57,7 +58,7 @@ for (const path of files(join(projectRoot, 'src'))) {
 for (const directory of ['scripts', 'sdk/scripts']) {
   for (const path of files(join(projectRoot, directory))) {
     if (/\.(?:js|jsx|cjs)$/.test(path)) errors.push(`${label(path)}: new maintenance code must use .mts`);
-    if (path.endsWith('.py') && !reviewedCompatibilityLaunchers.has(label(path))) {
+    if (path.endsWith('.py') && !generatedCompatibilityLaunchers.has(label(path))) {
       errors.push(`${label(path)}: new maintenance code must use .mts`);
     }
     if (!path.endsWith('.mjs')) continue;
@@ -81,7 +82,7 @@ for (const [directory, reviewed, description] of [
 
 for (const [reviewed, description] of [
   [reviewedJavaScriptTools, 'tool'],
-  [reviewedCompatibilityLaunchers, 'compatibility launcher'],
+  [generatedCompatibilityLaunchers, 'generated compatibility launcher'],
   [reviewedPortableJavaScript, 'portable example'],
   [reviewedLegacyJavaScriptTests, 'legacy test'],
 ] as const) {

@@ -5,7 +5,7 @@ import test from "node:test";
 import {
   runFixtureChecks,
   verifyThoughtProofExport
-} from "../../examples/thoughtproof-sentinel-paired-v1/verify.mjs";
+} from "../../examples/thoughtproof-sentinel-paired-v1/verify.reference.mjs";
 const fixtureUrl = new URL("../../examples/thoughtproof-sentinel-paired-v1/", import.meta.url);
 const readJson = (name) => JSON.parse(readFileSync(new URL(name, fixtureUrl), "utf8"));
 test("ThoughtProof Sentinel M1 paired vectors preserve issuer and subject-binding boundaries", async () => {

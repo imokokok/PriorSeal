@@ -1,10 +1,15 @@
 // Generated from web3-agent-kit-base-swap.test.mts by npm run core:build. Do not edit directly.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runFixtureChecks } from "../../examples/web3-agent-kit-base-swap-v1/verify.mjs";
+import { runFixtureChecks } from "../../examples/web3-agent-kit-base-swap-v1/verify.reference.mjs";
 test("Web3 Agent Kit Base swap evidence is independently reproducible and fails closed", async () => {
   const result = await runFixtureChecks();
   assert.equal(result.status, "PASS");
+  assert.ok(result.report.authority);
+  assert.ok(result.report.authorization);
+  assert.ok(result.report.timing);
+  assert.ok(result.report.compliance);
+  assert.ok(result.report.historicalVerification);
   assert.deepEqual(
     result.cases.map((entry) => entry.actual),
     [

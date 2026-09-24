@@ -157,9 +157,9 @@ function iso(seconds: number) {
   return new Date(seconds * 1000).toISOString();
 }
 
-function insightMessage(data: Record<string, any>): Record<string, any> {
+function insightMessage(data: Record<string, unknown>): Record<string, unknown> {
   const message = { ...data };
-  for (const field of INSIGHT_UINT_FIELDS) message[field] = BigInt(data[field]);
+  for (const field of INSIGHT_UINT_FIELDS) message[field] = BigInt(String(data[field]));
   return message;
 }
 
@@ -280,7 +280,7 @@ function makeObservations(values: number[], asset: string): Observation[] {
   }));
 }
 
-function insightPairCommitment(source: any, destination: any) {
+function insightPairCommitment(source: Awaited<ReturnType<typeof makeInsightAttestation>>, destination: Awaited<ReturnType<typeof makeInsightAttestation>>) {
   return {
     namespace: 'insight.pretrade-pair.v1',
     algorithm: 'keccak256',
@@ -300,7 +300,7 @@ function insightPairCommitment(source: any, destination: any) {
   };
 }
 
-function wakIntentId(draft: any) {
+function wakIntentId(draft: { data: string; to: string; value: string; from: string }) {
   const payload = {
     action: 'swap',
     amount_base_units: 0,
@@ -322,7 +322,7 @@ const calldata = encodeFunctionData({
   functionName: 'swapExactETHForTokens',
   args: [AMOUNT_OUT_MIN, [WETH, USDC], EXECUTOR, BigInt(ROUTER_DEADLINE)],
 });
-const draft: any = {
+const draft = {
   schema: 'web3-agent-kit.evm-transaction-draft.v1',
   sourceCommit: WAK_COMMIT,
   createdAt: CHECKED_AT - 30,
@@ -343,6 +343,7 @@ const draft: any = {
     recipient: EXECUTOR,
     deadline: ROUTER_DEADLINE,
   },
+  intentId: '',
 };
 draft.intentId = wakIntentId(draft);
 

@@ -106,6 +106,15 @@ async function writeJson(name, value) {
   await writeFile(new URL(name, output), `${JSON.stringify(value, null, 2)}
 `);
 }
+function receiptIntent(receipt) {
+  const evidence = receipt.authorizationEvidence;
+  if (typeof evidence !== "object" || evidence === null || Array.isArray(evidence)) throw new Error("Missing authorization evidence");
+  const authorization = Reflect.get(evidence, "authorization");
+  if (typeof authorization !== "object" || authorization === null || Array.isArray(authorization)) throw new Error("Missing authorization");
+  const intent = Reflect.get(authorization, "intent");
+  if (typeof intent !== "object" || intent === null || Array.isArray(intent)) throw new Error("Missing intent");
+  return intent;
+}
 async function makeReceipt({
   name,
   artifact,
@@ -269,7 +278,7 @@ await makeReceipt({
   name: "string-chain-id",
   artifact: validExport,
   mutateReceipt: (receipt) => {
-    receipt.authorizationEvidence.authorization.intent.chainId = "8453";
+    receiptIntent(receipt).chainId = "8453";
     return receipt;
   }
 });
@@ -331,7 +340,7 @@ await writeJson("subject-fixtures.json", {
       name: "non-exact-call intent requires the PriorSeal exact-call profile",
       canonical: JSON.parse(validExport.canonical),
       intent: {
-        ...matchingReceipt.authorizationEvidence.authorization.intent,
+        ...receiptIntent(matchingReceipt),
         schema: "priorseal.intent.v1"
       },
       expectedCode: "PRIORSEAL_EXACT_CALL_REQUIRED"

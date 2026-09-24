@@ -44,9 +44,31 @@ function sha256(value: string | Buffer) {
   return createHash('sha256').update(value).digest('hex');
 }
 
-async function readJson(name: string): Promise<{ text: string; value: any }> {
+async function readJson(name: string): Promise<{ text: string; value: unknown }> {
   const text = await readFile(new URL(name, output), 'utf8');
-  return { text, value: JSON.parse(text) };
+  return { text, value: JSON.parse(text) as unknown };
+}
+
+function record(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label}: expected object`);
+  return value as Record<string, unknown>;
+}
+
+function stringField(value: Record<string, unknown>, field: string, label: string): string {
+  const result = value[field];
+  if (typeof result !== 'string') throw new Error(`${label}: invalid ${field}`);
+  return result;
+}
+
+type SignedExport = { exportSchema: string; digest: string; canonical: string; signedAt: number; validUntil: number };
+function signedExport(value: unknown, label: string): SignedExport {
+  const data = record(value, label);
+  const signedAt = data.signedAt;
+  const validUntil = data.validUntil;
+  if (typeof signedAt !== 'number' || !Number.isSafeInteger(signedAt) || typeof validUntil !== 'number' || !Number.isSafeInteger(validUntil)) {
+    throw new Error(`${label}: invalid validity window`);
+  }
+  return { exportSchema: stringField(data, 'exportSchema', label), digest: stringField(data, 'digest', label), canonical: stringField(data, 'canonical', label), signedAt, validUntil };
 }
 
 async function writeJson(name: string, value: unknown) {
@@ -59,7 +81,7 @@ const sourceExpectations = {
   'thoughtproof-keys.json': '89ee418621200c709886416ccf3bf539fae37463f8278421f8206113c6592bfc',
 };
 
-const source: Record<string, any> = {};
+const source: Record<string, unknown> = {};
 for (const [name, expectedHash] of Object.entries(sourceExpectations)) {
   const loaded = await readJson(name);
   const actualHash = sha256(loaded.text);
@@ -69,12 +91,28 @@ for (const [name, expectedHash] of Object.entries(sourceExpectations)) {
   source[name] = loaded.value;
 }
 
-const matchingExport = source['export-m2-match.json'];
-const missingSubjectExport = source['export-m2-missing-subject.json'];
-const thoughtProofKeys = source['thoughtproof-keys.json'];
-const matchingCanonical = JSON.parse(matchingExport.canonical);
-const missingCanonical = JSON.parse(missingSubjectExport.canonical);
-const subject = matchingCanonical.decisionSubject;
+const matchingExport = signedExport(source['export-m2-match.json'], 'matching export');
+const missingSubjectExport = signedExport(source['export-m2-missing-subject.json'], 'missing-subject export');
+const keyDocument = record(source['thoughtproof-keys.json'], 'ThoughtProof keys');
+if (!Array.isArray(keyDocument.keys)) throw new Error('ThoughtProof keys: invalid keys');
+const thoughtProofKeys = { keys: keyDocument.keys.map((value) => {
+  const key = record(value, 'ThoughtProof key');
+  return { kid: stringField(key, 'kid', 'ThoughtProof key'), status: stringField(key, 'status', 'ThoughtProof key'), x: stringField(key, 'x', 'ThoughtProof key') };
+}) };
+const matchingCanonical = record(JSON.parse(matchingExport.canonical) as unknown, 'matching canonical');
+const missingCanonical = record(JSON.parse(missingSubjectExport.canonical) as unknown, 'missing canonical');
+const rawSubject = record(matchingCanonical.decisionSubject, 'decision subject');
+const chainId = rawSubject.chainId;
+if (typeof chainId !== 'number' || !Number.isSafeInteger(chainId)) throw new Error('decision subject: invalid chainId');
+const subject = {
+  schema: stringField(rawSubject, 'schema', 'decision subject'),
+  chainId,
+  transactionValue: stringField(rawSubject, 'transactionValue', 'decision subject'),
+  executor: stringField(rawSubject, 'executor', 'decision subject'),
+  callTarget: stringField(rawSubject, 'callTarget', 'decision subject'),
+  transactionNonce: stringField(rawSubject, 'transactionNonce', 'decision subject'),
+  calldataHash: stringField(rawSubject, 'calldataHash', 'decision subject'),
+};
 
 if (
   matchingExport.exportSchema !== exportDomain ||
@@ -89,7 +127,7 @@ if (keccak256(rawCalldata) !== subject.calldataHash) {
   throw new Error('raw calldata does not derive the matching ThoughtProof calldataHash');
 }
 
-async function makeReceipt(name: string, artifact: any) {
+async function makeReceipt(name: string, artifact: SignedExport) {
   const issuedAt = artifact.signedAt + 60;
   const expiresAt = artifact.validUntil - 60;
   const intent = {
@@ -210,7 +248,7 @@ await writeJson('priorseal-trusted-issuer-keys.json', {
 });
 
 const vectorKey = thoughtProofKeys.keys.find(
-  (key: any) => key.kid === 'tp-sentinel-export-ed25519-2026-09-vector',
+  (key) => key.kid === 'tp-sentinel-export-ed25519-2026-09-vector',
 );
 if (!vectorKey || vectorKey.status !== 'vector-only') {
   throw new Error('ThoughtProof vector key is absent or has an unexpected status');

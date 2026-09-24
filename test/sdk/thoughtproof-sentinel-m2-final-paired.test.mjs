@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { runFinalPairChecks } from "../../examples/thoughtproof-sentinel-paired-v2-final/verify.mjs";
+import { runFinalPairChecks } from "../../examples/thoughtproof-sentinel-paired-v2-final/verify.reference.mjs";
 const fixtureUrl = new URL("../../examples/thoughtproof-sentinel-paired-v2-final/", import.meta.url);
 const readJson = (name) => JSON.parse(readFileSync(new URL(name, fixtureUrl), "utf8"));
 test("M2 final pairs use the ThoughtProof-issued matching and missing-subject artifacts", async () => {

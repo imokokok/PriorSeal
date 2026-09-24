@@ -5,7 +5,7 @@ import test from "node:test";
 import {
   runFixtureChecks,
   verifyThreeObjectFlow
-} from "../../examples/insight-boundaryattest-three-object-v0.2/verify.mjs";
+} from "../../examples/insight-boundaryattest-three-object-v0.2/verify.reference.mjs";
 const fixtureUrl = new URL(
   "../../examples/insight-boundaryattest-three-object-v0.2/",
   import.meta.url
@@ -42,13 +42,15 @@ test("three-object fixture passes the matching flow and all documented fail-clos
       "PRIORSEAL_VALIDITY_EXCEEDS_EVIDENCE"
     ]
   );
+  const matching = results[0];
+  assert.ok(matching?.ok);
   assert.equal(
-    results[0].valueConclusion,
+    matching.valueConclusion,
     "BOUNDARYATTEST_ADDS_GOVERNANCE_HANDOFF"
   );
-  assert.equal(results[0].deletionTest.result, "MATERIAL_FACT_LOST");
+  assert.equal(matching.deletionTest.result, "MATERIAL_FACT_LOST");
   assert.match(
-    results[0].deletionTest.unverifiableFact,
+    matching.deletionTest.unverifiableFact,
     /governance signer reviewed/
   );
 });
@@ -92,6 +94,7 @@ test("deletion test returns reference-only when no material fact is lost", async
     expected
   });
   assert.equal(result.code, "OK");
+  assert.ok(result.ok);
   assert.equal(result.valueConclusion, "BOUNDARYATTEST_REFERENCE_ONLY");
   assert.equal(result.deletionTest.result, "NO_MATERIAL_FACT_LOST");
   assert.equal(result.deletionTest.unverifiableFact, null);

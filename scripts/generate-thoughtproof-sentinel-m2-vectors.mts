@@ -59,7 +59,7 @@ function sha256(value: string): `0x${string}` {
   return `0x${createHash('sha256').update(value, 'utf8').digest('hex')}`;
 }
 
-function exactCallSubject(overrides: Record<string, unknown> = {}): Record<string, any> {
+function exactCallSubject(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     schema: subjectSchema,
     kind: 'EVM_EXACT_CALL',
@@ -75,7 +75,7 @@ function exactCallSubject(overrides: Record<string, unknown> = {}): Record<strin
 
 function makeExport(
   name: string,
-  subject: Record<string, any> | undefined,
+  subject: Record<string, unknown> | undefined,
   { tamperSignature = false, verdict = 'ALLOW' }: { tamperSignature?: boolean; verdict?: string } = {},
 ) {
   const canonicalBody = {
@@ -123,19 +123,29 @@ async function writeJson(name: string, value: unknown) {
   await writeFile(new URL(name, output), `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function receiptIntent(receipt: ReturnType<typeof signReceipt>): Record<string, unknown> {
+  const evidence = receipt.authorizationEvidence;
+  if (typeof evidence !== 'object' || evidence === null || Array.isArray(evidence)) throw new Error('Missing authorization evidence');
+  const authorization = Reflect.get(evidence, 'authorization');
+  if (typeof authorization !== 'object' || authorization === null || Array.isArray(authorization)) throw new Error('Missing authorization');
+  const intent = Reflect.get(authorization, 'intent');
+  if (typeof intent !== 'object' || intent === null || Array.isArray(intent)) throw new Error('Missing intent');
+  return intent as Record<string, unknown>;
+}
+
 type ReceiptOptions = {
   name: string;
-  artifact: any;
-  chainId?: any;
-  sender?: any;
-  target?: any;
+  artifact: ReturnType<typeof makeExport>;
+  chainId?: number;
+  sender?: string;
+  target?: string;
   nonce?: string;
   value?: string;
   amount?: string;
-  dataHash?: any;
-  commitments?: any[];
+  dataHash?: string;
+  commitments?: Array<{ namespace: string; algorithm: string; digest: string }>;
   expiresAt?: number;
-  mutateReceipt?: (receipt: any) => any;
+  mutateReceipt?: (receipt: ReturnType<typeof signReceipt>) => ReturnType<typeof signReceipt>;
 };
 
 async function makeReceipt({
@@ -304,8 +314,9 @@ await makeReceipt({ name: 'effect-unmapped', artifact: effectUnmappedExport });
 await makeReceipt({
   name: 'string-chain-id',
   artifact: validExport,
-  mutateReceipt: (receipt: any) => {
-    receipt.authorizationEvidence.authorization.intent.chainId = '8453';
+  mutateReceipt: (receipt) => {
+    // Deliberately invalid fixture value for the runtime validator.
+    receiptIntent(receipt).chainId = '8453';
     return receipt;
   },
 });
@@ -368,7 +379,7 @@ await writeJson('subject-fixtures.json', {
       name: 'non-exact-call intent requires the PriorSeal exact-call profile',
       canonical: JSON.parse(validExport.canonical),
       intent: {
-        ...matchingReceipt.authorizationEvidence.authorization.intent,
+        ...receiptIntent(matchingReceipt),
         schema: 'priorseal.intent.v1',
       },
       expectedCode: 'PRIORSEAL_EXACT_CALL_REQUIRED',

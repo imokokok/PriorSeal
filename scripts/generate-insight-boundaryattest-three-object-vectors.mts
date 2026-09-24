@@ -170,9 +170,9 @@ function canonicalRequestHash({
   });
 }
 
-function insightTypedData(data: Record<string, any>): Parameters<typeof hashTypedData>[0] {
+function insightTypedData(data: Record<string, unknown>): Parameters<typeof hashTypedData>[0] {
   const message = { ...data };
-  for (const field of INSIGHT_UINT_FIELDS) message[field] = BigInt(data[field]);
+  for (const field of INSIGHT_UINT_FIELDS) message[field] = BigInt(String(data[field]));
   return {
     domain: INSIGHT_DOMAIN,
     types: INSIGHT_TYPES,
@@ -258,7 +258,7 @@ async function makeInsightAttestation({
   };
 }
 
-function computeInsightCommitment(source: any, destination: any) {
+function computeInsightCommitment(source: Awaited<ReturnType<typeof makeInsightAttestation>>, destination: Awaited<ReturnType<typeof makeInsightAttestation>>) {
   return {
     namespace: 'insight.pretrade-pair.v1',
     algorithm: 'keccak256',
@@ -283,7 +283,7 @@ function computeInsightCommitment(source: any, destination: any) {
   };
 }
 
-function deepMerge(base: Record<string, any>, patch?: Record<string, any> | null): Record<string, any> {
+function deepMerge(base: Record<string, unknown>, patch?: Record<string, unknown> | null): Record<string, unknown> {
   if (!patch) return structuredClone(base);
   const result = structuredClone(base);
   for (const [key, value] of Object.entries(patch)) {
@@ -295,11 +295,11 @@ function deepMerge(base: Record<string, any>, patch?: Record<string, any> | null
   return result;
 }
 
-function isPlainObject(value: unknown): value is Record<string, any> {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function signBoundaryClaim(claim: Record<string, any>, key = boundaryKey) {
+function signBoundaryClaim(claim: Record<string, unknown>, key = boundaryKey) {
   return {
     claim,
     signature: signEd25519(
@@ -311,37 +311,40 @@ function signBoundaryClaim(claim: Record<string, any>, key = boundaryKey) {
   };
 }
 
-function boundaryDigest(receipt: any): `0x${string}` {
+function boundaryDigest(receipt: ReturnType<typeof signBoundaryClaim>): `0x${string}` {
   return `0x${createHash('sha256').update(jcsCanonicalBytes(receipt.claim)).digest('hex')}`;
 }
 
-function makeBoundaryReceipt(baseClaim: Record<string, any>, patch?: Record<string, any> | null, key = boundaryKey) {
+function makeBoundaryReceipt(baseClaim: Record<string, unknown>, patch?: Record<string, unknown> | null, key = boundaryKey) {
   const claim = deepMerge(baseClaim, patch);
   const patchedDecision = patch?.decision_record;
+  const decision = claim.decision_record;
+  if (!isPlainObject(decision)) throw new Error('Invalid BoundaryAttest decision');
   if (
-    patchedDecision?.decision_id &&
+    isPlainObject(patchedDecision) && typeof patchedDecision.decision_id === 'string' &&
     !Object.hasOwn(patchedDecision, 'inputs')
   ) {
-    claim.decision_record.inputs = claim.decision_record.inputs.map(
-      (input: any) => ({
-        ...input,
+    if (!Array.isArray(decision.inputs)) throw new Error('Invalid BoundaryAttest inputs');
+    decision.inputs = decision.inputs.map(
+      (input: unknown) => ({
+        ...(isPlainObject(input) ? input : {}),
         decision_id: patchedDecision.decision_id,
       }),
     );
   }
   if (
-    patchedDecision?.decision_id &&
+    isPlainObject(patchedDecision) && typeof patchedDecision.decision_id === 'string' &&
     !Object.hasOwn(patchedDecision, 'adjudication')
   ) {
-    claim.decision_record.adjudication.decision_id =
-      patchedDecision.decision_id;
+    if (!isPlainObject(decision.adjudication)) throw new Error('Invalid BoundaryAttest adjudication');
+    decision.adjudication.decision_id = patchedDecision.decision_id;
   }
   return signBoundaryClaim(claim, key);
 }
 
 function contextCommitments(
-  insightCommitment: any,
-  boundaryReceipt: any,
+  insightCommitment: ReturnType<typeof computeInsightCommitment>,
+  boundaryReceipt: ReturnType<typeof makeBoundaryReceipt>,
   overrides: {
     missingBoundary?: boolean;
     wrongInsight?: boolean;
@@ -390,8 +393,8 @@ function contextCommitments(
 let receiptCounter = 0;
 type PriorSealReceiptOptions = {
   name: string;
-  insightCommitment: any;
-  boundaryReceipt: any;
+  insightCommitment: ReturnType<typeof computeInsightCommitment>;
+  boundaryReceipt: ReturnType<typeof makeBoundaryReceipt>;
   commitmentOverrides?: Parameters<typeof contextCommitments>[2];
   validUntil?: number;
   executionOverrides?: Record<string, unknown>;
@@ -609,7 +612,7 @@ const baseClaim = {
   },
 };
 
-const boundaryReceipts: Record<string, any> = {
+const boundaryReceipts: Record<string, ReturnType<typeof makeBoundaryReceipt>> = {
   base: makeBoundaryReceipt(baseClaim),
   wrongKey: makeBoundaryReceipt(baseClaim, null, wrongBoundaryKey),
   staleExport: makeBoundaryReceipt(baseClaim, {

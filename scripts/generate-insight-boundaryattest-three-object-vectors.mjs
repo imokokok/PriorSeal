@@ -159,7 +159,7 @@ function canonicalRequestHash({
 }
 function insightTypedData(data) {
   const message = { ...data };
-  for (const field of INSIGHT_UINT_FIELDS) message[field] = BigInt(data[field]);
+  for (const field of INSIGHT_UINT_FIELDS) message[field] = BigInt(String(data[field]));
   return {
     domain: INSIGHT_DOMAIN,
     types: INSIGHT_TYPES,
@@ -289,16 +289,20 @@ function boundaryDigest(receipt) {
 function makeBoundaryReceipt(baseClaim2, patch, key = boundaryKey) {
   const claim = deepMerge(baseClaim2, patch);
   const patchedDecision = patch?.decision_record;
-  if (patchedDecision?.decision_id && !Object.hasOwn(patchedDecision, "inputs")) {
-    claim.decision_record.inputs = claim.decision_record.inputs.map(
+  const decision = claim.decision_record;
+  if (!isPlainObject(decision)) throw new Error("Invalid BoundaryAttest decision");
+  if (isPlainObject(patchedDecision) && typeof patchedDecision.decision_id === "string" && !Object.hasOwn(patchedDecision, "inputs")) {
+    if (!Array.isArray(decision.inputs)) throw new Error("Invalid BoundaryAttest inputs");
+    decision.inputs = decision.inputs.map(
       (input) => ({
-        ...input,
+        ...isPlainObject(input) ? input : {},
         decision_id: patchedDecision.decision_id
       })
     );
   }
-  if (patchedDecision?.decision_id && !Object.hasOwn(patchedDecision, "adjudication")) {
-    claim.decision_record.adjudication.decision_id = patchedDecision.decision_id;
+  if (isPlainObject(patchedDecision) && typeof patchedDecision.decision_id === "string" && !Object.hasOwn(patchedDecision, "adjudication")) {
+    if (!isPlainObject(decision.adjudication)) throw new Error("Invalid BoundaryAttest adjudication");
+    decision.adjudication.decision_id = patchedDecision.decision_id;
   }
   return signBoundaryClaim(claim, key);
 }

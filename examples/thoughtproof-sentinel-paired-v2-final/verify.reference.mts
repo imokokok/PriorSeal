@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   verifyCalldataFixtures,
   verifyM2Pair,
-} from '../thoughtproof-sentinel-paired-v2/verify.mjs';
+} from '../thoughtproof-sentinel-paired-v2/verify.reference.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 

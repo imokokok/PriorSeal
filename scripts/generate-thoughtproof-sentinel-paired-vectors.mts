@@ -37,8 +37,16 @@ const publicKeyFingerprint = createHash('sha256')
   .update(issuerPublicKey.export({ type: 'spki', format: 'der' }))
   .digest('hex');
 
-async function readJson(name: string): Promise<any> {
-  return JSON.parse(await readFile(new URL(name, output), 'utf8'));
+async function readJson(name: string): Promise<{ digest: string; signedAt: number; validUntil: number }> {
+  const value: unknown = JSON.parse(await readFile(new URL(name, output), 'utf8'));
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${name}: invalid export`);
+  const digest = Reflect.get(value, 'digest');
+  const signedAt = Reflect.get(value, 'signedAt');
+  const validUntil = Reflect.get(value, 'validUntil');
+  if (typeof digest !== 'string' || !/^0x[0-9a-f]{64}$/.test(digest) || typeof signedAt !== 'number' || !Number.isSafeInteger(signedAt) || typeof validUntil !== 'number' || !Number.isSafeInteger(validUntil)) {
+    throw new Error(`${name}: invalid export fields`);
+  }
+  return { digest, signedAt, validUntil };
 }
 
 type ReceiptOptions = {

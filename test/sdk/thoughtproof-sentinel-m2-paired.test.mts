@@ -6,7 +6,7 @@ import {
   runFixtureChecks,
   verifyCalldataFixtures,
   verifyExactCallDecisionSubject,
-} from '../../examples/thoughtproof-sentinel-paired-v2/verify.mjs';
+} from '../../examples/thoughtproof-sentinel-paired-v2/verify.reference.mjs';
 import { buildIntent } from '../../src/index.mjs';
 import { buildExactCallIntent } from '../../sdk/dist/index.js';
 

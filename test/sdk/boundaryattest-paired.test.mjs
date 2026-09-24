@@ -1,7 +1,7 @@
 // Generated from boundaryattest-paired.test.mts by npm run core:build. Do not edit directly.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runFixtureChecks } from "../../examples/boundaryattest-paired-v0.2/verify.mjs";
+import { runFixtureChecks } from "../../examples/boundaryattest-paired-v0.2/verify.reference.mjs";
 test("BoundaryAttest paired fixture passes the documented positive and negative cases", async () => {
   const results = await runFixtureChecks({ log: () => {
   } });

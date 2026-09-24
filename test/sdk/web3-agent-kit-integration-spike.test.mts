@@ -6,11 +6,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { runVerification } from '../../examples/web3-agent-kit-integration-spike-v1/verify.source.reference.mjs'
 
 const bundle = fileURLToPath(new URL('../../examples/web3-agent-kit-integration-spike-v1/', import.meta.url))
 const maintenanceBundle = fileURLToPath(new URL('../../examples/web3-agent-kit-integration-spike-v1.0.1/', import.meta.url))
 const childEnv = { ...process.env }
 delete childEnv.NODE_TEST_CONTEXT
+
+test('the TypeScript-backed v1 verifier checks the frozen fixture', async () => {
+  const result = await runVerification()
+  assert.equal(result.status, 'PASS')
+  if (result.status !== 'PASS') return
+  assert.deepEqual(result.caseIds, ['N1', 'N2', 'N3', 'N4', 'N5a', 'N5b', 'P1'])
+})
 
 test('the extracted spike bundle verifies without a repository checkout and rejects changed bytes', () => {
   const temporary = mkdtempSync(join(tmpdir(), 'wak-spike-v1-'))
