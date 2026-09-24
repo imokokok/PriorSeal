@@ -4,25 +4,13 @@ import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const errors = [];
-const reviewedJavaScriptTools = /* @__PURE__ */ new Set([
-  "scripts/build-core.mjs"
-]);
+const reviewedJavaScriptTools = /* @__PURE__ */ new Set();
 const reviewedCompatibilityLaunchers = /* @__PURE__ */ new Set([
   "scripts/package-web3-agent-kit-integration-spike-v1.py"
 ]);
 const reviewedPortableJavaScript = /* @__PURE__ */ new Set([
-  "examples/402signal-eip3009-settlement-binding-v1/scripts/build.mjs",
-  "examples/402signal-eip3009-settlement-binding-v1/scripts/generate-signed-fixtures.mjs",
-  "examples/402signal-eip3009-settlement-binding-v1/scripts/import-route-fixture.mjs",
-  "examples/402signal-eip3009-settlement-binding-v1/src/verify-source.mjs",
   "examples/402signal-eip3009-settlement-binding-v1/vendor/route-guard-v0.7.3.mjs",
   "examples/402signal-eip3009-settlement-binding-v1/verify.mjs",
-  "examples/aps-priorseal-decision-binding-v1/adapter.mjs",
-  "examples/aps-priorseal-decision-binding-v1/adapter.test.mjs",
-  "examples/aps-priorseal-decision-binding-v1/aps-inputs/verify-from-package-root.mjs",
-  "examples/aps-priorseal-decision-binding-v1/generate-priorseal.mjs",
-  "examples/aps-priorseal-decision-binding-v1/trust.mjs",
-  "examples/aps-priorseal-decision-binding-v1/verify.mjs",
   "examples/boundaryattest-paired-v0.2/jcs.mjs",
   "examples/boundaryattest-paired-v0.2/verify.mjs",
   "examples/create-signed-receipt.mjs",
@@ -37,7 +25,6 @@ const reviewedPortableJavaScript = /* @__PURE__ */ new Set([
   "examples/verify-signed-receipt.mjs",
   "examples/web3-agent-kit-base-sepolia-live-v1/verify.mjs",
   "examples/web3-agent-kit-base-swap-v1/verify.mjs",
-  "examples/web3-agent-kit-base-swap-v2/verify.mjs",
   "examples/web3-agent-kit-context-binding-v1/verify.mjs",
   "examples/web3-agent-kit-integration-spike-v1/verify.mjs",
   "examples/web3-agent-kit-integration-spike-v1/verify.source.mjs",

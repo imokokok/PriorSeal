@@ -9,17 +9,17 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/regex.js
+// node_modules/abitype/dist/esm/regex.js
 function execTyped(regex, string) {
   const match = regex.exec(string);
   return match?.groups;
 }
 var init_regex = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/regex.js"() {
+  "node_modules/abitype/dist/esm/regex.js"() {
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/human-readable/formatAbiParameter.js
+// node_modules/abitype/dist/esm/human-readable/formatAbiParameter.js
 function formatAbiParameter(abiParameter) {
   let type = abiParameter.type;
   if (tupleRegex.test(abiParameter.type) && "components" in abiParameter) {
@@ -46,13 +46,13 @@ function formatAbiParameter(abiParameter) {
 }
 var tupleRegex;
 var init_formatAbiParameter = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/human-readable/formatAbiParameter.js"() {
+  "node_modules/abitype/dist/esm/human-readable/formatAbiParameter.js"() {
     init_regex();
     tupleRegex = /^tuple(?<array>(\[(\d*)\])*)$/;
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/human-readable/formatAbiParameters.js
+// node_modules/abitype/dist/esm/human-readable/formatAbiParameters.js
 function formatAbiParameters(abiParameters) {
   let params = "";
   const length = abiParameters.length;
@@ -65,12 +65,12 @@ function formatAbiParameters(abiParameters) {
   return params;
 }
 var init_formatAbiParameters = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/human-readable/formatAbiParameters.js"() {
+  "node_modules/abitype/dist/esm/human-readable/formatAbiParameters.js"() {
     init_formatAbiParameter();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/human-readable/formatAbiItem.js
+// node_modules/abitype/dist/esm/human-readable/formatAbiItem.js
 function formatAbiItem(abiItem) {
   if (abiItem.type === "function")
     return `function ${abiItem.name}(${formatAbiParameters(abiItem.inputs)})${abiItem.stateMutability && abiItem.stateMutability !== "nonpayable" ? ` ${abiItem.stateMutability}` : ""}${abiItem.outputs?.length ? ` returns (${formatAbiParameters(abiItem.outputs)})` : ""}`;
@@ -85,19 +85,19 @@ function formatAbiItem(abiItem) {
   return "receive() external payable";
 }
 var init_formatAbiItem = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/human-readable/formatAbiItem.js"() {
+  "node_modules/abitype/dist/esm/human-readable/formatAbiItem.js"() {
     init_formatAbiParameters();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/exports/index.js
+// node_modules/abitype/dist/esm/exports/index.js
 var init_exports = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/abitype/dist/esm/exports/index.js"() {
+  "node_modules/abitype/dist/esm/exports/index.js"() {
     init_formatAbiItem();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/abi/formatAbiItem.js
+// node_modules/viem/_esm/utils/abi/formatAbiItem.js
 function formatAbiItem2(abiItem, { includeName = false } = {}) {
   if (abiItem.type !== "function" && abiItem.type !== "event" && abiItem.type !== "error")
     throw new InvalidDefinitionTypeError(abiItem.type);
@@ -115,12 +115,12 @@ function formatAbiParam(param, { includeName }) {
   return param.type + (includeName && param.name ? ` ${param.name}` : "");
 }
 var init_formatAbiItem2 = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/abi/formatAbiItem.js"() {
+  "node_modules/viem/_esm/utils/abi/formatAbiItem.js"() {
     init_abi();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/isHex.js
+// node_modules/viem/_esm/utils/data/isHex.js
 function isHex(value, { strict = true } = {}) {
   if (!value)
     return false;
@@ -129,31 +129,31 @@ function isHex(value, { strict = true } = {}) {
   return strict ? /^0x[0-9a-fA-F]*$/.test(value) : value.startsWith("0x");
 }
 var init_isHex = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/isHex.js"() {
+  "node_modules/viem/_esm/utils/data/isHex.js"() {
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/size.js
+// node_modules/viem/_esm/utils/data/size.js
 function size(value) {
   if (isHex(value, { strict: false }))
     return Math.ceil((value.length - 2) / 2);
   return value.length;
 }
 var init_size = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/size.js"() {
+  "node_modules/viem/_esm/utils/data/size.js"() {
     init_isHex();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/version.js
+// node_modules/viem/_esm/errors/version.js
 var version;
 var init_version = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/version.js"() {
+  "node_modules/viem/_esm/errors/version.js"() {
     version = "2.56.3";
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/base.js
+// node_modules/viem/_esm/errors/base.js
 function walk(err, fn) {
   if (fn?.(err))
     return err;
@@ -163,7 +163,7 @@ function walk(err, fn) {
 }
 var errorConfig, BaseError;
 var init_base = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/base.js"() {
+  "node_modules/viem/_esm/errors/base.js"() {
     init_version();
     errorConfig = {
       getDocsUrl: ({ docsBaseUrl, docsPath: docsPath2 = "", docsSlug }) => docsPath2 ? `${docsBaseUrl ?? "https://viem.sh"}${docsPath2}${docsSlug ? `#${docsSlug}` : ""}` : void 0,
@@ -243,10 +243,10 @@ var init_base = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/abi.js
+// node_modules/viem/_esm/errors/abi.js
 var AbiDecodingDataSizeTooSmallError, AbiDecodingZeroDataError, AbiEncodingArrayLengthMismatchError, AbiEncodingBytesSizeMismatchError, AbiEncodingLengthMismatchError, AbiEventSignatureEmptyTopicsError, AbiEventSignatureNotFoundError, AbiFunctionSignatureNotFoundError, BytesSizeMismatchError, DecodeLogDataMismatch, DecodeLogTopicsMismatch, InvalidAbiEncodingTypeError, InvalidAbiDecodingTypeError, InvalidArrayError, InvalidDefinitionTypeError;
 var init_abi = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/abi.js"() {
+  "node_modules/viem/_esm/errors/abi.js"() {
     init_formatAbiItem2();
     init_size();
     init_base();
@@ -441,10 +441,10 @@ var init_abi = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/data.js
+// node_modules/viem/_esm/errors/data.js
 var SliceOffsetOutOfBoundsError, SizeExceedsPaddingSizeError;
 var init_data = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/data.js"() {
+  "node_modules/viem/_esm/errors/data.js"() {
     init_base();
     SliceOffsetOutOfBoundsError = class extends BaseError {
       constructor({ offset, position, size: size2 }) {
@@ -459,7 +459,7 @@ var init_data = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/pad.js
+// node_modules/viem/_esm/utils/data/pad.js
 function pad(hexOrBytes, { dir, size: size2 = 32 } = {}) {
   if (typeof hexOrBytes === "string")
     return padHex(hexOrBytes, { dir, size: size2 });
@@ -468,14 +468,14 @@ function pad(hexOrBytes, { dir, size: size2 = 32 } = {}) {
 function padHex(hex_, { dir, size: size2 = 32 } = {}) {
   if (size2 === null)
     return hex_;
-  const hex = hex_.replace("0x", "");
-  if (hex.length > size2 * 2)
+  const hex2 = hex_.replace("0x", "");
+  if (hex2.length > size2 * 2)
     throw new SizeExceedsPaddingSizeError({
-      size: Math.ceil(hex.length / 2),
+      size: Math.ceil(hex2.length / 2),
       targetSize: size2,
       type: "hex"
     });
-  return `0x${hex[dir === "right" ? "padEnd" : "padStart"](size2 * 2, "0")}`;
+  return `0x${hex2[dir === "right" ? "padEnd" : "padStart"](size2 * 2, "0")}`;
 }
 function padBytes(bytes, { dir, size: size2 = 32 } = {}) {
   if (size2 === null)
@@ -494,15 +494,15 @@ function padBytes(bytes, { dir, size: size2 = 32 } = {}) {
   return paddedBytes;
 }
 var init_pad = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/pad.js"() {
+  "node_modules/viem/_esm/utils/data/pad.js"() {
     init_data();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/encoding.js
+// node_modules/viem/_esm/errors/encoding.js
 var IntegerOutOfRangeError, InvalidBytesBooleanError, SizeOverflowError;
 var init_encoding = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/encoding.js"() {
+  "node_modules/viem/_esm/errors/encoding.js"() {
     init_base();
     IntegerOutOfRangeError = class extends BaseError {
       constructor({ max, min, signed, size: size2, value }) {
@@ -524,7 +524,7 @@ var init_encoding = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/trim.js
+// node_modules/viem/_esm/utils/data/trim.js
 function trim(hexOrBytes, { dir = "left" } = {}) {
   let data = typeof hexOrBytes === "string" ? hexOrBytes.replace("0x", "") : hexOrBytes;
   let sliceLength = 0;
@@ -543,11 +543,11 @@ function trim(hexOrBytes, { dir = "left" } = {}) {
   return data;
 }
 var init_trim = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/trim.js"() {
+  "node_modules/viem/_esm/utils/data/trim.js"() {
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/encoding/fromHex.js
+// node_modules/viem/_esm/utils/encoding/fromHex.js
 function assertSize(hexOrBytes, { size: size2 }) {
   if (size(hexOrBytes) > size2)
     throw new SizeOverflowError({
@@ -555,21 +555,21 @@ function assertSize(hexOrBytes, { size: size2 }) {
       maxSize: size2
     });
 }
-function hexToBigInt(hex, opts = {}) {
+function hexToBigInt(hex2, opts = {}) {
   const { signed } = opts;
   if (opts.size)
-    assertSize(hex, { size: opts.size });
-  const value = BigInt(hex);
+    assertSize(hex2, { size: opts.size });
+  const value = BigInt(hex2);
   if (!signed)
     return value;
-  const size2 = Math.ceil((hex.length - 2) / 2);
+  const size2 = Math.ceil((hex2.length - 2) / 2);
   const max = (1n << BigInt(size2) * 8n - 1n) - 1n;
   if (value <= max)
     return value;
   return value - BigInt(`0x${"f".padStart(size2 * 2, "f")}`) - 1n;
 }
-function hexToNumber(hex, opts = {}) {
-  const value = hexToBigInt(hex, opts);
+function hexToNumber(hex2, opts = {}) {
+  const value = hexToBigInt(hex2, opts);
   const number = Number(value);
   if (!Number.isSafeInteger(number))
     throw new IntegerOutOfRangeError({
@@ -582,13 +582,13 @@ function hexToNumber(hex, opts = {}) {
   return number;
 }
 var init_fromHex = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/encoding/fromHex.js"() {
+  "node_modules/viem/_esm/utils/encoding/fromHex.js"() {
     init_encoding();
     init_size();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/encoding/toHex.js
+// node_modules/viem/_esm/utils/encoding/toHex.js
 function toHex(value, opts = {}) {
   if (typeof value === "number" || typeof value === "bigint")
     return numberToHex(value, opts);
@@ -600,24 +600,24 @@ function toHex(value, opts = {}) {
   return bytesToHex(value, opts);
 }
 function boolToHex(value, opts = {}) {
-  const hex = `0x${Number(value)}`;
+  const hex2 = `0x${Number(value)}`;
   if (typeof opts.size === "number") {
-    assertSize(hex, { size: opts.size });
-    return pad(hex, { size: opts.size });
+    assertSize(hex2, { size: opts.size });
+    return pad(hex2, { size: opts.size });
   }
-  return hex;
+  return hex2;
 }
 function bytesToHex(value, opts = {}) {
   let string = "";
   for (let i = 0; i < value.length; i++) {
     string += hexes[value[i]];
   }
-  const hex = `0x${string}`;
+  const hex2 = `0x${string}`;
   if (typeof opts.size === "number") {
-    assertSize(hex, { size: opts.size });
-    return pad(hex, { dir: "right", size: opts.size });
+    assertSize(hex2, { size: opts.size });
+    return pad(hex2, { dir: "right", size: opts.size });
   }
-  return hex;
+  return hex2;
 }
 function numberToHex(value_, opts = {}) {
   const { signed, size: size2 } = opts;
@@ -642,10 +642,10 @@ function numberToHex(value_, opts = {}) {
       value: `${value_}${suffix}`
     });
   }
-  const hex = `0x${(signed && value < 0 ? (1n << BigInt(size2 * 8)) + BigInt(value) : value).toString(16)}`;
+  const hex2 = `0x${(signed && value < 0 ? (1n << BigInt(size2 * 8)) + BigInt(value) : value).toString(16)}`;
   if (size2)
-    return pad(hex, { size: size2 });
-  return hex;
+    return pad(hex2, { size: size2 });
+  return hex2;
 }
 function stringToHex(value_, opts = {}) {
   const value = encoder.encode(value_);
@@ -653,7 +653,7 @@ function stringToHex(value_, opts = {}) {
 }
 var hexes, encoder;
 var init_toHex = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/encoding/toHex.js"() {
+  "node_modules/viem/_esm/utils/encoding/toHex.js"() {
     init_encoding();
     init_pad();
     init_fromHex();
@@ -662,7 +662,7 @@ var init_toHex = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/encoding/toBytes.js
+// node_modules/viem/_esm/utils/encoding/toBytes.js
 function toBytes(value, opts = {}) {
   if (typeof value === "number" || typeof value === "bigint")
     return numberToBytes(value, opts);
@@ -691,12 +691,12 @@ function charCodeToBase16(char) {
   return void 0;
 }
 function hexToBytes(hex_, opts = {}) {
-  let hex = hex_;
+  let hex2 = hex_;
   if (opts.size) {
-    assertSize(hex, { size: opts.size });
-    hex = pad(hex, { dir: "right", size: opts.size });
+    assertSize(hex2, { size: opts.size });
+    hex2 = pad(hex2, { dir: "right", size: opts.size });
   }
-  let hexString = hex.slice(2);
+  let hexString = hex2.slice(2);
   if (hexString.length % 2)
     hexString = `0${hexString}`;
   const length = hexString.length / 2;
@@ -712,8 +712,8 @@ function hexToBytes(hex_, opts = {}) {
   return bytes;
 }
 function numberToBytes(value, opts) {
-  const hex = numberToHex(value, opts);
-  return hexToBytes(hex);
+  const hex2 = numberToHex(value, opts);
+  return hexToBytes(hex2);
 }
 function stringToBytes(value, opts = {}) {
   const bytes = encoder2.encode(value);
@@ -725,7 +725,7 @@ function stringToBytes(value, opts = {}) {
 }
 var encoder2, charCodeMap;
 var init_toBytes = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/encoding/toBytes.js"() {
+  "node_modules/viem/_esm/utils/encoding/toBytes.js"() {
     init_base();
     init_isHex();
     init_pad();
@@ -743,7 +743,7 @@ var init_toBytes = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/_u64.js
+// node_modules/@noble/hashes/esm/_u64.js
 function fromBig(n, le = false) {
   if (le)
     return { h: Number(n & U32_MASK64), l: Number(n >> _32n & U32_MASK64) };
@@ -761,7 +761,7 @@ function split(lst, le = false) {
 }
 var U32_MASK64, _32n, rotlSH, rotlSL, rotlBH, rotlBL;
 var init_u64 = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/_u64.js"() {
+  "node_modules/@noble/hashes/esm/_u64.js"() {
     U32_MASK64 = /* @__PURE__ */ BigInt(2 ** 32 - 1);
     _32n = /* @__PURE__ */ BigInt(32);
     rotlSH = (h, l, s) => h << s | l >>> 32 - s;
@@ -771,16 +771,16 @@ var init_u64 = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/cryptoNode.js
+// node_modules/@noble/hashes/esm/cryptoNode.js
 import * as nc from "node:crypto";
 var crypto;
 var init_cryptoNode = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/cryptoNode.js"() {
+  "node_modules/@noble/hashes/esm/cryptoNode.js"() {
     crypto = nc && typeof nc === "object" && "webcrypto" in nc ? nc.webcrypto : nc && typeof nc === "object" && "randomBytes" in nc ? nc : void 0;
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/utils.js
+// node_modules/@noble/hashes/esm/utils.js
 function isBytes(a) {
   return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
 }
@@ -881,7 +881,7 @@ function randomBytes(bytesLength = 32) {
 }
 var isLE, swap32IfBE, Hash;
 var init_utils = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/utils.js"() {
+  "node_modules/@noble/hashes/esm/utils.js"() {
     init_cryptoNode();
     isLE = /* @__PURE__ */ (() => new Uint8Array(new Uint32Array([287454020]).buffer)[0] === 68)();
     swap32IfBE = isLE ? (u) => u : byteSwap32;
@@ -890,7 +890,7 @@ var init_utils = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/sha3.js
+// node_modules/@noble/hashes/esm/sha3.js
 function keccakP(s, rounds = 24) {
   const B = new Uint32Array(5 * 2);
   for (let round = 24 - rounds; round < 24; round++) {
@@ -933,7 +933,7 @@ function keccakP(s, rounds = 24) {
 }
 var _0n, _1n, _2n, _7n, _256n, _0x71n, SHA3_PI, SHA3_ROTL, _SHA3_IOTA, IOTAS, SHA3_IOTA_H, SHA3_IOTA_L, rotlH, rotlL, Keccak, gen, keccak_256;
 var init_sha3 = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/sha3.js"() {
+  "node_modules/@noble/hashes/esm/sha3.js"() {
     init_u64();
     init_utils();
     _0n = BigInt(0);
@@ -1078,7 +1078,7 @@ var init_sha3 = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/keccak256.js
+// node_modules/viem/_esm/utils/hash/keccak256.js
 function keccak256(value, to_) {
   const to = to_ || "hex";
   const bytes = keccak_256(isHex(value, { strict: false }) ? toBytes(value) : value);
@@ -1087,7 +1087,7 @@ function keccak256(value, to_) {
   return toHex(bytes);
 }
 var init_keccak256 = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/keccak256.js"() {
+  "node_modules/viem/_esm/utils/hash/keccak256.js"() {
     init_sha3();
     init_isHex();
     init_toBytes();
@@ -1095,20 +1095,20 @@ var init_keccak256 = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/hashSignature.js
+// node_modules/viem/_esm/utils/hash/hashSignature.js
 function hashSignature(sig) {
   return hash(sig);
 }
 var hash;
 var init_hashSignature = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/hashSignature.js"() {
+  "node_modules/viem/_esm/utils/hash/hashSignature.js"() {
     init_toBytes();
     init_keccak256();
     hash = (value) => keccak256(toBytes(value));
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/normalizeSignature.js
+// node_modules/viem/_esm/utils/hash/normalizeSignature.js
 function normalizeSignature(signature) {
   let active = true;
   let current = "";
@@ -1152,15 +1152,15 @@ function normalizeSignature(signature) {
   return result;
 }
 var init_normalizeSignature = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/normalizeSignature.js"() {
+  "node_modules/viem/_esm/utils/hash/normalizeSignature.js"() {
     init_base();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/toSignature.js
+// node_modules/viem/_esm/utils/hash/toSignature.js
 var toSignature;
 var init_toSignature = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/toSignature.js"() {
+  "node_modules/viem/_esm/utils/hash/toSignature.js"() {
     init_exports();
     init_normalizeSignature();
     toSignature = (def) => {
@@ -1174,30 +1174,30 @@ var init_toSignature = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/toSignatureHash.js
+// node_modules/viem/_esm/utils/hash/toSignatureHash.js
 function toSignatureHash(fn) {
   return hashSignature(toSignature(fn));
 }
 var init_toSignatureHash = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/toSignatureHash.js"() {
+  "node_modules/viem/_esm/utils/hash/toSignatureHash.js"() {
     init_hashSignature();
     init_toSignature();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/toEventSelector.js
+// node_modules/viem/_esm/utils/hash/toEventSelector.js
 var toEventSelector;
 var init_toEventSelector = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/toEventSelector.js"() {
+  "node_modules/viem/_esm/utils/hash/toEventSelector.js"() {
     init_toSignatureHash();
     toEventSelector = toSignatureHash;
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/address.js
+// node_modules/viem/_esm/errors/address.js
 var InvalidAddressError;
 var init_address = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/address.js"() {
+  "node_modules/viem/_esm/errors/address.js"() {
     init_base();
     InvalidAddressError = class extends BaseError {
       constructor({ address }) {
@@ -1213,10 +1213,10 @@ var init_address = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/lru.js
+// node_modules/viem/_esm/utils/lru.js
 var LruMap;
 var init_lru = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/lru.js"() {
+  "node_modules/viem/_esm/utils/lru.js"() {
     LruMap = class extends Map {
       constructor(size2) {
         super();
@@ -1251,7 +1251,7 @@ var init_lru = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/address/getAddress.js
+// node_modules/viem/_esm/utils/address/getAddress.js
 function checksumAddress(address_, chainId) {
   if (checksumAddressCache.has(`${address_}.${chainId}`))
     return checksumAddressCache.get(`${address_}.${chainId}`);
@@ -1277,7 +1277,7 @@ function getAddress(address, chainId) {
 }
 var checksumAddressCache;
 var init_getAddress = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/address/getAddress.js"() {
+  "node_modules/viem/_esm/utils/address/getAddress.js"() {
     init_address();
     init_toBytes();
     init_keccak256();
@@ -1287,7 +1287,7 @@ var init_getAddress = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/address/isAddress.js
+// node_modules/viem/_esm/utils/address/isAddress.js
 function isAddress(address, options) {
   const { strict = true } = options ?? {};
   const cacheKey = `${address}.${strict}`;
@@ -1307,7 +1307,7 @@ function isAddress(address, options) {
 }
 var addressRegex, isAddressCache;
 var init_isAddress = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/address/isAddress.js"() {
+  "node_modules/viem/_esm/utils/address/isAddress.js"() {
     init_lru();
     init_getAddress();
     addressRegex = /^0x[a-fA-F0-9]{40}$/;
@@ -1315,7 +1315,7 @@ var init_isAddress = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/concat.js
+// node_modules/viem/_esm/utils/data/concat.js
 function concat(values) {
   if (typeof values[0] === "string")
     return concatHex(values);
@@ -1338,11 +1338,11 @@ function concatHex(values) {
   return `0x${values.reduce((acc, x) => acc + x.replace("0x", ""), "")}`;
 }
 var init_concat = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/concat.js"() {
+  "node_modules/viem/_esm/utils/data/concat.js"() {
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/slice.js
+// node_modules/viem/_esm/utils/data/slice.js
 function slice(value, start, end, { strict } = {}) {
   if (isHex(value, { strict: false }))
     return sliceHex(value, start, end, {
@@ -1384,23 +1384,23 @@ function sliceHex(value_, start, end, { strict } = {}) {
   return value;
 }
 var init_slice = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/data/slice.js"() {
+  "node_modules/viem/_esm/utils/data/slice.js"() {
     init_data();
     init_isHex();
     init_size();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/regex.js
+// node_modules/viem/_esm/utils/regex.js
 var bytesRegex, integerRegex;
 var init_regex2 = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/regex.js"() {
+  "node_modules/viem/_esm/utils/regex.js"() {
     bytesRegex = /^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/;
     integerRegex = /^(u?int)(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/;
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/abi/encodeAbiParameters.js
+// node_modules/viem/_esm/utils/abi/encodeAbiParameters.js
 function encodeAbiParameters(params, values) {
   if (params.length !== values.length)
     throw new AbiEncodingLengthMismatchError({
@@ -1629,7 +1629,7 @@ function isDynamicType(param) {
   return false;
 }
 var init_encodeAbiParameters = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/abi/encodeAbiParameters.js"() {
+  "node_modules/viem/_esm/utils/abi/encodeAbiParameters.js"() {
     init_abi();
     init_address();
     init_base();
@@ -1644,20 +1644,20 @@ var init_encodeAbiParameters = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/toFunctionSelector.js
+// node_modules/viem/_esm/utils/hash/toFunctionSelector.js
 var toFunctionSelector;
 var init_toFunctionSelector = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/hash/toFunctionSelector.js"() {
+  "node_modules/viem/_esm/utils/hash/toFunctionSelector.js"() {
     init_slice();
     init_toSignatureHash();
     toFunctionSelector = (fn) => slice(toSignatureHash(fn), 0, 4);
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/cursor.js
+// node_modules/viem/_esm/errors/cursor.js
 var NegativeOffsetError, PositionOutOfBoundsError, RecursiveReadLimitExceededError;
 var init_cursor = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/cursor.js"() {
+  "node_modules/viem/_esm/errors/cursor.js"() {
     init_base();
     NegativeOffsetError = class extends BaseError {
       constructor({ offset }) {
@@ -1679,7 +1679,7 @@ var init_cursor = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/cursor.js
+// node_modules/viem/_esm/utils/cursor.js
 function createCursor(bytes, { recursiveReadLimit = 8192 } = {}) {
   const cursor = Object.create(staticCursor);
   cursor.bytes = bytes;
@@ -1690,7 +1690,7 @@ function createCursor(bytes, { recursiveReadLimit = 8192 } = {}) {
 }
 var staticCursor;
 var init_cursor2 = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/cursor.js"() {
+  "node_modules/viem/_esm/utils/cursor.js"() {
     init_cursor();
     staticCursor = {
       bytes: new Uint8Array(),
@@ -1854,12 +1854,12 @@ var init_cursor2 = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/encoding/fromBytes.js
+// node_modules/viem/_esm/utils/encoding/fromBytes.js
 function bytesToBigInt(bytes, opts = {}) {
   if (typeof opts.size !== "undefined")
     assertSize(bytes, { size: opts.size });
-  const hex = bytesToHex(bytes);
-  return hexToBigInt(hex, opts);
+  const hex2 = bytesToHex(bytes);
+  return hexToBigInt(hex2, opts);
 }
 function bytesToBool(bytes_, opts = {}) {
   let bytes = bytes_;
@@ -1874,8 +1874,8 @@ function bytesToBool(bytes_, opts = {}) {
 function bytesToNumber(bytes, opts = {}) {
   if (typeof opts.size !== "undefined")
     assertSize(bytes, { size: opts.size });
-  const hex = bytesToHex(bytes);
-  return hexToNumber(hex, opts);
+  const hex2 = bytesToHex(bytes);
+  return hexToNumber(hex2, opts);
 }
 function bytesToString(bytes_, opts = {}) {
   let bytes = bytes_;
@@ -1886,7 +1886,7 @@ function bytesToString(bytes_, opts = {}) {
   return new TextDecoder().decode(bytes);
 }
 var init_fromBytes = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/encoding/fromBytes.js"() {
+  "node_modules/viem/_esm/utils/encoding/fromBytes.js"() {
     init_encoding();
     init_trim();
     init_fromHex();
@@ -1894,7 +1894,7 @@ var init_fromBytes = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/abi/decodeAbiParameters.js
+// node_modules/viem/_esm/utils/abi/decodeAbiParameters.js
 function decodeAbiParameters(params, data) {
   const bytes = typeof data === "string" ? hexToBytes(data) : data;
   const cursor = createCursor(bytes);
@@ -2089,7 +2089,7 @@ function hasDynamicChild(param) {
 }
 var sizeOfLength, sizeOfOffset;
 var init_decodeAbiParameters = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/abi/decodeAbiParameters.js"() {
+  "node_modules/viem/_esm/utils/abi/decodeAbiParameters.js"() {
     init_abi();
     init_getAddress();
     init_cursor2();
@@ -2104,10 +2104,10 @@ var init_decodeAbiParameters = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/stringify.js
+// node_modules/viem/_esm/utils/stringify.js
 var stringify;
 var init_stringify = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/stringify.js"() {
+  "node_modules/viem/_esm/utils/stringify.js"() {
     stringify = (value, replacer, space) => JSON.stringify(value, (key, value_) => {
       const value2 = typeof value_ === "bigint" ? value_.toString() : value_;
       return typeof replacer === "function" ? replacer(key, value2) : value2;
@@ -2115,7 +2115,7 @@ var init_stringify = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/_md.js
+// node_modules/@noble/hashes/esm/_md.js
 function setBigUint64(view, byteOffset, value, isLE2) {
   if (typeof view.setBigUint64 === "function")
     return view.setBigUint64(byteOffset, value, isLE2);
@@ -2136,7 +2136,7 @@ function Maj(a, b, c) {
 }
 var HashMD, SHA256_IV;
 var init_md = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/_md.js"() {
+  "node_modules/@noble/hashes/esm/_md.js"() {
     init_utils();
     HashMD = class extends Hash {
       constructor(blockLen, outputLen, padOffset, isLE2) {
@@ -2241,10 +2241,10 @@ var init_md = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/sha2.js
+// node_modules/@noble/hashes/esm/sha2.js
 var SHA256_K, SHA256_W, SHA256, sha256;
 var init_sha2 = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/sha2.js"() {
+  "node_modules/@noble/hashes/esm/sha2.js"() {
     init_md();
     init_utils();
     SHA256_K = /* @__PURE__ */ Uint32Array.from([
@@ -2388,10 +2388,10 @@ var init_sha2 = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/hmac.js
+// node_modules/@noble/hashes/esm/hmac.js
 var HMAC, hmac;
 var init_hmac = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/hashes/esm/hmac.js"() {
+  "node_modules/@noble/hashes/esm/hmac.js"() {
     init_utils();
     HMAC = class extends Hash {
       constructor(hash2, _key) {
@@ -2462,7 +2462,7 @@ var init_hmac = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/utils.js
+// node_modules/@noble/curves/esm/abstract/utils.js
 function isBytes2(a) {
   return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
 }
@@ -2475,23 +2475,23 @@ function abool(title, value) {
     throw new Error(title + " boolean expected, got " + value);
 }
 function numberToHexUnpadded(num2) {
-  const hex = num2.toString(16);
-  return hex.length & 1 ? "0" + hex : hex;
+  const hex2 = num2.toString(16);
+  return hex2.length & 1 ? "0" + hex2 : hex2;
 }
-function hexToNumber2(hex) {
-  if (typeof hex !== "string")
-    throw new Error("hex string expected, got " + typeof hex);
-  return hex === "" ? _0n2 : BigInt("0x" + hex);
+function hexToNumber2(hex2) {
+  if (typeof hex2 !== "string")
+    throw new Error("hex string expected, got " + typeof hex2);
+  return hex2 === "" ? _0n2 : BigInt("0x" + hex2);
 }
 function bytesToHex2(bytes) {
   abytes2(bytes);
   if (hasHexBuiltin)
     return bytes.toHex();
-  let hex = "";
+  let hex2 = "";
   for (let i = 0; i < bytes.length; i++) {
-    hex += hexes2[bytes[i]];
+    hex2 += hexes2[bytes[i]];
   }
-  return hex;
+  return hex2;
 }
 function asciiToBase16(ch) {
   if (ch >= asciis._0 && ch <= asciis._9)
@@ -2502,21 +2502,21 @@ function asciiToBase16(ch) {
     return ch - (asciis.a - 10);
   return;
 }
-function hexToBytes2(hex) {
-  if (typeof hex !== "string")
-    throw new Error("hex string expected, got " + typeof hex);
+function hexToBytes2(hex2) {
+  if (typeof hex2 !== "string")
+    throw new Error("hex string expected, got " + typeof hex2);
   if (hasHexBuiltin)
-    return Uint8Array.fromHex(hex);
-  const hl = hex.length;
+    return Uint8Array.fromHex(hex2);
+  const hl = hex2.length;
   const al = hl / 2;
   if (hl % 2)
     throw new Error("hex string expected, got unpadded hex of length " + hl);
   const array = new Uint8Array(al);
   for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
-    const n1 = asciiToBase16(hex.charCodeAt(hi));
-    const n2 = asciiToBase16(hex.charCodeAt(hi + 1));
+    const n1 = asciiToBase16(hex2.charCodeAt(hi));
+    const n2 = asciiToBase16(hex2.charCodeAt(hi + 1));
     if (n1 === void 0 || n2 === void 0) {
-      const char = hex[hi] + hex[hi + 1];
+      const char = hex2[hi] + hex2[hi + 1];
       throw new Error('hex string expected, got non-hex character "' + char + '" at index ' + hi);
     }
     array[ai] = n1 * 16 + n2;
@@ -2536,16 +2536,16 @@ function numberToBytesBE(n, len) {
 function numberToBytesLE(n, len) {
   return numberToBytesBE(n, len).reverse();
 }
-function ensureBytes(title, hex, expectedLength) {
+function ensureBytes(title, hex2, expectedLength) {
   let res;
-  if (typeof hex === "string") {
+  if (typeof hex2 === "string") {
     try {
-      res = hexToBytes2(hex);
+      res = hexToBytes2(hex2);
     } catch (e) {
       throw new Error(title + " must be hex string or Uint8Array, cause: " + e);
     }
-  } else if (isBytes2(hex)) {
-    res = Uint8Array.from(hex);
+  } else if (isBytes2(hex2)) {
+    res = Uint8Array.from(hex2);
   } else {
     throw new Error(title + " must be hex string or Uint8Array");
   }
@@ -2666,7 +2666,7 @@ function memoized(fn) {
 }
 var _0n2, _1n2, hasHexBuiltin, hexes2, asciis, isPosBig, bitMask, u8n, u8fr, validatorFns;
 var init_utils2 = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/utils.js"() {
+  "node_modules/@noble/curves/esm/abstract/utils.js"() {
     _0n2 = /* @__PURE__ */ BigInt(0);
     _1n2 = /* @__PURE__ */ BigInt(1);
     hasHexBuiltin = // @ts-ignore
@@ -2691,7 +2691,7 @@ var init_utils2 = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/modular.js
+// node_modules/@noble/curves/esm/abstract/modular.js
 function mod(a, b) {
   const result = a % b;
   return result >= _0n3 ? result : b + result;
@@ -2940,7 +2940,7 @@ function mapHashToField(key, fieldOrder, isLE2 = false) {
 }
 var _0n3, _1n3, _2n2, _3n, _4n, _5n, _8n, FIELD_FIELDS;
 var init_modular = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/modular.js"() {
+  "node_modules/@noble/curves/esm/abstract/modular.js"() {
     init_utils();
     init_utils2();
     _0n3 = BigInt(0);
@@ -2972,7 +2972,7 @@ var init_modular = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/curve.js
+// node_modules/@noble/curves/esm/abstract/curve.js
 function constTimeNegate(condition, item) {
   const neg = item.negate();
   return condition ? neg : item;
@@ -3203,7 +3203,7 @@ function validateBasic(curve) {
 }
 var _0n4, _1n4, pointPrecomputes, pointWindowSizes;
 var init_curve = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/curve.js"() {
+  "node_modules/@noble/curves/esm/abstract/curve.js"() {
     init_modular();
     init_utils2();
     _0n4 = BigInt(0);
@@ -3213,7 +3213,7 @@ var init_curve = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/weierstrass.js
+// node_modules/@noble/curves/esm/abstract/weierstrass.js
 function validateSigVerOpts(opts) {
   if (opts.lowS !== void 0)
     abool("lowS", opts.lowS);
@@ -3383,8 +3383,8 @@ function weierstrassPoints(opts) {
      * Converts hash string or Uint8Array to Point.
      * @param hex short/long ECDSA hex
      */
-    static fromHex(hex) {
-      const P = Point2.fromAffine(fromBytes(ensureBytes("pointHex", hex)));
+    static fromHex(hex2) {
+      const P = Point2.fromAffine(fromBytes(ensureBytes("pointHex", hex2)));
       P.assertValidity();
       return P;
     }
@@ -3739,15 +3739,15 @@ function weierstrass(curveDef) {
       Object.freeze(this);
     }
     // pair (bytes of r, bytes of s)
-    static fromCompact(hex) {
+    static fromCompact(hex2) {
       const l = nByteLength;
-      hex = ensureBytes("compactSignature", hex, l * 2);
-      return new Signature(slcNum(hex, 0, l), slcNum(hex, l, 2 * l));
+      hex2 = ensureBytes("compactSignature", hex2, l * 2);
+      return new Signature(slcNum(hex2, 0, l), slcNum(hex2, l, 2 * l));
     }
     // DER encoded ECDSA signature
     // https://bitcoin.stackexchange.com/questions/57644/what-are-the-parts-of-a-bitcoin-transaction-input-script
-    static fromDER(hex) {
-      const { r, s } = DER.toSig(ensureBytes("DER", hex));
+    static fromDER(hex2) {
+      const { r, s } = DER.toSig(ensureBytes("DER", hex2));
       return new Signature(r, s);
     }
     /**
@@ -4090,7 +4090,7 @@ function mapToCurveSimpleSWU(Fp, opts) {
 }
 var DERErr, DER, _0n5, _1n5, _2n3, _3n2, _4n2;
 var init_weierstrass = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/weierstrass.js"() {
+  "node_modules/@noble/curves/esm/abstract/weierstrass.js"() {
     init_curve();
     init_modular();
     init_utils2();
@@ -4163,12 +4163,12 @@ var init_weierstrass = __esm({
           const { Err: E } = DER;
           if (num2 < _0n5)
             throw new E("integer: negative integers are not allowed");
-          let hex = numberToHexUnpadded(num2);
-          if (Number.parseInt(hex[0], 16) & 8)
-            hex = "00" + hex;
-          if (hex.length & 1)
+          let hex2 = numberToHexUnpadded(num2);
+          if (Number.parseInt(hex2[0], 16) & 8)
+            hex2 = "00" + hex2;
+          if (hex2.length & 1)
             throw new E("unexpected DER parsing assertion: unpadded hex");
-          return hex;
+          return hex2;
         },
         decode(data) {
           const { Err: E } = DER;
@@ -4179,9 +4179,9 @@ var init_weierstrass = __esm({
           return bytesToNumberBE(data);
         }
       },
-      toSig(hex) {
+      toSig(hex2) {
         const { Err: E, _int: int, _tlv: tlv } = DER;
-        const data = ensureBytes("signature", hex);
+        const data = ensureBytes("signature", hex2);
         const { v: seqBytes, l: seqLeftBytes } = tlv.decode(48, data);
         if (seqLeftBytes.length)
           throw new E("invalid signature: left bytes after parsing");
@@ -4207,7 +4207,7 @@ var init_weierstrass = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/_shortw_utils.js
+// node_modules/@noble/curves/esm/_shortw_utils.js
 function getHash(hash2) {
   return {
     hash: hash2,
@@ -4220,14 +4220,14 @@ function createCurve(curveDef, defHash) {
   return { ...create(defHash), create };
 }
 var init_shortw_utils = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/_shortw_utils.js"() {
+  "node_modules/@noble/curves/esm/_shortw_utils.js"() {
     init_hmac();
     init_utils();
     init_weierstrass();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/hash-to-curve.js
+// node_modules/@noble/curves/esm/abstract/hash-to-curve.js
 function i2osp(value, length) {
   anum(value);
   anum(length);
@@ -4375,14 +4375,14 @@ function createHasher2(Point2, mapToCurve, defaults) {
 }
 var os2ip;
 var init_hash_to_curve = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/abstract/hash-to-curve.js"() {
+  "node_modules/@noble/curves/esm/abstract/hash-to-curve.js"() {
     init_modular();
     init_utils2();
     os2ip = bytesToNumberBE;
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/secp256k1.js
+// node_modules/@noble/curves/esm/secp256k1.js
 var secp256k1_exports = {};
 __export(secp256k1_exports, {
   encodeToCurve: () => encodeToCurve,
@@ -4486,7 +4486,7 @@ function schnorrVerify(signature, message, publicKey) {
 }
 var secp256k1P, secp256k1N, _0n6, _1n6, _2n4, divNearest, Fpk1, secp256k1, TAGGED_HASH_PREFIXES, pointToBytes, numTo32b, modP, modN, Point, GmulAdd, num, schnorr, isoMap, mapSWU, secp256k1_hasher, hashToCurve, encodeToCurve;
 var init_secp256k1 = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/@noble/curves/esm/secp256k1.js"() {
+  "node_modules/@noble/curves/esm/secp256k1.js"() {
     init_sha2();
     init_utils();
     init_shortw_utils();
@@ -4613,7 +4613,7 @@ var init_secp256k1 = __esm({
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/address/isAddressEqual.js
+// node_modules/viem/_esm/utils/address/isAddressEqual.js
 function isAddressEqual(a, b) {
   if (!isAddress(a, { strict: false }))
     throw new InvalidAddressError({ address: a });
@@ -4622,13 +4622,13 @@ function isAddressEqual(a, b) {
   return a.toLowerCase() === b.toLowerCase();
 }
 var init_isAddressEqual = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/address/isAddressEqual.js"() {
+  "node_modules/viem/_esm/utils/address/isAddressEqual.js"() {
     init_address();
     init_isAddress();
   }
 });
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/abi/decodeFunctionData.js
+// node_modules/viem/_esm/utils/abi/decodeFunctionData.js
 function decodeFunctionData(parameters) {
   const { abi, data } = parameters;
   const signature = slice(data, 0, 4);
@@ -4643,7 +4643,7 @@ function decodeFunctionData(parameters) {
   };
 }
 var init_decodeFunctionData = __esm({
-  "../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/abi/decodeFunctionData.js"() {
+  "node_modules/viem/_esm/utils/abi/decodeFunctionData.js"() {
     init_abi();
     init_slice();
     init_toFunctionSelector();
@@ -4659,7 +4659,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/accounts/utils/publicKeyToAddress.js
+// node_modules/viem/_esm/accounts/utils/publicKeyToAddress.js
 init_getAddress();
 init_keccak256();
 function publicKeyToAddress(publicKey) {
@@ -4667,7 +4667,7 @@ function publicKeyToAddress(publicKey) {
   return checksumAddress(`0x${address}`);
 }
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/signature/recoverPublicKey.js
+// node_modules/viem/_esm/utils/signature/recoverPublicKey.js
 init_isHex();
 init_size();
 init_fromHex();
@@ -4702,12 +4702,12 @@ function toRecoveryBit(yParityOrV) {
   throw new Error("Invalid yParityOrV value");
 }
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/signature/recoverAddress.js
+// node_modules/viem/_esm/utils/signature/recoverAddress.js
 async function recoverAddress({ hash: hash2, signature }) {
   return publicKeyToAddress(await recoverPublicKey({ hash: hash2, signature }));
 }
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/abi/decodeEventLog.js
+// node_modules/viem/_esm/utils/abi/decodeEventLog.js
 init_abi();
 init_cursor();
 init_size();
@@ -4800,17 +4800,17 @@ function decodeTopic({ param, value }) {
   return decodedArg[0];
 }
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/signature/hashTypedData.js
+// node_modules/viem/_esm/utils/signature/hashTypedData.js
 init_encodeAbiParameters();
 init_concat();
 init_toHex();
 init_keccak256();
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/typedData.js
+// node_modules/viem/_esm/utils/typedData.js
 init_abi();
 init_address();
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/errors/typedData.js
+// node_modules/viem/_esm/errors/typedData.js
 init_stringify();
 init_base();
 var InvalidDomainError = class extends BaseError {
@@ -4846,7 +4846,7 @@ var InvalidTypedDataTypeError = class extends BaseError {
   }
 };
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/typedData.js
+// node_modules/viem/_esm/utils/typedData.js
 init_isAddress();
 init_size();
 init_toHex();
@@ -4918,7 +4918,7 @@ function validateReference(type) {
     throw new InvalidStructTypeError({ type });
 }
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/signature/hashTypedData.js
+// node_modules/viem/_esm/utils/signature/hashTypedData.js
 function hashTypedData(parameters) {
   const { domain = {}, message, primaryType } = parameters;
   const types = {
@@ -5028,7 +5028,7 @@ function encodeField({ types, name, type, value }) {
   return [{ type }, value];
 }
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/signature/recoverTypedDataAddress.js
+// node_modules/viem/_esm/utils/signature/recoverTypedDataAddress.js
 async function recoverTypedDataAddress(parameters) {
   const { domain, message, primaryType, signature, types } = parameters;
   return recoverAddress({
@@ -5042,7 +5042,7 @@ async function recoverTypedDataAddress(parameters) {
   });
 }
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/signature/verifyTypedData.js
+// node_modules/viem/_esm/utils/signature/verifyTypedData.js
 init_getAddress();
 init_isAddressEqual();
 async function verifyTypedData(parameters) {
@@ -5056,10 +5056,10 @@ async function verifyTypedData(parameters) {
   }));
 }
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/index.js
+// node_modules/viem/_esm/index.js
 init_decodeFunctionData();
 
-// ../../../Users/imokokok/Documents/PriorSeal/node_modules/viem/_esm/utils/signature/parseSignature.js
+// node_modules/viem/_esm/utils/signature/parseSignature.js
 init_secp256k1();
 init_toHex();
 function parseSignature(signatureHex) {
@@ -5574,7 +5574,25 @@ function verifyRoute(options) {
 // examples/402signal-eip3009-settlement-binding-v1/src/verify-source.mjs
 var root = dirname(fileURLToPath(import.meta.url));
 var readText = (path) => readFileSync(resolve(root, path), "utf8");
-var readJson = (path) => JSON.parse(readText(path));
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function readJson(path) {
+  const value = JSON.parse(readText(path));
+  if (!isRecord(value)) throw new TypeError(`${path} must contain a JSON object`);
+  return value;
+}
+function responseLeafHash(text) {
+  const value = JSON.parse(text);
+  if (!isRecord(value) || !isRecord(value.pq_trust) || !isRecord(value.pq_trust.transparency) || !isRecord(value.pq_trust.transparency.receipt) || typeof value.pq_trust.transparency.receipt.leaf_hash !== "string") {
+    throw new TypeError("route response leaf hash is missing");
+  }
+  return value.pq_trust.transparency.receipt.leaf_hash;
+}
+function hex(value, label) {
+  if (!/^0x(?:[0-9a-fA-F]{2})*$/.test(value)) throw new TypeError(`${label} must be 0x-prefixed bytes`);
+  return value;
+}
 var lower = (value) => String(value).toLowerCase();
 var sameAddress = (left, right) => lower(left) === lower(right);
 var paymentAbi = [
@@ -5613,26 +5631,61 @@ var paymentAbi = [
     ]
   }
 ];
+var paymentTypes = {
+  TransferWithAuthorization: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "validAfter", type: "uint256" },
+    { name: "validBefore", type: "uint256" },
+    { name: "nonce", type: "bytes32" }
+  ]
+};
+var bindingTypes = {
+  PriorSealEip3009SettlementBinding: [
+    { name: "routeReceiptDigest", type: "bytes32" },
+    { name: "paymentAuthorizationDigest", type: "bytes32" },
+    { name: "authorizationNonce", type: "bytes32" },
+    { name: "bindingNonce", type: "bytes32" },
+    { name: "issuedAt", type: "uint256" },
+    { name: "expiresAt", type: "uint256" },
+    { name: "audience", type: "string" }
+  ]
+};
 function paymentTypedData(record) {
+  assert.equal(record.primaryType, "TransferWithAuthorization");
+  assert.deepEqual(record.types, paymentTypes);
   return {
-    domain: record.domain,
-    types: record.types,
-    primaryType: record.primaryType,
+    domain: {
+      ...record.domain,
+      verifyingContract: hex(record.domain.verifyingContract, "payment verifying contract")
+    },
+    types: paymentTypes,
+    primaryType: "TransferWithAuthorization",
     message: {
       ...record.message,
+      from: hex(record.message.from, "payment sender"),
+      to: hex(record.message.to, "payment recipient"),
       value: BigInt(record.message.value),
       validAfter: BigInt(record.message.validAfter),
-      validBefore: BigInt(record.message.validBefore)
+      validBefore: BigInt(record.message.validBefore),
+      nonce: hex(record.message.nonce, "payment nonce")
     }
   };
 }
 function bindingTypedData(record) {
+  assert.equal(record.primaryType, "PriorSealEip3009SettlementBinding");
+  assert.deepEqual(record.types, bindingTypes);
   return {
     domain: record.domain,
-    types: record.types,
-    primaryType: record.primaryType,
+    types: bindingTypes,
+    primaryType: "PriorSealEip3009SettlementBinding",
     message: {
       ...record.message,
+      routeReceiptDigest: hex(record.message.routeReceiptDigest, "route receipt digest"),
+      paymentAuthorizationDigest: hex(record.message.paymentAuthorizationDigest, "payment authorization digest"),
+      authorizationNonce: hex(record.message.authorizationNonce, "authorization nonce"),
+      bindingNonce: hex(record.message.bindingNonce, "binding nonce"),
       issuedAt: BigInt(record.message.issuedAt),
       expiresAt: BigInt(record.message.expiresAt)
     }
@@ -5675,14 +5728,22 @@ function routeOptions(raw, context2, now) {
 }
 async function verifyAuthorizationAndBinding({ pair, signed, verifiedRoute, routeDigest, now }) {
   const paymentData = paymentTypedData(pair.payment);
-  if (!await verifyTypedData({ ...paymentData, address: pair.payment.message.from, signature: pair.payment.signature })) {
+  if (!await verifyTypedData({
+    ...paymentData,
+    address: hex(pair.payment.message.from, "payment sender"),
+    signature: hex(pair.payment.signature, "payment signature")
+  })) {
     return blocked("PAYMENT_SIGNATURE_INVALID");
   }
   const paymentDigest = hashTypedData(paymentData);
   if (lower(paymentDigest) !== lower(pair.payment.digest)) return blocked("PAYMENT_DIGEST_MISMATCH");
   if (!sameAddress(pair.payment.message.from, signed.buyer)) return blocked("PAYMENT_SIGNER_MISMATCH");
   const bindingData = bindingTypedData(pair.binding);
-  if (!await verifyTypedData({ ...bindingData, address: pair.payment.message.from, signature: pair.binding.signature })) {
+  if (!await verifyTypedData({
+    ...bindingData,
+    address: hex(pair.payment.message.from, "payment sender"),
+    signature: hex(pair.binding.signature, "binding signature")
+  })) {
     return blocked("BINDING_SIGNATURE_INVALID");
   }
   if (lower(hashTypedData(bindingData)) !== lower(pair.binding.digest)) return blocked("BINDING_DIGEST_MISMATCH");
@@ -5716,10 +5777,13 @@ function verifySettlementPayload(evidence, payment) {
   assert.equal(evidence.receipt.status, "success");
   assert.ok(sameAddress(evidence.transaction.to, payment.domain.verifyingContract));
   assert.ok(evidence.receipt.logs.every((log) => sameAddress(log.address, payment.domain.verifyingContract)));
-  const decoded = decodeFunctionData({ abi: paymentAbi, data: evidence.transaction.input });
+  const decoded = decodeFunctionData({
+    abi: paymentAbi,
+    data: hex(evidence.transaction.input, "settlement transaction input")
+  });
   assert.equal(decoded.functionName, "transferWithAuthorization");
   const [from, to, value, validAfter, validBefore, nonce, v, r, s] = decoded.args;
-  const signature = parseSignature(payment.signature);
+  const signature = parseSignature(hex(payment.signature, "payment signature"));
   assert.ok(sameAddress(from, payment.message.from));
   assert.ok(sameAddress(to, payment.message.to));
   assert.equal(value, BigInt(payment.message.value));
@@ -5731,8 +5795,8 @@ function verifySettlementPayload(evidence, payment) {
   assert.equal(lower(s), lower(signature.s));
   const events = evidence.receipt.logs.map((log) => decodeEventLog({
     abi: paymentAbi,
-    data: log.data,
-    topics: log.topics,
+    data: hex(log.data, "settlement log data"),
+    topics: log.topics.map((topic) => hex(topic, "settlement log topic")),
     strict: true
   }));
   const used = events.find((event) => event.eventName === "AuthorizationUsed");
@@ -5747,25 +5811,29 @@ function verifySettlementPayload(evidence, payment) {
 }
 function settlementOutcome(variant, evidence, payment) {
   if (variant === "timeout") {
+    assert.ok("submission" in evidence);
     assert.equal(evidence.submission.outcome, "timeout");
     assert.equal(evidence.receipt, null);
     assert.equal(evidence.authorizationState, "unknown");
     return { settlement: "SETTLEMENT_PENDING", replacement: "BLOCKED", reason: "RECONCILIATION_REQUIRED" };
   }
-  verifySettlementPayload(evidence, payment);
-  assert.equal(evidence.receipt.blockHash, evidence.canonicalBlock.hash);
-  assert.equal(evidence.receipt.blockNumber, evidence.canonicalBlock.number);
+  assert.ok("transaction" in evidence && evidence.receipt && evidence.canonicalBlock);
+  const completed = evidence;
+  verifySettlementPayload(completed, payment);
+  assert.equal(completed.receipt.blockHash, completed.canonicalBlock.hash);
+  assert.equal(completed.receipt.blockNumber, completed.canonicalBlock.number);
   if (variant === "reorg") {
-    assert.equal(evidence.previouslyMatched, true);
-    assert.equal(evidence.canonicalBlock.canonical, false);
+    assert.ok("previouslyMatched" in completed);
+    assert.equal(completed.previouslyMatched, true);
+    assert.equal(completed.canonicalBlock.canonical, false);
     return { settlement: "REORGED", replacement: "BLOCKED", reason: "REORG_RECONCILIATION_REQUIRED" };
   }
   assert.equal(variant, "matching");
-  assert.equal(evidence.canonicalBlock.canonical, true);
-  assert.ok(evidence.canonicalBlock.confirmations >= evidence.canonicalBlock.requiredConfirmations);
-  assert.ok(Number(evidence.canonicalBlock.timestamp) > Number(payment.message.validAfter));
-  assert.ok(Number(evidence.canonicalBlock.timestamp) < Number(payment.message.validBefore));
-  assert.equal(evidence.authorizationState, true);
+  assert.equal(completed.canonicalBlock.canonical, true);
+  assert.ok(completed.canonicalBlock.confirmations >= completed.canonicalBlock.requiredConfirmations);
+  assert.ok(Number(completed.canonicalBlock.timestamp) > Number(payment.message.validAfter));
+  assert.ok(Number(completed.canonicalBlock.timestamp) < Number(payment.message.validBefore));
+  assert.equal(completed.authorizationState, true);
   return { settlement: "SETTLED_CONFIRMED", replacement: "NOT_REQUIRED", reason: "OK" };
 }
 function releasePaymentPayload(pair, verifiedRoute) {
@@ -5774,6 +5842,7 @@ function releasePaymentPayload(pair, verifiedRoute) {
   const bytes = Buffer.from(pair.wire.headerValue, "base64");
   assert.equal(bytes.toString("base64"), pair.wire.headerValue);
   const payload = JSON.parse(bytes.toString("utf8"));
+  assert.ok(isRecord(payload) && isRecord(payload.payload));
   assert.equal(payload.x402Version, 2);
   assert.deepEqual(payload.accepted, verifiedRoute.accepted);
   assert.deepEqual(payload.payload.authorization, pair.payment.message);
@@ -5793,13 +5862,15 @@ async function evaluate(vector, inputs2) {
     if (error instanceof RouteGuardError && error.code === "quote_expired") return finish(blocked("ROUTE_EVIDENCE_EXPIRED"));
     throw error;
   }
-  const pair = structuredClone(inputs2.signed.variants[vector.paymentVariant]);
+  if (!(vector.paymentVariant in inputs2.signed.variants)) throw new Error(`unknown payment variant: ${vector.paymentVariant}`);
+  const paymentVariant = vector.paymentVariant;
+  const pair = structuredClone(inputs2.signed.variants[paymentVariant]);
   if (vector.mutation?.paymentValue) pair.payment.message.value = vector.mutation.paymentValue;
   const preReleaseFailure = await verifyAuthorizationAndBinding({
     pair,
     signed: inputs2.signed,
     verifiedRoute,
-    routeDigest: `0x${inputs2.routeLeafHash}`,
+    routeDigest: hex(`0x${inputs2.routeLeafHash}`, "route receipt digest"),
     now: vector.now
   });
   if (preReleaseFailure) return finish(preReleaseFailure);
@@ -5810,26 +5881,31 @@ async function evaluate(vector, inputs2) {
   }
   releasePaymentPayload(pair, verifiedRoute);
   releaseCalls += 1;
+  if (!["matching", "timeout", "reorg"].includes(vector.settlementVariant)) {
+    throw new Error(`unknown settlement variant: ${vector.settlementVariant}`);
+  }
+  const settlementVariant = vector.settlementVariant;
   const outcome = settlementOutcome(
-    vector.settlementVariant,
-    inputs2.settlement[vector.settlementVariant],
+    settlementVariant,
+    inputs2.settlement[settlementVariant],
     pair.payment
   );
   return finish({ release: "PAYLOAD_RELEASED", ...outcome });
 }
 var manifest = verifyManifest();
+var rawResponse = readText("fixture/raw/route-response.json");
 var inputs = {
   raw: {
     request: readText("fixture/raw/route-request.json"),
-    response: readText("fixture/raw/route-response.json"),
+    response: rawResponse,
     challenge: readText("fixture/raw/seller-challenge.json")
   },
   context: readJson("fixture/raw/route-context.json"),
   signed: readJson("fixture/generated/signed-authorizations.json"),
   settlement: readJson("fixture/generated/settlement-evidence.json"),
-  cases: readJson("fixture/generated/cases.json")
+  cases: readJson("fixture/generated/cases.json"),
+  routeLeafHash: responseLeafHash(rawResponse)
 };
-inputs.routeLeafHash = JSON.parse(inputs.raw.response).pq_trust.transparency.receipt.leaf_hash;
 assert.equal(inputs.signed.privateKeyIncluded, false);
 assert.equal(inputs.cases.categories, 6);
 assert.equal(inputs.cases.vectors.length, 9);

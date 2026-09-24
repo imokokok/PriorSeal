@@ -21,8 +21,8 @@
     },
     {
       "path": "verify.mjs",
-      "bytes": 199427,
-      "sha256": "3be08214bf410adbe3b452cd603cd1462762233bacd9c30b8db758d38f4c1218"
+      "bytes": 197525,
+      "sha256": "39e956c4497459194c7fcd4e0e295eea4a174556e635813d81f04690274818f8"
     },
     {
       "path": "fixture/generated/cases.json",
@@ -58,6 +58,11 @@
       "path": "fixture/raw/seller-challenge.json",
       "bytes": 353,
       "sha256": "d7074b5efba1b133498f37eb4ec00a9a90919f898fe89a9f3ffcf0cd891fc8e9"
+    },
+    {
+      "path": "vendor/route-guard-v0.7.3.d.mts",
+      "bytes": 774,
+      "sha256": "860f69efacd3cbf3922ec7881c8ea2faea47e888c4dab7c6d7f3c5d99fe798b6"
     },
     {
       "path": "vendor/route-guard-v0.7.3.mjs",
