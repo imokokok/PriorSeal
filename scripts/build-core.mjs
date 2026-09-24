@@ -39,7 +39,11 @@ for (const sourcePath of sources) {
   const name = sourcePath.slice(sourcePath.lastIndexOf(sep) + 1, -4);
   const source = readFileSync(sourcePath, 'utf8');
   const compiled = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
-  const output = `// Generated from ${name}.mts by npm run core:build. Do not edit directly.\n${compiled}`;
+  const notice = `// Generated from ${name}.mts by npm run core:build. Do not edit directly.\n`;
+  const shebangEnd = compiled.startsWith('#!') ? compiled.indexOf('\n') + 1 : 0;
+  const output = shebangEnd > 0
+    ? `${compiled.slice(0, shebangEnd)}${notice}${compiled.slice(shebangEnd)}`
+    : `${notice}${compiled}`;
 
   if (check) {
     if (!existsSync(outputPath) || readFileSync(outputPath, 'utf8') !== output) {

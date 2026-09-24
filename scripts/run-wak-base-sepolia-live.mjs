@@ -1,5 +1,5 @@
-// Generated from run-wak-base-sepolia-live.mts by npm run core:build. Do not edit directly.
 #!/usr/bin/env node
+// Generated from run-wak-base-sepolia-live.mts by npm run core:build. Do not edit directly.
 import {
   createHash,
   createPublicKey,

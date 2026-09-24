@@ -1,30 +1,27 @@
-import test from 'node:test'
-import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
-
+// Generated from headless-market-state.test.mts by npm run core:build. Do not edit directly.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   HEADLESS_MARKET_STATE_NAMESPACE,
   headlessMarketStateCommitment,
   verifyHeadlessMarketStateReceipt,
-  verifyHeadlessMarketStateReceiptPair,
-} from '../../sdk/dist/index.js'
-
+  verifyHeadlessMarketStateReceiptPair
+} from "../../sdk/dist/index.js";
 const fixture = JSON.parse(await readFile(
-  new URL('../../examples/headless-market-state-pair-v1/vectors.json', import.meta.url),
-  'utf8',
-))
-
+  new URL("../../examples/headless-market-state-pair-v1/vectors.json", import.meta.url),
+  "utf8"
+));
 function intent(digest = fixture.authorization_context_commitment) {
   return {
     contextCommitments: [{
       namespace: HEADLESS_MARKET_STATE_NAMESPACE,
-      algorithm: 'sha256',
-      digest,
-    }],
-  }
+      algorithm: "sha256",
+      digest
+    }]
+  };
 }
-
-test('verifies the authority and execution receipts with distinct evidence roles', async () => {
+test("verifies the authority and execution receipts with distinct evidence roles", async () => {
   const result = await verifyHeadlessMarketStateReceiptPair({
     intent: intent(),
     authorityReceipt: fixture.authority_receipt,
@@ -32,53 +29,47 @@ test('verifies the authority and execution receipts with distinct evidence roles
     key: fixture.issuer_key,
     authorityTime: fixture.authority_time,
     executionTime: fixture.execution_time,
-    policy: fixture.policy,
-  })
-
-  assert.equal(result.valid, true)
-  assert.equal(result.authorizationBinding.matched, true)
-  assert.notEqual(result.authority.commitment.digest, result.executionEvidenceCommitment.digest)
-})
-
-test('rejects demo evidence under the production live-only default', async () => {
+    policy: fixture.policy
+  });
+  assert.equal(result.valid, true);
+  assert.equal(result.authorizationBinding.matched, true);
+  assert.notEqual(result.authority.commitment.digest, result.executionEvidenceCommitment.digest);
+});
+test("rejects demo evidence under the production live-only default", async () => {
   const result = await verifyHeadlessMarketStateReceipt(
     fixture.authority_receipt,
     fixture.issuer_key,
     fixture.authority_time,
-    { expectedMic: 'XNYS', allowedStatuses: ['CLOSED'], requiredFeedState: 'live' },
-  )
-  assert.equal(result.valid, false)
-  assert.deepEqual(result.reasonCodes, ['RECEIPT_MODE_NOT_ALLOWED'])
-})
-
-test('rejects tampering, stale evidence, wrong venues, reuse, and reversed pair timelines', async () => {
-  const tampered = structuredClone(fixture.authority_receipt)
-  tampered.coverage = tampered.coverage.replace('"determination_tier":1', '"determination_tier":2')
+    { expectedMic: "XNYS", allowedStatuses: ["CLOSED"], requiredFeedState: "live" }
+  );
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.reasonCodes, ["RECEIPT_MODE_NOT_ALLOWED"]);
+});
+test("rejects tampering, stale evidence, wrong venues, reuse, and reversed pair timelines", async () => {
+  const tampered = structuredClone(fixture.authority_receipt);
+  tampered.coverage = tampered.coverage.replace('"determination_tier":1', '"determination_tier":2');
   const tamperedResult = await verifyHeadlessMarketStateReceipt(
     tampered,
     fixture.issuer_key,
     fixture.authority_time,
     fixture.policy,
-    await headlessMarketStateCommitment(fixture.authority_receipt),
-  )
-  assert.deepEqual(tamperedResult.reasonCodes, ['COMMITMENT_MISMATCH', 'INVALID_SIGNATURE'])
-
+    await headlessMarketStateCommitment(fixture.authority_receipt)
+  );
+  assert.deepEqual(tamperedResult.reasonCodes, ["COMMITMENT_MISMATCH", "INVALID_SIGNATURE"]);
   const stale = await verifyHeadlessMarketStateReceipt(
     fixture.authority_receipt,
     fixture.issuer_key,
-    '2026-09-17T09:50:00.000Z',
-    fixture.policy,
-  )
-  assert.deepEqual(stale.reasonCodes, ['EXECUTION_OUTSIDE_RECEIPT_WINDOW'])
-
+    "2026-09-17T09:50:00.000Z",
+    fixture.policy
+  );
+  assert.deepEqual(stale.reasonCodes, ["EXECUTION_OUTSIDE_RECEIPT_WINDOW"]);
   const wrongVenue = await verifyHeadlessMarketStateReceipt(
     fixture.authority_receipt,
     fixture.issuer_key,
     fixture.authority_time,
-    { ...fixture.policy, expectedMic: 'XLON' },
-  )
-  assert.deepEqual(wrongVenue.reasonCodes, ['VENUE_MISMATCH'])
-
+    { ...fixture.policy, expectedMic: "XLON" }
+  );
+  assert.deepEqual(wrongVenue.reasonCodes, ["VENUE_MISMATCH"]);
   const reuse = await verifyHeadlessMarketStateReceiptPair({
     intent: intent(),
     authorityReceipt: fixture.authority_receipt,
@@ -86,18 +77,17 @@ test('rejects tampering, stale evidence, wrong venues, reuse, and reversed pair 
     key: fixture.issuer_key,
     authorityTime: fixture.authority_time,
     executionTime: fixture.authority_time,
-    policy: fixture.policy,
-  })
-  assert.ok(reuse.reasonCodes.includes('RECEIPTS_NOT_DISTINCT'))
-
+    policy: fixture.policy
+  });
+  assert.ok(reuse.reasonCodes.includes("RECEIPTS_NOT_DISTINCT"));
   const reversed = await verifyHeadlessMarketStateReceiptPair({
     intent: intent(),
     authorityReceipt: fixture.authority_receipt,
     executionReceipt: fixture.execution_receipt,
     key: fixture.issuer_key,
     authorityTime: fixture.authority_time,
-    executionTime: '2026-09-17T09:44:09.000Z',
-    policy: fixture.policy,
-  })
-  assert.ok(reversed.reasonCodes.includes('INVALID_PAIR_TIMELINE'))
-})
+    executionTime: "2026-09-17T09:44:09.000Z",
+    policy: fixture.policy
+  });
+  assert.ok(reversed.reasonCodes.includes("INVALID_PAIR_TIMELINE"));
+});

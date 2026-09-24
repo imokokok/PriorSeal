@@ -1,41 +1,41 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import {generateKeyPairSync} from 'node:crypto';
-import {privateKeyToAccount} from 'viem/accounts';
-import * as sdk from '../../sdk/dist/index.js';
-import {verifyRwaReceiptBundle as browserVerify} from '../../sdk/dist/verifier.js';
-import {authorizeIntent,authorizationTypedData,buildAuthorization,buildAuthorizedReceipt,createMemoryStore,signReceipt} from '../../src/index.mjs';
-import {rwaFixture,signRwaFixture} from '../../examples/rwa-v1/fixture.mjs';
-const account=privateKeyToAccount('0x'+'12'.repeat(32));
-async function fixture(){
-  const f=rwaFixture(sdk),authority=await signRwaFixture(sdk,account,f),execution=await signRwaFixture(sdk,account,rwaFixture(sdk,f.now+2));
-  const intent=await sdk.buildRwaBoundIntent({transaction:f.transaction,intentId:'receipt-rwa',asset:'eip155:8453/erc20:'+f.input.instrument.tokenAddress,amount:f.input.request.amount,validUntil:f.now+30},authority,f.now);
-  const draft=buildAuthorization({intent,principal:{type:'user',id:'test',account:account.address},authorizer:{type:'eip712',address:account.address},delegate:{agentId:'test-agent',executor:f.transaction.from},issuedAt:f.now,notBefore:f.now,expiresAt:intent.validUntil,authorizationNonce:'0x'+'44'.repeat(32),maxUses:'1',audience:'priorseal',policyHash:'0x'+'00'.repeat(32)});
-  const authorization=buildAuthorization({...draft,signature:await account.signTypedData(authorizationTypedData(draft))});
-  const keys=generateKeyPairSync('ed25519'),privateKeyPem=keys.privateKey.export({type:'pkcs8',format:'pem'}),publicKeyPem=keys.publicKey.export({type:'spki',format:'pem'});
-  const accepted=await authorizeIntent({input:authorization,store:createMemoryStore(),privateKeyPem,issuer:'test-rwa',keyId:'test',now:()=>f.now*1000});
-  const observed={chainId:8453,txHash:'0x'+'66'.repeat(32),status:'CONFIRMED',action:'CONTRACT_CALL',sender:f.transaction.from,recipient:f.transaction.to,target:f.transaction.to,calldataHash:f.input.request.call.calldataHash,nativeValue:'0',asset:intent.asset,amount:intent.amount,nonce:intent.nonce,executedAt:f.now+2,observedAt:f.now+3,confirmations:12,gasUsed:'100000',transfers:[],finalityState:'CONFIRMED'};
-  const receipt=signReceipt(buildAuthorizedReceipt({authorization:accepted.response.authorization,acceptance:accepted.response.acceptance,policyEvidence:accepted.response.policyEvidence,execution:observed,issuer:'test-rwa',keyId:'test',issuedAt:f.now+3}),privateKeyPem);
-  return {f,privateKeyPem,bundle:{receipt,authority:authority.proof,execution:execution.proof},trust:authority.trust,options:{now:f.now+3,trustedKeys:{issuer:'test-rwa',keyId:'test',algorithm:'Ed25519',publicKey:publicKeyPem,status:'active',validFrom:f.now-100,validUntil:f.now+100}}};
+// Generated from rwa-receipt.test.mts by npm run core:build. Do not edit directly.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
+import { privateKeyToAccount } from "viem/accounts";
+import * as sdk from "../../sdk/dist/index.js";
+import { verifyRwaReceiptBundle as browserVerify } from "../../sdk/dist/verifier.js";
+import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, createMemoryStore, signReceipt } from "../../src/index.mjs";
+import { rwaFixture, signRwaFixture } from "../../examples/rwa-v1/fixture.mjs";
+const account = privateKeyToAccount("0x" + "12".repeat(32));
+async function fixture() {
+  const f = rwaFixture(sdk), authority = await signRwaFixture(sdk, account, f), execution = await signRwaFixture(sdk, account, rwaFixture(sdk, f.now + 2));
+  const intent = await sdk.buildRwaBoundIntent({ transaction: f.transaction, intentId: "receipt-rwa", asset: "eip155:8453/erc20:" + f.input.instrument.tokenAddress, amount: f.input.request.amount, validUntil: f.now + 30 }, authority, f.now);
+  const draft = buildAuthorization({ intent, principal: { type: "user", id: "test", account: account.address }, authorizer: { type: "eip712", address: account.address }, delegate: { agentId: "test-agent", executor: f.transaction.from }, issuedAt: f.now, notBefore: f.now, expiresAt: intent.validUntil, authorizationNonce: "0x" + "44".repeat(32), maxUses: "1", audience: "priorseal", policyHash: "0x" + "00".repeat(32) });
+  const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
+  const keys = generateKeyPairSync("ed25519"), privateKeyPem = keys.privateKey.export({ type: "pkcs8", format: "pem" }), publicKeyPem = keys.publicKey.export({ type: "spki", format: "pem" });
+  const accepted = await authorizeIntent({ input: authorization, store: createMemoryStore(), privateKeyPem, issuer: "test-rwa", keyId: "test", now: () => f.now * 1e3 });
+  const observed = { chainId: 8453, txHash: "0x" + "66".repeat(32), status: "CONFIRMED", action: "CONTRACT_CALL", sender: f.transaction.from, recipient: f.transaction.to, target: f.transaction.to, calldataHash: f.input.request.call.calldataHash, nativeValue: "0", asset: intent.asset, amount: intent.amount, nonce: intent.nonce, executedAt: f.now + 2, observedAt: f.now + 3, confirmations: 12, gasUsed: "100000", transfers: [], finalityState: "CONFIRMED" };
+  const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, policyEvidence: accepted.response.policyEvidence, execution: observed, issuer: "test-rwa", keyId: "test", issuedAt: f.now + 3 }), privateKeyPem);
+  return { f, privateKeyPem, bundle: { receipt, authority: authority.proof, execution: execution.proof }, trust: authority.trust, options: { now: f.now + 3, trustedKeys: { issuer: "test-rwa", keyId: "test", algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: f.now - 100, validUntil: f.now + 100 } } };
 }
-test('RWA receipt verifies through both SDK entry points with out-of-band pins',async()=>{
-  const x=await fixture();
-  assert.equal((await sdk.verifyRwaReceiptBundle(x.bundle,x.trust,x.options)).valid,true);
-  assert.equal((await browserVerify(x.bundle,x.trust,x.options)).valid,true);
+test("RWA receipt verifies through both SDK entry points with out-of-band pins", async () => {
+  const x = await fixture();
+  assert.equal((await sdk.verifyRwaReceiptBundle(x.bundle, x.trust, x.options)).valid, true);
+  assert.equal((await browserVerify(x.bundle, x.trust, x.options)).valid, true);
 });
-for(const mode of ['missing-key','revoked-key','changed-transaction','changed-principal-signature','changed-assessment','same-assessment','production','wrong-request','expired-authority-at-execution','receipt-asserts-wrong-compliance'])test('RWA receipt bundle rejects '+mode,async()=>{
-  const x=await fixture(),b=x.bundle;
-  if(mode==='missing-key')delete x.options.trustedKeys;
-  if(mode==='revoked-key')x.options.trustedKeys.status='revoked';
-  if(mode==='changed-transaction')b.receipt.execution.nonce='8';
-  if(mode==='changed-principal-signature')b.receipt.authorizationEvidence.authorization.signature='0x'+'00'.repeat(65);
-  if(mode==='changed-assessment')b.execution.report.input.market.halt='HALTED';
-  if(mode==='same-assessment')b.execution=b.authority;
-  if(mode==='production')x.trust.environment='production';
-  if(mode==='wrong-request')x.trust.request.action='sell';
-  if(mode==='expired-authority-at-execution')b.receipt.execution.executedAt=x.f.now+30;
-  if(mode==='receipt-asserts-wrong-compliance')b.receipt.compliance.status='NON_COMPLIANT';
-  // Re-sign outer receipt in adversarial cases; inner self-consistency must still be enforced.
-  b.receipt=signReceipt(b.receipt,x.privateKeyPem);
-  assert.equal((await sdk.verifyRwaReceiptBundle(b,x.trust,x.options)).valid,false);
+for (const mode of ["missing-key", "revoked-key", "changed-transaction", "changed-principal-signature", "changed-assessment", "same-assessment", "production", "wrong-request", "expired-authority-at-execution", "receipt-asserts-wrong-compliance"]) test("RWA receipt bundle rejects " + mode, async () => {
+  const x = await fixture(), b = x.bundle;
+  if (mode === "missing-key") delete x.options.trustedKeys;
+  if (mode === "revoked-key") x.options.trustedKeys.status = "revoked";
+  if (mode === "changed-transaction") b.receipt.execution.nonce = "8";
+  if (mode === "changed-principal-signature") b.receipt.authorizationEvidence.authorization.signature = "0x" + "00".repeat(65);
+  if (mode === "changed-assessment") b.execution.report.input.market.halt = "HALTED";
+  if (mode === "same-assessment") b.execution = b.authority;
+  if (mode === "production") x.trust.environment = "production";
+  if (mode === "wrong-request") x.trust.request.action = "sell";
+  if (mode === "expired-authority-at-execution") b.receipt.execution.executedAt = x.f.now + 30;
+  if (mode === "receipt-asserts-wrong-compliance") b.receipt.compliance.status = "NON_COMPLIANT";
+  b.receipt = signReceipt(b.receipt, x.privateKeyPem);
+  assert.equal((await sdk.verifyRwaReceiptBundle(b, x.trust, x.options)).valid, false);
 });

@@ -7,6 +7,7 @@ import {
   EXECUTION_PROFILE_V1_ID,
   executionTypesForSchemaVersion,
 } from '../../sdk/dist/insight-execution-v5.js';
+import type { InsightProtocolTrust } from '../../sdk/dist/insight-protocol-trust.js';
 
 // Exact immutable Insight profile, MIT; source 76a22ac242512c06cd0e21e3fcd4452867b52e57.
 // Copyright (c) 2026 Insight (oracleinsight.xyz). SDK THIRD_PARTY_NOTICES includes full permission.
@@ -106,7 +107,7 @@ export function createInsightProtocolTrust({
   version = 5,
   legacyWithoutRelease = version < 5,
   withPolicy = true,
-}: TrustOptions) {
+}: TrustOptions): InsightProtocolTrust {
   const address = typeof signer === 'string' ? signer : signer.address;
   if (contentId(profileBody) !== EXECUTION_PROFILE_V1_ID)
     throw new Error('Immutable Insight profile mismatch');

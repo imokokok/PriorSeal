@@ -5,16 +5,10 @@ import { fileURLToPath } from "node:url";
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const errors = [];
 const reviewedJavaScriptTools = /* @__PURE__ */ new Set([
-  "scripts/build-core.mjs",
-  "scripts/build-web3-agent-kit-integration-spike-v1.mjs",
-  "scripts/generate-insight-boundaryattest-three-object-vectors.mjs",
-  "scripts/generate-interai-track1-preflight-candidate.mjs",
-  "scripts/generate-thoughtproof-sentinel-m2-final-pairs.mjs",
-  "scripts/generate-thoughtproof-sentinel-m2-vectors.mjs",
-  "scripts/generate-thoughtproof-sentinel-paired-vectors.mjs",
-  "scripts/generate-web3-agent-kit-base-swap-v2-vectors.mjs",
-  "scripts/generate-web3-agent-kit-base-swap-vectors.mjs",
-  "scripts/generate-web3-agent-kit-integration-spike-v1.mjs"
+  "scripts/build-core.mjs"
+]);
+const reviewedCompatibilityLaunchers = /* @__PURE__ */ new Set([
+  "scripts/package-web3-agent-kit-integration-spike-v1.py"
 ]);
 const reviewedPortableJavaScript = /* @__PURE__ */ new Set([
   "examples/402signal-eip3009-settlement-binding-v1/scripts/build.mjs",
@@ -50,27 +44,7 @@ const reviewedPortableJavaScript = /* @__PURE__ */ new Set([
   "examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs",
   "examples/web3-agent-kit-integration-spike-v1.0.1/verify.source.mjs"
 ]);
-const reviewedLegacyJavaScriptTests = /* @__PURE__ */ new Set([
-  "test/bootstrap/cloudflare-bindings.test.mjs",
-  "test/bootstrap/production-schema.test.mjs",
-  "test/examples/402signal-eip3009-settlement-binding.test.mjs",
-  "test/interfaces/http-server.test.mjs",
-  "test/sdk/boundaryattest-paired.test.mjs",
-  "test/sdk/headless-market-state.test.mjs",
-  "test/sdk/insight-boundaryattest-three-object.test.mjs",
-  "test/sdk/insight-protocol-trust.test.mjs",
-  "test/sdk/review-manifest-joint.test.mjs",
-  "test/sdk/rwa-golden.test.mjs",
-  "test/sdk/rwa-hardening.test.mjs",
-  "test/sdk/rwa-production-gates.test.mjs",
-  "test/sdk/rwa-receipt.test.mjs",
-  "test/sdk/rwa-source-lock.test.mjs",
-  "test/sdk/thoughtproof-sentinel-m2-final-paired.test.mjs",
-  "test/sdk/thoughtproof-sentinel-m2-paired.test.mjs",
-  "test/sdk/thoughtproof-sentinel-paired.test.mjs",
-  "test/sdk/web3-agent-kit-base-swap.test.mjs",
-  "test/sdk/web3-agent-kit-integration-spike.test.mjs"
-]);
+const reviewedLegacyJavaScriptTests = /* @__PURE__ */ new Set();
 function files(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     if (entry.isDirectory() && ["node_modules", "dist", ".git"].includes(entry.name)) return [];
@@ -94,6 +68,9 @@ for (const path of files(join(projectRoot, "src"))) {
 for (const directory of ["scripts", "sdk/scripts"]) {
   for (const path of files(join(projectRoot, directory))) {
     if (/\.(?:js|jsx|cjs)$/.test(path)) errors.push(`${label(path)}: new maintenance code must use .mts`);
+    if (path.endsWith(".py") && !reviewedCompatibilityLaunchers.has(label(path))) {
+      errors.push(`${label(path)}: new maintenance code must use .mts`);
+    }
     if (!path.endsWith(".mjs")) continue;
     const source = path.replace(/\.mjs$/, ".mts");
     if (!existsSync(source) && !reviewedJavaScriptTools.has(label(path))) {
@@ -113,13 +90,16 @@ for (const [directory, reviewed, description] of [
 }
 for (const [reviewed, description] of [
   [reviewedJavaScriptTools, "tool"],
+  [reviewedCompatibilityLaunchers, "compatibility launcher"],
   [reviewedPortableJavaScript, "portable example"],
   [reviewedLegacyJavaScriptTests, "legacy test"]
 ]) {
   for (const exception of reviewed) {
     const path = join(projectRoot, exception);
-    if (!existsSync(path)) errors.push(`${exception}: reviewed JavaScript ${description} no longer exists`);
-    else if (existsSync(path.replace(/\.mjs$/, ".mts"))) errors.push(`${exception}: remove stale JavaScript ${description} exception after TypeScript migration`);
+    if (!existsSync(path)) errors.push(`${exception}: reviewed ${description} exception no longer exists`);
+    else if (path.endsWith(".mjs") && existsSync(path.replace(/\.mjs$/, ".mts"))) {
+      errors.push(`${exception}: remove stale JavaScript ${description} exception after TypeScript migration`);
+    }
   }
 }
 if (errors.length) {

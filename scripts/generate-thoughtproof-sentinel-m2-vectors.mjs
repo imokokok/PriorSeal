@@ -1,91 +1,80 @@
-import { createHash, createPrivateKey, createPublicKey, sign } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { keccak256 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+// Generated from generate-thoughtproof-sentinel-m2-vectors.mts by npm run core:build. Do not edit directly.
+import { createHash, createPrivateKey, createPublicKey, sign } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { keccak256 } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import {
   authorizationTypedData,
   buildAuthorization,
   buildAuthorizationReceipt,
   buildAuthorizedReceipt,
   canonicalize,
-  signReceipt,
-} from '../src/index.mjs';
-import { signAuthorizationReceipt } from '../src/domain/authorization.mjs';
-
-const output = new URL('../examples/thoughtproof-sentinel-paired-v2/', import.meta.url);
-const namespace = 'thoughtproof.sentinel-decision.v1';
-const subjectSchema = 'thoughtproof.sentinel-subject.evm-exact-call.v1';
-const exportDomain = 'thoughtproof.sentinel.export.v1';
-const signedAt = Date.parse('2026-09-16T00:59:00Z') / 1000;
-const validUntil = signedAt + 86_400;
-const executor = `0x${'a'.repeat(40)}`;
-const callTarget = `0x${'c'.repeat(40)}`;
-const calldata = '0x38ed17390000000000000000000000000000000000000000000000000000000000000001';
+  signReceipt
+} from "../src/index.mjs";
+import { signAuthorizationReceipt } from "../src/domain/authorization.mjs";
+const output = new URL("../examples/thoughtproof-sentinel-paired-v2/", import.meta.url);
+const namespace = "thoughtproof.sentinel-decision.v1";
+const subjectSchema = "thoughtproof.sentinel-subject.evm-exact-call.v1";
+const exportDomain = "thoughtproof.sentinel.export.v1";
+const signedAt = Date.parse("2026-09-16T00:59:00Z") / 1e3;
+const validUntil = signedAt + 86400;
+const executor = `0x${"a".repeat(40)}`;
+const callTarget = `0x${"c".repeat(40)}`;
+const calldata = "0x38ed17390000000000000000000000000000000000000000000000000000000000000001";
 const calldataHash = keccak256(calldata);
-const emptyCalldata = '0x';
+const emptyCalldata = "0x";
 const emptyCalldataHash = keccak256(emptyCalldata);
-const transactionValue = '100000000000000000';
-
-// Both private values are deterministic fixture-only keys. The decision key is
-// authored by YuTao solely to make the contract proposal executable. It is not
-// a ThoughtProof key and must never be accepted outside these candidate vectors.
-const decisionPrivateKey = privateKeyFromSeed('44');
+const transactionValue = "100000000000000000";
+const decisionPrivateKey = privateKeyFromSeed("44");
 const decisionPublicKey = createPublicKey(decisionPrivateKey);
-const decisionJwk = decisionPublicKey.export({ format: 'jwk' });
-const decisionKeyId = 'yutao-m2-contract-proposal-vector-ed25519-1';
-
-const issuer = 'priorseal.thoughtproof-m2-proposal-fixture';
-const issuerKeyId = 'priorseal-thoughtproof-m2-proposal-ed25519-1';
-const issuerPrivateKey = privateKeyFromSeed('55');
+const decisionJwk = decisionPublicKey.export({ format: "jwk" });
+const decisionKeyId = "yutao-m2-contract-proposal-vector-ed25519-1";
+const issuer = "priorseal.thoughtproof-m2-proposal-fixture";
+const issuerKeyId = "priorseal-thoughtproof-m2-proposal-ed25519-1";
+const issuerPrivateKey = privateKeyFromSeed("55");
 const issuerPublicKey = createPublicKey(issuerPrivateKey);
-const issuerPrivateKeyPem = issuerPrivateKey.export({ type: 'pkcs8', format: 'pem' });
-const issuerPublicKeyPem = issuerPublicKey.export({ type: 'spki', format: 'pem' });
-const issuerPublicKeyFingerprint = createHash('sha256')
-  .update(issuerPublicKey.export({ type: 'spki', format: 'der' }))
-  .digest('hex');
-const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);
-
+const issuerPrivateKeyPem = issuerPrivateKey.export({ type: "pkcs8", format: "pem" });
+const issuerPublicKeyPem = issuerPublicKey.export({ type: "spki", format: "pem" });
+const issuerPublicKeyFingerprint = createHash("sha256").update(issuerPublicKey.export({ type: "spki", format: "der" })).digest("hex");
+const account = privateKeyToAccount(`0x${"1".repeat(64)}`);
 function privateKeyFromSeed(byte) {
-  const seed = Buffer.from(byte.repeat(32), 'hex');
+  const seed = Buffer.from(byte.repeat(32), "hex");
   return createPrivateKey({
-    key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), seed]),
-    format: 'der',
-    type: 'pkcs8',
+    key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed]),
+    format: "der",
+    type: "pkcs8"
   });
 }
-
 function sha256(value) {
-  return `0x${createHash('sha256').update(value, 'utf8').digest('hex')}`;
+  return `0x${createHash("sha256").update(value, "utf8").digest("hex")}`;
 }
-
 function exactCallSubject(overrides = {}) {
   return {
     schema: subjectSchema,
-    kind: 'EVM_EXACT_CALL',
+    kind: "EVM_EXACT_CALL",
     chainId: 8453,
     executor,
     callTarget,
-    transactionNonce: '1003',
+    transactionNonce: "1003",
     transactionValue,
     calldataHash,
-    ...overrides,
+    ...overrides
   };
 }
-
-function makeExport(name, subject, { tamperSignature = false, verdict = 'ALLOW' } = {}) {
+function makeExport(name, subject, { tamperSignature = false, verdict = "ALLOW" } = {}) {
   const canonicalBody = {
-    apiVersion: 'sentinel-api-0.1.0',
-    artifactSchema: 'sentinel.verdict.canonical.v1',
+    apiVersion: "sentinel-api-0.1.0",
+    artifactSchema: "sentinel.verdict.canonical.v1",
     confidence: 84,
-    ...(subject === undefined ? {} : { decisionSubject: subject }),
+    ...subject === void 0 ? {} : { decisionSubject: subject },
     evaluatedAt: signedAt,
-    mode: 'trade_execution',
-    models: { primary: 'contract-proposal-vector', secondary: 'contract-proposal-vector' },
-    objections: ['Exact-call subject evaluated under the M2 working-contract proposal.'],
-    reasoning: 'Candidate vector only. This is not a ThoughtProof-issued decision.',
-    tier: 'standard',
+    mode: "trade_execution",
+    models: { primary: "contract-proposal-vector", secondary: "contract-proposal-vector" },
+    objections: ["Exact-call subject evaluated under the M2 working-contract proposal."],
+    reasoning: "Candidate vector only. This is not a ThoughtProof-issued decision.",
+    tier: "standard",
     verdict,
-    verificationId: `sent_m2_${name.replaceAll('-', '_')}`,
+    verificationId: `sent_m2_${name.replaceAll("-", "_")}`
   };
   const canonical = canonicalize(canonicalBody);
   const fields = {
@@ -94,50 +83,49 @@ function makeExport(name, subject, { tamperSignature = false, verdict = 'ALLOW' 
     canonical,
     digest: sha256(canonical),
     keyId: decisionKeyId,
-    alg: 'Ed25519',
+    alg: "Ed25519",
     signedAt,
-    validUntil,
+    validUntil
   };
   const signature = sign(
     null,
     Buffer.concat([
-      Buffer.from(exportDomain, 'utf8'),
+      Buffer.from(exportDomain, "utf8"),
       Buffer.from([0]),
-      Buffer.from(canonicalize(fields), 'utf8'),
+      Buffer.from(canonicalize(fields), "utf8")
     ]),
-    decisionPrivateKey,
-  ).toString('hex');
+    decisionPrivateKey
+  ).toString("hex");
   return {
     exportSchema: exportDomain,
     ...fields,
-    signature: `0x${tamperSignature ? `${signature[0] === '0' ? '1' : '0'}${signature.slice(1)}` : signature}`,
+    signature: `0x${tamperSignature ? `${signature[0] === "0" ? "1" : "0"}${signature.slice(1)}` : signature}`
   };
 }
-
 async function writeJson(name, value) {
-  await writeFile(new URL(name, output), `${JSON.stringify(value, null, 2)}\n`);
+  await writeFile(new URL(name, output), `${JSON.stringify(value, null, 2)}
+`);
 }
-
 async function makeReceipt({
   name,
   artifact,
   chainId = 8453,
   sender = executor,
   target = callTarget,
-  nonce = '1003',
+  nonce = "1003",
   value = transactionValue,
   amount = value,
   dataHash = calldataHash,
   commitments,
   expiresAt = artifact.validUntil - 60,
-  mutateReceipt,
+  mutateReceipt
 }) {
   const intent = {
-    schema: 'priorseal.intent.v2',
-    executionProfile: 'priorseal.execution-profile.exact-call.v1',
+    schema: "priorseal.intent.v2",
+    executionProfile: "priorseal.execution-profile.exact-call.v1",
     intentId: `thoughtproof-m2-${name}`,
     chainId,
-    action: 'CONTRACT_CALL',
+    action: "CONTRACT_CALL",
     asset: `eip155:${chainId}/native`,
     amount,
     sender,
@@ -148,44 +136,44 @@ async function makeReceipt({
     calldataHash: dataHash,
     transactionValue: value,
     contextCommitments: commitments ?? [
-      { namespace, algorithm: 'sha256', digest: artifact.digest },
+      { namespace, algorithm: "sha256", digest: artifact.digest }
     ],
-    constraints: { minConfirmations: 12 },
+    constraints: { minConfirmations: 12 }
   };
   const issuedAt = artifact.signedAt + 60;
   const draft = buildAuthorization({
     intent,
-    principal: { type: 'user', id: 'thoughtproof-m2-proposal-user', account: account.address },
-    authorizer: { type: 'eip712', address: account.address },
-    delegate: { agentId: 'thoughtproof-m2-proposal-agent', executor: sender },
+    principal: { type: "user", id: "thoughtproof-m2-proposal-user", account: account.address },
+    authorizer: { type: "eip712", address: account.address },
+    delegate: { agentId: "thoughtproof-m2-proposal-agent", executor: sender },
     issuedAt,
     notBefore: issuedAt,
     expiresAt,
-    authorizationNonce: `0x${createHash('sha256').update(`authorization:${name}`).digest('hex')}`,
-    maxUses: '1',
-    audience: 'priorseal',
-    policyHash: `0x${'0'.repeat(64)}`,
+    authorizationNonce: `0x${createHash("sha256").update(`authorization:${name}`).digest("hex")}`,
+    maxUses: "1",
+    audience: "priorseal",
+    policyHash: `0x${"0".repeat(64)}`
   });
   const authorization = buildAuthorization({
     ...draft,
-    signature: await account.signTypedData(authorizationTypedData(draft)),
+    signature: await account.signTypedData(authorizationTypedData(draft))
   });
   const acceptedAt = issuedAt + 1;
   const acceptance = signAuthorizationReceipt(
     buildAuthorizationReceipt({ authorization, issuer, keyId: issuerKeyId, acceptedAt }),
-    issuerPrivateKeyPem,
+    issuerPrivateKeyPem
   );
   const executedAt = issuedAt + 60;
   const execution = {
-    schema: 'priorseal.execution-observation.v1',
+    schema: "priorseal.execution-observation.v1",
     chainId,
-    txHash: `0x${createHash('sha256').update(`transaction:${name}`).digest('hex')}`,
-    status: 'CONFIRMED',
-    blockNumber: 33_200_000 + Number.parseInt(createHash('sha256').update(name).digest('hex').slice(0, 6), 16),
-    blockHash: `0x${'e'.repeat(64)}`,
+    txHash: `0x${createHash("sha256").update(`transaction:${name}`).digest("hex")}`,
+    status: "CONFIRMED",
+    blockNumber: 332e5 + Number.parseInt(createHash("sha256").update(name).digest("hex").slice(0, 6), 16),
+    blockHash: `0x${"e".repeat(64)}`,
     executedAt,
     observedAt: executedAt + 5,
-    action: 'CONTRACT_CALL',
+    action: "CONTRACT_CALL",
     nonce,
     sender,
     recipient: target,
@@ -197,12 +185,12 @@ async function makeReceipt({
     transferMatchUnique: false,
     nativeValue: value,
     tokenValue: null,
-    gasUsed: '180000',
+    gasUsed: "180000",
     fee: null,
     executionDataAvailable: true,
-    observationSource: 'fixture',
-    finalityState: 'CONFIRMED',
-    confirmations: 12,
+    observationSource: "fixture",
+    finalityState: "CONFIRMED",
+    confirmations: 12
   };
   const receipt = signReceipt(
     buildAuthorizedReceipt({
@@ -211,430 +199,422 @@ async function makeReceipt({
       execution,
       issuer,
       keyId: issuerKeyId,
-      issuedAt: execution.observedAt,
+      issuedAt: execution.observedAt
     }),
-    issuerPrivateKeyPem,
+    issuerPrivateKeyPem
   );
   const outputReceipt = mutateReceipt ? mutateReceipt(structuredClone(receipt)) : receipt;
   await writeJson(`priorseal-receipt-${name}.json`, outputReceipt);
   return outputReceipt;
 }
-
 await mkdir(output, { recursive: true });
-
-const validExport = makeExport('valid', exactCallSubject());
-const missingSubjectExport = makeExport('missing_subject', undefined);
-const extraFieldExport = makeExport('extra_field', {
+const validExport = makeExport("valid", exactCallSubject());
+const missingSubjectExport = makeExport("missing_subject", void 0);
+const extraFieldExport = makeExport("extra_field", {
   ...exactCallSubject(),
-  principal: account.address,
+  principal: account.address
 });
-const wrongSchemaExport = makeExport('wrong_schema', exactCallSubject({ schema: 'unsupported.v1' }));
-const tamperedSignatureExport = makeExport('tampered_signature', exactCallSubject(), {
-  tamperSignature: true,
+const wrongSchemaExport = makeExport("wrong_schema", exactCallSubject({ schema: "unsupported.v1" }));
+const tamperedSignatureExport = makeExport("tampered_signature", exactCallSubject(), {
+  tamperSignature: true
 });
 const uppercaseAddressExport = makeExport(
-  'uppercase_address',
-  exactCallSubject({ executor: `0x${'A'.repeat(40)}` }),
+  "uppercase_address",
+  exactCallSubject({ executor: `0x${"A".repeat(40)}` })
 );
 const uppercaseHashExport = makeExport(
-  'uppercase_hash',
-  exactCallSubject({ calldataHash: calldataHash.toUpperCase().replace('0X', '0x') }),
+  "uppercase_hash",
+  exactCallSubject({ calldataHash: calldataHash.toUpperCase().replace("0X", "0x") })
 );
 const leadingZeroUintExport = makeExport(
-  'leading_zero_uint',
-  exactCallSubject({ transactionNonce: '01003' }),
+  "leading_zero_uint",
+  exactCallSubject({ transactionNonce: "01003" })
 );
-const zeroChainIdExport = makeExport('zero_chain_id', exactCallSubject({ chainId: 0 }));
+const zeroChainIdExport = makeExport("zero_chain_id", exactCallSubject({ chainId: 0 }));
 const missingFieldSubject = exactCallSubject();
 delete missingFieldSubject.callTarget;
-const missingFieldExport = makeExport('missing_field', missingFieldSubject);
-const effectUnmappedExport = makeExport('effect_unmapped', exactCallSubject(), {
-  verdict: 'DEFER',
+const missingFieldExport = makeExport("missing_field", missingFieldSubject);
+const effectUnmappedExport = makeExport("effect_unmapped", exactCallSubject(), {
+  verdict: "DEFER"
 });
-const invalidExport = { ...validExport, exportSchema: 'thoughtproof.sentinel.export.invalid' };
-
-await writeJson('export-valid.json', validExport);
-await writeJson('export-missing-subject.json', missingSubjectExport);
-await writeJson('export-extra-field.json', extraFieldExport);
-await writeJson('export-wrong-subject-schema.json', wrongSchemaExport);
-await writeJson('export-tampered-signature.json', tamperedSignatureExport);
-await writeJson('export-uppercase-address.json', uppercaseAddressExport);
-await writeJson('export-uppercase-hash.json', uppercaseHashExport);
-await writeJson('export-leading-zero-uint.json', leadingZeroUintExport);
-await writeJson('export-zero-chain-id.json', zeroChainIdExport);
-await writeJson('export-missing-field.json', missingFieldExport);
-await writeJson('export-effect-unmapped.json', effectUnmappedExport);
-await writeJson('export-invalid.json', invalidExport);
-
-const matchingReceipt = await makeReceipt({ name: 'matching', artifact: validExport });
+const invalidExport = { ...validExport, exportSchema: "thoughtproof.sentinel.export.invalid" };
+await writeJson("export-valid.json", validExport);
+await writeJson("export-missing-subject.json", missingSubjectExport);
+await writeJson("export-extra-field.json", extraFieldExport);
+await writeJson("export-wrong-subject-schema.json", wrongSchemaExport);
+await writeJson("export-tampered-signature.json", tamperedSignatureExport);
+await writeJson("export-uppercase-address.json", uppercaseAddressExport);
+await writeJson("export-uppercase-hash.json", uppercaseHashExport);
+await writeJson("export-leading-zero-uint.json", leadingZeroUintExport);
+await writeJson("export-zero-chain-id.json", zeroChainIdExport);
+await writeJson("export-missing-field.json", missingFieldExport);
+await writeJson("export-effect-unmapped.json", effectUnmappedExport);
+await writeJson("export-invalid.json", invalidExport);
+const matchingReceipt = await makeReceipt({ name: "matching", artifact: validExport });
 await makeReceipt({
-  name: 'amount-outside-m2-binding',
+  name: "amount-outside-m2-binding",
   artifact: validExport,
-  amount: '42000000',
+  amount: "42000000"
 });
-await makeReceipt({ name: 'missing-subject', artifact: missingSubjectExport });
-await makeReceipt({ name: 'extra-field', artifact: extraFieldExport });
-await makeReceipt({ name: 'wrong-subject-schema', artifact: wrongSchemaExport });
-await makeReceipt({ name: 'uppercase-address', artifact: uppercaseAddressExport });
-await makeReceipt({ name: 'uppercase-hash', artifact: uppercaseHashExport });
-await makeReceipt({ name: 'leading-zero-uint', artifact: leadingZeroUintExport });
-await makeReceipt({ name: 'zero-chain-id', artifact: zeroChainIdExport });
-await makeReceipt({ name: 'missing-field', artifact: missingFieldExport });
-await makeReceipt({ name: 'effect-unmapped', artifact: effectUnmappedExport });
+await makeReceipt({ name: "missing-subject", artifact: missingSubjectExport });
+await makeReceipt({ name: "extra-field", artifact: extraFieldExport });
+await makeReceipt({ name: "wrong-subject-schema", artifact: wrongSchemaExport });
+await makeReceipt({ name: "uppercase-address", artifact: uppercaseAddressExport });
+await makeReceipt({ name: "uppercase-hash", artifact: uppercaseHashExport });
+await makeReceipt({ name: "leading-zero-uint", artifact: leadingZeroUintExport });
+await makeReceipt({ name: "zero-chain-id", artifact: zeroChainIdExport });
+await makeReceipt({ name: "missing-field", artifact: missingFieldExport });
+await makeReceipt({ name: "effect-unmapped", artifact: effectUnmappedExport });
 await makeReceipt({
-  name: 'string-chain-id',
+  name: "string-chain-id",
   artifact: validExport,
   mutateReceipt: (receipt) => {
-    receipt.authorizationEvidence.authorization.intent.chainId = '8453';
+    receipt.authorizationEvidence.authorization.intent.chainId = "8453";
     return receipt;
-  },
+  }
 });
-await makeReceipt({ name: 'chain-mismatch', artifact: validExport, chainId: 1 });
+await makeReceipt({ name: "chain-mismatch", artifact: validExport, chainId: 1 });
 await makeReceipt({
-  name: 'executor-mismatch',
+  name: "executor-mismatch",
   artifact: validExport,
-  sender: `0x${'b'.repeat(40)}`,
+  sender: `0x${"b".repeat(40)}`
 });
 await makeReceipt({
-  name: 'target-mismatch',
+  name: "target-mismatch",
   artifact: validExport,
-  target: `0x${'d'.repeat(40)}`,
+  target: `0x${"d".repeat(40)}`
 });
-await makeReceipt({ name: 'nonce-mismatch', artifact: validExport, nonce: '1004' });
-await makeReceipt({ name: 'value-mismatch', artifact: validExport, value: '0' });
+await makeReceipt({ name: "nonce-mismatch", artifact: validExport, nonce: "1004" });
+await makeReceipt({ name: "value-mismatch", artifact: validExport, value: "0" });
 await makeReceipt({
-  name: 'calldata-mismatch',
+  name: "calldata-mismatch",
   artifact: validExport,
-  dataHash: keccak256('0x1234'),
+  dataHash: keccak256("0x1234")
 });
 await makeReceipt({
-  name: 'wrong-commitment',
+  name: "wrong-commitment",
   artifact: validExport,
-  commitments: [{ namespace, algorithm: 'sha256', digest: `0x${'f'.repeat(64)}` }],
+  commitments: [{ namespace, algorithm: "sha256", digest: `0x${"f".repeat(64)}` }]
 });
 await makeReceipt({
-  name: 'ambiguous-commitment',
+  name: "ambiguous-commitment",
   artifact: validExport,
   commitments: [
-    { namespace, algorithm: 'sha256', digest: validExport.digest },
-    { namespace, algorithm: 'sha256', digest: `0x${'f'.repeat(64)}` },
-  ],
+    { namespace, algorithm: "sha256", digest: validExport.digest },
+    { namespace, algorithm: "sha256", digest: `0x${"f".repeat(64)}` }
+  ]
 });
 await makeReceipt({
-  name: 'decision-expires-first',
+  name: "decision-expires-first",
   artifact: validExport,
-  expiresAt: validExport.validUntil + 600,
+  expiresAt: validExport.validUntil + 600
 });
-
-await writeJson('calldata-fixtures.json', {
-  schema: 'thoughtproof.sentinel-subject.calldata-keccak-fixtures.v1',
+await writeJson("calldata-fixtures.json", {
+  schema: "thoughtproof.sentinel-subject.calldata-keccak-fixtures.v1",
   cases: [
     {
-      name: 'non-empty calldata derivation',
+      name: "non-empty calldata derivation",
       data: calldata,
-      expectedCalldataHash: calldataHash,
+      expectedCalldataHash: calldataHash
     },
     {
-      name: 'empty calldata derivation',
+      name: "empty calldata derivation",
       data: emptyCalldata,
-      expectedCalldataHash: emptyCalldataHash,
-    },
-  ],
+      expectedCalldataHash: emptyCalldataHash
+    }
+  ]
 });
-await writeJson('subject-fixtures.json', {
-  schema: 'priorseal.thoughtproof-sentinel-subject-fixtures.v1',
+await writeJson("subject-fixtures.json", {
+  schema: "priorseal.thoughtproof-sentinel-subject-fixtures.v1",
   cases: [
     {
-      name: 'non-exact-call intent requires the PriorSeal exact-call profile',
+      name: "non-exact-call intent requires the PriorSeal exact-call profile",
       canonical: JSON.parse(validExport.canonical),
       intent: {
         ...matchingReceipt.authorizationEvidence.authorization.intent,
-        schema: 'priorseal.intent.v1',
+        schema: "priorseal.intent.v1"
       },
-      expectedCode: 'PRIORSEAL_EXACT_CALL_REQUIRED',
-    },
-  ],
+      expectedCode: "PRIORSEAL_EXACT_CALL_REQUIRED"
+    }
+  ]
 });
-
 const keyDocument = {
-  schema: 'thoughtproof.keys.v1',
+  schema: "thoughtproof.keys.v1",
   keys: [
     {
       kid: decisionKeyId,
-      kty: 'OKP',
-      crv: 'Ed25519',
-      alg: 'EdDSA',
+      kty: "OKP",
+      crv: "Ed25519",
+      alg: "EdDSA",
       x: decisionJwk.x,
-      status: 'vector-only',
-      notBefore: new Date((signedAt - 60) * 1000).toISOString(),
-      notAfter: new Date((validUntil + 60) * 1000).toISOString(),
-    },
-  ],
+      status: "vector-only",
+      notBefore: new Date((signedAt - 60) * 1e3).toISOString(),
+      notAfter: new Date((validUntil + 60) * 1e3).toISOString()
+    }
+  ]
 };
-await writeJson('proposal-decision-keys.json', keyDocument);
-await writeJson('proposal-decision-keys-not-yet-valid.json', {
+await writeJson("proposal-decision-keys.json", keyDocument);
+await writeJson("proposal-decision-keys-not-yet-valid.json", {
   ...keyDocument,
   keys: keyDocument.keys.map((key) => ({
     ...key,
-    notBefore: new Date((signedAt + 60) * 1000).toISOString(),
-  })),
+    notBefore: new Date((signedAt + 60) * 1e3).toISOString()
+  }))
 });
-await writeJson('proposal-decision-keys-expired.json', {
+await writeJson("proposal-decision-keys-expired.json", {
   ...keyDocument,
   keys: keyDocument.keys.map((key) => ({
     ...key,
-    notAfter: new Date((signedAt - 60) * 1000).toISOString(),
-  })),
+    notAfter: new Date((signedAt - 60) * 1e3).toISOString()
+  }))
 });
-
 const trustedKeys = {
-  schema: 'priorseal.keys.v1',
+  schema: "priorseal.keys.v1",
   issuer,
   keys: [
     {
       issuer,
       keyId: issuerKeyId,
-      algorithm: 'Ed25519',
+      algorithm: "Ed25519",
       publicKey: issuerPublicKeyPem,
-      status: 'active',
+      status: "active",
       validFrom: null,
-      validUntil: null,
-    },
-  ],
+      validUntil: null
+    }
+  ]
 };
-await writeJson('priorseal-trusted-issuer-keys.json', trustedKeys);
-
+await writeJson("priorseal-trusted-issuer-keys.json", trustedKeys);
 const expected = {
-  schema: 'priorseal.thoughtproof-sentinel-paired-fixture.v2',
-  status: 'CONTRACT_PROPOSAL_VECTORS',
-  vectorAuthority: 'YuTao Peng contract proposal only; not ThoughtProof',
+  schema: "priorseal.thoughtproof-sentinel-paired-fixture.v2",
+  status: "CONTRACT_PROPOSAL_VECTORS",
+  vectorAuthority: "YuTao Peng contract proposal only; not ThoughtProof",
   exportSchema: exportDomain,
-  artifactSchema: 'sentinel.verdict.canonical.v1',
+  artifactSchema: "sentinel.verdict.canonical.v1",
   exportDomain,
   namespace,
-  algorithm: 'sha256',
+  algorithm: "sha256",
   subjectSchema,
-  calldataFixtures: 'calldata-fixtures.json',
-  subjectFixtures: 'subject-fixtures.json',
-  amountBinding: 'OUTSIDE_M2_SUBJECT_BINDING',
+  calldataFixtures: "calldata-fixtures.json",
+  subjectFixtures: "subject-fixtures.json",
+  amountBinding: "OUTSIDE_M2_SUBJECT_BINDING",
   nonceSemantics: {
-    transactionNonce: 'decisionSubject.transactionNonce and intent.nonce are the EVM transaction nonce',
-    authorizationNonce: 'PriorSeal authorization replay protection only',
+    transactionNonce: "decisionSubject.transactionNonce and intent.nonce are the EVM transaction nonce",
+    authorizationNonce: "PriorSeal authorization replay protection only"
   },
   trustedThoughtProofKeys: [
     {
       kid: decisionKeyId,
       x: decisionJwk.x,
-      use: 'vector-only',
-    },
+      use: "vector-only"
+    }
   ],
   priorSeal: {
     issuer,
     keyId: issuerKeyId,
     publicKeySpkiSha256: issuerPublicKeyFingerprint,
-    receiptSchema: 'priorseal.execution-receipt.v3',
-    intentSchema: 'priorseal.intent.v2',
-    executionProfile: 'priorseal.execution-profile.exact-call.v1',
+    receiptSchema: "priorseal.execution-receipt.v3",
+    intentSchema: "priorseal.intent.v2",
+    executionProfile: "priorseal.execution-profile.exact-call.v1"
   },
   effectMap: {
-    ALLOW: 'RECOMMEND',
-    BLOCK: 'DO_NOT_RECOMMEND',
-    UNCERTAIN: 'REVIEW_REQUIRED',
+    ALLOW: "RECOMMEND",
+    BLOCK: "DO_NOT_RECOMMEND",
+    UNCERTAIN: "REVIEW_REQUIRED"
   },
   cases: [
     {
-      name: 'M2 exact-call matching pair',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-matching.json',
+      name: "M2 exact-call matching pair",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-matching.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_COMMITMENT_VERIFIED',
-      expectedSubjectBindingCode: 'DECISION_SUBJECT_VERIFIED',
+      expectedCode: "DECISION_COMMITMENT_VERIFIED",
+      expectedSubjectBindingCode: "DECISION_SUBJECT_VERIFIED"
     },
     {
-      name: 'intent amount is outside M2 subject binding',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-amount-outside-m2-binding.json',
+      name: "intent amount is outside M2 subject binding",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-amount-outside-m2-binding.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_COMMITMENT_VERIFIED',
-      expectedSubjectBindingCode: 'DECISION_SUBJECT_VERIFIED',
+      expectedCode: "DECISION_COMMITMENT_VERIFIED",
+      expectedSubjectBindingCode: "DECISION_SUBJECT_VERIFIED"
     },
     {
-      name: 'proposal vector kid rejected without explicit allowance',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-matching.json',
+      name: "proposal vector kid rejected without explicit allowance",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-matching.json",
       allowVectorOnly: false,
-      expectedCode: 'DECISION_SIGNER_UNTRUSTED',
+      expectedCode: "DECISION_SIGNER_UNTRUSTED"
     },
     {
-      name: 'signing key not yet valid at export signedAt',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-matching.json',
-      keyDocument: 'proposal-decision-keys-not-yet-valid.json',
+      name: "signing key not yet valid at export signedAt",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-matching.json",
+      keyDocument: "proposal-decision-keys-not-yet-valid.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SIGNER_UNTRUSTED',
+      expectedCode: "DECISION_SIGNER_UNTRUSTED"
     },
     {
-      name: 'signing key expired before export signedAt',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-matching.json',
-      keyDocument: 'proposal-decision-keys-expired.json',
+      name: "signing key expired before export signedAt",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-matching.json",
+      keyDocument: "proposal-decision-keys-expired.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SIGNER_UNTRUSTED',
+      expectedCode: "DECISION_SIGNER_UNTRUSTED"
     },
     {
-      name: 'missing signed export',
+      name: "missing signed export",
       export: null,
-      receipt: 'priorseal-receipt-matching.json',
+      receipt: "priorseal-receipt-matching.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_EXPORT_MISSING',
+      expectedCode: "DECISION_EXPORT_MISSING"
     },
     {
-      name: 'invalid signed export envelope',
-      export: 'export-invalid.json',
-      receipt: 'priorseal-receipt-matching.json',
+      name: "invalid signed export envelope",
+      export: "export-invalid.json",
+      receipt: "priorseal-receipt-matching.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_EXPORT_INVALID',
+      expectedCode: "DECISION_EXPORT_INVALID"
     },
     {
-      name: 'tampered export signature',
-      export: 'export-tampered-signature.json',
-      receipt: 'priorseal-receipt-matching.json',
+      name: "tampered export signature",
+      export: "export-tampered-signature.json",
+      receipt: "priorseal-receipt-matching.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SIGNATURE_INVALID',
+      expectedCode: "DECISION_SIGNATURE_INVALID"
     },
     {
-      name: 'M1 artifact without M2 subject',
-      export: 'export-missing-subject.json',
-      receipt: 'priorseal-receipt-missing-subject.json',
+      name: "M1 artifact without M2 subject",
+      export: "export-missing-subject.json",
+      receipt: "priorseal-receipt-missing-subject.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_MISSING',
+      expectedCode: "DECISION_SUBJECT_MISSING"
     },
     {
-      name: 'subject contains authorization-only field',
-      export: 'export-extra-field.json',
-      receipt: 'priorseal-receipt-extra-field.json',
+      name: "subject contains authorization-only field",
+      export: "export-extra-field.json",
+      receipt: "priorseal-receipt-extra-field.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_INVALID',
+      expectedCode: "DECISION_SUBJECT_INVALID"
     },
     {
-      name: 'unsupported subject schema',
-      export: 'export-wrong-subject-schema.json',
-      receipt: 'priorseal-receipt-wrong-subject-schema.json',
+      name: "unsupported subject schema",
+      export: "export-wrong-subject-schema.json",
+      receipt: "priorseal-receipt-wrong-subject-schema.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_INVALID',
+      expectedCode: "DECISION_SUBJECT_INVALID"
     },
     {
-      name: 'uppercase subject address is non-canonical',
-      export: 'export-uppercase-address.json',
-      receipt: 'priorseal-receipt-uppercase-address.json',
+      name: "uppercase subject address is non-canonical",
+      export: "export-uppercase-address.json",
+      receipt: "priorseal-receipt-uppercase-address.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_INVALID',
+      expectedCode: "DECISION_SUBJECT_INVALID"
     },
     {
-      name: 'uppercase subject hash is non-canonical',
-      export: 'export-uppercase-hash.json',
-      receipt: 'priorseal-receipt-uppercase-hash.json',
+      name: "uppercase subject hash is non-canonical",
+      export: "export-uppercase-hash.json",
+      receipt: "priorseal-receipt-uppercase-hash.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_INVALID',
+      expectedCode: "DECISION_SUBJECT_INVALID"
     },
     {
-      name: 'leading-zero subject uint is non-canonical',
-      export: 'export-leading-zero-uint.json',
-      receipt: 'priorseal-receipt-leading-zero-uint.json',
+      name: "leading-zero subject uint is non-canonical",
+      export: "export-leading-zero-uint.json",
+      receipt: "priorseal-receipt-leading-zero-uint.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_INVALID',
+      expectedCode: "DECISION_SUBJECT_INVALID"
     },
     {
-      name: 'zero chainId is invalid',
-      export: 'export-zero-chain-id.json',
-      receipt: 'priorseal-receipt-zero-chain-id.json',
+      name: "zero chainId is invalid",
+      export: "export-zero-chain-id.json",
+      receipt: "priorseal-receipt-zero-chain-id.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_INVALID',
+      expectedCode: "DECISION_SUBJECT_INVALID"
     },
     {
-      name: 'single missing subject field is invalid',
-      export: 'export-missing-field.json',
-      receipt: 'priorseal-receipt-missing-field.json',
+      name: "single missing subject field is invalid",
+      export: "export-missing-field.json",
+      receipt: "priorseal-receipt-missing-field.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_INVALID',
+      expectedCode: "DECISION_SUBJECT_INVALID"
     },
     {
-      name: 'string PriorSeal intent chainId is rejected without coercion',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-string-chain-id.json',
+      name: "string PriorSeal intent chainId is rejected without coercion",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-string-chain-id.json",
       allowVectorOnly: true,
-      expectedCode: 'PRIORSEAL_INVALID_AUTHORIZATION',
+      expectedCode: "PRIORSEAL_INVALID_AUTHORIZATION"
     },
     {
-      name: 'chain mismatch',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-chain-mismatch.json',
+      name: "chain mismatch",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-chain-mismatch.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_CHAIN_MISMATCH',
+      expectedCode: "DECISION_SUBJECT_CHAIN_MISMATCH"
     },
     {
-      name: 'executor mismatch',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-executor-mismatch.json',
+      name: "executor mismatch",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-executor-mismatch.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_EXECUTOR_MISMATCH',
+      expectedCode: "DECISION_SUBJECT_EXECUTOR_MISMATCH"
     },
     {
-      name: 'call target mismatch',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-target-mismatch.json',
+      name: "call target mismatch",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-target-mismatch.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_TARGET_MISMATCH',
+      expectedCode: "DECISION_SUBJECT_TARGET_MISMATCH"
     },
     {
-      name: 'transaction nonce mismatch',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-nonce-mismatch.json',
+      name: "transaction nonce mismatch",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-nonce-mismatch.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_NONCE_MISMATCH',
+      expectedCode: "DECISION_SUBJECT_NONCE_MISMATCH"
     },
     {
-      name: 'transaction value mismatch',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-value-mismatch.json',
+      name: "transaction value mismatch",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-value-mismatch.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_VALUE_MISMATCH',
+      expectedCode: "DECISION_SUBJECT_VALUE_MISMATCH"
     },
     {
-      name: 'calldata hash mismatch',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-calldata-mismatch.json',
+      name: "calldata hash mismatch",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-calldata-mismatch.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_SUBJECT_CALLDATA_MISMATCH',
+      expectedCode: "DECISION_SUBJECT_CALLDATA_MISMATCH"
     },
     {
-      name: 'wrong decision commitment',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-wrong-commitment.json',
+      name: "wrong decision commitment",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-wrong-commitment.json",
       allowVectorOnly: true,
-      expectedCode: 'CONTEXT_COMMITMENT_DIGEST_MISMATCH',
+      expectedCode: "CONTEXT_COMMITMENT_DIGEST_MISMATCH"
     },
     {
-      name: 'ambiguous decision commitment',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-ambiguous-commitment.json',
+      name: "ambiguous decision commitment",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-ambiguous-commitment.json",
       allowVectorOnly: true,
-      expectedCode: 'CONTEXT_COMMITMENT_AMBIGUOUS',
+      expectedCode: "CONTEXT_COMMITMENT_AMBIGUOUS"
     },
     {
-      name: 'decision expires before authorization',
-      export: 'export-valid.json',
-      receipt: 'priorseal-receipt-decision-expires-first.json',
+      name: "decision expires before authorization",
+      export: "export-valid.json",
+      receipt: "priorseal-receipt-decision-expires-first.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_EXPIRES_BEFORE_AUTHORIZATION',
+      expectedCode: "DECISION_EXPIRES_BEFORE_AUTHORIZATION"
     },
     {
-      name: 'unmapped advisory decision effect',
-      export: 'export-effect-unmapped.json',
-      receipt: 'priorseal-receipt-effect-unmapped.json',
+      name: "unmapped advisory decision effect",
+      export: "export-effect-unmapped.json",
+      receipt: "priorseal-receipt-effect-unmapped.json",
       allowVectorOnly: true,
-      expectedCode: 'DECISION_EFFECT_UNMAPPED',
-    },
-  ],
+      expectedCode: "DECISION_EFFECT_UNMAPPED"
+    }
+  ]
 };
-await writeJson('expected.json', expected);
+await writeJson("expected.json", expected);
