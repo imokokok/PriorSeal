@@ -1,7 +1,8 @@
 // Generated from check-typescript-policy.mts by npm run core:build. Do not edit directly.
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const errors = [];
 const reviewedJavaScriptTools = /* @__PURE__ */ new Set();
@@ -78,6 +79,20 @@ for (const [reviewed, description] of [
     else if (path.endsWith(".mjs") && existsSync(path.replace(/\.mjs$/, ".mts"))) {
       errors.push(`${exception}: remove stale JavaScript ${description} exception after TypeScript migration`);
     }
+  }
+}
+for (const directory of ["src", "sdk/src", "web/src", "scripts", "sdk/scripts", "examples", "test"]) {
+  for (const path of files(join(projectRoot, directory))) {
+    let inspect = function(node) {
+      if (node.kind === ts.SyntaxKind.AnyKeyword) {
+        const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+        errors.push(`${label(path)}:${line + 1}: authored TypeScript must not use explicit any`);
+      }
+      ts.forEachChild(node, inspect);
+    };
+    if (!/\.(?:ts|tsx|mts)$/.test(path)) continue;
+    const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+    inspect(source);
   }
 }
 if (errors.length) {

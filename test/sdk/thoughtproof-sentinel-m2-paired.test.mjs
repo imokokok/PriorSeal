@@ -69,7 +69,7 @@ test("M2 refuses string chain IDs instead of coercing them", () => {
   );
   assert.throws(
     () => buildIntent(intentInput),
-    (error) => error.code === "INVALID_CHAIN_ID"
+    (error) => typeof error === "object" && error !== null && "code" in error && error.code === "INVALID_CHAIN_ID"
   );
   assert.throws(
     () => buildExactCallIntent({

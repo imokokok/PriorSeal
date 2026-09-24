@@ -8,7 +8,14 @@ import {
 } from '../../examples/thoughtproof-sentinel-paired-v1/verify.reference.mjs';
 
 const fixtureUrl = new URL('../../examples/thoughtproof-sentinel-paired-v1/', import.meta.url);
-const readJson = (name: string): any => JSON.parse(readFileSync(new URL(name, fixtureUrl), 'utf8'));
+type FixtureFiles = {
+  'export-valid.json': typeof import('../../examples/thoughtproof-sentinel-paired-v1/export-valid.json');
+  'export-prod-live.json': typeof import('../../examples/thoughtproof-sentinel-paired-v1/export-prod-live.json');
+  'thoughtproof-keys.json': typeof import('../../examples/thoughtproof-sentinel-paired-v1/thoughtproof-keys.json');
+  'expected.json': typeof import('../../examples/thoughtproof-sentinel-paired-v1/expected.json');
+};
+const readJson = <Name extends keyof FixtureFiles>(name: Name): FixtureFiles[Name] =>
+  JSON.parse(readFileSync(new URL(name, fixtureUrl), 'utf8')) as FixtureFiles[Name];
 
 test('ThoughtProof Sentinel M1 paired vectors preserve issuer and subject-binding boundaries', async () => {
   const results = await runFixtureChecks({ log: () => {} });
@@ -23,7 +30,7 @@ test('ThoughtProof vector pin cannot be promoted to production by changing disco
   const artifact = readJson('export-valid.json');
   const keyDocument = readJson('thoughtproof-keys.json');
   const expected = readJson('expected.json');
-  keyDocument.keys.find((entry: any) => entry.kid === artifact.keyId).status = 'active';
+  keyDocument.keys.find((entry) => entry.kid === artifact.keyId)!.status = 'active';
   assert.equal(
     verifyThoughtProofExport(artifact, keyDocument, expected, { allowVectorOnly: true }).code,
     'DECISION_SIGNER_UNTRUSTED',
@@ -34,7 +41,9 @@ test('retired production kid remains verifiable for an artifact signed in its wi
   const artifact = readJson('export-prod-live.json');
   const keyDocument = readJson('thoughtproof-keys.json');
   const expected = readJson('expected.json');
-  const key = keyDocument.keys.find((entry: any) => entry.kid === artifact.keyId);
+  const key = keyDocument.keys.find((entry) => entry.kid === artifact.keyId)! as {
+    status: string; notAfter: string | null;
+  };
   key.status = 'retired';
   key.notAfter = new Date((artifact.signedAt + 1) * 1000).toISOString();
   assert.equal(verifyThoughtProofExport(artifact, keyDocument, expected).code, 'OK');

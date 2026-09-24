@@ -117,7 +117,7 @@ function verifyThoughtProofExport(artifact, keyDocument, expected, { allowVector
     "signedAt",
     "signature"
   ];
-  if (required.some((field) => artifact[field] === void 0 || artifact[field] === null)) {
+  if (required.some((field) => artifact[field] == null)) {
     return fail("DECISION_EXPORT_INVALID", "required export field is missing");
   }
   if (artifact.artifactSchema !== expected.artifactSchema || artifact.alg !== "Ed25519") {
@@ -154,7 +154,7 @@ function verifyThoughtProofExport(artifact, keyDocument, expected, { allowVector
   } catch {
     return fail("DECISION_EXPORT_INVALID", "transported canonical string is not JSON");
   }
-  if (canonical.artifactSchema !== artifact.artifactSchema || canonical.verificationId !== artifact.verificationId) {
+  if (!isRecord(canonical) || typeof canonical.verdict !== "string" || canonical.artifactSchema !== artifact.artifactSchema || canonical.verificationId !== artifact.verificationId) {
     return fail("DECISION_EXPORT_INVALID", "outer and canonical identifiers disagree");
   }
   return { ok: true, code: "OK", artifact, canonical, keyStatus: resolved.entry.status };
@@ -166,12 +166,12 @@ function isCanonicalUint(value) {
   return typeof value === "string" && /^(0|[1-9][0-9]*)$/.test(value);
 }
 function verifyExactCallDecisionSubject(canonical, intent, expected) {
-  const subject = canonical?.decisionSubject;
+  const subject = isRecord(canonical) ? canonical.decisionSubject : void 0;
   if (subject === void 0) return fail("DECISION_SUBJECT_MISSING");
-  if (!isRecord(subject) || Object.keys(subject).length !== SUBJECT_FIELDS.length || !Object.keys(subject).every((field) => SUBJECT_FIELDS.includes(field)) || subject.schema !== expected.subjectSchema || subject.kind !== "EVM_EXACT_CALL" || !Number.isSafeInteger(subject.chainId) || subject.chainId < 1 || !isCanonicalAddress(subject.executor) || !isCanonicalAddress(subject.callTarget) || !isCanonicalUint(subject.transactionNonce) || !isCanonicalUint(subject.transactionValue) || typeof subject.calldataHash !== "string" || !/^0x[0-9a-f]{64}$/.test(subject.calldataHash)) {
+  if (!isRecord(subject) || Object.keys(subject).length !== SUBJECT_FIELDS.length || !Object.keys(subject).every((field) => SUBJECT_FIELDS.includes(field)) || subject.schema !== expected.subjectSchema || subject.kind !== "EVM_EXACT_CALL" || typeof subject.chainId !== "number" || !Number.isSafeInteger(subject.chainId) || subject.chainId < 1 || !isCanonicalAddress(subject.executor) || !isCanonicalAddress(subject.callTarget) || !isCanonicalUint(subject.transactionNonce) || !isCanonicalUint(subject.transactionValue) || typeof subject.calldataHash !== "string" || !/^0x[0-9a-f]{64}$/.test(subject.calldataHash)) {
     return fail("DECISION_SUBJECT_INVALID");
   }
-  if (!isRecord(intent) || intent?.schema !== expected.priorSeal.intentSchema || intent?.executionProfile !== expected.priorSeal.executionProfile || intent?.action !== "CONTRACT_CALL" || !Number.isSafeInteger(intent.chainId) || intent.chainId < 1) {
+  if (!isRecord(intent) || intent.schema !== expected.priorSeal.intentSchema || intent.executionProfile !== expected.priorSeal.executionProfile || intent.action !== "CONTRACT_CALL" || typeof intent.chainId !== "number" || !Number.isSafeInteger(intent.chainId) || intent.chainId < 1) {
     return fail("PRIORSEAL_EXACT_CALL_REQUIRED");
   }
   if (subject.chainId !== intent.chainId) return fail("DECISION_SUBJECT_CHAIN_MISMATCH");
@@ -196,6 +196,7 @@ async function verifyM2Pair({
 }) {
   const decision = verifyThoughtProofExport(artifact, keyDocument, expected, { allowVectorOnly });
   if (!decision.ok) return decision;
+  if (!artifact) return fail("DECISION_EXPORT_MISSING");
   if (!isRecord(priorSealReceipt)) return fail("PRIORSEAL_RECEIPT_MISSING");
   const trustedKey = trustedIssuerKeys?.keys?.find(
     (entry) => entry.issuer === expected.priorSeal.issuer && entry.keyId === expected.priorSeal.keyId
@@ -214,8 +215,10 @@ async function verifyM2Pair({
   if (priorSealReceipt.schema !== expected.priorSeal.receiptSchema || priorSeal.executionStatus !== "CONFIRMED" || priorSeal.complianceStatus !== "COMPLIANT") {
     return fail("PRIORSEAL_RECEIPT_NOT_COMPLIANT");
   }
+  if (!priorSealReceipt.authorizationEvidence) return fail("PRIORSEAL_AUTHORIZATION_MISSING");
   const authorization = priorSealReceipt.authorizationEvidence.authorization;
   const intent = authorization.intent;
+  if (expected.algorithm !== "sha256" && expected.algorithm !== "keccak256") return fail("DECISION_COMMITMENT_ALGORITHM_INVALID");
   const commitment = matchUniqueContextCommitment(intent, {
     namespace: expected.namespace,
     algorithm: expected.algorithm,

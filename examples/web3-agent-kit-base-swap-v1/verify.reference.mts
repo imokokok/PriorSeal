@@ -14,8 +14,17 @@ import {
 } from 'viem';
 import { matchUniqueContextCommitment } from '../../sdk/dist/context-commitment.js';
 import { verifyReceiptLocally } from '../../sdk/dist/verifier.js';
+import type { ContextCommitment, Intent, KeyRegistry } from '../../sdk/dist/types.js';
 
 const directory = dirname(fileURLToPath(import.meta.url));
+type Bundle = typeof import('./evidence-bundle.json');
+type Roots = typeof import('./trust-roots.json');
+type Attestation = Bundle['insight']['sourceAttestation'];
+type InsightRegistry = Bundle['insight']['keyRegistry'];
+type Observation = Attestation['evidence']['providerObservations'][number];
+type Draft = Bundle['transactionDraft'];
+type GovernorPolicy = Bundle['governor']['policy'];
+type GovernorDecision = Bundle['governor']['decision'];
 const SWAP_ABI = [{
   type: 'function',
   name: 'swapExactETHForTokens',
@@ -66,7 +75,7 @@ const INSIGHT_UINT_FIELDS = [
   'sourceGroupCount', 'crossProviderAgreementBps', 'maxStablecoinDepegBps',
   'maxDataAgeSeconds', 'recommendedMaxPositionUsd', 'validUntil', 'checkedAt',
   'schemaVersion', 'requiredSourceGroupCount',
-];
+] as const;
 const CANONICAL_REQUEST_DOMAIN = {
   name: 'Insight Canonical Pre-Trade Request',
   version: '1',
@@ -101,32 +110,32 @@ class VerificationFailure extends Error {
   }
 }
 
-function readJson(name: any) {
-  return JSON.parse(readFileSync(resolve(directory, name), 'utf8'));
+function readJson<T>(name: string): T {
+  return JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as T;
 }
 
-function requireClaim(condition: unknown, code: string, detail?: string) {
+function requireClaim(condition: unknown, code: string, detail?: string): asserts condition {
   if (!condition) throw new VerificationFailure(code, detail);
 }
 
-function canonicalize(value: any): string {
+function canonicalize(value: unknown): string {
   if (value === undefined) throw new TypeError('undefined is not canonical JSON');
   if (typeof value === 'number' && !Number.isFinite(value)) throw new TypeError('non-finite number is not canonical JSON');
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`;
-  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalize(value[key])}`).join(',')}}`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalize((value as Record<string, unknown>)[key])}`).join(',')}}`;
 }
 
-function sha256(value: any) {
+function sha256(value: string | Buffer) {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function sha256Canonical(value: any) {
+function sha256Canonical(value: unknown) {
   return `0x${sha256(canonicalize(value))}`;
 }
 
-function insightMessage(data: any) {
-  const message = { ...data };
+function insightMessage(data: Attestation['data']) {
+  const message: Record<string, string | number | bigint> = { ...data };
   for (const field of INSIGHT_UINT_FIELDS) {
     requireClaim(Number.isSafeInteger(data?.[field]) && data[field] >= 0, 'INSIGHT_MALFORMED', `${field} must be a non-negative safe integer`);
     message[field] = BigInt(data[field]);
@@ -134,8 +143,8 @@ function insightMessage(data: any) {
   return message;
 }
 
-function observationsHash(observations: any) {
-  const hashes = observations.map((entry: any) => keccak256(encodeAbiParameters(OBSERVATION_ABI, [
+function observationsHash(observations: Observation[]) {
+  const hashes = observations.map((entry) => keccak256(encodeAbiParameters(OBSERVATION_ABI, [
     entry.provider,
     entry.feedId,
     BigInt(entry.value),
@@ -147,21 +156,21 @@ function observationsHash(observations: any) {
   return hashes.length ? keccak256(concat(hashes)) : keccak256('0x');
 }
 
-function agreementBps(observations: any) {
-  const included = observations.filter((entry: any) => entry.included).map((entry: any) => Number(entry.value));
+function agreementBps(observations: Observation[]) {
+  const included = observations.filter((entry) => entry.included).map((entry) => Number(entry.value));
   if (!included.length) return 0;
   const max = Math.max(...included);
   const min = Math.min(...included);
   return Math.round((max > 0 ? 1 - (max - min) / max : 1) * 10_000);
 }
 
-async function verifyInsight(attestation: any, registry: any, roots: any, decisionTime: any, executionTime: any) {
+async function verifyInsight(attestation: Attestation, registry: InsightRegistry, roots: Roots, decisionTime: number, executionTime: number) {
   requireClaim(attestation.schemaVersion === 3 && attestation.data?.schemaVersion === 3, 'INSIGHT_SCHEMA_UNSUPPORTED');
   requireClaim(attestation.attester.toLowerCase() === roots.insight.attester.toLowerCase(), 'INSIGHT_SIGNER_UNTRUSTED');
-  const key = registry.public_keys.find((entry: any) => entry.key_id === roots.insight.historicalKeyId);
+  const key = registry.public_keys.find((entry) => entry.key_id === roots.insight.historicalKeyId);
   requireClaim(key && key.public_key.toLowerCase() === attestation.attester.toLowerCase(), 'INSIGHT_KEY_UNKNOWN');
   requireClaim(key.role !== 'sample', 'INSIGHT_SAMPLE_KEY_REJECTED');
-  requireClaim(!key.revoked && !registry.revoked_keys.some((entry: any) => entry.key_id === key.key_id), 'INSIGHT_KEY_REVOKED');
+  requireClaim(!key.revoked && !(registry.revoked_keys as Array<{ key_id: string }>).some((entry) => entry.key_id === key.key_id), 'INSIGHT_KEY_REVOKED');
   const checkedAtMs = attestation.data.checkedAt * 1_000;
   requireClaim(checkedAtMs >= Date.parse(key.validFrom), 'INSIGHT_KEY_OUTSIDE_WINDOW');
   requireClaim(key.validUntil === null || checkedAtMs < Date.parse(key.validUntil), 'INSIGHT_KEY_OUTSIDE_WINDOW');
@@ -174,8 +183,8 @@ async function verifyInsight(attestation: any, registry: any, roots: any, decisi
   requireClaim(hashTypedData(typedData as Parameters<typeof hashTypedData>[0]) === attestation.uid, 'INSIGHT_UID_MISMATCH');
   requireClaim(await verifyTypedData({
     ...(typedData as unknown as Parameters<typeof verifyTypedData>[0]),
-    address: attestation.attester,
-    signature: attestation.signature,
+    address: attestation.attester as `0x${string}`,
+    signature: attestation.signature as `0x${string}`,
   }), 'INSIGHT_SIGNATURE_INVALID');
   const expectedRequestHash = hashTypedData({
     domain: CANONICAL_REQUEST_DOMAIN,
@@ -192,12 +201,12 @@ async function verifyInsight(attestation: any, registry: any, roots: any, decisi
   requireClaim(expectedRequestHash === attestation.data.requestHash, 'INSIGHT_REQUEST_HASH_MISMATCH');
   const observations = attestation.evidence?.providerObservations ?? [];
   requireClaim(observationsHash(observations) === attestation.data.providerObservationsHash, 'INSIGHT_OBSERVATIONS_HASH_MISMATCH');
-  requireClaim(observations.filter((entry: any) => entry.included).length === attestation.data.participantCount, 'INSIGHT_PARTICIPANT_COUNT_MISMATCH');
+  requireClaim(observations.filter((entry) => entry.included).length === attestation.data.participantCount, 'INSIGHT_PARTICIPANT_COUNT_MISMATCH');
   requireClaim(agreementBps(observations) === attestation.data.crossProviderAgreementBps, 'INSIGHT_AGREEMENT_MISMATCH');
   const groups = new Set(observations
-    .filter((entry: any) => entry.included)
-    .map((entry: any) => attestation.evidence.providerGroups[entry.provider])
-    .filter((group: any) => group && group !== 'derived'));
+    .filter((entry) => entry.included)
+    .map((entry) => (attestation.evidence.providerGroups as Record<string, string>)[entry.provider])
+    .filter((group) => group && group !== 'derived'));
   requireClaim(groups.size === attestation.data.sourceGroupCount, 'INSIGHT_SOURCE_GROUP_COUNT_MISMATCH');
   requireClaim(attestation.data.participantCount >= attestation.data.requiredParticipantCount, 'INSIGHT_COVERAGE_GATE_FAILED');
   requireClaim(attestation.data.sourceGroupCount >= attestation.data.requiredSourceGroupCount, 'INSIGHT_INDEPENDENCE_GATE_FAILED');
@@ -215,17 +224,17 @@ async function verifyInsight(attestation: any, registry: any, roots: any, decisi
   };
 }
 
-function registrySnapshotTime(registry: any) {
+function registrySnapshotTime(registry: InsightRegistry) {
   const successorTimes = registry.public_keys
-    .map((entry: any) => Date.parse(entry.validFrom) / 1_000)
+    .map((entry) => Date.parse(entry.validFrom) / 1_000)
     .filter(Number.isSafeInteger);
   return Math.max(...successorTimes);
 }
 
-function computePairCommitment(source: any, destination: any, maxSlippageBps: any) {
+function computePairCommitment(source: Attestation, destination: Attestation, maxSlippageBps: number) {
   return {
     namespace: 'insight.pretrade-pair.v1',
-    algorithm: 'keccak256',
+    algorithm: 'keccak256' as const,
     digest: keccak256(encodeAbiParameters([
       { type: 'bytes32', name: 'sourceUid' },
       { type: 'bytes32', name: 'destinationUid' },
@@ -233,16 +242,16 @@ function computePairCommitment(source: any, destination: any, maxSlippageBps: an
       { type: 'bytes32', name: 'destinationRequestHash' },
       { type: 'uint16', name: 'maxSlippageBps' },
     ], [
-      source.uid,
-      destination.uid,
-      source.data.requestHash,
-      destination.data.requestHash,
+      source.uid as `0x${string}`,
+      destination.uid as `0x${string}`,
+      source.data.requestHash as `0x${string}`,
+      destination.data.requestHash as `0x${string}`,
       maxSlippageBps,
     ])),
   };
 }
 
-function wakIntentId(draft: any) {
+function wakIntentId(draft: Draft) {
   return sha256(canonicalize({
     action: draft.action,
     amount_base_units: 0,
@@ -256,11 +265,11 @@ function wakIntentId(draft: any) {
   }));
 }
 
-function verifyDraft(draft: any) {
+function verifyDraft(draft: Draft) {
   requireClaim(draft.chain === 'base' && draft.chainId === 8453, 'DRAFT_CHAIN_MISMATCH');
-  requireClaim(keccak256(draft.data) === draft.calldataHash, 'DRAFT_CALLDATA_HASH_MISMATCH');
+  requireClaim(keccak256(draft.data as `0x${string}`) === draft.calldataHash, 'DRAFT_CALLDATA_HASH_MISMATCH');
   requireClaim(wakIntentId(draft) === draft.intentId, 'WAK_INTENT_ID_MISMATCH');
-  const decoded = decodeFunctionData({ abi: SWAP_ABI, data: draft.data });
+  const decoded = decodeFunctionData({ abi: SWAP_ABI, data: draft.data as `0x${string}` });
   requireClaim(decoded.functionName === 'swapExactETHForTokens', 'DRAFT_FUNCTION_MISMATCH');
   if (!decoded.args) throw new VerificationFailure('DRAFT_FUNCTION_MISMATCH');
   const [amountOutMin, path, recipient, deadline] = decoded.args;
@@ -268,13 +277,13 @@ function verifyDraft(draft: any) {
     throw new VerificationFailure('DRAFT_FUNCTION_MISMATCH');
   }
   requireClaim(String(amountOutMin) === draft.decodedCall.amountOutMin, 'DRAFT_AMOUNT_OUT_MIN_MISMATCH');
-  requireClaim(path.map((entry: any) => entry.toLowerCase()).join(':') === draft.decodedCall.path.join(':'), 'DRAFT_PATH_MISMATCH');
+  requireClaim(path.map((entry) => entry.toLowerCase()).join(':') === draft.decodedCall.path.join(':'), 'DRAFT_PATH_MISMATCH');
   requireClaim(recipient.toLowerCase() === draft.from && recipient.toLowerCase() === draft.decodedCall.recipient, 'DRAFT_RECIPIENT_MISMATCH');
   requireClaim(Number(deadline) === draft.decodedCall.deadline, 'DRAFT_DEADLINE_MISMATCH');
   return { functionName: decoded.functionName, amountOutMin: String(amountOutMin), deadline: Number(deadline) };
 }
 
-function evaluateGovernor(policy: any, decision: any, draft: any, source: any, destination: any, pairCommitment: any) {
+function evaluateGovernor(policy: GovernorPolicy, decision: GovernorDecision, draft: Draft, source: Attestation, destination: Attestation, pairCommitment: ContextCommitment) {
   requireClaim(decision.policyId === policy.policyId, 'GOVERNOR_POLICY_ID_MISMATCH');
   requireClaim(decision.policyDigest === sha256Canonical(policy), 'GOVERNOR_POLICY_DIGEST_MISMATCH');
   requireClaim(decision.intentId === draft.intentId, 'GOVERNOR_INTENT_MISMATCH');
@@ -315,28 +324,28 @@ function evaluateGovernor(policy: any, decision: any, draft: any, source: any, d
     calldataHash: draft.calldataHash,
     nativeValue: draft.value,
   })) {
-    requireClaim(String(decision.exactCall[field]).toLowerCase() === String(expected).toLowerCase(), `GOVERNOR_EXACT_CALL_${field.toUpperCase()}_MISMATCH`);
+    requireClaim(String((decision.exactCall as Record<string, unknown>)[field]).toLowerCase() === String(expected).toLowerCase(), `GOVERNOR_EXACT_CALL_${field.toUpperCase()}_MISMATCH`);
   }
   return { nativeAllowed, nativeReasons, insightEffect, finalDecision };
 }
 
-function keyFingerprint(publicKeyPem: any) {
+function keyFingerprint(publicKeyPem: string) {
   return sha256(createPublicKey(publicKeyPem).export({ type: 'spki', format: 'der' }));
 }
 
-function matchCommitment(intent: any, expected: any, code: any) {
-  const match = matchUniqueContextCommitment(intent, expected);
+function matchCommitment(intent: unknown, expected: ContextCommitment, code: string) {
+  const match = matchUniqueContextCommitment(intent as Intent, expected);
   requireClaim(match.matched, code, match.code);
 }
 
-export async function verifyEvidenceBundle(bundle: any, roots: any) {
+export async function verifyEvidenceBundle(bundle: Bundle, roots: Roots) {
   try {
     requireClaim(bundle.schema === 'web3-agent-kit.base-swap-evidence.v1', 'BUNDLE_SCHEMA_UNSUPPORTED');
     requireClaim(bundle.fixtureMode === 'SYNTHETIC_NO_BROADCAST', 'BUNDLE_MODE_INVALID');
     const { bundleHash, ...unsigned } = bundle;
     requireClaim(bundleHash === sha256Canonical(unsigned), 'BUNDLE_HASH_MISMATCH');
     for (const [name, expected] of Object.entries(roots.expectedSourceCommits)) {
-      requireClaim(bundle.sources[name].commit === expected, 'SOURCE_COMMIT_MISMATCH', name);
+      requireClaim((bundle.sources as Record<string, { commit: string }>)[name]?.commit === expected, 'SOURCE_COMMIT_MISMATCH', name);
     }
     const draftResult = verifyDraft(bundle.transactionDraft);
     const receipt = bundle.priorSeal.receipt;
@@ -378,7 +387,7 @@ export async function verifyEvidenceBundle(bundle: any, roots: any) {
     );
     const registry = bundle.priorSeal.keyRegistry;
     requireClaim(registry.issuer === roots.priorSeal.issuer, 'PRIORSEAL_ISSUER_UNTRUSTED');
-    const keys = registry.keys.filter((entry: any) => entry.keyId === roots.priorSeal.keyId && entry.issuer === roots.priorSeal.issuer);
+    const keys = registry.keys.filter((entry) => entry.keyId === roots.priorSeal.keyId && entry.issuer === roots.priorSeal.issuer);
     requireClaim(keys.length === 1, keys.length ? 'PRIORSEAL_KEY_AMBIGUOUS' : 'PRIORSEAL_KEY_UNKNOWN');
     const key = keys[0];
     requireClaim(keyFingerprint(key.publicKey) === roots.priorSeal.publicKeySpkiSha256, 'PRIORSEAL_KEY_FINGERPRINT_MISMATCH');
@@ -399,7 +408,7 @@ export async function verifyEvidenceBundle(bundle: any, roots: any) {
       transactionValue: bundle.transactionDraft.value,
       sender: bundle.transactionDraft.from,
     })) {
-      requireClaim(String(intent[field]).toLowerCase() === String(expected).toLowerCase(), `PRIORSEAL_INTENT_${field.toUpperCase()}_MISMATCH`);
+      requireClaim(String((intent as Record<string, unknown>)[field]).toLowerCase() === String(expected).toLowerCase(), `PRIORSEAL_INTENT_${field.toUpperCase()}_MISMATCH`);
     }
     matchCommitment(intent, pairCommitment, 'INSIGHT_CONTEXT_COMMITMENT_MISMATCH');
     matchCommitment(intent, {
@@ -482,7 +491,7 @@ export async function verifyEvidenceBundle(bundle: any, roots: any) {
   }
 }
 
-function withRehashedMutation(bundle: any, mutate: any) {
+function withRehashedMutation(bundle: Bundle, mutate: (copy: Bundle) => void) {
   const clone = structuredClone(bundle);
   mutate(clone);
   const { bundleHash: _ignored, ...unsigned } = clone;
@@ -491,36 +500,36 @@ function withRehashedMutation(bundle: any, mutate: any) {
 }
 
 export async function runFixtureChecks() {
-  const bundle = readJson('evidence-bundle.json');
-  const roots = readJson('trust-roots.json');
+  const bundle = readJson<Bundle>('evidence-bundle.json');
+  const roots = readJson<Roots>('trust-roots.json');
   const baseline = await verifyEvidenceBundle(bundle, roots);
   const cases = [
     { name: 'complete exported evidence', expected: 'OK', result: baseline },
     {
       name: 'tampered governor decision',
       expected: 'GOVERNOR_DECISION_MISMATCH',
-      result: await verifyEvidenceBundle(withRehashedMutation(bundle, (copy: any) => {
+      result: await verifyEvidenceBundle(withRehashedMutation(bundle, (copy) => {
         copy.governor.decision.decision = 'ALLOW_EXECUTION';
       }), roots),
     },
     {
       name: 'tampered raw calldata',
       expected: 'DRAFT_CALLDATA_HASH_MISMATCH',
-      result: await verifyEvidenceBundle(withRehashedMutation(bundle, (copy: any) => {
+      result: await verifyEvidenceBundle(withRehashedMutation(bundle, (copy) => {
         copy.transactionDraft.data = '0x1234';
       }), roots),
     },
     {
       name: 'historical Insight key revoked',
       expected: 'INSIGHT_KEY_REVOKED',
-      result: await verifyEvidenceBundle(withRehashedMutation(bundle, (copy: any) => {
+      result: await verifyEvidenceBundle(withRehashedMutation(bundle, (copy) => {
         copy.insight.keyRegistry.public_keys[0].revoked = true;
       }), roots),
     },
     {
       name: 'tampered observed execution',
       expected: 'PRIORSEAL_INVALID_SIGNATURE',
-      result: await verifyEvidenceBundle(withRehashedMutation(bundle, (copy: any) => {
+      result: await verifyEvidenceBundle(withRehashedMutation(bundle, (copy) => {
         copy.priorSeal.receipt.execution.calldataHash = `0x${'ff'.repeat(32)}`;
       }), roots),
     },

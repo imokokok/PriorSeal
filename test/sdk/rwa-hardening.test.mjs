@@ -79,8 +79,8 @@ test("completed replay rejects a different execution digest without resubmitting
   assert.equal(x.calls, 1);
 });
 test("reserve race rejects a different execution digest without submitting", async (t) => {
-  const x = await setup(t), stored = { authorizationId: x.input.authorizationId, transaction: x.f.transaction, executionDigest: "0x" + "00".repeat(32), status: "RESERVED" };
-  const attempts = { get: async () => null, reserve: async () => ({ claimed: false, attempt: stored }) };
+  const x = await setup(t), stored = { authorizationId: x.input.authorizationId, transaction: x.f.transaction, executionDigest: "0x" + "00".repeat(32), nonceKey: "test", status: "RESERVED", txHash: null, updatedAt: x.f.now };
+  const attempts = { ...x.attempts, get: async () => null, reserve: async () => ({ claimed: false, attempt: stored }) };
   await assert.rejects(executeRwaAuthorized(x.input, { ...x.deps, attempts }), /RWA_REPLAY_EVIDENCE_MISMATCH/);
   assert.equal(x.calls, 0);
 });
@@ -182,8 +182,9 @@ test("trust-key permutations and casing do not change v2 pair admission", async 
 for (const mode of ["reverted", "under-output", "wrong-receiver", "missing-transfers", "tamper", "missing-key"]) test("detailed receipt distinguishes " + mode, async (t) => {
   const x = await setup(t), observed = structuredClone(x.observed);
   if (mode === "reverted") observed.status = "REVERTED";
-  if (mode === "under-output") observed.transfers[1].amount = "1";
-  if (mode === "wrong-receiver") observed.transfers[1].recipient = x.f.transaction.from;
+  const transfers = observed.transfers;
+  if (mode === "under-output") transfers[1].amount = "1";
+  if (mode === "wrong-receiver") transfers[1].recipient = x.f.transaction.from;
   if (mode === "missing-transfers") delete observed.transfers;
   const receipt = x.receipt(observed);
   if (mode === "tamper") receipt.execution.nonce = "8";

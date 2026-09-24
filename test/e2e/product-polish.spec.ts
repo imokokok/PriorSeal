@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { generateKeyPairSync } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { buildReviewManifest } from '../../sdk/dist/verifier.js'
+import type { ReviewResult } from '../../sdk/dist/verifier.js'
 import { privateKeyToAccount } from 'viem/accounts'
 import { buildExactCallIntent } from '../../sdk/dist/index.js'
 import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildVerificationBundle, createMemoryStore } from '../../src/index.mjs'
@@ -9,6 +10,13 @@ import { signReceipt } from '../../src/domain/receipt.mjs'
 import { createJointReviewFixture } from '../helpers/joint-review-fixture.mjs'
 
 const caps = { schema: 'priorseal.capabilities.v1', issuer: 'fixture', audience: 'partner-deployment', executionProfiles: ['priorseal.execution-profile.exact-call.v1'], chains: [8453, 84532], authorizers: ['eip712'], proofMode: 'issuer', policyHash: `0x${'0'.repeat(64)}`, minConfirmations: 12, dependencies: { issuer: 'configured', timestamp: 'not_required', rpc: 'configured', storage: 'available' }, workflowReady: true, checkedAt: 1_800_000_000, archive: { enabled: true, retention: 'until_operator_deletion', scope: 'project_uploaded_evidence' } }
+declare global {
+  interface Window {
+    __walletCalls: string[]
+    __signFixture: (data: unknown) => Promise<string>
+    ethereum: { request: (input: { method: string; params?: unknown[] }) => Promise<unknown> }
+  }
+}
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { localStorage.clear(); localStorage.setItem('priorseal.storage-preference.v1', JSON.stringify({ choice: 'denied', updatedAt: Date.now() })) })
@@ -20,8 +28,8 @@ test('exact-call canonical preview uses SDK binding and resumes identical accept
   const contexts = [{ namespace: 'agent-call-envelope.v1', algorithm: 'sha256' as const, digest: `0x${'c'.repeat(64)}` }]
   const requests: { body: unknown; key: string }[] = []
   const signer = privateKeyToAccount(`0x${'3'.repeat(64)}`)
-  await page.exposeFunction('__signFixture', (data) => signer.signTypedData(data))
-  await page.addInitScript((address) => { (window as any).__walletCalls = []; (window as any).ethereum = { request: async ({ method, params }: { method: string; params: unknown[] }) => { (window as any).__walletCalls.push(method); return method === 'eth_requestAccounts' ? [address] : (window as any).__signFixture(JSON.parse(String(params[1]))) } } }, signer.address)
+  await page.exposeFunction('__signFixture', (data: unknown) => signer.signTypedData(data as Parameters<typeof signer.signTypedData>[0]))
+  await page.addInitScript((address) => { window.__walletCalls = []; window.ethereum = { request: async ({ method, params }) => { window.__walletCalls.push(method); return method === 'eth_requestAccounts' ? [address] : window.__signFixture(JSON.parse(String(params?.[1]))) } } }, signer.address)
   await page.route('**/v1/authorizations/prepare', async (route) => {
     const input = route.request().postDataJSON()
     expect(input.intent).toEqual(buildExactCallIntent({ transaction, intentId: input.intent.intentId, asset: 'eip155:84532/native', amount: '0', validUntil: input.intent.validUntil, constraints: { minConfirmations: 12 }, contextCommitments: contexts }))
@@ -32,17 +40,17 @@ test('exact-call canonical preview uses SDK binding and resumes identical accept
   await page.route('**/v1/authorizations', async (route) => {
     requests.push({ body: route.request().postDataJSON(), key: route.request().headers()['idempotency-key'] })
     if (requests.length === 1) await route.fulfill({ status: 503, json: { error: { message: 'Acceptance response temporarily unavailable' } } })
-    else await route.fulfill({ json: { authorization: requests[1].body, acceptance: { acceptedAt: Math.floor(Date.now() / 1000), status: 'ACCEPTED', authorizationId: (requests[1].body as any).authorizationId } } })
+    else await route.fulfill({ json: { authorization: requests[1].body, acceptance: { acceptedAt: Math.floor(Date.now() / 1000), status: 'ACCEPTED', authorizationId: (requests[1].body as { authorizationId: string }).authorizationId } } })
   })
   await page.goto('/app/intents/exact-call')
   await page.getByLabel('Transaction JSON', { exact: true }).fill(JSON.stringify(transaction))
   await page.getByLabel('Context commitments (optional)').fill(JSON.stringify(contexts))
   await page.getByRole('button', { name: 'Prepare canonical intent' }).click()
   await expect(page.getByRole('heading', { name: 'Review canonical authorization' })).toBeVisible()
-  expect(await page.evaluate(() => (window as any).__walletCalls)).toEqual(['eth_requestAccounts'])
+  expect(await page.evaluate(() => window.__walletCalls)).toEqual(['eth_requestAccounts'])
   await page.getByRole('button', { name: 'Confirm and sign authorization' }).click()
   await expect(page.getByText('Acceptance response temporarily unavailable', { exact: true })).toBeVisible()
-  expect(await page.evaluate(() => (window as any).__walletCalls)).toEqual(['eth_requestAccounts', 'eth_signTypedData_v4'])
+  expect(await page.evaluate(() => window.__walletCalls)).toEqual(['eth_requestAccounts', 'eth_signTypedData_v4'])
   const exported = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export recovery checkpoint' }).click()
   const checkpointFile = await (await exported).path()
@@ -53,7 +61,7 @@ test('exact-call canonical preview uses SDK binding and resumes identical accept
   await expect(page.getByRole('heading', { name: 'Authorization accepted' })).toBeVisible()
   await expect(page.getByText('Authorization window is not active', { exact: true })).toBeVisible()
   expect(requests[0]).toEqual(requests[1])
-  expect(await page.evaluate(() => (window as any).__walletCalls)).toEqual([])
+  expect(await page.evaluate(() => window.__walletCalls)).toEqual([])
 })
 
 test('unsupported exact-call workflow is rejected before any wallet request', async ({ page }) => {
@@ -144,7 +152,7 @@ test('missing timestamp configuration never appears ready and exact-call mobile 
 
 test('combined review preserves original bytes and keeps unsupported attachments explicitly partial', async ({ page }, testInfo) => {
   const { bundle, profile } = await nativeFixture()
-  const manifest = await buildReviewManifest({ bundle, attachments: [{ id: 'optional-note', role: 'partner.note', profile: 'partner.unknown.v1', rawJson: '{ "note": "not independently verified" }' }] })
+  const manifest = await buildReviewManifest({ bundle: bundle as Parameters<typeof buildReviewManifest>[0]['bundle'], attachments: [{ id: 'optional-note', role: 'partner.note', profile: 'partner.unknown.v1', rawJson: '{ "note": "not independently verified" }' }] })
   const raw = JSON.stringify(manifest, null, 4) + '\n'
   await page.goto('/app/verify')
   await page.getByLabel('Evidence JSON file').setInputFiles({ name: 'review.json', mimeType: 'application/json', buffer: Buffer.from(raw) })
@@ -193,10 +201,10 @@ test('v5 combined review requires independent protocol trust and exposes exact s
   const downloaded = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export review report' }).click()
   const download = await downloaded
-  const report = JSON.parse(await readFile((await download.path())!, 'utf8'))
+  const report = JSON.parse(await readFile((await download.path())!, 'utf8')) as { complete: boolean; review: ReviewResult }
   expect(report.complete).toBe(true)
-  expect(report.review.artifacts[2].protocol.registrySnapshotSha256).toBe(options.insightProtocolTrust.registrySnapshot.sha256)
-  expect(report.review.artifacts[2].protocol.registrySnapshotByteLength).toBe(options.insightProtocolTrust.registrySnapshot.byteLength)
+  expect(report.review.artifacts[2].protocol!.registrySnapshotSha256).toBe(options.insightProtocolTrust.registrySnapshot.sha256)
+  expect(report.review.artifacts[2].protocol!.registrySnapshotByteLength).toBe(options.insightProtocolTrust.registrySnapshot.byteLength)
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   await expect.poll(() => page.locator('#console-navigation').evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(0)
@@ -215,7 +223,7 @@ test('v5 combined review requires independent protocol trust and exposes exact s
 
 test('combined review exposes a cross-evidence mismatch without upgrading external decision use', async ({ page }) => {
   const fixture = await createJointReviewFixture()
-  const manifest = await buildReviewManifest({ bundle: fixture.bundle, attachments: fixture.attachments, expectedTxHash: `0x${'2'.repeat(64)}`, assembledAt: fixture.manifest.assembledAt })
+  const manifest = await buildReviewManifest({ bundle: fixture.bundle as Parameters<typeof buildReviewManifest>[0]['bundle'], attachments: fixture.attachments, expectedTxHash: `0x${'2'.repeat(64)}`, assembledAt: fixture.manifest.assembledAt })
   const key = fixture.options.trustedKeys
   const profile = { schema: 'priorseal.trust-profile.v1', name: 'Mismatch review', issuer: key.issuer, audience: fixture.options.expectedAudience, keys: [key], source: 'Independent synthetic test fixture', confirmedAt: 0, insightKeyRegistry: fixture.options.insightKeyRegistry, insightProtocolTrust: fixture.options.insightProtocolTrust }
   await page.route('**/.well-known/priorseal-keys.json', route => route.fulfill({ json: { schema: 'priorseal.keys.v1', issuer: key.issuer, keys: [] } }))
@@ -287,17 +295,17 @@ test('complete archive export follows a single snapshot and contains every match
   const exported = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export all matches with artifacts' }).click()
   const download = await exported
-  const report = JSON.parse(await readFile((await download.path())!, 'utf8'))
+  const report = JSON.parse(await readFile((await download.path())!, 'utf8')) as { complete: boolean; snapshot: number; entries: Array<{ artifact: { fixture: string } }> }
   expect(report.complete).toBe(true)
   expect(report.snapshot).toBe(3)
-  expect(report.entries.map((entry: any) => entry.artifact.fixture)).toEqual(ids)
+  expect(report.entries.map((entry) => entry.artifact.fixture)).toEqual(ids)
   expect(requestedCursors).toEqual(['', '', 'fixture-cursor'])
   expect(JSON.stringify(report)).not.toContain('fixture-token')
 })
 
 test('server typed-data substitution cannot reach the wallet signing request', async ({ page }) => {
   const account = privateKeyToAccount(`0x${'4'.repeat(64)}`)
-  await page.addInitScript((address) => { (window as any).__walletCalls = []; (window as any).ethereum = { request: async ({ method }: { method: string }) => { (window as any).__walletCalls.push(method); return [address] } } }, account.address)
+  await page.addInitScript((address) => { window.__walletCalls = []; window.ethereum = { request: async ({ method }) => { window.__walletCalls.push(method); return [address] } } }, account.address)
   await page.route('**/v1/authorizations/prepare', async (route) => {
     const authorization = buildAuthorization({ ...route.request().postDataJSON(), policyHash: caps.policyHash })
     const typedData = authorizationTypedData(authorization)
@@ -309,5 +317,5 @@ test('server typed-data substitution cannot reach the wallet signing request', a
   await page.getByRole('button', { name: 'Prepare canonical intent' }).click()
   await page.getByRole('button', { name: 'Confirm and sign authorization' }).click()
   await expect(page.getByText('Prepared authorization or wallet typed data is inconsistent', { exact: true })).toBeVisible()
-  expect(await page.evaluate(() => (window as any).__walletCalls)).toEqual(['eth_requestAccounts'])
+  expect(await page.evaluate(() => window.__walletCalls)).toEqual(['eth_requestAccounts'])
 })

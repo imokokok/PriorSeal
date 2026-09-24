@@ -32,5 +32,5 @@ test('Cloudflare rate limiter awaits the shared binding and fails closed', async
   assert.equal(await limiter.allow('principal-1'), true);
   assert.equal(await limiter.allow('principal-1'), false);
   assert.deepEqual(keys, ['principal-1', 'principal-1']);
-  await assert.rejects(() => createCloudflareRateLimiter({ async limit() { throw new Error('binding failed'); } }).allow('principal-1'), (error: any) => error.code === 'RATE_LIMITER_UNAVAILABLE');
+  await assert.rejects(() => createCloudflareRateLimiter({ async limit() { throw new Error('binding failed'); } }).allow('principal-1'), (error: unknown) => typeof error === 'object' && error !== null && 'code' in error && error.code === 'RATE_LIMITER_UNAVAILABLE');
 });

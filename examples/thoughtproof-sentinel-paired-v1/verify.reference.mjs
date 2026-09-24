@@ -106,7 +106,7 @@ function verifyThoughtProofExport(artifact, keyDocument, expected, { allowVector
     "signedAt",
     "signature"
   ];
-  if (required.some((field) => artifact[field] === void 0 || artifact[field] === null)) {
+  if (required.some((field) => artifact[field] == null)) {
     return fail("DECISION_EXPORT_INVALID", "required export field is missing");
   }
   if (artifact.artifactSchema !== expected.artifactSchema || artifact.alg !== "Ed25519") {
@@ -143,7 +143,7 @@ function verifyThoughtProofExport(artifact, keyDocument, expected, { allowVector
   } catch {
     return fail("DECISION_EXPORT_INVALID", "transported canonical string is not JSON");
   }
-  if (canonical.artifactSchema !== artifact.artifactSchema || canonical.verificationId !== artifact.verificationId) {
+  if (!isRecord(canonical) || typeof canonical.verdict !== "string" || canonical.artifactSchema !== artifact.artifactSchema || canonical.verificationId !== artifact.verificationId) {
     return fail("DECISION_EXPORT_INVALID", "outer and canonical identifiers disagree");
   }
   return { ok: true, code: "OK", artifact, canonical, keyStatus: resolved.entry.status };
@@ -155,6 +155,7 @@ function priorSealPublicKeyFingerprint(publicKeyPem) {
 async function verifyPair({ artifact, priorSealReceipt, keyDocument, trustedIssuerKeys, expected, allowVectorOnly = false }) {
   const decision = verifyThoughtProofExport(artifact, keyDocument, expected, { allowVectorOnly });
   if (!decision.ok) return decision;
+  if (!artifact) return fail("DECISION_EXPORT_MISSING");
   if (!isRecord(priorSealReceipt)) return fail("PRIORSEAL_RECEIPT_MISSING");
   const trustedKey = trustedIssuerKeys?.keys?.find(
     (entry) => entry.issuer === expected.priorSeal.issuer && entry.keyId === expected.priorSeal.keyId
@@ -173,11 +174,13 @@ async function verifyPair({ artifact, priorSealReceipt, keyDocument, trustedIssu
   if (priorSealReceipt.schema !== expected.priorSeal.receiptSchema || priorSeal.executionStatus !== "CONFIRMED" || priorSeal.complianceStatus !== "COMPLIANT") {
     return fail("PRIORSEAL_RECEIPT_NOT_COMPLIANT");
   }
+  if (!priorSealReceipt.authorizationEvidence) return fail("PRIORSEAL_AUTHORIZATION_MISSING");
   const authorization = priorSealReceipt.authorizationEvidence.authorization;
   const intent = authorization.intent;
   if (intent.schema !== expected.priorSeal.intentSchema || intent.executionProfile !== expected.priorSeal.executionProfile) {
     return fail("PRIORSEAL_EXACT_CALL_REQUIRED");
   }
+  if (expected.algorithm !== "sha256" && expected.algorithm !== "keccak256") return fail("DECISION_COMMITMENT_ALGORITHM_INVALID");
   const commitment = matchUniqueContextCommitment(intent, {
     namespace: expected.namespace,
     algorithm: expected.algorithm,

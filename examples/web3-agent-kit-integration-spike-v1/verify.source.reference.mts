@@ -5,6 +5,7 @@ import { readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { encodeAbiParameters, hashTypedData, keccak256, verifyTypedData } from 'viem'
+import type { Receipt, KeyEntry } from '../../sdk/dist/types.js'
 import {
   verifyAuthorization,
   verifyAuthorizationReceipt,
@@ -13,6 +14,27 @@ import {
 
 const directory = dirname(fileURLToPath(import.meta.url))
 const fixtureDirectory = join(directory, 'fixture')
+type Baseline = typeof import('./fixture/baseline.json')
+type Roots = typeof import('./fixture/trust-roots.json')
+type Manifest = typeof import('./fixture/manifest.json')
+type Attestation = Baseline['insight']['sourceAttestation'] & { reasonCodes?: string[] }
+type FixtureCase = {
+  id: string; wakVersion: string; input: Record<string, unknown> & {
+    insightVariant?: string; now?: number; mutateAfterAuthorization?: { field: string; value: string };
+    attempts?: number; providerReconstructed?: boolean; persistedAcceptanceRequired?: boolean;
+    actualBaseSepoliaExecutionRequired?: boolean;
+  };
+  counts: { authorizationProvider: number; signer: number; broadcast: number; receipt: number };
+  terminal: string; reason: string; inputArtifactHashes: { baselineSha256: string; caseInputSha256: string };
+  conditionalOn?: string[];
+}
+type Cases = { schema: string; cases: FixtureCase[] }
+type ReportCase = { id: string; wakVersion: string; inputArtifactHashes: { baselineSha256?: string; caseInputSha256?: string; liveInputSha256?: string }; expectedTerminal: string; actualTerminal: string; reason: string; counts: FixtureCase['counts']; reconstruction?: { differentProviderInstance: boolean; samePersistedAcceptanceId: boolean } }
+type Report = { schema: string; fixtureVersion: string; envelopeDigest: string; policyCommitmentDigest: string;
+  instrumentation?: { explicitSignerProtocol: boolean; explicitBroadcastFn: boolean };
+  adapter?: { newFieldTypes: number }; adapterAcceptance?: { expectedNewFieldTypes: number; actualNewFieldTypes: number; terminal: string };
+  cases: ReportCase[];
+  p1?: { receipt: Receipt; trustedKey: KeyEntry; wak: { envelopeDigest: string; policyCommitmentDigest: string }; insightPairCommitment: string } }
 const requiredCases = ['N1', 'N2', 'N3', 'N4', 'N5a', 'N5b']
 const uintFields = new Set([
   'subjectChainId', 'tradeAmountUsd', 'consensusPrice', 'maxDeviationBps',
@@ -43,27 +65,36 @@ class FixtureError extends Error {
   code: string;
   constructor(code: string, detail?: string) { super(detail ?? code); this.code = code }
 }
-function demand(condition: unknown, code: string, detail?: string) { if (!condition) throw new FixtureError(code, detail) }
-function sha256(value: any) { return createHash('sha256').update(value).digest('hex') }
-function canonical(value: any): string {
+function demand(condition: unknown, code: string, detail?: string): asserts condition { if (!condition) throw new FixtureError(code, detail) }
+function sha256(value: string | Buffer) { return createHash('sha256').update(value).digest('hex') }
+function canonical(value: unknown): string | undefined {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
-  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`
   return JSON.stringify(value)
 }
-function domainDigest(namespace: any, payload: any) { return `0x${sha256(`${namespace}\0${canonical(payload)}`)}` }
-function readJson(path: any) { return JSON.parse(readFileSync(path, 'utf8')) }
-function commitment(intent: any, namespace: any, algorithm: any, digest: any) {
-  const matches = intent.contextCommitments.filter((entry: any) => entry.namespace === namespace)
+function domainDigest(namespace: string, payload: unknown) { return `0x${sha256(`${namespace}\0${canonical(payload)}`)}` }
+function readJson<T>(path: string): T { return JSON.parse(readFileSync(path, 'utf8')) as T }
+function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value) }
+function parseReport(value: unknown): Report {
+  demand(isRecord(value) && value.schema === 'wak-insight-priorseal.acceptance-report.v1' &&
+    value.fixtureVersion === 'v1' && Array.isArray(value.cases) &&
+    value.cases.every((entry: unknown) => isRecord(entry) && typeof entry.id === 'string' &&
+      typeof entry.wakVersion === 'string' && isRecord(entry.inputArtifactHashes) &&
+      isRecord(entry.counts)), 'REPORT_SCHEMA_INVALID')
+  return value as Report
+}
+function commitment(intent: { contextCommitments?: Array<{ namespace: string; algorithm: string; digest: string }> }, namespace: string, algorithm: string, digest: string) {
+  const matches = intent.contextCommitments?.filter((entry) => entry.namespace === namespace) ?? []
   demand(matches.length === 1, 'CONTEXT_COMMITMENT_NOT_UNIQUE', namespace)
   demand(matches[0].algorithm === algorithm && matches[0].digest === digest, 'CONTEXT_COMMITMENT_MISMATCH', namespace)
 }
-function pair(source: any, destination: any) {
+function pair(source: Attestation, destination: Attestation) {
   return keccak256(encodeAbiParameters([
     { type: 'bytes32' }, { type: 'bytes32' }, { type: 'bytes32' },
     { type: 'bytes32' }, { type: 'uint16' },
-  ], [source.uid, destination.uid, source.data.requestHash, destination.data.requestHash, 50]))
+  ], [source.uid as `0x${string}`, destination.uid as `0x${string}`, source.data.requestHash as `0x${string}`, destination.data.requestHash as `0x${string}`, 50]))
 }
-function typedData(attestation: any) {
+function typedData(attestation: Attestation) {
   return {
     domain: { name: 'Insight Oracle Safety', version: '3', chainId: 1 },
     types: insightTypes,
@@ -71,18 +102,18 @@ function typedData(attestation: any) {
     message: Object.fromEntries(Object.entries(attestation.data).map(([key, value]) => [key, uintFields.has(key) ? BigInt(String(value)) : value])),
   }
 }
-async function verifyInsight(attestation: any, baseline: any, roots: any) {
+async function verifyInsight(attestation: Attestation, baseline: Baseline, roots: Roots) {
   demand(attestation.schemaVersion === 3 && attestation.data.schemaVersion === 3, 'INSIGHT_SCHEMA_INVALID')
   demand(attestation.attester.toLowerCase() === roots.insight.attester.toLowerCase(), 'INSIGHT_ATTESTER_UNTRUSTED')
   const registry = baseline.insight.keyRegistry
-  const keys = registry.public_keys.filter((key: any) => key.key_id === roots.insight.historicalKeyId)
+  const keys = registry.public_keys.filter((key) => key.key_id === roots.insight.historicalKeyId)
   demand(keys.length === 1 && keys[0].public_key.toLowerCase() === attestation.attester.toLowerCase(), 'INSIGHT_KEY_MISMATCH')
-  demand(!keys[0].revoked && !registry.revoked_keys.some((entry: any) => entry.key_id === keys[0].key_id), 'INSIGHT_KEY_REVOKED')
+  demand(!keys[0].revoked && !(registry.revoked_keys as Array<{ key_id: string }>).some((entry) => entry.key_id === keys[0].key_id), 'INSIGHT_KEY_REVOKED')
   demand(Date.parse(keys[0].validFrom) / 1000 <= attestation.data.checkedAt &&
     (keys[0].validUntil === null || attestation.data.checkedAt < Date.parse(keys[0].validUntil) / 1000), 'INSIGHT_KEY_TIME_INVALID')
   const input = typedData(attestation)
   demand(hashTypedData(input as Parameters<typeof hashTypedData>[0]) === attestation.uid, 'INSIGHT_UID_MISMATCH')
-  demand(await verifyTypedData({ ...(input as unknown as Parameters<typeof verifyTypedData>[0]), address: attestation.attester, signature: attestation.signature }), 'INSIGHT_SIGNATURE_INVALID')
+  demand(await verifyTypedData({ ...(input as unknown as Parameters<typeof verifyTypedData>[0]), address: attestation.attester as `0x${string}`, signature: attestation.signature as `0x${string}` }), 'INSIGHT_SIGNATURE_INVALID')
   demand(attestation.validUntil === attestation.data.validUntil && attestation.data.checkedAt < attestation.data.validUntil, 'INSIGHT_WINDOW_INVALID')
   if (attestation.reasonCodes) {
     const hash = keccak256(encodeAbiParameters([{ type: 'string[]' }], [attestation.reasonCodes]))
@@ -90,21 +121,21 @@ async function verifyInsight(attestation: any, baseline: any, roots: any) {
   }
 }
 function verifyManifest() {
-  const manifest = readJson(join(fixtureDirectory, 'manifest.json'))
+  const manifest = readJson<Manifest>(join(fixtureDirectory, 'manifest.json'))
   demand(manifest.schema === 'wak-insight-priorseal.fixture-manifest.v1', 'MANIFEST_SCHEMA_INVALID')
   const expected = ['README.md', 'fixture/baseline.json', 'fixture/cases.json', 'fixture/trust-roots.json', 'verify.mjs']
   demand(canonical(Object.keys(manifest.files).sort()) === canonical(expected.sort()), 'MANIFEST_FILE_SET_MISMATCH')
   for (const relative of expected) {
     const bytes = readFileSync(join(directory, relative))
-    demand(sha256(bytes) === manifest.files[relative], 'FILE_HASH_MISMATCH', relative)
+    demand(sha256(bytes) === (manifest.files as Record<string, string>)[relative], 'FILE_HASH_MISMATCH', relative)
   }
   return manifest
 }
 async function verifyBaseline() {
   const manifest = verifyManifest()
-  const baseline = readJson(join(fixtureDirectory, 'baseline.json'))
-  const cases = readJson(join(fixtureDirectory, 'cases.json'))
-  const roots = readJson(join(fixtureDirectory, 'trust-roots.json'))
+  const baseline = readJson<Baseline>(join(fixtureDirectory, 'baseline.json'))
+  const cases = readJson<Cases>(join(fixtureDirectory, 'cases.json'))
+  const roots = readJson<Roots>(join(fixtureDirectory, 'trust-roots.json'))
   demand(baseline.schema === 'wak-insight-priorseal.fixture-baseline.v1' && baseline.mode === 'SYNTHETIC_NO_BROADCAST', 'BASELINE_SCHEMA_INVALID')
   demand(cases.schema === 'wak-insight-priorseal.fixture-cases.v1' && roots.schema === 'wak-insight-priorseal.trust-roots.v1' && roots.synthetic === true, 'FIXTURE_SCHEMA_INVALID')
   const { transaction, wak, insight, priorSeal } = baseline
@@ -112,7 +143,7 @@ async function verifyBaseline() {
   const payload = wak.callEnvelope.payload
   demand(payload.schema === 'agent-call-envelope.v1' && payload.executionProfile === 'call', 'ENVELOPE_SCHEMA_INVALID')
   demand(payload.chainId === transaction.chainId && payload.executor === transaction.from && payload.nonce === transaction.nonce &&
-    payload.target === transaction.to && payload.nativeValue === transaction.value && payload.calldataHash === keccak256(transaction.data), 'ENVELOPE_CALL_MISMATCH')
+    payload.target === transaction.to && payload.nativeValue === transaction.value && payload.calldataHash === keccak256(transaction.data as `0x${string}`), 'ENVELOPE_CALL_MISMATCH')
   demand(domainDigest('agent-call-envelope.v1', payload) === wak.callEnvelope.digest, 'ENVELOPE_DIGEST_MISMATCH')
   const policy = wak.policyDecisionCommitment
   demand(policy.payload.schema === 'web3-agent-kit.policy-decision.v1' && policy.payload.callIdentity === wak.callEnvelope.digest && policy.payload.verdict === 'allow', 'POLICY_PAYLOAD_INVALID')
@@ -137,7 +168,7 @@ async function verifyBaseline() {
   demand(acceptance.authorizationId === authorization.authorizationId && acceptance.intentHash === authorization.intentHash && acceptance.acceptedAt >= authorization.notBefore, 'PRIORSEAL_ACCEPTANCE_MISMATCH')
   const intent = authorization.intent
   demand(intent.chainId === transaction.chainId && intent.sender === transaction.from && intent.callTarget === transaction.to &&
-    intent.nonce === transaction.nonce && intent.calldataHash === keccak256(transaction.data) && intent.transactionValue === transaction.value,
+    intent.nonce === transaction.nonce && intent.calldataHash === keccak256(transaction.data as `0x${string}`) && intent.transactionValue === transaction.value,
   'PRIORSEAL_EXACT_CALL_MISMATCH')
   demand(authorization.delegate.executor === transaction.from && authorization.maxUses === '1' && authorization.notBefore <= baseline.issuedAt &&
     authorization.expiresAt <= Math.min(insight.sourceAttestation.data.validUntil, insight.destinationAttestation.data.validUntil), 'PRIORSEAL_AUTHORIZATION_WINDOW_INVALID')
@@ -156,31 +187,33 @@ async function verifyBaseline() {
     raw: { signedAuthorization: authorization, verificationResult: response.verificationResult, acceptance },
   }
   demand(canonical(mapped) === canonical(expectedMapping), 'WAK_ADAPTER_MAPPING_MISMATCH')
-  for (const [key, value] of Object.entries(expectedMapping)) demand(canonical(response[key]) === canonical(value) || key === 'raw', 'PRIORSEAL_RESPONSE_MAPPING_MISMATCH', key)
-  const ids = cases.cases.map((entry: any) => entry.id)
+  for (const [key, value] of Object.entries(expectedMapping)) demand(canonical((response as Record<string, unknown>)[key]) === canonical(value) || key === 'raw', 'PRIORSEAL_RESPONSE_MAPPING_MISMATCH', key)
+  const ids = cases.cases.map((entry) => entry.id)
   demand(canonical(ids) === canonical([...requiredCases, 'P1']), 'CASE_SET_INVALID')
   const baselineSha256 = sha256(readFileSync(join(fixtureDirectory, 'baseline.json')))
   for (const entry of cases.cases) {
+    const inputBytes = canonical(entry.input)
+    demand(typeof inputBytes === 'string', 'CASE_INPUT_INVALID', entry.id)
     demand(entry.wakVersion === '1.18.4' && entry.inputArtifactHashes?.baselineSha256 === baselineSha256 &&
-      entry.inputArtifactHashes?.caseInputSha256 === sha256(canonical(entry.input)), 'CASE_INPUT_HASH_MISMATCH', entry.id)
+      entry.inputArtifactHashes?.caseInputSha256 === sha256(inputBytes), 'CASE_INPUT_HASH_MISMATCH', entry.id)
   }
   const [n1, n2, n3, n4, n5a, n5b, p1] = cases.cases
   demand(n1.input.insightVariant === 'signed-block' && n1.counts.authorizationProvider === 0 && n1.counts.signer === 0 && n1.counts.broadcast === 0 && n1.counts.receipt === 0, 'N1_VECTOR_INVALID')
-  demand(n2.input.now >= insight.sourceAttestation.data.validUntil && n2.counts.authorizationProvider === 0 && n2.counts.signer === 0 && n2.counts.broadcast === 0 && n2.counts.receipt === 0, 'N2_VECTOR_INVALID')
-  demand(n3.input.mutateAfterAuthorization.field === 'data' && keccak256(n3.input.mutateAfterAuthorization.value) !== payload.calldataHash && n3.counts.signer === 0 && n3.counts.broadcast === 0 && n3.counts.receipt === 0, 'N3_VECTOR_INVALID')
-  demand(n4.input.mutateAfterAuthorization.field === 'nonce' && n4.input.mutateAfterAuthorization.value !== transaction.nonce && n4.counts.signer === 0 && n4.counts.broadcast === 0 && n4.counts.receipt === 0, 'N4_VECTOR_INVALID')
+  demand(typeof n2.input.now === 'number' && n2.input.now >= insight.sourceAttestation.data.validUntil && n2.counts.authorizationProvider === 0 && n2.counts.signer === 0 && n2.counts.broadcast === 0 && n2.counts.receipt === 0, 'N2_VECTOR_INVALID')
+  demand(n3.input.mutateAfterAuthorization?.field === 'data' && keccak256(n3.input.mutateAfterAuthorization.value as `0x${string}`) !== payload.calldataHash && n3.counts.signer === 0 && n3.counts.broadcast === 0 && n3.counts.receipt === 0, 'N3_VECTOR_INVALID')
+  demand(n4.input.mutateAfterAuthorization?.field === 'nonce' && n4.input.mutateAfterAuthorization.value !== transaction.nonce && n4.counts.signer === 0 && n4.counts.broadcast === 0 && n4.counts.receipt === 0, 'N4_VECTOR_INVALID')
   for (const n5 of [n5a, n5b]) demand(n5.input.attempts === 2 && n5.counts.signer === 1 && n5.counts.broadcast === 1 && n5.counts.receipt === 1, 'REPLAY_VECTOR_INVALID')
   demand(n5a.input.providerReconstructed === false && n5b.input.providerReconstructed === true && n5b.input.persistedAcceptanceRequired === true, 'REPLAY_RECONSTRUCTION_INVALID')
   demand(canonical(p1.conditionalOn) === canonical(requiredCases) && p1.input.actualBaseSepoliaExecutionRequired === true, 'P1_GATE_INVALID')
   return { manifest, baseline, cases, roots }
 }
-function verifyWakReport(report: any, cases: any, baseline: any) {
+function verifyWakReport(report: Report, cases: Cases, baseline: Baseline) {
   demand(report.schema === 'wak-insight-priorseal.acceptance-report.v1' && report.fixtureVersion === 'v1', 'REPORT_SCHEMA_INVALID')
   demand(report.envelopeDigest === baseline.wak.callEnvelope.digest && report.policyCommitmentDigest === baseline.wak.policyDecisionCommitment.digest, 'REPORT_COMMITMENT_MISMATCH')
   demand(report.instrumentation?.explicitSignerProtocol === true && report.instrumentation?.explicitBroadcastFn === true, 'REPORT_INSTRUMENTATION_MISSING')
   demand(report.adapter?.newFieldTypes === 0 && report.adapterAcceptance?.expectedNewFieldTypes === 0 && report.adapterAcceptance?.actualNewFieldTypes === 0 && report.adapterAcceptance?.terminal === 'PASS', 'REPORT_NEW_FIELD_TYPES')
   demand(Array.isArray(report.cases), 'REPORT_CASES_MISSING')
-  const ids = report.cases.map((entry: any) => entry.id)
+  const ids = report.cases.map((entry) => entry.id)
   demand(canonical(ids.slice(0, 6)) === canonical(requiredCases), 'REPORT_NEGATIVE_ORDER_INVALID')
   for (let index = 0; index < 6; index += 1) {
     const actual = report.cases[index]
@@ -199,7 +232,7 @@ function verifyWakReport(report: any, cases: any, baseline: any) {
   demand(ids.length === 6, 'REPORT_CASE_SET_INVALID')
   return 'NEGATIVE_REPORT_FIELDS_VERIFIED_P1_PENDING'
 }
-async function verifyLiveReceipt(report: any, keyPin: any) {
+async function verifyLiveReceipt(report: Report, keyPin: string | undefined) {
   demand(/^([0-9a-f]{64})$/.test(keyPin ?? ''), 'LIVE_KEY_PIN_REQUIRED')
   const live = report.p1
   demand(live?.receipt && live?.trustedKey?.publicKey && live?.wak && live?.insightPairCommitment, 'P1_EVIDENCE_MISSING')
@@ -209,11 +242,12 @@ async function verifyLiveReceipt(report: any, keyPin: any) {
   demand(receipt.outcome === 'COMPLETED' && receipt.execution.chainId === 84532 && receipt.execution.status === 'CONFIRMED' && receipt.compliance?.status === 'COMPLIANT' && receipt.binding?.bound === true, 'P1_RECEIPT_STATUS_INVALID')
   const checked = await verifyAuthorizedReceipt(receipt, key.publicKey, { key, now: receipt.issuedAt, audience: 'priorseal' })
   demand(checked.valid, 'P1_RECEIPT_SIGNATURE_INVALID', checked.code)
+  demand(receipt.authorizationEvidence, 'P1_AUTHORIZATION_EVIDENCE_MISSING')
   const intent = receipt.authorizationEvidence.authorization.intent
   commitment(intent, 'agent-call-envelope.v1', 'sha256', live.wak.envelopeDigest)
   commitment(intent, 'web3-agent-kit.policy-decision.v1', 'sha256', live.wak.policyCommitmentDigest)
   commitment(intent, 'insight.pretrade-pair.v1', 'keccak256', live.insightPairCommitment)
-  demand(/^0x[0-9a-f]{64}$/.test(receipt.execution.txHash), 'P1_TX_HASH_INVALID')
+  demand(typeof receipt.execution.txHash === 'string' && /^0x[0-9a-f]{64}$/.test(receipt.execution.txHash), 'P1_TX_HASH_INVALID')
   return 'P1_RECEIPT_LOCALLY_VERIFIED_RPC_CHECK_STILL_REQUIRED'
 }
 
@@ -222,14 +256,14 @@ export async function runVerification({ reportPath, trustKeySha256 }: { reportPa
     const { baseline, cases, manifest } = await verifyBaseline()
     let wakAcceptance = 'NOT_RUN'
     if (reportPath) {
-      const report = readJson(resolve(reportPath))
+      const report = parseReport(readJson<unknown>(resolve(reportPath)))
       wakAcceptance = verifyWakReport(report, cases, baseline)
       if (wakAcceptance === 'P1_REPORTED_REQUIRES_RECEIPT_VERIFICATION') wakAcceptance = await verifyLiveReceipt(report, trustKeySha256)
     }
     return {
       status: 'PASS', fixture: 'CRYPTOGRAPHIC_INPUTS_AND_EXPECTED_OUTCOMES_VERIFIED',
       wakAcceptance, baselineEnvelopeDigest: baseline.wak.callEnvelope.digest,
-      adapterNewFieldTypes: 0, caseIds: cases.cases.map((entry: any) => entry.id),
+      adapterNewFieldTypes: 0, caseIds: cases.cases.map((entry) => entry.id),
       manifestSchema: manifest.schema,
       compatibilityNote: 'WAK v1.18.4 Chain enum lacks Base Sepolia; WAK P1 implementation needs renewed ownership alignment.',
     }
@@ -239,7 +273,7 @@ export async function runVerification({ reportPath, trustKeySha256 }: { reportPa
 }
 
 if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
-  const option = (name: any) => {
+  const option = (name: string) => {
     const index = process.argv.indexOf(name)
     return index < 0 ? undefined : process.argv[index + 1]
   }

@@ -17,7 +17,9 @@ async function fixture() {
   const accepted = await authorizeIntent({ input: authorization, store: createMemoryStore(), privateKeyPem, issuer: "test-rwa", keyId: "test", now: () => f.now * 1e3 });
   const observed = { chainId: 8453, txHash: "0x" + "66".repeat(32), status: "CONFIRMED", action: "CONTRACT_CALL", sender: f.transaction.from, recipient: f.transaction.to, target: f.transaction.to, calldataHash: f.input.request.call.calldataHash, nativeValue: "0", asset: intent.asset, amount: intent.amount, nonce: intent.nonce, executedAt: f.now + 2, observedAt: f.now + 3, confirmations: 12, gasUsed: "100000", transfers: [], finalityState: "CONFIRMED" };
   const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, policyEvidence: accepted.response.policyEvidence, execution: observed, issuer: "test-rwa", keyId: "test", issuedAt: f.now + 3 }), privateKeyPem);
-  return { f, privateKeyPem, bundle: { receipt, authority: authority.proof, execution: execution.proof }, trust: authority.trust, options: { now: f.now + 3, trustedKeys: { issuer: "test-rwa", keyId: "test", algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: f.now - 100, validUntil: f.now + 100 } } };
+  const bundle = { receipt, authority: authority.proof, execution: execution.proof };
+  const options = { now: f.now + 3, trustedKeys: { issuer: "test-rwa", keyId: "test", algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: f.now - 100, validUntil: f.now + 100 } };
+  return { f, privateKeyPem, bundle, trust: authority.trust, options };
 }
 test("RWA receipt verifies through both SDK entry points with out-of-band pins", async () => {
   const x = await fixture();

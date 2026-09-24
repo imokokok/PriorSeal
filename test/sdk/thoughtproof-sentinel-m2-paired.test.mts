@@ -11,7 +11,15 @@ import { buildIntent } from '../../src/index.mjs';
 import { buildExactCallIntent } from '../../sdk/dist/index.js';
 
 const fixtureUrl = new URL('../../examples/thoughtproof-sentinel-paired-v2/', import.meta.url);
-const readJson = (name: string): any => JSON.parse(readFileSync(new URL(name, fixtureUrl), 'utf8'));
+type FixtureFiles = {
+  'expected.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2/expected.json');
+  'export-valid.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2/export-valid.json');
+  'priorseal-receipt-matching.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2/priorseal-receipt-matching.json');
+  'priorseal-receipt-amount-outside-m2-binding.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2/priorseal-receipt-amount-outside-m2-binding.json');
+  'calldata-fixtures.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2/calldata-fixtures.json');
+};
+const readJson = <Name extends keyof FixtureFiles>(name: Name): FixtureFiles[Name] =>
+  JSON.parse(readFileSync(new URL(name, fixtureUrl), 'utf8')) as FixtureFiles[Name];
 
 test('ThoughtProof Sentinel M2 proposal vectors bind the signed decision subject to the PriorSeal exact call', async () => {
   const results = await runFixtureChecks({ log: () => {} });
@@ -56,7 +64,7 @@ test('M2 verifies raw calldata derivation including empty bytes', () => {
     'empty calldata derivation',
   ]);
   assert.equal(
-    fixtures.cases.find((fixture: any) => fixture.data === '0x').expectedCalldataHash,
+    fixtures.cases.find((fixture) => fixture.data === '0x')!.expectedCalldataHash,
     '0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470',
   );
 });
@@ -74,12 +82,12 @@ test('M2 refuses string chain IDs instead of coercing them', () => {
   );
   assert.throws(
     () => buildIntent(intentInput),
-    (error: any) => error.code === 'INVALID_CHAIN_ID',
+    (error: unknown) => typeof error === 'object' && error !== null && 'code' in error && error.code === 'INVALID_CHAIN_ID',
   );
   assert.throws(
     () => buildExactCallIntent({
       transaction: {
-        chainId: '8453' as any,
+        chainId: '8453' as unknown as number,
         from: intent.sender,
         to: intent.callTarget,
         data: '0x',
@@ -106,7 +114,7 @@ test('M2 excludes contract creation and separates transaction nonce from authori
       transaction: {
         chainId: 8453,
         from: authorization.intent.sender,
-        to: null as any,
+        to: null as unknown as `0x${string}`,
         data: '0x',
         nonce: 1n,
       },

@@ -6,16 +6,26 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { matchUniqueContextCommitment } from '../../sdk/dist/index.js';
 import { verifyReceiptLocally } from '../../sdk/dist/verifier.js';
+import type { KeyRegistry, Receipt } from '../../sdk/dist/types.js';
 import { jcsCanonicalBytes } from './jcs.reference.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const requiredClaimFields = ['receipt_version', 'receipt_role', 'event_id', 'timestamp', 'action_type', 'status'];
 
-function readJson(name: string): any {
-  return JSON.parse(readFileSync(resolve(directory, name), 'utf8'));
+type Expected = typeof import('./expected.json');
+type ExternalReceipt = { public_key_id: string; signature: string; claim: {
+  event_id: string; timestamp: string; decision_record: {
+    decision_id: string; subject: { action_ref: string; action_type: string };
+    resolution: { timestamp: string; verdict: string };
+  };
+} };
+
+function readJson<T>(name: string): T {
+  // Checked-in fixture data; public verification below still validates signed inputs.
+  return JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as T;
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -46,7 +56,7 @@ export function verifyBoundaryAttestReceipt(receipt: unknown, publicKeyPem: stri
   if (!isRecord(receipt.claim) || typeof receipt.signature !== 'string' || typeof receipt.public_key_id !== 'string') return { ok: false, code: 'INVALID_BOUNDARYATTEST_RECEIPT' };
   for (const field of requiredClaimFields) if (!Object.hasOwn(receipt.claim, field)) return { ok: false, code: `MISSING_BOUNDARYATTEST_FIELD:${field}` };
   if (receipt.claim.receipt_version !== '0.2') return { ok: false, code: 'UNSUPPORTED_BOUNDARYATTEST_VERSION' };
-  if (!['client_observed', 'server_attested'].includes(receipt.claim.receipt_role)) return { ok: false, code: 'UNSUPPORTED_BOUNDARYATTEST_ROLE' };
+  if (typeof receipt.claim.receipt_role !== 'string' || !['client_observed', 'server_attested'].includes(receipt.claim.receipt_role)) return { ok: false, code: 'UNSUPPORTED_BOUNDARYATTEST_ROLE' };
   try {
     if (receipt.public_key_id !== externalKeyId(publicKeyPem)) return { ok: false, code: 'BOUNDARYATTEST_KEY_ID_MISMATCH' };
     const valid = verify(null, jcsCanonicalBytes(receipt.claim), publicKeyPem, Buffer.from(receipt.signature, 'base64'));
@@ -56,17 +66,19 @@ export function verifyBoundaryAttestReceipt(receipt: unknown, publicKeyPem: stri
   }
 }
 
-export async function verifyPair({ externalReceipt, externalPublicKey, priorSealReceipt, trustedIssuerKeys, expected, usedSignedExports = new Set<string>(), usedDecisionIds = new Set<string>() }: { externalReceipt: any; externalPublicKey: string; priorSealReceipt: any; trustedIssuerKeys: any; expected: any; usedSignedExports?: Set<string>; usedDecisionIds?: Set<string> }) {
+export async function verifyPair({ externalReceipt, externalPublicKey, priorSealReceipt, trustedIssuerKeys, expected, usedSignedExports = new Set<string>(), usedDecisionIds = new Set<string>() }: { externalReceipt: ExternalReceipt; externalPublicKey: string; priorSealReceipt: Receipt; trustedIssuerKeys: KeyRegistry; expected: Expected; usedSignedExports?: Set<string>; usedDecisionIds?: Set<string> }) {
   const external = verifyBoundaryAttestReceipt(externalReceipt, externalPublicKey);
   if (!external.ok) return external;
 
   const priorSeal = await verifyReceiptLocally(priorSealReceipt, { trustedKeys: trustedIssuerKeys, now: priorSealReceipt.issuedAt });
   if (!priorSeal.valid) return { ok: false, code: `PRIORSEAL_${priorSeal.code}` };
   if (priorSeal.verificationScope !== 'LOCAL_COMPLETE') return { ok: false, code: 'PRIORSEAL_EXTERNAL_CHECK_REQUIRED' };
+  if (!priorSealReceipt.authorizationEvidence) return { ok: false, code: 'PRIORSEAL_AUTHORIZATION_MISSING' };
 
   const intent = priorSealReceipt.authorizationEvidence.authorization.intent;
   const digest = `0x${createHash('sha256').update(jcsCanonicalBytes(externalReceipt.claim)).digest('hex')}`;
   if (digest !== expected.digest) return { ok: false, code: 'BOUNDARYATTEST_CLAIM_DIGEST_MISMATCH' };
+  if (expected.algorithm !== 'sha256' && expected.algorithm !== 'keccak256') return { ok: false, code: 'INVALID_COMMITMENT_ALGORITHM' };
   const commitment = matchUniqueContextCommitment(intent, { namespace: expected.namespace, algorithm: expected.algorithm, digest });
   if (!commitment.matched) return { ok: false, code: commitment.code };
 
@@ -125,13 +137,13 @@ export async function verifyPair({ externalReceipt, externalPublicKey, priorSeal
 }
 
 export async function runFixtureChecks({ log = console.log }: { log?: (message: string) => void } = {}) {
-  const externalReceipt = readJson('boundaryattest-receipt.json');
+  const externalReceipt = readJson<ExternalReceipt>('boundaryattest-receipt.json');
   const externalPublicKey = readFileSync(resolve(directory, 'boundaryattest-public-key.pem'), 'utf8');
-  const priorSealReceipt = readJson('priorseal-receipt.json');
-  const wrongDigestReceipt = readJson('priorseal-receipt-wrong-digest.json');
-  const staleReceipt = readJson('priorseal-receipt-stale-evidence.json');
-  const trustedIssuerKeys = readJson('priorseal-trusted-issuer-keys.json');
-  const expected = readJson('expected.json');
+  const priorSealReceipt = readJson<Receipt>('priorseal-receipt.json');
+  const wrongDigestReceipt = readJson<Receipt>('priorseal-receipt-wrong-digest.json');
+  const staleReceipt = readJson<Receipt>('priorseal-receipt-stale-evidence.json');
+  const trustedIssuerKeys = readJson<KeyRegistry>('priorseal-trusted-issuer-keys.json');
+  const expected = readJson<Expected>('expected.json');
 
   const results: { name: string; code: string }[] = [];
   const check = (name: string, result: { code: string }, expectedCode: string) => {

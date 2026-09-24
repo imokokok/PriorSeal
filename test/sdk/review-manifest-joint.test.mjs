@@ -4,13 +4,19 @@ import assert from "node:assert/strict";
 import { keccak256 } from "viem";
 import { hashJson } from "../../src/index.mjs";
 import {
-  buildReviewManifest as buildReviewManifestTyped,
-  verifyReviewManifestLocally as verifyReviewManifestLocallyTyped
+  buildReviewManifest,
+  verifyReviewManifestLocally
 } from "../../sdk/dist/verifier.js";
 import { createJointReviewFixture, zeroHash, router } from "../helpers/joint-review-fixture.mjs";
-const fixture = async (options = {}) => createJointReviewFixture(options);
-const buildReviewManifest = async (input) => buildReviewManifestTyped(input);
-const verifyReviewManifestLocally = async (manifest, options) => verifyReviewManifestLocallyTyped(manifest, options);
+const fixture = async (options) => {
+  const f = await createJointReviewFixture(options);
+  return {
+    ...f,
+    // The helper constructs valid values; tests below mutate them after construction.
+    bundle: f.bundle,
+    options: f.options
+  };
+};
 test("joint review verifies real Insight v5 pair, immutable protocol policy and exact-call authorization locally", async () => {
   const f = await fixture();
   const result = await verifyReviewManifestLocally(f.manifest, f.options);

@@ -32,7 +32,7 @@ function unpinPolicy(trust) {
   delete trust.consumerPolicy.policyRawJson;
 }
 function changePolicy(trust, mutate) {
-  const { policyId: _ignored, ...body } = JSON.parse(trust.consumerPolicy.policyRawJson);
+  const { policyId: _ignored, ...body } = JSON.parse(trust.consumerPolicy.policyRawJson ?? "{}");
   mutate(body);
   const policyId = contentId(body);
   trust.consumerPolicy.policyId = policyId;

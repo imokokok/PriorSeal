@@ -17,6 +17,27 @@ const recipient = `0x${'b'.repeat(40)}`;
 const intent = { intentId: 'intent-api-1', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '1000000', sender, recipient, validUntil: 2_000_000_000, nonce: '0' };
 
 type TestServer = ReturnType<typeof createHttpServer>;
+type ServerOptions = NonNullable<Parameters<typeof createHttpServer>[0]>;
+type ObserverResult = Awaited<ReturnType<NonNullable<ServerOptions['observer']>>>;
+type HttpTestResponse = {
+  error: { code: string; details: { reasonCodes: string[] } };
+  verification: { valid: boolean };
+  id: string;
+  items: Array<{ artifact: unknown }>;
+  role: string;
+  retention: string;
+  nextCursor: string | null;
+  status: string;
+  receipt: { receiptId: string; schema: string; executionStatus: string; compliance: { status: string }; binding: { bound: boolean } };
+  authorization: { authorizationId: string };
+  result: { valid: boolean };
+  observationJob: { jobId: string };
+  observation: { status: string };
+  schema: string;
+  keyRegistry: { keys: Array<{ keyId: string }> };
+  trust: { model: string };
+  bundleHash: string;
+};
 type RequestOptions = {
   method?: string;
   headers?: Record<string, string>;
@@ -34,17 +55,17 @@ type MockResponse = EventEmitter & {
 };
 
 async function serverFor(testContext: TestContext) {
-  const server = createHttpServer({ observer: async () => ({ chainId: 8453, txHash: `0x${'1'.repeat(64)}`, status: 'PENDING', sender, recipient, finalityState: 'PENDING' }) as any });
+  const server = createHttpServer({ observer: async () => ({ chainId: 8453, txHash: `0x${'1'.repeat(64)}`, status: 'PENDING', sender, recipient, finalityState: 'PENDING' }) as unknown as ObserverResult });
   testContext.after(() => server.close()); return server;
 }
 async function request(server: TestServer, path: string, { method = 'GET', headers = {}, body, stream }: RequestOptions = {}) {
   const req = stream ?? Readable.from(body ? [Buffer.from(body)] : []); Object.assign(req, { method, url: path, headers, socket: { remoteAddress: '127.0.0.1' } });
   const res = new EventEmitter() as MockResponse; res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
-  const done = new Promise<void>((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers ?? {}, buffer: () => Buffer.from(res.body ?? ''), json: (): any => JSON.parse(Buffer.from(res.body ?? '').toString('utf8')), text: () => Buffer.from(res.body ?? '').toString('utf8') };
+  const done = new Promise<void>((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers ?? {}, buffer: () => Buffer.from(res.body ?? ''), json: (): HttpTestResponse => JSON.parse(Buffer.from(res.body ?? '').toString('utf8')) as HttpTestResponse, text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
 test('request deadline terminates stalled bodies and rejects slow route work', async (t) => {
   const store = { async health() { await new Promise(resolve => setTimeout(resolve, 80)); return 'ok'; } };
-  const server = createHttpServer({ store: store as any, requestTimeoutMs: 20 });
+  const server = createHttpServer({ store: store as unknown as ServerOptions['store'], requestTimeoutMs: 20 });
   t.after(() => server.close());
   assert.equal(server.requestTimeout, 20);
 
@@ -162,7 +183,7 @@ test('observation writes honor Idempotency-Key and return a signed linked receip
   const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
   let calls = 0;
   const txHash = `0x${'1'.repeat(64)}`;
-  const server = createHttpServer({ privateKeyPem, publicKeyPem, observer: async () => { calls += 1; return { chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_000, observedAt: 1_001, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'evm-json-rpc:eip155:8453:configured-1' } as any; } });
+  const server = createHttpServer({ privateKeyPem, publicKeyPem, observer: async () => { calls += 1; return { chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_000, observedAt: 1_001, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'evm-json-rpc:eip155:8453:configured-1' } as unknown as ObserverResult; } });
   t.after(() => server.close());
   await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
   const options = { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'observe-1' }, body: JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 }) };
@@ -192,8 +213,8 @@ test('pending observations return a durable job handle', async (t) => {
   const txHash = `0x${'7'.repeat(64)}`;
   const queued = { jobId: 'job-pending-1', state: 'QUEUED', attempts: 0, input: { intentId: intent.intentId, chainId: 8453, txHash }, observation: null, result: null, error: null };
   const jobKeys: string[] = [];
-  const observationWorker = { async enqueuePersistent(input: any) { jobKeys.push(input.idempotencyKey); return { ...queued, jobId: `job-pending-${jobKeys.length}` }; }, async get() { return queued; } };
-  const server = createHttpServer({ observationWorker: observationWorker as any, observer: async () => ({ chainId: 8453, txHash, status: 'PENDING', action: 'TRANSFER', sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 0, transfers: [], finalityState: 'PENDING' }) as any });
+  const observationWorker = { async enqueuePersistent(input: { idempotencyKey: string }) { jobKeys.push(input.idempotencyKey); return { ...queued, jobId: `job-pending-${jobKeys.length}` }; }, async get() { return queued; } };
+  const server = createHttpServer({ observationWorker: observationWorker as unknown as ServerOptions['observationWorker'], observer: async () => ({ chainId: 8453, txHash, status: 'PENDING', action: 'TRANSFER', sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 0, transfers: [], finalityState: 'PENDING' }) as unknown as ObserverResult });
   t.after(() => server.close());
   await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
   const observationBody = JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 });
@@ -218,7 +239,7 @@ test('signed authorization is accepted before execution and produces a v3 compli
   const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
   const txHash = `0x${'5'.repeat(64)}`;
   let clock = 1_001_000;
-  const server = createHttpServer({ privateKeyPem, publicKeyPem, now: () => clock, observer: async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_100, observedAt: 1_101, sender: account.address.toLowerCase(), recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'test' }) as any });
+  const server = createHttpServer({ privateKeyPem, publicKeyPem, now: () => clock, observer: async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_100, observedAt: 1_101, sender: account.address.toLowerCase(), recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'test' }) as unknown as ObserverResult });
   t.after(() => server.close());
   const accepted = await request(server, '/v1/authorizations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(authorization) });
   assert.equal(accepted.status, 201);

@@ -300,7 +300,7 @@ function priorSealPublicKeyFingerprint(publicKeyPem) {
 function mapScopeMismatch(scope, intent) {
   if (!isRecord(scope) || Object.keys(scope).length !== BOUNDARY_SCOPE_FIELDS.length || !Object.keys(scope).every(
     (field) => BOUNDARY_SCOPE_FIELDS.includes(field)
-  ) || !Number.isSafeInteger(scope.chainId) || scope.chainId < 1 || typeof scope.executor !== "string" || !/^0x[0-9a-f]{40}$/.test(scope.executor) || typeof scope.callTarget !== "string" || !/^0x[0-9a-f]{40}$/.test(scope.callTarget) || typeof scope.transactionNonce !== "string" || !/^(0|[1-9][0-9]*)$/.test(scope.transactionNonce) || typeof scope.nativeValue !== "string" || !/^(0|[1-9][0-9]*)$/.test(scope.nativeValue) || typeof scope.calldataHash !== "string" || !/^0x[0-9a-f]{64}$/.test(scope.calldataHash)) {
+  ) || typeof scope.chainId !== "number" || !Number.isSafeInteger(scope.chainId) || scope.chainId < 1 || typeof scope.executor !== "string" || !/^0x[0-9a-f]{40}$/.test(scope.executor) || typeof scope.callTarget !== "string" || !/^0x[0-9a-f]{40}$/.test(scope.callTarget) || typeof scope.transactionNonce !== "string" || !/^(0|[1-9][0-9]*)$/.test(scope.transactionNonce) || typeof scope.nativeValue !== "string" || !/^(0|[1-9][0-9]*)$/.test(scope.nativeValue) || typeof scope.calldataHash !== "string" || !/^0x[0-9a-f]{64}$/.test(scope.calldataHash)) {
     return fail("BOUNDARYATTEST_SCOPE_INVALID");
   }
   if (scope.chainId !== intent.chainId)
@@ -347,7 +347,7 @@ async function verifyThreeObjectFlow({
 }) {
   if (!isRecord(priorSealReceipt)) return fail("PRIORSEAL_RECEIPT_MISSING");
   const authorizationTime = priorSealReceipt?.authorizationEvidence?.authorization?.issuedAt;
-  if (!Number.isSafeInteger(authorizationTime))
+  if (typeof authorizationTime !== "number" || !Number.isSafeInteger(authorizationTime))
     return fail("PRIORSEAL_AUTHORIZATION_TIME_INVALID");
   const source = await verifyInsightAttestation(
     insightSource,
@@ -391,6 +391,7 @@ async function verifyThreeObjectFlow({
   if (priorSeal.executionStatus !== "CONFIRMED" || priorSeal.complianceStatus !== "COMPLIANT") {
     return fail("PRIORSEAL_RECEIPT_NOT_COMPLIANT");
   }
+  if (!priorSealReceipt.authorizationEvidence) return fail("PRIORSEAL_AUTHORIZATION_MISSING");
   const intent = priorSealReceipt.authorizationEvidence.authorization.intent;
   if (intent.schema !== "priorseal.intent.v2" || intent.executionProfile !== "priorseal.execution-profile.exact-call.v1") {
     return fail("PRIORSEAL_EXACT_CALL_REQUIRED");

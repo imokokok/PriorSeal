@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { keccak256 } from 'viem';
 import { matchUniqueContextCommitment } from '../../sdk/dist/index.js';
 import { verifyReceiptLocally } from '../../sdk/dist/verifier.js';
+import type { KeyRegistry, Receipt } from '../../sdk/dist/types.js';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const SUBJECT_FIELDS = [
@@ -20,11 +21,23 @@ const SUBJECT_FIELDS = [
   'calldataHash',
 ];
 
-function readJson(name: any) {
-  return JSON.parse(readFileSync(resolve(directory, name), 'utf8'));
+type Artifact = typeof import('./export-valid.json');
+type KeyDocument = { schema: string; keys: Array<{
+  kid: string; kty: string; crv: string; alg: string; x: string;
+  status: string; notBefore: string | null; notAfter: string | null;
+}> };
+type FixtureExpected = typeof import('./expected.json');
+type Expected = Pick<FixtureExpected,
+  'exportSchema' | 'artifactSchema' | 'exportDomain' | 'namespace' | 'algorithm' |
+  'subjectSchema' | 'trustedThoughtProofKeys' | 'priorSeal' | 'effectMap'
+>;
+type Canonical = Record<string, unknown> & { artifactSchema: string; verificationId: string; verdict: string };
+
+function readJson<T>(name: string): T {
+  return JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as T;
 }
 
-function isRecord(value: any) {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -32,7 +45,7 @@ function fail(code: string, detail?: string) {
   return { ok: false as const, code, ...(detail ? { detail } : {}) };
 }
 
-function jcsFlat(value: any) {
+function jcsFlat(value: Record<string, unknown>) {
   const parts = [];
   for (const key of Object.keys(value).sort()) {
     const item = value[key];
@@ -48,7 +61,7 @@ function jcsFlat(value: any) {
   return `{${parts.join(',')}}`;
 }
 
-function signedInput(artifact: any, domain: any) {
+function signedInput(artifact: Artifact, domain: string) {
   const fields: Record<string, unknown> = {
     artifactSchema: artifact.artifactSchema,
     verificationId: artifact.verificationId,
@@ -66,12 +79,12 @@ function signedInput(artifact: any, domain: any) {
   ]);
 }
 
-function resolveThoughtProofKey(artifact: any, keyDocument: any, expected: any, allowVectorOnly: any) {
+function resolveThoughtProofKey(artifact: Artifact, keyDocument: KeyDocument, expected: Expected, allowVectorOnly: boolean) {
   if (keyDocument?.schema !== 'thoughtproof.keys.v1' || !Array.isArray(keyDocument.keys)) {
     return fail('DECISION_SIGNER_UNTRUSTED', 'invalid ThoughtProof key document');
   }
-  const entry = keyDocument.keys.find((candidate: any) => candidate.kid === artifact.keyId);
-  const pin = expected.trustedThoughtProofKeys.find((candidate: any) => candidate.kid === artifact.keyId);
+  const entry = keyDocument.keys.find((candidate) => candidate.kid === artifact.keyId);
+  const pin = expected.trustedThoughtProofKeys.find((candidate) => candidate.kid === artifact.keyId);
   if (!entry || !pin || entry.x !== pin.x || entry.kty !== 'OKP' || entry.crv !== 'Ed25519') {
     return fail('DECISION_SIGNER_UNTRUSTED', 'kid is missing or does not match the out-of-band pin');
   }
@@ -110,7 +123,7 @@ function resolveThoughtProofKey(artifact: any, keyDocument: any, expected: any, 
   return { ok: true as const, entry };
 }
 
-export function verifyThoughtProofExport(artifact: any, keyDocument: any, expected: any, { allowVectorOnly = false } = {}) {
+export function verifyThoughtProofExport(artifact: Artifact | null, keyDocument: KeyDocument, expected: Expected, { allowVectorOnly = false } = {}) {
   if (!artifact) return fail('DECISION_EXPORT_MISSING');
   if (!isRecord(artifact) || artifact.exportSchema !== expected.exportSchema) {
     return fail('DECISION_EXPORT_INVALID', 'unsupported export schema');
@@ -125,7 +138,7 @@ export function verifyThoughtProofExport(artifact: any, keyDocument: any, expect
     'signedAt',
     'signature',
   ];
-  if (required.some((field) => artifact[field] === undefined || artifact[field] === null)) {
+  if (required.some((field) => (artifact as Record<string, unknown>)[field] == null)) {
     return fail('DECISION_EXPORT_INVALID', 'required export field is missing');
   }
   if (artifact.artifactSchema !== expected.artifactSchema || artifact.alg !== 'Ed25519') {
@@ -159,31 +172,32 @@ export function verifyThoughtProofExport(artifact: any, keyDocument: any, expect
   }
   const digest = `0x${createHash('sha256').update(artifact.canonical, 'utf8').digest('hex')}`;
   if (digest !== artifact.digest) return fail('DECISION_COMMITMENT_DIGEST_MISMATCH');
-  let canonical;
+  let canonical: unknown;
   try {
     canonical = JSON.parse(artifact.canonical);
   } catch {
     return fail('DECISION_EXPORT_INVALID', 'transported canonical string is not JSON');
   }
   if (
+    !isRecord(canonical) || typeof canonical.verdict !== 'string' ||
     canonical.artifactSchema !== artifact.artifactSchema ||
     canonical.verificationId !== artifact.verificationId
   ) {
     return fail('DECISION_EXPORT_INVALID', 'outer and canonical identifiers disagree');
   }
-  return { ok: true as const, code: 'OK', artifact, canonical, keyStatus: resolved.entry.status };
+  return { ok: true as const, code: 'OK', artifact, canonical: canonical as Canonical, keyStatus: resolved.entry.status };
 }
 
-function isCanonicalAddress(value: any) {
+function isCanonicalAddress(value: unknown): value is string {
   return typeof value === 'string' && /^0x[0-9a-f]{40}$/.test(value);
 }
 
-function isCanonicalUint(value: any) {
+function isCanonicalUint(value: unknown): value is string {
   return typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
 }
 
-export function verifyExactCallDecisionSubject(canonical: any, intent: any, expected: any) {
-  const subject = canonical?.decisionSubject;
+export function verifyExactCallDecisionSubject(canonical: unknown, intent: unknown, expected: Expected) {
+  const subject = isRecord(canonical) ? canonical.decisionSubject : undefined;
   if (subject === undefined) return fail('DECISION_SUBJECT_MISSING');
   if (
     !isRecord(subject) ||
@@ -191,7 +205,7 @@ export function verifyExactCallDecisionSubject(canonical: any, intent: any, expe
     !Object.keys(subject).every((field) => SUBJECT_FIELDS.includes(field)) ||
     subject.schema !== expected.subjectSchema ||
     subject.kind !== 'EVM_EXACT_CALL' ||
-    !Number.isSafeInteger(subject.chainId) ||
+    typeof subject.chainId !== 'number' || !Number.isSafeInteger(subject.chainId) ||
     subject.chainId < 1 ||
     !isCanonicalAddress(subject.executor) ||
     !isCanonicalAddress(subject.callTarget) ||
@@ -204,10 +218,10 @@ export function verifyExactCallDecisionSubject(canonical: any, intent: any, expe
   }
   if (
     !isRecord(intent) ||
-    intent?.schema !== expected.priorSeal.intentSchema ||
-    intent?.executionProfile !== expected.priorSeal.executionProfile ||
-    intent?.action !== 'CONTRACT_CALL' ||
-    !Number.isSafeInteger(intent.chainId) ||
+    intent.schema !== expected.priorSeal.intentSchema ||
+    intent.executionProfile !== expected.priorSeal.executionProfile ||
+    intent.action !== 'CONTRACT_CALL' ||
+    typeof intent.chainId !== 'number' || !Number.isSafeInteger(intent.chainId) ||
     intent.chainId < 1
   ) {
     return fail('PRIORSEAL_EXACT_CALL_REQUIRED');
@@ -221,7 +235,7 @@ export function verifyExactCallDecisionSubject(canonical: any, intent: any, expe
   return { ok: true as const, code: 'DECISION_SUBJECT_VERIFIED', subject };
 }
 
-function priorSealPublicKeyFingerprint(publicKeyPem: any) {
+function priorSealPublicKeyFingerprint(publicKeyPem: string) {
   const der = createPublicKey(publicKeyPem).export({ type: 'spki', format: 'der' });
   return createHash('sha256').update(der).digest('hex');
 }
@@ -233,13 +247,14 @@ export async function verifyM2Pair({
   trustedIssuerKeys,
   expected,
   allowVectorOnly = false,
-}: any) {
+}: { artifact: Artifact | null; priorSealReceipt: Receipt | null; keyDocument: KeyDocument; trustedIssuerKeys: KeyRegistry; expected: Expected; allowVectorOnly?: boolean }) {
   const decision = verifyThoughtProofExport(artifact, keyDocument, expected, { allowVectorOnly });
   if (!decision.ok) return decision;
+  if (!artifact) return fail('DECISION_EXPORT_MISSING');
 
   if (!isRecord(priorSealReceipt)) return fail('PRIORSEAL_RECEIPT_MISSING');
   const trustedKey = trustedIssuerKeys?.keys?.find(
-    (entry: any) => entry.issuer === expected.priorSeal.issuer && entry.keyId === expected.priorSeal.keyId,
+    (entry) => entry.issuer === expected.priorSeal.issuer && entry.keyId === expected.priorSeal.keyId,
   );
   if (
     !trustedKey ||
@@ -264,8 +279,10 @@ export async function verifyM2Pair({
   ) {
     return fail('PRIORSEAL_RECEIPT_NOT_COMPLIANT');
   }
+  if (!priorSealReceipt.authorizationEvidence) return fail('PRIORSEAL_AUTHORIZATION_MISSING');
   const authorization = priorSealReceipt.authorizationEvidence.authorization;
   const intent = authorization.intent;
+  if (expected.algorithm !== 'sha256' && expected.algorithm !== 'keccak256') return fail('DECISION_COMMITMENT_ALGORITHM_INVALID');
   const commitment = matchUniqueContextCommitment(intent, {
     namespace: expected.namespace,
     algorithm: expected.algorithm,
@@ -277,7 +294,7 @@ export async function verifyM2Pair({
   }
   const subject = verifyExactCallDecisionSubject(decision.canonical, intent, expected);
   if (!subject.ok) return subject;
-  const effect = expected.effectMap[decision.canonical.verdict];
+  const effect = (expected.effectMap as Record<string, string>)[decision.canonical.verdict];
   if (!effect) return fail('DECISION_EFFECT_UNMAPPED');
   return {
     ok: true as const,
@@ -294,11 +311,11 @@ export async function verifyM2Pair({
   };
 }
 
-export function verifyCalldataFixtures(fixtures: any): { name: string; code: string }[] {
+export function verifyCalldataFixtures(fixtures: unknown): { name: string; code: string }[] {
   if (!isRecord(fixtures) || !Array.isArray(fixtures.cases) || fixtures.cases.length < 1) {
     throw new Error('calldata fixture document is invalid');
   }
-  return fixtures.cases.map((fixture: any) => {
+  return fixtures.cases.map((fixture: unknown) => {
     if (
       !isRecord(fixture) ||
       typeof fixture.name !== 'string' ||
@@ -309,7 +326,7 @@ export function verifyCalldataFixtures(fixtures: any): { name: string; code: str
     ) {
       throw new Error('calldata fixture encoding is invalid');
     }
-    const derived = keccak256(fixture.data);
+    const derived = keccak256(fixture.data as `0x${string}`);
     if (derived !== fixture.expectedCalldataHash) {
       throw new Error(`${fixture.name}: expected ${fixture.expectedCalldataHash}, derived ${derived}`);
     }
@@ -317,11 +334,11 @@ export function verifyCalldataFixtures(fixtures: any): { name: string; code: str
   });
 }
 
-export function verifySubjectFixtures(fixtures: any, expected: any): { name: string; code: string }[] {
+export function verifySubjectFixtures(fixtures: unknown, expected: Expected): { name: string; code: string }[] {
   if (!isRecord(fixtures) || !Array.isArray(fixtures.cases) || fixtures.cases.length < 1) {
     throw new Error('subject fixture document is invalid');
   }
-  return fixtures.cases.map((fixture: any) => {
+  return fixtures.cases.map((fixture: unknown) => {
     if (
       !isRecord(fixture) ||
       typeof fixture.name !== 'string' ||
@@ -340,17 +357,17 @@ export function verifySubjectFixtures(fixtures: any, expected: any): { name: str
 }
 
 export async function runFixtureChecks({ log = console.log } = {}) {
-  const expected = readJson('expected.json');
-  const trustedIssuerKeys = readJson('priorseal-trusted-issuer-keys.json');
-  const results = verifyCalldataFixtures(readJson(expected.calldataFixtures));
+  const expected = readJson<FixtureExpected>('expected.json');
+  const trustedIssuerKeys = readJson<KeyRegistry>('priorseal-trusted-issuer-keys.json');
+  const results = verifyCalldataFixtures(readJson<unknown>(expected.calldataFixtures));
   for (const result of results) log(`PASS ${result.name}: ${result.code}`);
-  const subjectResults = verifySubjectFixtures(readJson(expected.subjectFixtures), expected);
+  const subjectResults = verifySubjectFixtures(readJson<unknown>(expected.subjectFixtures), expected);
   results.push(...subjectResults);
   for (const result of subjectResults) log(`PASS ${result.name}: ${result.code}`);
   for (const vector of expected.cases) {
-    const artifact = vector.export ? readJson(vector.export) : null;
-    const priorSealReceipt = vector.receipt ? readJson(vector.receipt) : null;
-    const keyDocument = readJson(vector.keyDocument ?? 'proposal-decision-keys.json');
+    const artifact = vector.export ? readJson<Artifact>(vector.export) : null;
+    const priorSealReceipt = vector.receipt ? readJson<Receipt>(vector.receipt) : null;
+    const keyDocument = readJson<KeyDocument>(vector.keyDocument ?? 'proposal-decision-keys.json');
     const result = await verifyM2Pair({
       artifact,
       priorSealReceipt,

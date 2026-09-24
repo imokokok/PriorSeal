@@ -15,6 +15,7 @@
     "sdk/scripts/**/*.mts",
     "examples/**/*.mts",
     "test/**/*.mts",
+    "test/**/*.ts",
     "worker-configuration.d.ts"
   ]
 }

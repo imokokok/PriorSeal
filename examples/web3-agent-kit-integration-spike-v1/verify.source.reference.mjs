@@ -86,8 +86,15 @@ function domainDigest(namespace, payload) {
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function parseReport(value) {
+  demand(isRecord(value) && value.schema === "wak-insight-priorseal.acceptance-report.v1" && value.fixtureVersion === "v1" && Array.isArray(value.cases) && value.cases.every((entry) => isRecord(entry) && typeof entry.id === "string" && typeof entry.wakVersion === "string" && isRecord(entry.inputArtifactHashes) && isRecord(entry.counts)), "REPORT_SCHEMA_INVALID");
+  return value;
+}
 function commitment(intent, namespace, algorithm, digest) {
-  const matches = intent.contextCommitments.filter((entry) => entry.namespace === namespace);
+  const matches = intent.contextCommitments?.filter((entry) => entry.namespace === namespace) ?? [];
   demand(matches.length === 1, "CONTEXT_COMMITMENT_NOT_UNIQUE", namespace);
   demand(matches[0].algorithm === algorithm && matches[0].digest === digest, "CONTEXT_COMMITMENT_MISMATCH", namespace);
 }
@@ -196,13 +203,15 @@ async function verifyBaseline() {
   demand(canonical(ids) === canonical([...requiredCases, "P1"]), "CASE_SET_INVALID");
   const baselineSha256 = sha256(readFileSync(join(fixtureDirectory, "baseline.json")));
   for (const entry of cases.cases) {
-    demand(entry.wakVersion === "1.18.4" && entry.inputArtifactHashes?.baselineSha256 === baselineSha256 && entry.inputArtifactHashes?.caseInputSha256 === sha256(canonical(entry.input)), "CASE_INPUT_HASH_MISMATCH", entry.id);
+    const inputBytes = canonical(entry.input);
+    demand(typeof inputBytes === "string", "CASE_INPUT_INVALID", entry.id);
+    demand(entry.wakVersion === "1.18.4" && entry.inputArtifactHashes?.baselineSha256 === baselineSha256 && entry.inputArtifactHashes?.caseInputSha256 === sha256(inputBytes), "CASE_INPUT_HASH_MISMATCH", entry.id);
   }
   const [n1, n2, n3, n4, n5a, n5b, p1] = cases.cases;
   demand(n1.input.insightVariant === "signed-block" && n1.counts.authorizationProvider === 0 && n1.counts.signer === 0 && n1.counts.broadcast === 0 && n1.counts.receipt === 0, "N1_VECTOR_INVALID");
-  demand(n2.input.now >= insight.sourceAttestation.data.validUntil && n2.counts.authorizationProvider === 0 && n2.counts.signer === 0 && n2.counts.broadcast === 0 && n2.counts.receipt === 0, "N2_VECTOR_INVALID");
-  demand(n3.input.mutateAfterAuthorization.field === "data" && keccak256(n3.input.mutateAfterAuthorization.value) !== payload.calldataHash && n3.counts.signer === 0 && n3.counts.broadcast === 0 && n3.counts.receipt === 0, "N3_VECTOR_INVALID");
-  demand(n4.input.mutateAfterAuthorization.field === "nonce" && n4.input.mutateAfterAuthorization.value !== transaction.nonce && n4.counts.signer === 0 && n4.counts.broadcast === 0 && n4.counts.receipt === 0, "N4_VECTOR_INVALID");
+  demand(typeof n2.input.now === "number" && n2.input.now >= insight.sourceAttestation.data.validUntil && n2.counts.authorizationProvider === 0 && n2.counts.signer === 0 && n2.counts.broadcast === 0 && n2.counts.receipt === 0, "N2_VECTOR_INVALID");
+  demand(n3.input.mutateAfterAuthorization?.field === "data" && keccak256(n3.input.mutateAfterAuthorization.value) !== payload.calldataHash && n3.counts.signer === 0 && n3.counts.broadcast === 0 && n3.counts.receipt === 0, "N3_VECTOR_INVALID");
+  demand(n4.input.mutateAfterAuthorization?.field === "nonce" && n4.input.mutateAfterAuthorization.value !== transaction.nonce && n4.counts.signer === 0 && n4.counts.broadcast === 0 && n4.counts.receipt === 0, "N4_VECTOR_INVALID");
   for (const n5 of [n5a, n5b]) demand(n5.input.attempts === 2 && n5.counts.signer === 1 && n5.counts.broadcast === 1 && n5.counts.receipt === 1, "REPLAY_VECTOR_INVALID");
   demand(n5a.input.providerReconstructed === false && n5b.input.providerReconstructed === true && n5b.input.persistedAcceptanceRequired === true, "REPLAY_RECONSTRUCTION_INVALID");
   demand(canonical(p1.conditionalOn) === canonical(requiredCases) && p1.input.actualBaseSepoliaExecutionRequired === true, "P1_GATE_INVALID");
@@ -242,11 +251,12 @@ async function verifyLiveReceipt(report, keyPin) {
   demand(receipt.outcome === "COMPLETED" && receipt.execution.chainId === 84532 && receipt.execution.status === "CONFIRMED" && receipt.compliance?.status === "COMPLIANT" && receipt.binding?.bound === true, "P1_RECEIPT_STATUS_INVALID");
   const checked = await verifyAuthorizedReceipt(receipt, key.publicKey, { key, now: receipt.issuedAt, audience: "priorseal" });
   demand(checked.valid, "P1_RECEIPT_SIGNATURE_INVALID", checked.code);
+  demand(receipt.authorizationEvidence, "P1_AUTHORIZATION_EVIDENCE_MISSING");
   const intent = receipt.authorizationEvidence.authorization.intent;
   commitment(intent, "agent-call-envelope.v1", "sha256", live.wak.envelopeDigest);
   commitment(intent, "web3-agent-kit.policy-decision.v1", "sha256", live.wak.policyCommitmentDigest);
   commitment(intent, "insight.pretrade-pair.v1", "keccak256", live.insightPairCommitment);
-  demand(/^0x[0-9a-f]{64}$/.test(receipt.execution.txHash), "P1_TX_HASH_INVALID");
+  demand(typeof receipt.execution.txHash === "string" && /^0x[0-9a-f]{64}$/.test(receipt.execution.txHash), "P1_TX_HASH_INVALID");
   return "P1_RECEIPT_LOCALLY_VERIFIED_RPC_CHECK_STILL_REQUIRED";
 }
 async function runVerification({ reportPath, trustKeySha256 } = {}) {
@@ -254,7 +264,7 @@ async function runVerification({ reportPath, trustKeySha256 } = {}) {
     const { baseline, cases, manifest } = await verifyBaseline();
     let wakAcceptance = "NOT_RUN";
     if (reportPath) {
-      const report = readJson(resolve(reportPath));
+      const report = parseReport(readJson(resolve(reportPath)));
       wakAcceptance = verifyWakReport(report, cases, baseline);
       if (wakAcceptance === "P1_REPORTED_REQUIRES_RECEIPT_VERIFICATION") wakAcceptance = await verifyLiveReceipt(report, trustKeySha256);
     }

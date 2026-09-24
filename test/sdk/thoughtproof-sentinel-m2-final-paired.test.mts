@@ -5,7 +5,15 @@ import test from 'node:test';
 import { runFinalPairChecks } from '../../examples/thoughtproof-sentinel-paired-v2-final/verify.reference.mjs';
 
 const fixtureUrl = new URL('../../examples/thoughtproof-sentinel-paired-v2-final/', import.meta.url);
-const readJson = (name: string): any => JSON.parse(readFileSync(new URL(name, fixtureUrl), 'utf8'));
+type FixtureFiles = {
+  'expected.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2-final/expected.json');
+  'export-m2-match.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2-final/export-m2-match.json');
+  'export-m2-missing-subject.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2-final/export-m2-missing-subject.json');
+  'priorseal-receipt-matching.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2-final/priorseal-receipt-matching.json');
+  'priorseal-receipt-missing-subject.json': typeof import('../../examples/thoughtproof-sentinel-paired-v2-final/priorseal-receipt-missing-subject.json');
+};
+const readJson = <Name extends keyof FixtureFiles>(name: Name): FixtureFiles[Name] =>
+  JSON.parse(readFileSync(new URL(name, fixtureUrl), 'utf8')) as FixtureFiles[Name];
 
 test('M2 final pairs use the ThoughtProof-issued matching and missing-subject artifacts', async () => {
   const results = await runFinalPairChecks({ log: () => {} });

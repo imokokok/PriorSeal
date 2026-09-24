@@ -8,6 +8,7 @@ import {
   verifyCalldataFixtures,
   verifyM2Pair,
 } from '../thoughtproof-sentinel-paired-v2/verify.reference.mjs';
+import type { KeyRegistry, Receipt } from '../../sdk/dist/types.js';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 
@@ -24,9 +25,9 @@ function sha256(value: string): string {
 }
 
 export async function runFinalPairChecks({ log = console.log }: { log?: (message: string) => void } = {}) {
-  const expected = readJson<{ sourceFilesSha256: Record<string, string>; calldataFixtures: string; cases: { name: string; export: string; receipt: string; allowVectorOnly: boolean; expectedCode: string; expectedSubjectBindingCode?: string }[] }>('expected.json');
-  const thoughtProofKeys = readJson('thoughtproof-keys.json');
-  const trustedIssuerKeys = readJson('priorseal-trusted-issuer-keys.json');
+  const expected = readJson<typeof import('./expected.json')>('expected.json');
+  const thoughtProofKeys = readJson<typeof import('./thoughtproof-keys.json')>('thoughtproof-keys.json');
+  const trustedIssuerKeys = readJson<KeyRegistry>('priorseal-trusted-issuer-keys.json');
   const results: { name: string; code: string; subjectBindingCode?: string }[] = [];
 
   for (const [name, expectedHash] of Object.entries(expected.sourceFilesSha256)) {
@@ -41,8 +42,8 @@ export async function runFinalPairChecks({ log = console.log }: { log?: (message
   for (const result of calldataResults) log(`PASS ${result.name}: ${result.code}`);
 
   for (const vector of expected.cases) {
-    const artifact = readJson(vector.export);
-    const priorSealReceipt = readJson(vector.receipt);
+    const artifact = readJson<typeof import('./export-m2-match.json')>(vector.export);
+    const priorSealReceipt = readJson<Receipt>(vector.receipt);
     const result = await verifyM2Pair({
       artifact,
       priorSealReceipt,

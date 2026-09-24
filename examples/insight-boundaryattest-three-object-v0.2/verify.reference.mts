@@ -16,6 +16,7 @@ import {
 } from 'viem';
 import { matchUniqueContextCommitment } from '../../sdk/dist/index.js';
 import { verifyReceiptLocally } from '../../sdk/dist/verifier.js';
+import type { KeyRegistry, Receipt } from '../../sdk/dist/types.js';
 import { jcsCanonicalBytes } from './jcs.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -44,7 +45,7 @@ const INSIGHT_UINT_FIELDS = [
   'checkedAt',
   'schemaVersion',
   'requiredSourceGroupCount',
-];
+] as const;
 
 const INSIGHT_DOMAIN = {
   name: 'Insight Oracle Safety',
@@ -105,11 +106,26 @@ const BOUNDARY_SCOPE_FIELDS = [
   'nativeValue',
 ];
 
-function readJson(name: any) {
-  return JSON.parse(readFileSync(resolve(directory, name), 'utf8'));
+type InsightAttestation = typeof import('./insight-source.json');
+type InsightData = InsightAttestation['data'];
+type BoundaryReceipt = typeof import('./boundaryattest-receipt.json');
+type Expected = typeof import('./expected.json');
+type FixtureCase = { name: string; expectedCode: string; expectedValueConclusion?: string;
+  mutation?: string; insightSource?: string; insightDestination?: string;
+  boundaryReceipt?: string; priorSealReceipt?: string;
+  preloadExportReplay?: boolean; preloadDecisionReplay?: boolean };
+type InsightHexField = 'reasonCodesHash' | 'requestHash' | 'evaluatedAssetIdsHash' | 'providerObservationsHash';
+type InsightMessage = Omit<InsightData, typeof INSIGHT_UINT_FIELDS[number] | InsightHexField> & {
+  [K in typeof INSIGHT_UINT_FIELDS[number]]: bigint;
+} & {
+  [K in InsightHexField]: `0x${string}`;
+};
+
+function readJson<T>(name: string): T {
+  return JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as T;
 }
 
-function isRecord(value: any) {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -117,11 +133,11 @@ function fail(code: string, detail?: string) {
   return { ok: false as const, code, ...(detail ? { detail } : {}) };
 }
 
-function sha256HexBytes(bytes: any) {
+function sha256HexBytes(bytes: Buffer) {
   return `0x${createHash('sha256').update(bytes).digest('hex')}`;
 }
 
-function externalKeyId(publicKeyPem: any) {
+function externalKeyId(publicKeyPem: string) {
   const der = createPublicKey(publicKeyPem).export({
     type: 'spki',
     format: 'der',
@@ -129,18 +145,18 @@ function externalKeyId(publicKeyPem: any) {
   return `sha256:${createHash('sha256').update(der).digest('hex')}`;
 }
 
-function insightMessage(data: any) {
-  const message = { ...data };
+function insightMessage(data: InsightData) {
+  const message: Record<string, string | number | bigint> = { ...data };
   for (const field of INSIGHT_UINT_FIELDS) {
     if (!Number.isSafeInteger(data?.[field]) || data[field] < 0) {
       throw new TypeError(`${field} must be a non-negative safe integer`);
     }
     message[field] = BigInt(data[field]);
   }
-  return message;
+  return message as InsightMessage;
 }
 
-function recomputeInsightRequestHash(data: any) {
+function recomputeInsightRequestHash(data: InsightData) {
   return hashTypedData({
     domain: CANONICAL_REQUEST_DOMAIN,
     types: CANONICAL_REQUEST_TYPES,
@@ -156,9 +172,9 @@ function recomputeInsightRequestHash(data: any) {
 }
 
 export async function verifyInsightAttestation(
-  attestation: any,
-  expectedAttester: any,
-  authorizationTime: any,
+  attestation: InsightAttestation,
+  expectedAttester: string,
+  authorizationTime: number,
 ) {
   if (!isRecord(attestation) || !isRecord(attestation.data))
     return fail('ATTESTATION_INVALID');
@@ -185,8 +201,8 @@ export async function verifyInsightAttestation(
     if (
       !(await verifyTypedData({
         ...args,
-        address: attestation.attester,
-        signature: attestation.signature,
+        address: attestation.attester as `0x${string}`,
+        signature: attestation.signature as `0x${string}`,
       }))
     ) {
       return fail('SIGNATURE_INVALID');
@@ -223,9 +239,9 @@ export async function verifyInsightAttestation(
 }
 
 export function computeInsightPairCommitment(
-  source: any,
-  destination: any,
-  maxSlippageBps: any,
+  source: InsightAttestation,
+  destination: InsightAttestation,
+  maxSlippageBps: number,
 ) {
   if (
     !Number.isSafeInteger(maxSlippageBps) ||
@@ -243,10 +259,10 @@ export function computeInsightPairCommitment(
       { type: 'uint16', name: 'maxSlippageBps' },
     ],
     [
-      source.uid,
-      destination.uid,
-      source.data.requestHash,
-      destination.data.requestHash,
+      source.uid as `0x${string}`,
+      destination.uid as `0x${string}`,
+      source.data.requestHash as `0x${string}`,
+      destination.data.requestHash as `0x${string}`,
       maxSlippageBps,
     ],
   );
@@ -257,7 +273,7 @@ export function computeInsightPairCommitment(
   };
 }
 
-export function verifyBoundaryAttestReceipt(receipt: any, expectedPublicKey: any) {
+export function verifyBoundaryAttestReceipt(receipt: BoundaryReceipt, expectedPublicKey: string) {
   if (!isRecord(receipt)) return fail('BOUNDARYATTEST_RECEIPT_INVALID');
   if (
     Object.keys(receipt).sort().join(',') !== 'claim,public_key_id,signature'
@@ -336,7 +352,7 @@ export function verifyBoundaryAttestReceipt(receipt: any, expectedPublicKey: any
     !Array.isArray(decision.inputs) ||
     decision.inputs.length === 0 ||
     decision.inputs.some(
-      (input: any) =>
+      (input) =>
         !isRecord(input) ||
         input.decision_id !== decision.decision_id ||
         input.evidence_bundle_digest !== decision.evidence?.bundle_digest,
@@ -350,7 +366,7 @@ export function verifyBoundaryAttestReceipt(receipt: any, expectedPublicKey: any
   return { ok: true as const, code: 'OK', claim: receipt.claim, decision };
 }
 
-function parseWholeSecondTimestamp(value: any) {
+function parseWholeSecondTimestamp(value: string) {
   const seconds = Date.parse(value) / 1000;
   return Number.isSafeInteger(seconds) ? seconds : null;
 }
@@ -363,7 +379,7 @@ function checkFreshness({
   invalid,
   future,
   stale,
-}: any) {
+}: { timestamp: string; authorizationTime: number; maxAge: number; maxFutureSkew: number; invalid: string; future: string; stale: string }) {
   const observed = parseWholeSecondTimestamp(timestamp);
   if (observed === null) return fail(invalid);
   if (observed > authorizationTime + maxFutureSkew) return fail(future);
@@ -371,7 +387,7 @@ function checkFreshness({
   return { ok: true as const, code: 'OK', observed };
 }
 
-function priorSealPublicKeyFingerprint(publicKeyPem: any) {
+function priorSealPublicKeyFingerprint(publicKeyPem: string) {
   const der = createPublicKey(publicKeyPem).export({
     type: 'spki',
     format: 'der',
@@ -379,14 +395,14 @@ function priorSealPublicKeyFingerprint(publicKeyPem: any) {
   return createHash('sha256').update(der).digest('hex');
 }
 
-function mapScopeMismatch(scope: any, intent: any) {
+function mapScopeMismatch(scope: unknown, intent: NonNullable<Receipt['authorizationEvidence']>['authorization']['intent']) {
   if (
     !isRecord(scope) ||
     Object.keys(scope).length !== BOUNDARY_SCOPE_FIELDS.length ||
     !Object.keys(scope).every((field) =>
       BOUNDARY_SCOPE_FIELDS.includes(field),
     ) ||
-    !Number.isSafeInteger(scope.chainId) ||
+    typeof scope.chainId !== 'number' || !Number.isSafeInteger(scope.chainId) ||
     scope.chainId < 1 ||
     typeof scope.executor !== 'string' ||
     !/^0x[0-9a-f]{40}$/.test(scope.executor) ||
@@ -416,7 +432,7 @@ function mapScopeMismatch(scope: any, intent: any) {
   return { ok: true as const, code: 'OK' };
 }
 
-export function evaluateBoundaryAttestValue(deletionTest: any) {
+export function evaluateBoundaryAttestValue(deletionTest: unknown) {
   if (
     !isRecord(deletionTest) ||
     typeof deletionTest.exactFact !== 'string' ||
@@ -453,11 +469,13 @@ export async function verifyThreeObjectFlow({
   expected,
   usedSignedExports = new Set(),
   usedDecisionIds = new Set(),
-}: any) {
+}: { insightSource: InsightAttestation; insightDestination: InsightAttestation;
+  boundaryReceipt: BoundaryReceipt; boundaryPublicKey: string; priorSealReceipt: Receipt | null;
+  trustedIssuerKeys: KeyRegistry; expected: Expected; usedSignedExports?: Set<string>; usedDecisionIds?: Set<string> }) {
   if (!isRecord(priorSealReceipt)) return fail('PRIORSEAL_RECEIPT_MISSING');
   const authorizationTime =
     priorSealReceipt?.authorizationEvidence?.authorization?.issuedAt;
-  if (!Number.isSafeInteger(authorizationTime))
+  if (typeof authorizationTime !== 'number' || !Number.isSafeInteger(authorizationTime))
     return fail('PRIORSEAL_AUTHORIZATION_TIME_INVALID');
 
   const source = await verifyInsightAttestation(
@@ -494,7 +512,7 @@ export async function verifyThreeObjectFlow({
   if (!boundary.ok) return boundary;
 
   const trustedKey = trustedIssuerKeys?.keys?.find(
-    (entry: any) =>
+    (entry) =>
       entry.issuer === expected.priorSeal.issuer &&
       entry.keyId === expected.priorSeal.keyId,
   );
@@ -521,6 +539,7 @@ export async function verifyThreeObjectFlow({
   ) {
     return fail('PRIORSEAL_RECEIPT_NOT_COMPLIANT');
   }
+  if (!priorSealReceipt.authorizationEvidence) return fail('PRIORSEAL_AUTHORIZATION_MISSING');
   const intent = priorSealReceipt.authorizationEvidence.authorization.intent;
   if (
     intent.schema !== 'priorseal.intent.v2' ||
@@ -643,7 +662,7 @@ export async function verifyThreeObjectFlow({
   };
 }
 
-function applyMutation(caseDefinition: any, source: any, boundaryReceipt: any) {
+function applyMutation(caseDefinition: FixtureCase, source: InsightAttestation, boundaryReceipt: BoundaryReceipt) {
   if (caseDefinition.mutation === 'tamper-insight-source-verdict') {
     source.data.verdict = 'BLOCK';
   }
@@ -654,30 +673,30 @@ function applyMutation(caseDefinition: any, source: any, boundaryReceipt: any) {
 }
 
 export async function runFixtureChecks({ log = console.log } = {}) {
-  const expected = readJson('expected.json');
-  const trustedIssuerKeys = readJson('priorseal-trusted-issuer-keys.json');
+  const expected = readJson<Expected>('expected.json');
+  const trustedIssuerKeys = readJson<KeyRegistry>('priorseal-trusted-issuer-keys.json');
   const boundaryPublicKey = readFileSync(
     resolve(directory, 'boundaryattest-public-key.pem'),
     'utf8',
   );
   const results = [];
 
-  for (const caseDefinition of expected.cases) {
-    const source = readJson(
+  for (const caseDefinition of expected.cases as FixtureCase[]) {
+    const source = readJson<InsightAttestation>(
       caseDefinition.insightSource ?? 'insight-source.json',
     );
-    const destination = readJson(
+    const destination = readJson<InsightAttestation>(
       caseDefinition.insightDestination ?? 'insight-destination.json',
     );
-    const boundaryReceipt = readJson(
+    const boundaryReceipt = readJson<BoundaryReceipt>(
       caseDefinition.boundaryReceipt ?? 'boundaryattest-receipt.json',
     );
-    const priorSealReceipt = readJson(
+    const priorSealReceipt = readJson<Receipt>(
       caseDefinition.priorSealReceipt ?? 'priorseal-receipt-matching.json',
     );
     applyMutation(caseDefinition, source, boundaryReceipt);
-    const usedSignedExports = new Set();
-    const usedDecisionIds = new Set();
+    const usedSignedExports = new Set<string>();
+    const usedDecisionIds = new Set<string>();
     if (caseDefinition.preloadExportReplay) {
       usedSignedExports.add(
         JSON.stringify([

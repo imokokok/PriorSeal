@@ -1,6 +1,7 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const errors: string[] = [];
@@ -92,6 +93,23 @@ for (const [reviewed, description] of [
     else if (path.endsWith('.mjs') && existsSync(path.replace(/\.mjs$/, '.mts'))) {
       errors.push(`${exception}: remove stale JavaScript ${description} exception after TypeScript migration`);
     }
+  }
+}
+
+// Generated worker-configuration.d.ts is checked by Wrangler; authored
+// TypeScript must keep its untrusted boundaries explicit instead of using any.
+for (const directory of ['src', 'sdk/src', 'web/src', 'scripts', 'sdk/scripts', 'examples', 'test']) {
+  for (const path of files(join(projectRoot, directory))) {
+    if (!/\.(?:ts|tsx|mts)$/.test(path)) continue;
+    const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
+    function inspect(node: ts.Node): void {
+      if (node.kind === ts.SyntaxKind.AnyKeyword) {
+        const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+        errors.push(`${label(path)}:${line + 1}: authored TypeScript must not use explicit any`);
+      }
+      ts.forEachChild(node, inspect);
+    }
+    inspect(source);
   }
 }
 

@@ -23,8 +23,8 @@ const instrument = {
   priceBasis: 'underlying-spot',
   corporateActionVersion: 'rhj-registry-20260921',
 } as const satisfies sdk.RwaInstrument;
-function fixture(): any {
-  const f: any = rwaV2Fixture(sdk),
+function fixture() {
+  const f = rwaV2Fixture(sdk) as unknown as Omit<ReturnType<typeof rwaV2Fixture>, 'callProfile'> & { callProfile: sdk.RwaCallProfileV2 },
     profile = executionRegistry.profiles[0].profile,
     instrumentId = sdk.rwaInstrumentId(instrument);
   assert.equal(instrumentId, profile.instrumentId);
@@ -37,8 +37,8 @@ function fixture(): any {
     price.priceBasis = instrument.priceBasis;
     price.corporateActionVersion = instrument.corporateActionVersion;
   }
-  f.input.market.instrumentId = instrumentId;
-  f.input.market.mic = instrument.venueMic;
+  f.input.market!.instrumentId = instrumentId;
+  f.input.market!.mic = instrument.venueMic;
   for (const evidence of f.input.evidence) {
     evidence.instrumentId = instrumentId;
     if (evidence.kind !== 'eligibility') evidence.subject = instrumentId;
@@ -55,7 +55,7 @@ function fixture(): any {
     minimumOutput: '1',
     receiver: f.receiverEvidence.subject,
     deadline: f.now + 120,
-  });
+  }) as typeof f.transaction;
   f.input.request.call = {
     chainId: f.transaction.chainId,
     from: f.transaction.from,
@@ -107,7 +107,7 @@ test('PriorSeal independently requires the signed production admission commitmen
       signer: signer.address,
       signature: await signer.signTypedData(sdk.rwaV2SigningData(report)),
     },
-    trust: any = {
+    trust: Parameters<typeof sdk.verifyRwaReportV2>[1] & { instrumentAdmission?: typeof instrumentAdmission } = {
       policy: structuredClone(f.policy),
       policyId: sdk.rwaPolicyId(f.policy),
       request: structuredClone(f.input.request),

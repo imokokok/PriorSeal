@@ -39,7 +39,7 @@ function verifyBoundaryAttestReceipt(receipt, publicKeyPem) {
   if (!isRecord(receipt.claim) || typeof receipt.signature !== "string" || typeof receipt.public_key_id !== "string") return { ok: false, code: "INVALID_BOUNDARYATTEST_RECEIPT" };
   for (const field of requiredClaimFields) if (!Object.hasOwn(receipt.claim, field)) return { ok: false, code: `MISSING_BOUNDARYATTEST_FIELD:${field}` };
   if (receipt.claim.receipt_version !== "0.2") return { ok: false, code: "UNSUPPORTED_BOUNDARYATTEST_VERSION" };
-  if (!["client_observed", "server_attested"].includes(receipt.claim.receipt_role)) return { ok: false, code: "UNSUPPORTED_BOUNDARYATTEST_ROLE" };
+  if (typeof receipt.claim.receipt_role !== "string" || !["client_observed", "server_attested"].includes(receipt.claim.receipt_role)) return { ok: false, code: "UNSUPPORTED_BOUNDARYATTEST_ROLE" };
   try {
     if (receipt.public_key_id !== externalKeyId(publicKeyPem)) return { ok: false, code: "BOUNDARYATTEST_KEY_ID_MISMATCH" };
     const valid = verify(null, jcsCanonicalBytes(receipt.claim), publicKeyPem, Buffer.from(receipt.signature, "base64"));
@@ -54,9 +54,11 @@ async function verifyPair({ externalReceipt, externalPublicKey, priorSealReceipt
   const priorSeal = await verifyReceiptLocally(priorSealReceipt, { trustedKeys: trustedIssuerKeys, now: priorSealReceipt.issuedAt });
   if (!priorSeal.valid) return { ok: false, code: `PRIORSEAL_${priorSeal.code}` };
   if (priorSeal.verificationScope !== "LOCAL_COMPLETE") return { ok: false, code: "PRIORSEAL_EXTERNAL_CHECK_REQUIRED" };
+  if (!priorSealReceipt.authorizationEvidence) return { ok: false, code: "PRIORSEAL_AUTHORIZATION_MISSING" };
   const intent = priorSealReceipt.authorizationEvidence.authorization.intent;
   const digest = `0x${createHash("sha256").update(jcsCanonicalBytes(externalReceipt.claim)).digest("hex")}`;
   if (digest !== expected.digest) return { ok: false, code: "BOUNDARYATTEST_CLAIM_DIGEST_MISMATCH" };
+  if (expected.algorithm !== "sha256" && expected.algorithm !== "keccak256") return { ok: false, code: "INVALID_COMMITMENT_ALGORITHM" };
   const commitment = matchUniqueContextCommitment(intent, { namespace: expected.namespace, algorithm: expected.algorithm, digest });
   if (!commitment.matched) return { ok: false, code: commitment.code };
   const decision = externalReceipt.claim.decision_record;

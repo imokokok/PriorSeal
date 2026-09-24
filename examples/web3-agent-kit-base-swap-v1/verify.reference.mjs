@@ -315,7 +315,7 @@ async function verifyEvidenceBundle(bundle, roots) {
     const { bundleHash, ...unsigned } = bundle;
     requireClaim(bundleHash === sha256Canonical(unsigned), "BUNDLE_HASH_MISMATCH");
     for (const [name, expected] of Object.entries(roots.expectedSourceCommits)) {
-      requireClaim(bundle.sources[name].commit === expected, "SOURCE_COMMIT_MISMATCH", name);
+      requireClaim(bundle.sources[name]?.commit === expected, "SOURCE_COMMIT_MISMATCH", name);
     }
     const draftResult = verifyDraft(bundle.transactionDraft);
     const receipt = bundle.priorSeal.receipt;

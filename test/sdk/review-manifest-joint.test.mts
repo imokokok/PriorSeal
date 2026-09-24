@@ -4,29 +4,33 @@ import assert from 'node:assert/strict';
 import { keccak256 } from 'viem';
 import { hashJson } from '../../src/index.mjs';
 import {
-  buildReviewManifest as buildReviewManifestTyped,
-  verifyReviewManifestLocally as verifyReviewManifestLocallyTyped,
+  buildReviewManifest,
+  verifyReviewManifestLocally,
 } from '../../sdk/dist/verifier.js';
+import type { InsightProtocolTrust } from '../../sdk/dist/insight-protocol-trust.js';
 import { createJointReviewFixture, zeroHash, router } from '../helpers/joint-review-fixture.mjs';
 
-// This suite intentionally mutates otherwise valid cross-product artifacts. Keep
-// the unsafe boundary in these three adapters and type the test control flow.
-const fixture = async (options: any = {}): Promise<any> => createJointReviewFixture(options);
-const buildReviewManifest = async (input: any): Promise<any> => buildReviewManifestTyped(input);
-const verifyReviewManifestLocally = async (manifest: any, options: any): Promise<any> =>
-  verifyReviewManifestLocallyTyped(manifest, options);
+const fixture = async (options?: Parameters<typeof createJointReviewFixture>[0]) => {
+  const f = await createJointReviewFixture(options);
+  return {
+    ...f,
+    // The helper constructs valid values; tests below mutate them after construction.
+    bundle: f.bundle as Parameters<typeof buildReviewManifest>[0]['bundle'],
+    options: f.options as NonNullable<Parameters<typeof verifyReviewManifestLocally>[1]>,
+  };
+};
 
 test('joint review verifies real Insight v5 pair, immutable protocol policy and exact-call authorization locally', async () => {
   const f = await fixture();
   const result = await verifyReviewManifestLocally(f.manifest, f.options);
   assert.equal(result.valid, true, JSON.stringify(result));
   assert.equal(result.verificationOrigin, 'local');
-  assert(result.artifacts.every((row: any) => row.signatureValid && row.trusted));
+  assert(result.artifacts.every((row) => row.signatureValid && row.trusted));
   assert.equal(result.relations.insightPair, true);
   assert.equal(result.relations.insightAuthorizationBinding, true);
   assert.equal(result.relations.insightProtocol, true);
-  assert.equal(result.artifacts[2].protocol.scope, 'signed-profile');
-  assert.equal(result.artifacts[2].protocol.code, 'SIGNED_PROFILE_VERIFIED');
+  assert.equal(result.artifacts[2].protocol!.scope, 'signed-profile');
+  assert.equal(result.artifacts[2].protocol!.code, 'SIGNED_PROFILE_VERIFIED');
 });
 
 test('joint review rejects a rehashed payload mutation without a corresponding signature', async () => {
@@ -43,10 +47,10 @@ for (const scenario of [
   { name: 'different execution time for the same transaction', options: { c4Overrides: { executedAt: 1200 } } },
   { name: 'different executor for the same transaction', options: { c4Overrides: { taker: router, subject: router } } },
   { name: 'legacy C4 v2 without a signed destination binding', options: { c4Version: 2 } },
-  { name: 'C4 v5 with zero destination UID and source-only UID hash', options: { c4Overrides: (source: any) => ({ destinationPreTradeUid: zeroHash, preTradeUidsHash: keccak256(source.uid) }) } },
+  { name: 'C4 v5 with zero destination UID and source-only UID hash', options: { c4Overrides: (source: { uid: `0x${string}` }) => ({ destinationPreTradeUid: zeroHash, preTradeUidsHash: keccak256(source.uid) }) } },
   { name: 'destination assessed after authorization', options: { destinationOverrides: { checkedAt: 1050 } } },
   { name: 'authorization outliving a decision', options: { sourceOverrides: { validUntil: 1400 } } },
-  { name: 'incorrect pair commitment', options: { commitmentOverride: zeroHash } },
+  { name: 'incorrect pair commitment', options: { commitmentOverride: zeroHash as `0x${string}` } },
   { name: 'incorrect declared pre-trade signing time', options: { c4Overrides: { preTradeSignedAt: 901, attestationAgeAtExecSeconds: 199 } } },
   { name: 'incorrect declared attestation age', options: { c4Overrides: { attestationAgeAtExecSeconds: 0 } } },
   { name: 'different destination scope', options: { destinationOverrides: { tradeAmountUsd: 200000000000 } } },
@@ -70,8 +74,8 @@ test('missing attachments and independent Insight trust prevent complete verific
   }
   const untrusted = await verifyReviewManifestLocally(f.manifest, { ...f.options, insightKeyRegistry: undefined });
   assert.equal(untrusted.valid, false);
-  assert(untrusted.artifacts.every((row: any) => row.trusted === false));
-  const sample = structuredClone(f.options); sample.insightKeyRegistry.keys[0].role = 'sample';
+  assert(untrusted.artifacts.every((row) => row.trusted === false));
+  const sample = structuredClone(f.options); sample.insightKeyRegistry!.keys![0].role = 'sample';
   assert.equal((await verifyReviewManifestLocally(f.manifest, sample)).valid, false);
 });
 
@@ -80,7 +84,7 @@ test('a valid local anchor proof still requires the external chain check', async
   const result = await verifyReviewManifestLocally(f.manifest, f.options);
   assert.equal(result.priorSeal.valid, true, JSON.stringify(result));
   assert.equal(result.valid, false);
-  assert.deepEqual(result.requiredExternalChecks.map((check: any) => check.type), ['EVM_ANCHOR']);
+  assert.deepEqual(result.requiredExternalChecks.map((check) => check.type), ['EVM_ANCHOR']);
 });
 
 
@@ -100,40 +104,40 @@ test('joint timing uses the later of both signed pre-trade checkedAt values', as
 
 test('v5 protocol trust is independently supplied and cannot be granted by a manifest', async () => {
   const f = await fixture();
-  f.manifest.insightProtocolTrust = f.options.insightProtocolTrust;
+  (f.manifest as typeof f.manifest & { insightProtocolTrust?: InsightProtocolTrust }).insightProtocolTrust = f.options.insightProtocolTrust;
   const { manifestHash: _hash, ...content } = f.manifest;
   f.manifest.manifestHash = hashJson(content);
   const result = await verifyReviewManifestLocally(f.manifest, { ...f.options, insightProtocolTrust: undefined });
   assert.equal(result.valid, false);
   assert.equal(result.artifacts[2].signatureValid, true);
   assert.equal(result.artifacts[2].trusted, true);
-  assert.equal(result.artifacts[2].protocol.code, 'INSIGHT_PROTOCOL_TRUST_REQUIRED');
+  assert.equal(result.artifacts[2].protocol!.code, 'INSIGHT_PROTOCOL_TRUST_REQUIRED');
 });
 
 test('legacy v4 review requires exact snapshot pins and reports only snapshot-relative semantics', async () => {
   const f = await fixture({ c4Version: 4 });
   const result = await verifyReviewManifestLocally(f.manifest, f.options);
   assert.equal(result.valid, true, JSON.stringify(result));
-  assert.equal(result.artifacts[2].protocol.scope, 'legacy-snapshot');
-  assert.equal(result.artifacts[2].protocol.registrySnapshotSha256, f.options.insightProtocolTrust.registrySnapshot.sha256);
+  assert.equal(result.artifacts[2].protocol!.scope, 'legacy-snapshot');
+  assert.equal(result.artifacts[2].protocol!.registrySnapshotSha256, f.options.insightProtocolTrust!.registrySnapshot.sha256);
   assert.equal((await verifyReviewManifestLocally(f.manifest, { ...f.options, insightProtocolTrust: undefined })).valid, false);
-  f.options.insightProtocolTrust.registrySnapshot.rawJson += '\n';
+  f.options.insightProtocolTrust!.registrySnapshot.rawJson += '\n';
   const mismatch = await verifyReviewManifestLocally(f.manifest, f.options);
   assert.equal(mismatch.valid, false);
-  assert.equal(mismatch.artifacts[2].protocol.code, 'REGISTRY_SNAPSHOT_MISMATCH');
+  assert.equal(mismatch.artifacts[2].protocol!.code, 'REGISTRY_SNAPSHOT_MISMATCH');
 });
 
 for (const [name, mutate] of [
-  ['registry raw bytes', (trust: any) => { trust.registrySnapshot.rawJson += ' '; }],
-  ['registry byte length', (trust: any) => { trust.registrySnapshot.byteLength++; }],
-  ['missing lineage body', (trust: any) => { trust.registryReleases.pop(); }],
-  ['changed immutable profile', (trust: any) => { trust.executionProfiles[0].rawJson = '{}'; }],
-  ['unadmitted execution schema', (trust: any) => { trust.consumerPolicy.allowedSchemaVersions = [4]; }],
-  ['mismatched immutable policy pins', (trust: any) => { trust.consumerPolicy.allowedProfileIds = [zeroHash]; }],
-] as Array<[string, (trust: any) => void]>) {
+  ['registry raw bytes', (trust: InsightProtocolTrust) => { trust.registrySnapshot.rawJson += ' '; }],
+  ['registry byte length', (trust: InsightProtocolTrust) => { trust.registrySnapshot.byteLength++; }],
+  ['missing lineage body', (trust: InsightProtocolTrust) => { trust.registryReleases.pop(); }],
+  ['changed immutable profile', (trust: InsightProtocolTrust) => { trust.executionProfiles[0].rawJson = '{}'; }],
+  ['unadmitted execution schema', (trust: InsightProtocolTrust) => { trust.consumerPolicy.allowedSchemaVersions = [4]; }],
+  ['mismatched immutable policy pins', (trust: InsightProtocolTrust) => { trust.consumerPolicy.allowedProfileIds = [zeroHash]; }],
+] as Array<[string, (trust: InsightProtocolTrust) => void]>) {
   test(`v5 combined review rejects ${name}`, async () => {
     const f = await fixture();
-    mutate(f.options.insightProtocolTrust);
+    mutate(f.options.insightProtocolTrust!);
     const result = await verifyReviewManifestLocally(f.manifest, f.options);
     assert.equal(result.valid, false);
     assert.equal(result.artifacts[2].signatureValid, true);
