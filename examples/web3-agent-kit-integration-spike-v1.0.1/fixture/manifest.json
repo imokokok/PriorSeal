@@ -1,0 +1,12 @@
+{
+  "schema": "wak-insight-priorseal.fixture-manifest.v1",
+  "version": "v1.0.1",
+  "reportContractVersion": "v1",
+  "files": {
+    "README.md": "14e3abe44ab467b70522907df68d0aa7454ddb9f58dcd2ad10e04c4f7d7611be",
+    "fixture/baseline.json": "799fc12b3ee0bcd8780e3b03361c80c179415f2cabaacb22dc42c077c471a64f",
+    "fixture/cases.json": "80355db3254a7b9574bbab07403e77f45cf2287ea8f61d81cb48253274a24dce",
+    "fixture/trust-roots.json": "b62645ffdf6e9c460f0b086ed29e5e086f261010c9539e19610e24608a4ff9d2",
+    "verify.mjs": "b36c3fb6e76f92e9b2260767fed672c455b68d5821b1f70d90928621c01fd612"
+  }
+}

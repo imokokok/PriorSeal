@@ -7,6 +7,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 const bundle = fileURLToPath(new URL('../../examples/web3-agent-kit-integration-spike-v1/', import.meta.url))
+const maintenanceBundle = fileURLToPath(new URL('../../examples/web3-agent-kit-integration-spike-v1.0.1/', import.meta.url))
 const childEnv = { ...process.env }
 delete childEnv.NODE_TEST_CONTEXT
 
@@ -45,4 +46,19 @@ test('the extracted spike bundle verifies without a repository checkout and reje
   } finally {
     rmSync(temporary, { recursive: true, force: true })
   }
+})
+
+test('the v1.0.1 maintenance bundle closes the stale Base Sepolia compatibility note', () => {
+  const verified = JSON.parse(execFileSync(process.execPath, [join(maintenanceBundle, 'verify.mjs')], {
+    encoding: 'utf8',
+    cwd: maintenanceBundle,
+    env: childEnv,
+  }))
+
+  assert.equal(verified.status, 'PASS')
+  assert.equal(verified.fixtureBundleVersion, 'v1.0.1')
+  assert.equal(verified.reportContractVersion, 'v1')
+  assert.equal(verified.wakAcceptance, 'NOT_RUN')
+  assert.match(verified.compatibilityNote, /Chain\.BASE_SEPOLIA with chain ID 84532/)
+  assert.doesNotMatch(verified.compatibilityNote, /lacks Base Sepolia/i)
 })

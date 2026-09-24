@@ -46,7 +46,9 @@ const reviewedPortableJavaScript = /* @__PURE__ */ new Set([
   "examples/web3-agent-kit-base-swap-v2/verify.mjs",
   "examples/web3-agent-kit-context-binding-v1/verify.mjs",
   "examples/web3-agent-kit-integration-spike-v1/verify.mjs",
-  "examples/web3-agent-kit-integration-spike-v1/verify.source.mjs"
+  "examples/web3-agent-kit-integration-spike-v1/verify.source.mjs",
+  "examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs",
+  "examples/web3-agent-kit-integration-spike-v1.0.1/verify.source.mjs"
 ]);
 const reviewedLegacyJavaScriptTests = /* @__PURE__ */ new Set([
   "test/bootstrap/cloudflare-bindings.test.mjs",
