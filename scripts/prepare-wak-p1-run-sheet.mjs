@@ -110,6 +110,13 @@ const FACTORY_ABI = [{
   inputs: [{ name: "tokenA", type: "address" }, { name: "tokenB", type: "address" }, { name: "fee", type: "uint24" }],
   outputs: [{ name: "pool", type: "address" }]
 }];
+const POOL_ABI = [{
+  type: "function",
+  name: "liquidity",
+  stateMutability: "view",
+  inputs: [],
+  outputs: [{ name: "liquidity", type: "uint128" }]
+}];
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -214,6 +221,8 @@ const [routerCode, quoterCode, factoryCode, wethCode, usdcCode, balance, nonce, 
 for (const [name, code] of Object.entries({ routerCode, quoterCode, factoryCode, wethCode, usdcCode }))
   assert(code && code !== "0x", `${name} is not deployed`);
 assert(pool !== "0x0000000000000000000000000000000000000000", "WETH/USDC 0.3% pool is unavailable");
+const poolLiquidity = await client.readContract({ address: pool, abi: POOL_ABI, functionName: "liquidity" });
+assert(poolLiquidity > 0n, "WETH/USDC 0.3% pool has no liquidity");
 const quoteParams = { tokenIn: WETH, tokenOut: USDC, amountIn: AMOUNT_IN, fee: FEE, sqrtPriceLimitX96: 0n };
 const quote = await client.simulateContract({
   account,
@@ -235,6 +244,7 @@ const swapParams = {
   sqrtPriceLimitX96: 0n
 };
 const data = encodeFunctionData({ abi: EXACT_INPUT_SINGLE_ABI, functionName: "exactInputSingle", args: [swapParams] });
+assert(data.startsWith("0x04e45aaf"), "SwapRouter02 exactInputSingle selector mismatch");
 const calldataHash = keccak256(data);
 const gasEstimate = await client.estimateGas({ account: account.address, to: ROUTER, data, value: AMOUNT_IN });
 const gas = gasEstimate * 120n / 100n;
@@ -249,7 +259,7 @@ const envelopePayload = {
   nonce: String(nonce),
   calldataHash,
   nativeValue: AMOUNT_IN.toString(),
-  target: ROUTER
+  target: ROUTER.toLowerCase()
 };
 const envelopeDigest = domainDigest("agent-call-envelope.v1", envelopePayload);
 const pairCommitment = insightPairCommitment(source, destination);
@@ -257,10 +267,10 @@ const evaluatedAt = Math.floor(Date.now() / 1e3);
 const policyPayload = {
   schema: "web3-agent-kit.policy-decision.v1",
   callIdentity: envelopeDigest,
-  policyId: "wak-insight-priorseal-p1",
+  policyId: "wak-insight-priorseal-spike-v1",
   policyVersion: "1",
   verdict: "allow",
-  reasonCodes: ["FRESH_SIGNED_INSIGHT_PASS_PAIR", "NONPRODUCTION_BASE_SEPOLIA_ONLY"],
+  reasonCodes: [],
   evaluatedAt
 };
 const policyDigest = domainDigest("web3-agent-kit.policy-decision.v1", policyPayload);
@@ -335,6 +345,7 @@ const runSheet = {
     rpc: "https://sepolia.base.org",
     rpcCredentialIncluded: false,
     confirmationRule: `${MIN_CONFIRMATIONS} confirmations`,
+    receiptTimeoutSeconds: 180,
     finalityRule: "receipt status success and block remains canonical after two confirmations",
     rpcSnapshotBlock: blockNumber.toString()
   },
@@ -356,7 +367,7 @@ const runSheet = {
     productionFunds: false,
     testnetOnly: true
   },
-  contracts: { router: ROUTER, quoter: QUOTER, factory: FACTORY, pool, weth: WETH, usdc: USDC },
+  contracts: { router: ROUTER, quoter: QUOTER, factory: FACTORY, pool, poolLiquidity: poolLiquidity.toString(), weth: WETH, usdc: USDC },
   quote: {
     quotedAmountOut: quotedAmountOut.toString(),
     amountOutMinimum: amountOutMinimum.toString(),
@@ -377,6 +388,7 @@ const runSheet = {
     maxFeePerGas: fees.maxFeePerGas.toString(),
     maxPriorityFeePerGas: fees.maxPriorityFeePerGas.toString()
   },
+  routerCall: { functionName: "exactInputSingle", selector: "0x04e45aaf", deadlineInCalldata: false },
   insight: {
     sourceUid: source.uid,
     destinationUid: destination.uid,
