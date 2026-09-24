@@ -125,6 +125,7 @@ interface Options {
 	allowanceRecord: string;
 	output: string;
 	archive: string;
+	mode: "review" | "live";
 }
 
 interface GateEnvelope {
@@ -183,16 +184,22 @@ function parseArgs(argv: string[]): Options {
 	const allowanceRecord = values.get("--allowance-record");
 	const output = values.get("--output");
 	const archive = values.get("--archive");
+	const mode = values.get("--mode") ?? "review";
 	assert(
 		gateDir && allowanceRecord && output && archive,
 		"Required: --gate-dir --allowance-record --output --archive",
 	);
-	assert(values.size === 4, "Unsupported arguments");
+	assert(mode === "review" || mode === "live", "Unsupported candidate mode");
+	assert(
+		values.size === 4 || (values.size === 5 && values.has("--mode")),
+		"Unsupported arguments",
+	);
 	return {
 		gateDir: path.resolve(gateDir),
 		allowanceRecord: path.resolve(allowanceRecord),
 		output: path.resolve(output),
 		archive: path.resolve(archive),
+		mode,
 	};
 }
 
@@ -624,12 +631,17 @@ const sourceBindingBytes = serialize(sourceBinding);
 const destinationBindingBytes = serialize(destinationBinding);
 
 const packageDocument = {
-	schema: "interai.track1.final-binding-review-candidate-package.v1",
+	schema:
+		options.mode === "live"
+			? "interai.track1.jit-direct-verify-candidate-package.v1"
+			: "interai.track1.final-binding-review-candidate-package.v1",
 	packageId: `interai-track1-base-sepolia-${generatedAt}`,
 	generatedAt,
 	generatedAtIso: new Date(generatedAt * 1_000).toISOString(),
 	purpose:
-		"FINAL_BINDING_REVIEW_BEFORE_SINGLE_NON_BROADCAST_AUTHENTICATED_PREFLIGHT",
+		options.mode === "live"
+			? "JIT_HOST_CHECK_BEFORE_SINGLE_DIRECT_NON_BROADCAST_AUTHENTICATED_VERIFY"
+			: "FINAL_BINDING_REVIEW_BEFORE_SINGLE_NON_BROADCAST_AUTHENTICATED_PREFLIGHT",
 	hostPrerequisiteDisposition: "SATISFIED_AT_GENERATION",
 	executionAuthorization: "INTERAI_EXECUTABLE_ALLOW_NOT_ESTABLISHED",
 	network: {
@@ -712,12 +724,21 @@ const packageDocument = {
 		interaiCredentialExchangedOrConsumed: false,
 		authenticatedInteraiPreflightCalled: false,
 	},
-	handoff: {
-		finalBindingReviewMayProceed: true,
-		singleAuthenticatedPreflightMayProceedBeforeReview: false,
-		regenerationRule:
-			"Any nonce, quote, calldata, calldataHash, or assertion change creates a new candidate requiring review.",
-	},
+	handoff:
+		options.mode === "live"
+			? {
+					localFailClosedCheckRequired: true,
+					singleDirectAuthenticatedVerifyAfterReady: true,
+					emailCandidateHandoff: false,
+					regenerationRule:
+						"Any nonce, quote, calldata, calldataHash, or assertion change creates a new JIT candidate and requires a fresh local fail-closed check.",
+				}
+			: {
+					finalBindingReviewMayProceed: true,
+					singleAuthenticatedPreflightMayProceedBeforeReview: false,
+					regenerationRule:
+						"Any nonce, quote, calldata, calldataHash, or assertion change creates a new candidate requiring review.",
+				},
 };
 
 const releaseFilename = `oracle-registry-release-${asString(current.releaseId, "release id")}.json`;
@@ -762,11 +783,15 @@ await writePair(
 );
 
 const readme =
-	`# InterAI Track 1 final-binding-review candidate\n\n` +
+	(options.mode === "live"
+		? `# InterAI Track 1 JIT direct-verify candidate\n\n`
+		: `# InterAI Track 1 final-binding-review candidate\n\n`) +
 	`Package: \`${packageDocument.packageId}\`\n\n` +
 	`Generated: ${packageDocument.generatedAtIso}\n\n` +
-	`This package satisfied all host-side prerequisites at generation and is submitted only for Alejandro's final binding review. It is not an InterAI ALLOW or execution authorization. No swap was signed or broadcast, no PriorSeal execution step ran, the InterAI credential remained unexchanged/unconsumed, and no authenticated InterAI preflight was made.\n\n` +
-	`The quote expires at ${new Date(quoteExpiresAt * 1_000).toISOString()}. After expiry or any volatile-field change, regenerate the complete candidate and review it as new.\n`;
+	(options.mode === "live"
+		? `This host-generated JIT input is for local fail-closed checks followed by one direct authenticated InterAI /verify call after READY. It is not an InterAI ALLOW or execution authorization and is not an email attachment. No swap was signed or broadcast and no PriorSeal execution step ran at generation.\n\n`
+		: `This package satisfied all host-side prerequisites at generation and is submitted only for Alejandro's final binding review. It is not an InterAI ALLOW or execution authorization. No swap was signed or broadcast, no PriorSeal execution step ran, the InterAI credential remained unexchanged/unconsumed, and no authenticated InterAI preflight was made.\n\n`) +
+	`The quote expires at ${new Date(quoteExpiresAt * 1_000).toISOString()}. After expiry or any volatile-field change, regenerate the complete candidate.\n`;
 await writePair(options.output, options.archive, "README.md", readme);
 
 const names = [
