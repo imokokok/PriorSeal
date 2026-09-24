@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -30,6 +31,20 @@ const reviewedPortableJavaScript = new Map<string, string | null>([
 ]);
 
 const reviewedLegacyJavaScriptTests = new Set<string>();
+
+// Guard the whole tracked repository, including new directories that the
+// source-specific checks below do not yet know about.
+const trackedFiles = execFileSync('git', ['ls-files', '-z'], { cwd: projectRoot, encoding: 'utf8' }).split('\0').filter(Boolean);
+const allowedRuntimeDirectories = ['src/', 'scripts/', 'sdk/scripts/', 'examples/', 'test/'];
+for (const path of trackedFiles) {
+  if (/\.(?:js|jsx|cjs)$/.test(path)) errors.push(`${path}: maintained JavaScript must be TypeScript`);
+  if (path.endsWith('.mjs') && !allowedRuntimeDirectories.some((directory) => path.startsWith(directory))) {
+    errors.push(`${path}: runtime JavaScript is outside the reviewed TypeScript build and portable example directories`);
+  }
+  if (path.endsWith('.py') && !generatedCompatibilityLaunchers.has(path)) {
+    errors.push(`${path}: maintained operational code must be TypeScript`);
+  }
+}
 
 function files(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

@@ -8,6 +8,10 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
+    "paths": {
+      "priorseal-sdk": ["./sdk/src/index.ts"],
+      "priorseal-sdk/verifier": ["./sdk/src/verifier.ts"]
+    },
     "types": ["node"]
   },
   "include": [

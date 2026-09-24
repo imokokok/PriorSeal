@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -17,6 +17,10 @@ import {
 	recoverTypedDataAddress,
 } from "viem";
 import { baseSepolia } from "viem/chains";
+import {
+	assertTrack1Registry,
+	assertTrack1SignedDescriptor,
+} from "./interai-track1-registry.mjs";
 
 const CHAIN_ID = 84_532;
 const RPC_URL = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
@@ -125,6 +129,7 @@ interface Options {
 	allowanceRecord: string;
 	output: string;
 	archive: string;
+	mode: "review" | "live";
 }
 
 interface GateEnvelope {
@@ -183,16 +188,22 @@ function parseArgs(argv: string[]): Options {
 	const allowanceRecord = values.get("--allowance-record");
 	const output = values.get("--output");
 	const archive = values.get("--archive");
+	const mode = values.get("--mode") ?? "review";
 	assert(
 		gateDir && allowanceRecord && output && archive,
 		"Required: --gate-dir --allowance-record --output --archive",
 	);
-	assert(values.size === 4, "Unsupported arguments");
+	assert(mode === "review" || mode === "live", "Unsupported candidate mode");
+	assert(
+		values.size === 4 || (values.size === 5 && values.has("--mode")),
+		"Unsupported arguments",
+	);
 	return {
 		gateDir: path.resolve(gateDir),
 		allowanceRecord: path.resolve(allowanceRecord),
 		output: path.resolve(output),
 		archive: path.resolve(archive),
+		mode,
 	};
 }
 
@@ -416,6 +427,11 @@ const current = asRecord(currentRaw, "registry current");
 const audit = asRecord(auditRaw, "audit proof");
 const allowanceRecord = asRecord(allowanceRaw, "allowance record");
 const now = Math.floor(Date.now() / 1_000);
+if (options.mode === "live") {
+	assertTrack1Registry(registry, now * 1_000);
+	assertTrack1SignedDescriptor(source);
+	assertTrack1SignedDescriptor(destination);
+}
 await Promise.all([
 	verifyEnvelope(source, "source", WETH_ID, USDC_ID, registry, now),
 	verifyEnvelope(destination, "destination", USDC_ID, WETH_ID, registry, now),
@@ -520,6 +536,7 @@ assert(
 	"Router allowance is not the exact bounded amount",
 );
 
+const quoteRequestedAt = Math.floor(Date.now() / 1_000);
 const quoteResult = await client.simulateContract({
 	account: EXECUTOR,
 	address: QUOTER,
@@ -542,6 +559,11 @@ const [
 	initializedTicksCrossed,
 	quoteGasEstimate,
 ] = quoteResult.result;
+const quoteObservedAt = Math.min(Number(block.timestamp), quoteRequestedAt);
+assert(
+	Math.floor(Date.now() / 1_000) - quoteObservedAt < QUOTE_VALID_FOR_SECONDS,
+	"Quote block or request is already stale",
+);
 const amountOutMinimum =
 	(quotedAmountOut * (10_000n - MAX_SLIPPAGE_BPS)) / 10_000n;
 assert(amountOutMinimum > 0n, "Quote is too small");
@@ -569,7 +591,7 @@ await client.call({
 });
 
 const generatedAt = Math.floor(Date.now() / 1_000);
-const quoteExpiresAt = generatedAt + QUOTE_VALID_FOR_SECONDS;
+const quoteExpiresAt = quoteObservedAt + QUOTE_VALID_FOR_SECONDS;
 const exactCall = {
 	chainId: CHAIN_ID,
 	sender: EXECUTOR,
@@ -578,7 +600,7 @@ const exactCall = {
 	calldataHash,
 	nonce: String(pendingNonce),
 };
-const canonicalAction = {
+const reviewAction = {
 	schema: "interai-canonical-action/v1",
 	tool_id: "evm.wallet",
 	type: "transaction",
@@ -597,6 +619,27 @@ const canonicalAction = {
 	external_side_effect: true,
 	irreversible: true,
 };
+const canonicalAction =
+	options.mode === "live"
+		? {
+				schema: "interai-canonical-action/v1",
+				tool_id: "wallet.send_transaction",
+				type: "evm_call",
+				operation: "eth_sendTransaction",
+				arguments: {
+					chainId: CHAIN_ID,
+					sender: EXECUTOR,
+					target: ROUTER,
+					value: "0",
+					calldataHash,
+					nonce: String(pendingNonce),
+					amount_usd: DECLARED_AMOUNT_USD,
+					currency: "USD",
+				},
+				external_side_effect: true,
+				irreversible: true,
+			}
+		: reviewAction;
 
 const sourceBytes = await readFile(sourcePath);
 const destinationBytes = await readFile(destinationPath);
@@ -624,12 +667,20 @@ const sourceBindingBytes = serialize(sourceBinding);
 const destinationBindingBytes = serialize(destinationBinding);
 
 const packageDocument = {
-	schema: "interai.track1.final-binding-review-candidate-package.v1",
-	packageId: `interai-track1-base-sepolia-${generatedAt}`,
+	schema:
+		options.mode === "live"
+			? "interai.track1.jit-direct-verify-candidate-package.v1"
+			: "interai.track1.final-binding-review-candidate-package.v1",
+	packageId:
+		options.mode === "live"
+			? `interai-track1-base-sepolia-${generatedAt}-${randomUUID()}`
+			: `interai-track1-base-sepolia-${generatedAt}`,
 	generatedAt,
 	generatedAtIso: new Date(generatedAt * 1_000).toISOString(),
 	purpose:
-		"FINAL_BINDING_REVIEW_BEFORE_SINGLE_NON_BROADCAST_AUTHENTICATED_PREFLIGHT",
+		options.mode === "live"
+			? "JIT_HOST_CHECK_BEFORE_SINGLE_DIRECT_NON_BROADCAST_AUTHENTICATED_VERIFY"
+			: "FINAL_BINDING_REVIEW_BEFORE_SINGLE_NON_BROADCAST_AUTHENTICATED_PREFLIGHT",
 	hostPrerequisiteDisposition: "SATISFIED_AT_GENERATION",
 	executionAuthorization: "INTERAI_EXECUTABLE_ALLOW_NOT_ESTABLISHED",
 	network: {
@@ -664,7 +715,7 @@ const packageDocument = {
 		sqrtPriceX96After: sqrtPriceX96After.toString(),
 		initializedTicksCrossed,
 		gasEstimate: quoteGasEstimate.toString(),
-		observedAt: generatedAt,
+		observedAt: quoteObservedAt,
 		expiresAt: quoteExpiresAt,
 		validForSeconds: QUOTE_VALID_FOR_SECONDS,
 	},
@@ -712,12 +763,21 @@ const packageDocument = {
 		interaiCredentialExchangedOrConsumed: false,
 		authenticatedInteraiPreflightCalled: false,
 	},
-	handoff: {
-		finalBindingReviewMayProceed: true,
-		singleAuthenticatedPreflightMayProceedBeforeReview: false,
-		regenerationRule:
-			"Any nonce, quote, calldata, calldataHash, or assertion change creates a new candidate requiring review.",
-	},
+	handoff:
+		options.mode === "live"
+			? {
+					localFailClosedCheckRequired: true,
+					singleDirectAuthenticatedVerifyAfterReady: true,
+					emailCandidateHandoff: false,
+					regenerationRule:
+						"Any nonce, quote, calldata, calldataHash, or assertion change creates a new JIT candidate and requires a fresh local fail-closed check.",
+				}
+			: {
+					finalBindingReviewMayProceed: true,
+					singleAuthenticatedPreflightMayProceedBeforeReview: false,
+					regenerationRule:
+						"Any nonce, quote, calldata, calldataHash, or assertion change creates a new candidate requiring review.",
+				},
 };
 
 const releaseFilename = `oracle-registry-release-${asString(current.releaseId, "release id")}.json`;
@@ -762,11 +822,15 @@ await writePair(
 );
 
 const readme =
-	`# InterAI Track 1 final-binding-review candidate\n\n` +
+	(options.mode === "live"
+		? `# InterAI Track 1 JIT direct-verify candidate\n\n`
+		: `# InterAI Track 1 final-binding-review candidate\n\n`) +
 	`Package: \`${packageDocument.packageId}\`\n\n` +
 	`Generated: ${packageDocument.generatedAtIso}\n\n` +
-	`This package satisfied all host-side prerequisites at generation and is submitted only for Alejandro's final binding review. It is not an InterAI ALLOW or execution authorization. No swap was signed or broadcast, no PriorSeal execution step ran, the InterAI credential remained unexchanged/unconsumed, and no authenticated InterAI preflight was made.\n\n` +
-	`The quote expires at ${new Date(quoteExpiresAt * 1_000).toISOString()}. After expiry or any volatile-field change, regenerate the complete candidate and review it as new.\n`;
+	(options.mode === "live"
+		? `This host-generated JIT input is for local fail-closed checks followed by one direct authenticated InterAI /verify call after READY. It is not an InterAI ALLOW or execution authorization and is not an email attachment. No swap was signed or broadcast and no PriorSeal execution step ran at generation.\n\n`
+		: `This package satisfied all host-side prerequisites at generation and is submitted only for Alejandro's final binding review. It is not an InterAI ALLOW or execution authorization. No swap was signed or broadcast, no PriorSeal execution step ran, the InterAI credential remained unexchanged/unconsumed, and no authenticated InterAI preflight was made.\n\n`) +
+	`The quote expires at ${new Date(quoteExpiresAt * 1_000).toISOString()}. After expiry or any volatile-field change, regenerate the complete candidate.\n`;
 await writePair(options.output, options.archive, "README.md", readme);
 
 const names = [

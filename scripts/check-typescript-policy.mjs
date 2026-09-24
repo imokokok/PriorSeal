@@ -1,5 +1,6 @@
 // Generated from check-typescript-policy.mts by npm run core:build. Do not edit directly.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -24,6 +25,17 @@ const reviewedPortableJavaScript = /* @__PURE__ */ new Map([
   ["examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs", "examples/web3-agent-kit-integration-spike-v1.0.1/verify.source.mts"]
 ]);
 const reviewedLegacyJavaScriptTests = /* @__PURE__ */ new Set();
+const trackedFiles = execFileSync("git", ["ls-files", "-z"], { cwd: projectRoot, encoding: "utf8" }).split("\0").filter(Boolean);
+const allowedRuntimeDirectories = ["src/", "scripts/", "sdk/scripts/", "examples/", "test/"];
+for (const path of trackedFiles) {
+  if (/\.(?:js|jsx|cjs)$/.test(path)) errors.push(`${path}: maintained JavaScript must be TypeScript`);
+  if (path.endsWith(".mjs") && !allowedRuntimeDirectories.some((directory) => path.startsWith(directory))) {
+    errors.push(`${path}: runtime JavaScript is outside the reviewed TypeScript build and portable example directories`);
+  }
+  if (path.endsWith(".py") && !generatedCompatibilityLaunchers.has(path)) {
+    errors.push(`${path}: maintained operational code must be TypeScript`);
+  }
+}
 function files(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     if (entry.isDirectory() && ["node_modules", "dist", ".git"].includes(entry.name)) return [];

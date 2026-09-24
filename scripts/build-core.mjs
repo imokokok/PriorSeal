@@ -1,12 +1,19 @@
 // Generated from build-core.mts by npm run core:build. Do not edit directly.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { transformSync } from "esbuild";
 import ts from "typescript";
 const check = process.argv[2] === "--check";
-if (!check && process.argv.length !== 2) throw new Error("Usage: node scripts/build-core.mjs [--check]");
+const testsOnly = process.argv[2] === "--tests-only";
+const generatorsOnly = process.argv[2] === "--generators-only";
+const toolsOnly = process.argv[2] === "--tools-only";
+const operationsOnly = process.argv[2] === "--operations-only";
+if (process.argv.length > 3 || process.argv.length === 3 && !check && !testsOnly && !generatorsOnly && !toolsOnly && !operationsOnly) {
+  throw new Error("Usage: node scripts/build-core.mjs [--check|--tests-only|--generators-only|--tools-only|--operations-only]");
+}
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const sourceRoot = join(projectRoot, "src");
 const frozenExamples = /* @__PURE__ */ new Map([
@@ -20,22 +27,48 @@ const frozenExamples = /* @__PURE__ */ new Map([
   ["examples/web3-agent-kit-integration-spike-v1/verify.source.reference.mts", "ff4cb1f14603c46bef693c5137e38dbff5917c167c6ef4498f4f34471c886c18"]
 ]);
 const sha256 = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
+const onDemandGeneratorSources = [
+  "scripts/generate-insight-boundaryattest-three-object-vectors.mts",
+  "scripts/generate-thoughtproof-sentinel-m2-final-pairs.mts",
+  "scripts/generate-thoughtproof-sentinel-m2-vectors.mts",
+  "scripts/generate-thoughtproof-sentinel-paired-vectors.mts",
+  "scripts/generate-web3-agent-kit-base-swap-v2-vectors.mts",
+  "scripts/generate-web3-agent-kit-base-swap-vectors.mts",
+  "scripts/prepare-wak-p1-run-sheet.mts"
+].map((path) => join(projectRoot, path));
+const onDemandToolSources = [
+  "scripts/check-web-performance.mts",
+  "scripts/compile-contracts.mts",
+  "scripts/deploy-worker.mts",
+  "scripts/preview-web.mts",
+  "scripts/verify-rwa-execution-profiles.mts"
+].map((path) => join(projectRoot, path));
+const onDemandOperationSources = [
+  "scripts/prepare-transparency-anchor.mts",
+  "scripts/record-transparency-anchor.mts",
+  "scripts/production-readiness.mts",
+  "scripts/production-smoke-readonly.mts",
+  "scripts/production-smoke.mts",
+  "scripts/rotation-impact.mts"
+].map((path) => join(projectRoot, path));
+const onDemandPaths = /* @__PURE__ */ new Set([...onDemandGeneratorSources, ...onDemandToolSources, ...onDemandOperationSources]);
 function findSources(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) return findSources(path);
+    if (entry.isDirectory()) {
+      return ["node_modules", "dist", ".git"].includes(entry.name) ? [] : findSources(path);
+    }
     return entry.isFile() && entry.name.endsWith(".mts") && !entry.name.endsWith(".d.mts") ? [path] : [];
   });
 }
-const sources = [
+const sources = testsOnly ? findSources(join(projectRoot, "test")) : generatorsOnly ? onDemandGeneratorSources : toolsOnly ? onDemandToolSources : operationsOnly ? onDemandOperationSources : [
   ...findSources(sourceRoot),
-  ...findSources(join(projectRoot, "scripts")),
+  ...findSources(join(projectRoot, "scripts")).filter((path) => !onDemandPaths.has(path)),
   ...findSources(join(projectRoot, "sdk", "scripts")),
-  ...findSources(join(projectRoot, "examples")),
-  ...findSources(join(projectRoot, "test"))
+  ...findSources(join(projectRoot, "examples"))
 ].sort();
 if (sources.length === 0) throw new Error("No TypeScript runtime sources found");
-for (const source of frozenExamples.keys()) {
+for (const source of testsOnly || generatorsOnly || toolsOnly || operationsOnly ? [] : frozenExamples.keys()) {
   if (!existsSync(join(projectRoot, source))) throw new Error(`Frozen TypeScript reference is missing: ${source}`);
 }
 function runtimePath(sourcePath) {
@@ -44,22 +77,33 @@ function runtimePath(sourcePath) {
 }
 const timestampSourcePath = join(sourceRoot, "domain", "rfc3161-source.mts");
 const timestampDeclarationPath = join(sourceRoot, "domain", "rfc3161.d.mts");
-const declaration = ts.transpileDeclaration(readFileSync(timestampSourcePath, "utf8"), {
-  fileName: timestampSourcePath,
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext }
-});
-if (declaration.diagnostics?.length) {
-  throw new Error(declaration.diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")).join("\n"));
-}
-const declarationOutput = `// Generated from rfc3161-source.mts by npm run core:build. Do not edit directly.
-${declaration.outputText}`;
-if (check) {
-  if (!existsSync(timestampDeclarationPath) || readFileSync(timestampDeclarationPath, "utf8") !== declarationOutput) {
-    console.error("src/domain/rfc3161.d.mts is missing or stale; run npm run core:build");
-    process.exitCode = 1;
+if (!testsOnly && !generatorsOnly && !toolsOnly && !operationsOnly) {
+  const declaration = ts.transpileDeclaration(readFileSync(timestampSourcePath, "utf8"), {
+    fileName: timestampSourcePath,
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext }
+  });
+  if (declaration.diagnostics?.length) {
+    throw new Error(declaration.diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")).join("\n"));
   }
-} else {
-  writeFileSync(timestampDeclarationPath, declarationOutput);
+  const declarationOutput = `// Generated from rfc3161-source.mts by npm run core:build. Do not edit directly.
+${declaration.outputText}`;
+  if (check) {
+    if (!existsSync(timestampDeclarationPath) || readFileSync(timestampDeclarationPath, "utf8") !== declarationOutput) {
+      console.error("src/domain/rfc3161.d.mts is missing or stale; run npm run core:build");
+      process.exitCode = 1;
+    }
+  } else {
+    writeFileSync(timestampDeclarationPath, declarationOutput);
+  }
+}
+if (!check) {
+  const compiler = join(projectRoot, "node_modules", "typescript", "bin", "tsc");
+  for (const project of ["tsconfig.core.json", "sdk/tsconfig.json", "tsconfig.maintenance.json"]) {
+    execFileSync(process.execPath, [compiler, "-p", project, "--noEmit", "--pretty", "false"], {
+      cwd: projectRoot,
+      stdio: "inherit"
+    });
+  }
 }
 for (const sourcePath of sources) {
   const outputPath = runtimePath(sourcePath);
@@ -77,7 +121,8 @@ for (const sourcePath of sources) {
   const name = sourcePath.slice(sourcePath.lastIndexOf(sep) + 1, -4);
   const source = readFileSync(sourcePath, "utf8");
   const compiled = transformSync(source, { loader: "ts", format: "esm", target: "es2022" }).code;
-  const notice = `// Generated from ${name}.mts by npm run core:build. Do not edit directly.
+  const command = generatorsOnly ? "core:build:generators" : toolsOnly ? "core:build:tools" : operationsOnly ? "core:build:operations" : testsOnly ? "core:build:tests" : "core:build";
+  const notice = `// Generated from ${name}.mts by npm run ${command}. Do not edit directly.
 `;
   const shebangEnd = compiled.startsWith("#!") ? compiled.indexOf("\n") + 1 : 0;
   const output = shebangEnd > 0 ? `${compiled.slice(0, shebangEnd)}${notice}${compiled.slice(shebangEnd)}` : `${notice}${compiled}`;
@@ -90,8 +135,9 @@ for (const sourcePath of sources) {
     writeFileSync(outputPath, output);
   }
 }
-const compatibilityLauncherPath = join(projectRoot, "scripts", "package-web3-agent-kit-integration-spike-v1.py");
-const compatibilityLauncher = `#!/usr/bin/env python3
+if (!testsOnly && !generatorsOnly && !toolsOnly && !operationsOnly) {
+  const compatibilityLauncherPath = join(projectRoot, "scripts", "package-web3-agent-kit-integration-spike-v1.py");
+  const compatibilityLauncher = `#!/usr/bin/env python3
 """Compatibility launcher for the frozen WAK bundle documentation."""
 
 import os
@@ -102,13 +148,14 @@ from pathlib import Path
 SCRIPT = Path(__file__).with_suffix(".mjs")
 os.execvp("node", ("node", str(SCRIPT), *sys.argv[1:]))
 `;
-if (check) {
-  if (!existsSync(compatibilityLauncherPath) || readFileSync(compatibilityLauncherPath, "utf8") !== compatibilityLauncher) {
-    console.error("scripts/package-web3-agent-kit-integration-spike-v1.py is missing or stale; run npm run core:build");
-    process.exitCode = 1;
+  if (check) {
+    if (!existsSync(compatibilityLauncherPath) || readFileSync(compatibilityLauncherPath, "utf8") !== compatibilityLauncher) {
+      console.error("scripts/package-web3-agent-kit-integration-spike-v1.py is missing or stale; run npm run core:build");
+      process.exitCode = 1;
+    }
+  } else {
+    writeFileSync(compatibilityLauncherPath, compatibilityLauncher);
   }
-} else {
-  writeFileSync(compatibilityLauncherPath, compatibilityLauncher);
 }
 if (check) {
   let findRuntimeFiles = function(directory) {
