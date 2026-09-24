@@ -10,7 +10,7 @@ function args() {
   const values = process.argv.slice(2);
   assert(
     values.length % 2 === 0,
-    "Usage: --ready-file FILE --pilot-template FILE --output-root DIR [--proxy http://127.0.0.1:7890]"
+    "Usage: --ready-file FILE --output-root DIR [--proxy http://127.0.0.1:7890]"
   );
   const parsed = /* @__PURE__ */ new Map();
   for (let i = 0; i < values.length; i += 2) {
@@ -22,12 +22,10 @@ function args() {
   }
   for (const key of parsed.keys())
     assert(
-      ["--ready-file", "--pilot-template", "--output-root", "--proxy"].includes(
-        key
-      ),
+      ["--ready-file", "--output-root", "--proxy"].includes(key),
       `Unsupported option: ${key}`
     );
-  for (const key of ["--ready-file", "--pilot-template", "--output-root"])
+  for (const key of ["--ready-file", "--output-root"])
     assert(parsed.has(key), `Missing ${key}`);
   if (parsed.has("--proxy"))
     assert(
@@ -56,7 +54,6 @@ async function main() {
   process.umask(63);
   const opts = args();
   const readyFile = path.resolve(opts.get("--ready-file") ?? "");
-  const pilotTemplate = path.resolve(opts.get("--pilot-template") ?? "");
   const outputRoot = path.resolve(opts.get("--output-root") ?? "");
   const now = Date.now();
   const start = Date.parse("2026-09-25T12:00:00Z");
@@ -71,11 +68,6 @@ async function main() {
   assert(
     Number.isFinite(readyAt) && readyAt >= start && readyAt <= now && readyAt < end,
     "READY time outside agreed window"
-  );
-  const template = JSON.parse(await readFile(pilotTemplate, "utf8"));
-  assert(
-    template.schema === "interai.track1.pilot-evidence-template.v1",
-    "Pilot wire template not configured"
   );
   const priorSealRoot = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -144,8 +136,6 @@ async function main() {
       "scripts/build-interai-track1-direct-request.mjs",
       "--candidate-dir",
       candidateDir,
-      "--pilot-template",
-      pilotTemplate,
       "--output",
       requestFile
     ],

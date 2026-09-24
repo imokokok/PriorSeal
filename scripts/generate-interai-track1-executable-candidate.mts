@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -527,6 +527,7 @@ assert(
 	"Router allowance is not the exact bounded amount",
 );
 
+const quoteRequestedAt = Math.floor(Date.now() / 1_000);
 const quoteResult = await client.simulateContract({
 	account: EXECUTOR,
 	address: QUOTER,
@@ -549,6 +550,11 @@ const [
 	initializedTicksCrossed,
 	quoteGasEstimate,
 ] = quoteResult.result;
+const quoteObservedAt = Math.min(Number(block.timestamp), quoteRequestedAt);
+assert(
+	Math.floor(Date.now() / 1_000) - quoteObservedAt < QUOTE_VALID_FOR_SECONDS,
+	"Quote block or request is already stale",
+);
 const amountOutMinimum =
 	(quotedAmountOut * (10_000n - MAX_SLIPPAGE_BPS)) / 10_000n;
 assert(amountOutMinimum > 0n, "Quote is too small");
@@ -576,7 +582,7 @@ await client.call({
 });
 
 const generatedAt = Math.floor(Date.now() / 1_000);
-const quoteExpiresAt = generatedAt + QUOTE_VALID_FOR_SECONDS;
+const quoteExpiresAt = quoteObservedAt + QUOTE_VALID_FOR_SECONDS;
 const exactCall = {
 	chainId: CHAIN_ID,
 	sender: EXECUTOR,
@@ -585,7 +591,7 @@ const exactCall = {
 	calldataHash,
 	nonce: String(pendingNonce),
 };
-const canonicalAction = {
+const reviewAction = {
 	schema: "interai-canonical-action/v1",
 	tool_id: "evm.wallet",
 	type: "transaction",
@@ -604,6 +610,27 @@ const canonicalAction = {
 	external_side_effect: true,
 	irreversible: true,
 };
+const canonicalAction =
+	options.mode === "live"
+		? {
+				schema: "interai-canonical-action/v1",
+				tool_id: "wallet.send_transaction",
+				type: "evm_call",
+				operation: "eth_sendTransaction",
+				arguments: {
+					chainId: CHAIN_ID,
+					sender: EXECUTOR,
+					target: ROUTER,
+					value: "0",
+					calldataHash,
+					nonce: String(pendingNonce),
+					amount_usd: DECLARED_AMOUNT_USD,
+					currency: "USD",
+				},
+				external_side_effect: true,
+				irreversible: true,
+			}
+		: reviewAction;
 
 const sourceBytes = await readFile(sourcePath);
 const destinationBytes = await readFile(destinationPath);
@@ -635,7 +662,10 @@ const packageDocument = {
 		options.mode === "live"
 			? "interai.track1.jit-direct-verify-candidate-package.v1"
 			: "interai.track1.final-binding-review-candidate-package.v1",
-	packageId: `interai-track1-base-sepolia-${generatedAt}`,
+	packageId:
+		options.mode === "live"
+			? `interai-track1-base-sepolia-${generatedAt}-${randomUUID()}`
+			: `interai-track1-base-sepolia-${generatedAt}`,
 	generatedAt,
 	generatedAtIso: new Date(generatedAt * 1_000).toISOString(),
 	purpose:
@@ -676,7 +706,7 @@ const packageDocument = {
 		sqrtPriceX96After: sqrtPriceX96After.toString(),
 		initializedTicksCrossed,
 		gasEstimate: quoteGasEstimate.toString(),
-		observedAt: generatedAt,
+		observedAt: quoteObservedAt,
 		expiresAt: quoteExpiresAt,
 		validForSeconds: QUOTE_VALID_FOR_SECONDS,
 	},

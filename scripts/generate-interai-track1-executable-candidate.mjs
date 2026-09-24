@@ -1,5 +1,5 @@
 // Generated from generate-interai-track1-executable-candidate.mts by npm run core:build. Do not edit directly.
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -456,6 +456,7 @@ assert(
   routerAllowance === AMOUNT_IN,
   "Router allowance is not the exact bounded amount"
 );
+const quoteRequestedAt = Math.floor(Date.now() / 1e3);
 const quoteResult = await client.simulateContract({
   account: EXECUTOR,
   address: QUOTER,
@@ -478,6 +479,11 @@ const [
   initializedTicksCrossed,
   quoteGasEstimate
 ] = quoteResult.result;
+const quoteObservedAt = Math.min(Number(block.timestamp), quoteRequestedAt);
+assert(
+  Math.floor(Date.now() / 1e3) - quoteObservedAt < QUOTE_VALID_FOR_SECONDS,
+  "Quote block or request is already stale"
+);
 const amountOutMinimum = quotedAmountOut * (10000n - MAX_SLIPPAGE_BPS) / 10000n;
 assert(amountOutMinimum > 0n, "Quote is too small");
 const swapParams = {
@@ -503,7 +509,7 @@ await client.call({
   blockNumber: block.number
 });
 const generatedAt = Math.floor(Date.now() / 1e3);
-const quoteExpiresAt = generatedAt + QUOTE_VALID_FOR_SECONDS;
+const quoteExpiresAt = quoteObservedAt + QUOTE_VALID_FOR_SECONDS;
 const exactCall = {
   chainId: CHAIN_ID,
   sender: EXECUTOR,
@@ -512,7 +518,7 @@ const exactCall = {
   calldataHash,
   nonce: String(pendingNonce)
 };
-const canonicalAction = {
+const reviewAction = {
   schema: "interai-canonical-action/v1",
   tool_id: "evm.wallet",
   type: "transaction",
@@ -531,6 +537,24 @@ const canonicalAction = {
   external_side_effect: true,
   irreversible: true
 };
+const canonicalAction = options.mode === "live" ? {
+  schema: "interai-canonical-action/v1",
+  tool_id: "wallet.send_transaction",
+  type: "evm_call",
+  operation: "eth_sendTransaction",
+  arguments: {
+    chainId: CHAIN_ID,
+    sender: EXECUTOR,
+    target: ROUTER,
+    value: "0",
+    calldataHash,
+    nonce: String(pendingNonce),
+    amount_usd: DECLARED_AMOUNT_USD,
+    currency: "USD"
+  },
+  external_side_effect: true,
+  irreversible: true
+} : reviewAction;
 const sourceBytes = await readFile(sourcePath);
 const destinationBytes = await readFile(destinationPath);
 const binding = (role, envelope, assertionBytes) => ({
@@ -553,7 +577,7 @@ const sourceBindingBytes = serialize(sourceBinding);
 const destinationBindingBytes = serialize(destinationBinding);
 const packageDocument = {
   schema: options.mode === "live" ? "interai.track1.jit-direct-verify-candidate-package.v1" : "interai.track1.final-binding-review-candidate-package.v1",
-  packageId: `interai-track1-base-sepolia-${generatedAt}`,
+  packageId: options.mode === "live" ? `interai-track1-base-sepolia-${generatedAt}-${randomUUID()}` : `interai-track1-base-sepolia-${generatedAt}`,
   generatedAt,
   generatedAtIso: new Date(generatedAt * 1e3).toISOString(),
   purpose: options.mode === "live" ? "JIT_HOST_CHECK_BEFORE_SINGLE_DIRECT_NON_BROADCAST_AUTHENTICATED_VERIFY" : "FINAL_BINDING_REVIEW_BEFORE_SINGLE_NON_BROADCAST_AUTHENTICATED_PREFLIGHT",
@@ -591,7 +615,7 @@ const packageDocument = {
     sqrtPriceX96After: sqrtPriceX96After.toString(),
     initializedTicksCrossed,
     gasEstimate: quoteGasEstimate.toString(),
-    observedAt: generatedAt,
+    observedAt: quoteObservedAt,
     expiresAt: quoteExpiresAt,
     validForSeconds: QUOTE_VALID_FOR_SECONDS
   },

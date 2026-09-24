@@ -192,7 +192,7 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
   );
   const packageId = string(candidate.packageId, "candidate.packageId");
   assert(
-    /^interai-track1-base-sepolia-\d+$/.test(packageId),
+    /^interai-track1-base-sepolia-\d+-[0-9a-f-]{36}$/.test(packageId),
     "Unexpected candidate package ID"
   );
   assert(
@@ -201,7 +201,7 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
   );
   const quote = object(candidate.quote, "candidate.quote");
   assert(
-    typeof quote.expiresAt === "number" && quote.validForSeconds === 60 && typeof quote.observedAt === "number" && quote.expiresAt === quote.observedAt + 60 && quote.expiresAt * 1e3 - now >= 15e3,
+    typeof quote.expiresAt === "number" && quote.validForSeconds === 60 && typeof quote.observedAt === "number" && now - quote.observedAt * 1e3 <= 6e4 && quote.expiresAt === quote.observedAt + 60 && quote.expiresAt * 1e3 - now >= 15e3,
     "Quote has less than 15 seconds remaining"
   );
   const projection = object(
@@ -211,23 +211,32 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
   const action = object(candidate.canonicalAction, "candidate.canonicalAction");
   const args = object(action.arguments, "candidate.canonicalAction.arguments");
   assert(
-    action.schema === "interai-canonical-action/v1" && action.external_side_effect === true && action.irreversible === true,
+    action.schema === "interai-canonical-action/v1" && action.tool_id === "wallet.send_transaction" && action.type === "evm_call" && action.operation === "eth_sendTransaction" && action.external_side_effect === true && action.irreversible === true && Object.keys(args).sort().join(",") === "amount_usd,calldataHash,chainId,currency,nonce,sender,target,value",
     "Canonical action semantics mismatch"
   );
   assert(
-    args.chain_id === 84532 && getAddress(string(args.sender, "action.sender")) === EXECUTOR && getAddress(string(args.target, "action.target")) === ROUTER,
+    args.chainId === 84532 && getAddress(string(args.sender, "action.sender")) === EXECUTOR && getAddress(string(args.target, "action.target")) === ROUTER,
     "Pinned EVM action mismatch"
   );
   assert(
     args.value === "0" && args.amount_usd === 4 && args.currency === "USD",
     "EVM value or economic declaration mismatch"
   );
-  const calldata = string(args.calldata, "action.calldata");
+  const sourceBinding = await jsonFile(
+    path.join(candidateDir, "source-evidence-binding.json")
+  );
+  const destinationBinding = await jsonFile(
+    path.join(candidateDir, "destination-evidence-binding.json")
+  );
+  const calldata = string(
+    sourceBinding.exactCalldata,
+    "source exact calldata"
+  );
   assert(
-    /^0x[0-9a-f]+$/i.test(calldata) && calldata.startsWith("0x04e45aaf"),
+    /^0x[0-9a-f]+$/i.test(calldata) && calldata.startsWith("0x04e45aaf") && destinationBinding.exactCalldata === calldata,
     "Unexpected calldata or selector"
   );
-  assert(keccak256(calldata) === args.calldata_hash, "Calldata hash mismatch");
+  assert(keccak256(calldata) === args.calldataHash, "Calldata hash mismatch");
   const decoded = decodeFunctionData({
     abi: EXACT_INPUT_SINGLE_ABI,
     data: calldata
@@ -239,7 +248,7 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
   const params = decoded.args[0];
   const swap = object(candidate.swap, "candidate.swap");
   assert(
-    getAddress(params.tokenIn) === WETH && getAddress(params.tokenOut) === "0x036CbD53842c5426634e7929541eC2318f3dCF7e" && params.fee === 3e3 && getAddress(params.recipient) === EXECUTOR && params.amountIn === AMOUNT_IN && params.amountOutMinimum === BigInt(string(swap.amountOutMinimum, "swap.amountOutMinimum")) && params.sqrtPriceLimitX96 === 0n,
+    getAddress(params.tokenIn) === WETH && getAddress(params.tokenOut) === "0x036CbD53842c5426634e7929541eC2318f3dCF7e" && params.fee === 3e3 && getAddress(params.recipient) === EXECUTOR && params.amountIn === AMOUNT_IN && params.amountOutMinimum > 0n && params.amountOutMinimum === BigInt(string(swap.amountOutMinimum, "swap.amountOutMinimum")) && params.sqrtPriceLimitX96 === 0n,
     "SwapRouter02 exactInputSingle calldata mismatch"
   );
   assert(
@@ -247,7 +256,7 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
     "Quote or slippage binding mismatch"
   );
   assert(
-    projection.chainId === 84532 && projection.sender === args.sender && projection.target === args.target && projection.value === args.value && projection.calldataHash === args.calldata_hash && String(projection.nonce) === args.nonce,
+    projection.chainId === 84532 && projection.sender === args.sender && projection.target === args.target && projection.value === args.value && projection.calldataHash === args.calldataHash && String(projection.nonce) === args.nonce,
     "Six-field EVM projection mismatch"
   );
   const nonce = Number(args.nonce);
@@ -311,12 +320,12 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
       `${label} UID or signer mismatch`
     );
     assert(
-      typeof assertion.validUntil === "number" && assertion.validUntil * 1e3 - now >= 3e4,
+      typeof assertion.validUntil === "number" && assertion.validUntil * 1e3 - now >= 3e4 && assertion.schemaVersion === 3 && assertion.validForSeconds === 600,
       `${label} assertion has less than 30 seconds remaining`
     );
     const data = object(assertion.data, `${label}.data`);
     assert(
-      data.verdict === "PASS" && data.subjectChainId === 84532 && data.action === "swap" && data.tradeAmountUsd === 4e6 && data.validUntil === assertion.validUntil,
+      data.verdict === "PASS" && data.schemaVersion === 3 && data.subjectChainId === 84532 && data.action === "swap" && data.tradeAmountUsd === 4e6 && data.validUntil === assertion.validUntil && typeof data.checkedAt === "number" && data.checkedAt + 600 === assertion.validUntil && data.sourceAssetId?.toString().toLowerCase() === (label === "source" ? "eip155:84532/erc20:0x4200000000000000000000000000000000000006" : "eip155:84532/erc20:0x036cbd53842c5426634e7929541ec2318f3dcf7e") && data.destinationAssetId?.toString().toLowerCase() === (label === "source" ? "eip155:84532/erc20:0x036cbd53842c5426634e7929541ec2318f3dcf7e" : "eip155:84532/erc20:0x4200000000000000000000000000000000000006"),
       `${label} assertion payload mismatch`
     );
     const eip712 = object(assertion.eip712, `${label}.eip712`);
@@ -338,11 +347,9 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
       getAddress(recovered) === getAddress(signer),
       `${label} signature recovery mismatch`
     );
-    const binding = await jsonFile(
-      path.join(candidateDir, `${label}-evidence-binding.json`)
-    );
+    const binding = label === "source" ? sourceBinding : destinationBinding;
     assert(
-      binding.assertionUid === assertion.uid && binding.requestHash === object(assertion.data, `${label}.data`).requestHash && equalJson(binding.exactCall, projection) && equalJson(binding.economicDeclaration, {
+      binding.assertionUid === assertion.uid && binding.exactCalldata === calldata && binding.requestHash === object(assertion.data, `${label}.data`).requestHash && equalJson(binding.exactCall, projection) && equalJson(binding.economicDeclaration, {
         amount_usd: 4,
         currency: "USD"
       }),
@@ -366,8 +373,8 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
     "InterAI request"
   );
   assert(
-    typeof request.use_case === "string" && request.use_case.length > 0,
-    "Missing autonomous use_case"
+    request.use_case === "agent-before-tool-execution" && request.domain === "interai-priorseal-track1" && Object.keys(request).sort().join(",") === "action,authorization_ttl_seconds,context,domain,execution_context,external_evidence,policy,use_case",
+    "Pilot request envelope mismatch"
   );
   assert(
     equalJson(request.action, action),
@@ -382,8 +389,18 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
     "InterAI execution_context"
   );
   assert(
-    context.schema === "interai-host-execution-context/v1" && context.environment === "testnet" && context.run_id === packageId && typeof context.workspace_id === "string" && typeof context.actor_id === "string",
+    context.schema === "interai-host-execution-context/v1" && context.environment === "base-sepolia-testnet" && context.run_id === packageId && context.workspace_id === "interai-priorseal-track1" && context.actor_id === "agent:yutao:interai-track1" && Object.keys(context).sort().join(",") === "actor_id,environment,run_id,schema",
     "Host execution context mismatch"
+  );
+  assert(
+    equalJson(request.context, {
+      environment: "test",
+      user_confirmation: true
+    }) && equalJson(request.policy, {
+      require_trust_receipt: true,
+      require_user_confirmation_for_irreversible: true
+    }),
+    "Pilot context or policy mismatch"
   );
   assert(
     !Object.hasOwn(request, "payment_signature"),
@@ -398,12 +415,12 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
     ["source", source, 0],
     ["destination", destination, 1]
   ]) {
-    const item = JSON.stringify(evidence[index]);
-    for (const field of ["uid", "signature"])
-      assert(
-        item.includes(string(assertion[field], `${label}.${field}`)),
-        `${label} ${field} missing from InterAI evidence request`
-      );
+    const item = object(evidence[index], `${label} pilot evidence`);
+    const bound = object(item.binding, `${label} pilot binding`);
+    assert(
+      Object.keys(item).sort().join(",") === "attestation_json,binding,profile,registry_json" && item.profile === "insight.oracle-safety-check.v3.pilot/v1" && typeof item.attestation_json === "string" && equalJson(JSON.parse(item.attestation_json), assertion) && typeof item.registry_json === "string" && equalJson(JSON.parse(item.registry_json), registryKeys) && Object.keys(bound).join(",") === "calldata" && bound.calldata === calldata,
+      `${label} pilot evidence wire mismatch`
+    );
   }
   const client = createPublicClient({
     chain: baseSepolia,
@@ -592,6 +609,10 @@ async function main() {
     { mode: 384, flag: "wx" }
   );
   const headersPath = path.join(outputDir, `${packageId}.response.headers`);
+  assert(
+    quoteExpiresAt - Date.now() >= 15e3,
+    "Quote aged out immediately before InterAI request"
+  );
   const response = await runCurl(
     curlConfig(key, requestPath, packageId, headersPath, opts.get("--proxy"))
   );
