@@ -2,6 +2,8 @@
 
 This fixture records one real anonymous send21 demo draft, one ERC-20 USDC transfer on Base Sepolia, and a local PriorSeal exact-call authorization and v3 receipt. The payer is published Hardhat development account #1; both its funds and the issuer key are strictly test-only. The issuer key was generated for this run and its private half was discarded after the evidence bundle was written.
 
+To reproduce the flow with a new testnet draft, use the public [send21 demo](https://send21.io/demo). The recorded fixture uses draft `66238009-a717-4746-96c5-4b2b013d7f3a` and [Base Sepolia transaction `0x9d6502f4cf45e838a11208269dc2407b01c9fe56e40660f78b90465c07866523`](https://sepolia.basescan.org/tx/0x9d6502f4cf45e838a11208269dc2407b01c9fe56e40660f78b90465c07866523). The demo reported the draft as `Confirmed` with that transaction as its `paidTxId`.
+
 The demo response provides the receiver, token contract, amount, draft ID and expiry. The `transfer` calldata is derived from those fields. The payer address and transaction nonce come from the wallet/RPC at signing time. The authorization is signed and locally accepted before the transaction is signed and broadcast. Script event ordering is recorded, but no independent timestamp authority was used to prove that ordering cryptographically.
 
 ## Verify
