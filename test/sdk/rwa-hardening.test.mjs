@@ -179,22 +179,30 @@ test("trust-key permutations and casing do not change v2 pair admission", async 
   await executeRwaAuthorized(x.input, x.deps);
   assert.equal(x.calls, 1);
 });
-for (const mode of ["reverted", "under-output", "wrong-receiver", "missing-transfers", "tamper", "missing-key"]) test("detailed receipt distinguishes " + mode, async (t) => {
+for (const mode of ["reverted", "under-output", "wrong-receiver", "missing-transfers", "malformed-transfer", "tamper", "missing-key"]) test("detailed receipt distinguishes " + mode, async (t) => {
   const x = await setup(t), observed = structuredClone(x.observed);
   if (mode === "reverted") observed.status = "REVERTED";
   const transfers = observed.transfers;
   if (mode === "under-output") transfers[1].amount = "1";
   if (mode === "wrong-receiver") transfers[1].recipient = x.f.transaction.from;
   if (mode === "missing-transfers") delete observed.transfers;
+  if (mode === "malformed-transfer") observed.transfers[1] = { ...transfers[1], asset: 7 };
   const receipt = x.receipt(observed);
   if (mode === "tamper") receipt.execution.nonce = "8";
   if (mode === "missing-key") delete x.options.trustedKeys;
-  const r = await sdk.inspectRwaReceiptBundle({ receipt, authority: x.input.authority.proof, execution: x.input.execution.proof }, x.input.authority.trust, x.options);
+  const bundle = { receipt, authority: x.input.authority.proof, execution: x.input.execution.proof };
+  const r = await sdk.inspectRwaReceiptBundle(bundle, x.input.authority.trust, x.options);
   assert.equal(r.admissible, false);
   assert.equal(r.integrity, mode === "tamper" ? "FAIL" : mode === "missing-key" ? "NOT_CHECKED" : "PASS", JSON.stringify(r));
-  if (["reverted", "under-output", "wrong-receiver"].includes(mode)) {
+  if (["reverted", "under-output", "wrong-receiver", "malformed-transfer"].includes(mode)) {
     assert.equal(r.claims, "PASS");
     assert.equal(r.execution, "FAILED");
+  }
+  if (mode === "malformed-transfer") {
+    assert.ok(r.reasons.includes("RWA_TRANSFERS_INVALID"), JSON.stringify(r));
+    const browser = await browserInspect(bundle, x.input.authority.trust, x.options);
+    assert.equal(browser.execution, "FAILED");
+    assert.ok(browser.reasons.includes("RWA_TRANSFERS_INVALID"), JSON.stringify(browser));
   }
   if (mode === "missing-transfers") assert.equal(r.execution, "NOT_CHECKED");
 });

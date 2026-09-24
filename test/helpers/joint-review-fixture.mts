@@ -4,7 +4,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { V3_DOMAIN, V3_TYPES, V3_PRIMARY_TYPE } from 'verify-insight-receipt';
 import { EXECUTION_DOMAIN, EXECUTION_PRIMARY_TYPE, EXECUTION_PROFILE_V1_ID, executionTypesForSchemaVersion } from '../../sdk/dist/insight-execution-v5.js';
 import { createInsightProtocolTrust } from './insight-protocol-fixture.mjs';
-import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildTransparencyEvidence, buildVerificationBundle, createMemoryStore, hashJson, signReceipt } from '../../src/index.mjs';
+import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildTransparencyEvidence, buildVerificationBundle, createMemoryStore, signReceipt } from '../../src/index.mjs';
 import { buildReviewManifest } from '../../sdk/dist/verifier.js';
 
 // Ephemeral test-only keys. No environment, live service, wallet or chain is used.

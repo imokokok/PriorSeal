@@ -16,6 +16,7 @@
     "examples/**/*.mts",
     "test/**/*.mts",
     "test/**/*.ts",
+    "playwright.config.ts",
     "worker-configuration.d.ts"
   ]
 }

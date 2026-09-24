@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as sdk from '../../sdk/dist/index.js';
 import { inspectRwaReceiptBundle as browserInspect } from '../../sdk/dist/verifier.js';
-import { createRwaAttemptStore, executeRwaAuthorized, reconcileRwaAttempt, buildAuthorization, authorizationTypedData, authorizeIntent } from '../../src/index.mjs';
+import { createRwaAttemptStore, executeRwaAuthorized, reconcileRwaAttempt } from '../../src/index.mjs';
 import { workflowFixture } from '../../examples/rwa-v2/workflow-fixture.mjs';
 import { signRwaV2Fixture } from '../../examples/rwa-v2/fixture.mjs';
 import { rwaFixture, signRwaFixture } from '../../examples/rwa-v1/fixture.mjs';
@@ -137,19 +137,27 @@ test('trust-key permutations and casing do not change v2 pair admission',async t
   x.input.execution.trust.keys[1].address=x.input.execution.trust.keys[1].address.toLowerCase();
   await executeRwaAuthorized(x.input,x.deps);assert.equal(x.calls,1);
 });
-for(const mode of ['reverted','under-output','wrong-receiver','missing-transfers','tamper','missing-key'])test('detailed receipt distinguishes '+mode,async t=>{
+for(const mode of ['reverted','under-output','wrong-receiver','missing-transfers','malformed-transfer','tamper','missing-key'])test('detailed receipt distinguishes '+mode,async t=>{
   const x=await setup(t), observed=structuredClone(x.observed);
   if(mode==='reverted')observed.status='REVERTED';
   const transfers = observed.transfers as Array<{ amount: string; recipient: string }>;
   if(mode==='under-output')transfers[1].amount='1';
   if(mode==='wrong-receiver')transfers[1].recipient=x.f.transaction.from;
   if(mode==='missing-transfers')delete observed.transfers;
+  if(mode==='malformed-transfer')observed.transfers![1]={...transfers[1],asset:7};
   const receipt=x.receipt(observed);
   if(mode==='tamper')receipt.execution.nonce='8';
   if(mode==='missing-key')delete (x.options as Partial<typeof x.options>).trustedKeys;
-  const r=await sdk.inspectRwaReceiptBundle({receipt:receipt as unknown as sdk.Receipt,authority:x.input.authority.proof,execution:x.input.execution.proof},x.input.authority.trust,x.options);
+  const bundle={receipt:receipt as unknown as sdk.Receipt,authority:x.input.authority.proof,execution:x.input.execution.proof};
+  const r=await sdk.inspectRwaReceiptBundle(bundle,x.input.authority.trust,x.options);
   assert.equal(r.admissible,false);
   assert.equal(r.integrity,mode==='tamper'?'FAIL':mode==='missing-key'?'NOT_CHECKED':'PASS',JSON.stringify(r));
-  if(['reverted','under-output','wrong-receiver'].includes(mode)){assert.equal(r.claims,'PASS');assert.equal(r.execution,'FAILED');}
+  if(['reverted','under-output','wrong-receiver','malformed-transfer'].includes(mode)){assert.equal(r.claims,'PASS');assert.equal(r.execution,'FAILED');}
+  if(mode==='malformed-transfer'){
+    assert.ok(r.reasons.includes('RWA_TRANSFERS_INVALID'),JSON.stringify(r));
+    const browser=await browserInspect(bundle,x.input.authority.trust,x.options);
+    assert.equal(browser.execution,'FAILED');
+    assert.ok(browser.reasons.includes('RWA_TRANSFERS_INVALID'),JSON.stringify(browser));
+  }
   if(mode==='missing-transfers')assert.equal(r.execution,'NOT_CHECKED');
 });

@@ -2,11 +2,26 @@ import { verifyReceiptLocally, verifyReceiptSignature, type LocalVerifierOptions
 import { verifyRwaExecutionPair, type RwaProof } from './rwa-binding.js'
 import { inspectRwaReport, type RwaTrust, type SignedRwaReport } from './insight-rwa.js'
 import { inspectRwaReportV2, type RwaTrustV2, type SignedRwaReportV2 } from './insight-rwa-v2.js'
-import { assessRwaCallOutcome } from './insight-rwa-call.js'
+import { assessRwaCallOutcome, type RwaObservedTransfer } from './insight-rwa-call.js'
 import type { Receipt, KeyEntry, KeyRegistry } from './types.js'
 
 type Axis = 'PASS' | 'FAIL' | 'NOT_CHECKED'
 type Bundle = { receipt: Receipt; authority: RwaProof; execution: RwaProof }
+
+function observedTransfers(values: readonly unknown[]): RwaObservedTransfer[] | null {
+  const transfers: RwaObservedTransfer[] = []
+  for (const value of values) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
+    const record = value as Record<string, unknown>
+    if (typeof record.asset !== 'string' || typeof record.sender !== 'string' ||
+      typeof record.recipient !== 'string' || typeof record.amount !== 'string' ||
+      typeof record.logIndex !== 'number') return null
+    transfers.push({ token: record.asset, from: record.sender, to: record.recipient,
+      amount: record.amount, logIndex: record.logIndex })
+  }
+  return transfers
+}
+
 export type RwaReceiptDetails = {
   integrity: Axis; trust: Axis; claims: Axis; time: Axis; policy: Axis
   execution: 'SATISFIED' | 'FAILED' | 'NOT_CHECKED'
@@ -53,10 +68,13 @@ export async function inspectRwaReceiptBundle(input: Bundle, trust: RwaTrust | R
       if (!Array.isArray(r.execution.transfers)) { out.execution = 'NOT_CHECKED'; out.reasons.push('RWA_TRANSFERS_MISSING') }
       else {
         out.execution = 'NOT_CHECKED'
-        const transfers = r.execution.transfers.map(t => { const v = (t ?? {}) as Record<string, unknown>; return { token: v.asset as string, from: v.sender as string, to: v.recipient as string, amount: v.amount as string, logIndex: v.logIndex as number } })
-        const outcome = assessRwaCallOutcome(b.execution.report.semantics, e.authorization.intent.sender!, transfers)
-        out.execution = outcome.satisfied ? 'SATISFIED' : 'FAILED'
-        if (!outcome.satisfied) { out.execution = 'FAILED'; out.reasons.push(...outcome.reasons) }
+        const transfers = observedTransfers(r.execution.transfers)
+        if (!transfers) { out.execution = 'FAILED'; out.reasons.push('RWA_TRANSFERS_INVALID') }
+        else {
+          const outcome = assessRwaCallOutcome(b.execution.report.semantics, e.authorization.intent.sender!, transfers)
+          out.execution = outcome.satisfied ? 'SATISFIED' : 'FAILED'
+          if (!outcome.satisfied) out.reasons.push(...outcome.reasons)
+        }
       }
     }
     out.admissible = [out.integrity, out.trust, out.claims, out.time, out.policy].every(v => v === 'PASS') && out.execution === 'SATISFIED' && out.externalChecks === 'NONE'

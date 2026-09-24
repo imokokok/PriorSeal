@@ -1,6 +1,8 @@
 import * as asn1js from 'asn1js';
 import { AlgorithmIdentifier, Certificate, CryptoEngine, MessageImprint, PKIStatus, SignedData, TSTInfo, TimeStampReq, TimeStampResp, setEngine } from 'pkijs';
-import type { TimestampEvidence, TimestampPolicy } from './rfc3161.mjs';
+export type TimestampPolicy = { schema: 'priorseal.timestamp-policy.v1'; profile: 'digicert-rfc3161-v1'; maxClockSkewSeconds: number };
+export type TimestampEvidence = { schema: 'priorseal.rfc3161-evidence.v1'; domain: string; profile: string; tsaUrl: string; authorizationHash: string; requestedAt: number; nonce: string; timestamp: number; serialNumber: string; policyOid: string; digestAlgorithm: string; responseHash: string; response: string };
+export type TimestampVerificationResult = { valid: boolean; code: string; timestamp?: number; serialNumber?: string; profile?: string };
 
 type TimestampOptions = { authorizationHash?: string; requestedAt?: number; before?: number; cryptoProvider?: Crypto };
 type VerificationDetails = { signatureVerified?: boolean | null; signerCertificateVerified?: boolean | null; signerCertificate?: Certificate | null; certificatePath?: Certificate[] };
@@ -35,7 +37,7 @@ export function buildTimestampPolicy(inputValue: unknown = {}): TimestampPolicy 
   return { schema: RFC3161_POLICY_SCHEMA, profile: DIGICERT_RFC3161_PROFILE, maxClockSkewSeconds };
 }
 
-export async function createTimestampRequest(data: Uint8Array, cryptoProvider: Crypto = globalThis.crypto) {
+export async function createTimestampRequest(data: Uint8Array, cryptoProvider: Crypto = globalThis.crypto): Promise<{ body: Uint8Array<ArrayBuffer>; nonce: string }> {
   const crypto = requireCrypto(cryptoProvider);
   configureEngine(crypto);
   const bytes = toBytes(data);
@@ -71,7 +73,7 @@ export async function buildTimestampEvidence({ response, authorizationHash, requ
   };
 }
 
-export async function verifyTimestampEvidence(evidence: TimestampEvidence | null | undefined, data: Uint8Array, policy: unknown, { authorizationHash, requestedAt, before, cryptoProvider = globalThis.crypto }: TimestampOptions = {}) {
+export async function verifyTimestampEvidence(evidence: TimestampEvidence | null | undefined, data: Uint8Array, policy: unknown, { authorizationHash, requestedAt, before, cryptoProvider = globalThis.crypto }: TimestampOptions = {}): Promise<TimestampVerificationResult> {
   try {
     const normalizedPolicy = buildTimestampPolicy(policy);
     const claims = validateTimestampEvidenceClaims(evidence, normalizedPolicy, { authorizationHash, requestedAt, before });
@@ -113,7 +115,7 @@ export async function verifyTimestampEvidence(evidence: TimestampEvidence | null
   }
 }
 
-export function validateTimestampEvidenceClaims(evidence: TimestampEvidence | null | undefined, policy: unknown, { authorizationHash, requestedAt, before }: TimestampOptions = {}) {
+export function validateTimestampEvidenceClaims(evidence: TimestampEvidence | null | undefined, policy: unknown, { authorizationHash, requestedAt, before }: TimestampOptions = {}): TimestampVerificationResult {
   try {
     const normalizedPolicy = buildTimestampPolicy(policy);
     if (!evidence || evidence.schema !== RFC3161_EVIDENCE_SCHEMA || evidence.domain !== 'priorseal/rfc3161-evidence/v1') return invalid('INVALID_TIMESTAMP_EVIDENCE');

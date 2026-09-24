@@ -1,4 +1,3 @@
-import { errorCode } from '../../shared/error-code.mjs';
 import { hashJson } from '../../domain/hashing.mjs';
 import { archiveEntry, archivePage, type ArchiveAccess, type ArchiveQuery } from '../../application/archive/evidence-archive.mjs';
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from '../../domain/merkle-log.mjs';

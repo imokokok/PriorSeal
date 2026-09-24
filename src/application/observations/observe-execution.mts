@@ -16,7 +16,6 @@ import type { ExecutionInput } from '../../domain/execution.mjs';
 import type { AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { WorkerObservation } from './observation-worker.mjs';
 import type { IdempotencyStore } from '../idempotency.mjs';
-import type { normalizeExecution } from '../../domain/execution.mjs';
 
 type CorrelatedObservation = BindingExecution & { txHash?: string | null; intentHash?: string | null; executionDataAvailable?: boolean };
 type Observation = WorkerObservation & { chainId: number | string; intentHash?: string; executedAt?: number | null; observedAt?: number | null; confirmations?: number; sender?: string | null; nonce?: string | null; action?: string | null; recipient?: string | null; target?: string | null; calldataHash?: string | null; nativeValue?: string | null; asset?: string | null; amount?: string | null; status: string };

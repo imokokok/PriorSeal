@@ -3,7 +3,7 @@ import { Link, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { AppShell, CodeValue, CopyButton, Empty, Field, LoadingState, Notice, PageHeader, ReceiptSummary, Status, receiptPrimaryStatus } from './components'
 import { api, getCapabilities, type Capabilities } from './lib/api'
 import { RotationDiagnostics } from './pages/RotationDiagnostics'
-import { chains, dateTime, fromUnix, reasonText, short, toUnix, verificationText } from './lib/format'
+import { chains, dateTime, fromUnix, reasonText, short, toUnix } from './lib/format'
 import { activityChangeEvent, getActivity, getStoragePreference, session, storagePreferenceEvent } from './lib/storage'
 import type { ApiError, AuthorizationRecord, Execution, Intent, KeyRegistry, ObservationJob, ObservationResult, Receipt } from './types'
 

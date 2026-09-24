@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 const root = fileURLToPath(new URL("..", import.meta.url));
+const check = process.argv[2] === "--check";
+if (!check && process.argv.length !== 2) throw new Error("Usage: node scripts/build-web3-agent-kit-integration-spike-v1.0.1.mjs [--check]");
 const bundle = join(root, "examples/web3-agent-kit-integration-spike-v1.0.1");
 const verifierPath = join(bundle, "verify.mjs");
 const frozenVerifierSha256 = "b36c3fb6e76f92e9b2260767fed672c455b68d5821b1f70d90928621c01fd612";
@@ -47,7 +49,12 @@ const manifest = `${JSON.stringify({
 }, null, 2)}
 `;
 if (sha256(manifest) !== frozenManifestSha256) throw new Error("Frozen v1.0.1 manifest changed; publish a new version instead");
-await writeFile(verifierPath, verifier);
-await writeFile(join(bundle, "fixture/manifest.json"), manifest);
-process.stdout.write(`${JSON.stringify({ status: "BUILT", version: "v1.0.1", files: Object.keys(files).length })}
+if (check) {
+  if (await readFile(verifierPath, "utf8") !== verifier) throw new Error("Frozen v1.0.1 verifier is stale");
+  if (await readFile(join(bundle, "fixture/manifest.json"), "utf8") !== manifest) throw new Error("Frozen v1.0.1 manifest is stale");
+} else {
+  await writeFile(verifierPath, verifier);
+  await writeFile(join(bundle, "fixture/manifest.json"), manifest);
+}
+process.stdout.write(`${JSON.stringify({ status: check ? "CHECKED" : "BUILT", version: "v1.0.1", files: Object.keys(files).length })}
 `);

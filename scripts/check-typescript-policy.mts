@@ -13,19 +13,20 @@ const generatedCompatibilityLaunchers = new Set([
   'scripts/package-web3-agent-kit-integration-spike-v1.py',
 ]);
 
-const reviewedPortableJavaScript = new Set([
-  'examples/402signal-eip3009-settlement-binding-v1/vendor/route-guard-v0.7.3.mjs',
-  'examples/402signal-eip3009-settlement-binding-v1/verify.mjs',
-  'examples/boundaryattest-paired-v0.2/jcs.mjs',
-  'examples/boundaryattest-paired-v0.2/verify.mjs',
-  'examples/insight-boundaryattest-three-object-v0.2/verify.mjs',
-  'examples/thoughtproof-sentinel-paired-v1/verify.mjs',
-  'examples/thoughtproof-sentinel-paired-v2/verify.mjs',
-  'examples/thoughtproof-sentinel-paired-v2-final/verify.mjs',
-  'examples/web3-agent-kit-base-swap-v1/verify.mjs',
-  'examples/web3-agent-kit-integration-spike-v1/verify.mjs',
-  'examples/web3-agent-kit-integration-spike-v1/verify.source.mjs',
-  'examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs',
+// Each exception has a checked TypeScript source. Null is the pinned third-party file.
+const reviewedPortableJavaScript = new Map<string, string | null>([
+  ['examples/402signal-eip3009-settlement-binding-v1/vendor/route-guard-v0.7.3.mjs', null],
+  ['examples/402signal-eip3009-settlement-binding-v1/verify.mjs', 'examples/402signal-eip3009-settlement-binding-v1/src/verify-source.mts'],
+  ['examples/boundaryattest-paired-v0.2/jcs.mjs', 'examples/boundaryattest-paired-v0.2/jcs.reference.mts'],
+  ['examples/boundaryattest-paired-v0.2/verify.mjs', 'examples/boundaryattest-paired-v0.2/verify.reference.mts'],
+  ['examples/insight-boundaryattest-three-object-v0.2/verify.mjs', 'examples/insight-boundaryattest-three-object-v0.2/verify.reference.mts'],
+  ['examples/thoughtproof-sentinel-paired-v1/verify.mjs', 'examples/thoughtproof-sentinel-paired-v1/verify.reference.mts'],
+  ['examples/thoughtproof-sentinel-paired-v2/verify.mjs', 'examples/thoughtproof-sentinel-paired-v2/verify.reference.mts'],
+  ['examples/thoughtproof-sentinel-paired-v2-final/verify.mjs', 'examples/thoughtproof-sentinel-paired-v2-final/verify.reference.mts'],
+  ['examples/web3-agent-kit-base-swap-v1/verify.mjs', 'examples/web3-agent-kit-base-swap-v1/verify.reference.mts'],
+  ['examples/web3-agent-kit-integration-spike-v1/verify.mjs', 'examples/web3-agent-kit-integration-spike-v1/verify.source.reference.mts'],
+  ['examples/web3-agent-kit-integration-spike-v1/verify.source.mjs', 'examples/web3-agent-kit-integration-spike-v1/verify.source.reference.mts'],
+  ['examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs', 'examples/web3-agent-kit-integration-spike-v1.0.1/verify.source.mts'],
 ]);
 
 const reviewedLegacyJavaScriptTests = new Set<string>();
@@ -87,12 +88,18 @@ for (const [reviewed, description] of [
   [reviewedPortableJavaScript, 'portable example'],
   [reviewedLegacyJavaScriptTests, 'legacy test'],
 ] as const) {
-  for (const exception of reviewed) {
+  for (const exception of reviewed.keys()) {
     const path = join(projectRoot, exception);
     if (!existsSync(path)) errors.push(`${exception}: reviewed ${description} exception no longer exists`);
     else if (path.endsWith('.mjs') && existsSync(path.replace(/\.mjs$/, '.mts'))) {
       errors.push(`${exception}: remove stale JavaScript ${description} exception after TypeScript migration`);
     }
+  }
+}
+
+for (const [runtime, source] of reviewedPortableJavaScript) {
+  if (source !== null && !existsSync(join(projectRoot, source))) {
+    errors.push(`${runtime}: reviewed TypeScript source ${source} is missing`);
   }
 }
 

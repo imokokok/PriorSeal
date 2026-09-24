@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { transformSync } from "esbuild";
+import ts from "typescript";
 const check = process.argv[2] === "--check";
 if (!check && process.argv.length !== 2) throw new Error("Usage: node scripts/build-core.mjs [--check]");
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -40,6 +41,25 @@ for (const source of frozenExamples.keys()) {
 function runtimePath(sourcePath) {
   if (sourcePath === join(sourceRoot, "domain", "rfc3161-source.mts")) return join(sourceRoot, "domain", "rfc3161.mjs");
   return sourcePath.replace(/\.mts$/, ".mjs");
+}
+const timestampSourcePath = join(sourceRoot, "domain", "rfc3161-source.mts");
+const timestampDeclarationPath = join(sourceRoot, "domain", "rfc3161.d.mts");
+const declaration = ts.transpileDeclaration(readFileSync(timestampSourcePath, "utf8"), {
+  fileName: timestampSourcePath,
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext }
+});
+if (declaration.diagnostics?.length) {
+  throw new Error(declaration.diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")).join("\n"));
+}
+const declarationOutput = `// Generated from rfc3161-source.mts by npm run core:build. Do not edit directly.
+${declaration.outputText}`;
+if (check) {
+  if (!existsSync(timestampDeclarationPath) || readFileSync(timestampDeclarationPath, "utf8") !== declarationOutput) {
+    console.error("src/domain/rfc3161.d.mts is missing or stale; run npm run core:build");
+    process.exitCode = 1;
+  }
+} else {
+  writeFileSync(timestampDeclarationPath, declarationOutput);
 }
 for (const sourcePath of sources) {
   const outputPath = runtimePath(sourcePath);
