@@ -24,7 +24,39 @@ const priorSealPublic = createPublicKey(priorSealPrivate);
 const priorSealPublicPem = priorSealPublic.export({ type: "spki", format: "pem" });
 const root = new URL("../examples/web3-agent-kit-integration-spike-v1/", import.meta.url);
 const fixture = new URL("fixture/", root);
-const previous = JSON.parse(await readFile(new URL("../examples/web3-agent-kit-base-swap-v2/evidence-bundle.json", import.meta.url), "utf8"));
+function record(value2, path) {
+  if (value2 === null || typeof value2 !== "object" || Array.isArray(value2)) throw new TypeError(`${path} must be an object`);
+  return value2;
+}
+function hex32(value2, path) {
+  if (typeof value2 !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(value2)) throw new TypeError(`${path} must be a 32-byte hex value`);
+  return value2;
+}
+function attestation(value2, path) {
+  const input = record(value2, path);
+  const data2 = record(input.data, `${path}.data`);
+  if (!Number.isSafeInteger(data2.validUntil) || typeof data2.verdict !== "string") throw new TypeError(`${path}.data has invalid fields`);
+  if (typeof input.signature !== "string" || !/^0x[0-9a-fA-F]+$/.test(input.signature)) throw new TypeError(`${path}.signature must be hex`);
+  if (input.reasonCodes !== void 0 && (!Array.isArray(input.reasonCodes) || !input.reasonCodes.every((code) => typeof code === "string"))) throw new TypeError(`${path}.reasonCodes must be strings`);
+  return {
+    ...input,
+    uid: hex32(input.uid, `${path}.uid`),
+    signature: input.signature,
+    data: {
+      ...data2,
+      requestHash: hex32(data2.requestHash, `${path}.data.requestHash`),
+      validUntil: data2.validUntil,
+      verdict: data2.verdict,
+      reasonCodesHash: hex32(data2.reasonCodesHash, `${path}.data.reasonCodesHash`)
+    },
+    ...input.reasonCodes === void 0 ? {} : { reasonCodes: input.reasonCodes }
+  };
+}
+const previousValue = JSON.parse(await readFile(new URL("../examples/web3-agent-kit-base-swap-v2/evidence-bundle.json", import.meta.url), "utf8"));
+const previousInsight = record(record(previousValue, "previous bundle").insight, "previous bundle.insight");
+const sourceAttestation = attestation(previousInsight.sourceAttestation, "previous bundle.insight.sourceAttestation");
+const destinationAttestation = attestation(previousInsight.destinationAttestation, "previous bundle.insight.destinationAttestation");
+const previousKeyRegistry = record(previousInsight.keyRegistry, "previous bundle.insight.keyRegistry");
 const evaluatedAt = 1789639170;
 const issuedAt = 1789639200;
 const validUntil = 1789639380;
@@ -71,8 +103,8 @@ const uintFields = new Set(insightTypes.OracleSafetyCheck.filter(({ type }) => t
 function canonical(value2) {
   if (Array.isArray(value2)) return `[${value2.map(canonical).join(",")}]`;
   if (value2 && typeof value2 === "object") {
-    const record = value2;
-    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(",")}}`;
+    const record2 = value2;
+    return `{${Object.keys(record2).sort().map((key) => `${JSON.stringify(key)}:${canonical(record2[key])}`).join(",")}}`;
   }
   return JSON.stringify(value2);
 }
@@ -82,12 +114,16 @@ function sha256(bytes) {
 function domainDigest(namespace, payload) {
   return `0x${sha256(`${namespace}\0${canonical(payload)}`)}`;
 }
-function typedData(attestation) {
+function typedData(input) {
   return {
     domain: { name: "Insight Oracle Safety", version: "3", chainId: 1 },
     types: insightTypes,
     primaryType: "OracleSafetyCheck",
-    message: Object.fromEntries(Object.entries(attestation.data).map(([key, entry]) => [key, uintFields.has(key) ? BigInt(entry) : entry]))
+    message: Object.fromEntries(Object.entries(input.data).map(([key, entry]) => {
+      if (!uintFields.has(key)) return [key, entry];
+      if (typeof entry !== "string" && typeof entry !== "number") throw new TypeError(`${key} must be a decimal integer`);
+      return [key, BigInt(entry)];
+    }))
   };
 }
 function pair(source2, destination2) {
@@ -107,8 +143,8 @@ async function writeJson(name, value2) {
   await writeFile(new URL(name, fixture), `${JSON.stringify(value2, null, 2)}
 `);
 }
-const source = previous.insight.sourceAttestation;
-const destination = previous.insight.destinationAttestation;
+const source = sourceAttestation;
+const destination = destinationAttestation;
 const blockedDestination = structuredClone(destination);
 blockedDestination.data.verdict = "BLOCK";
 blockedDestination.data.reasonCodesHash = keccak256(encodeAbiParameters(
@@ -215,7 +251,7 @@ const acceptance = signAuthorizationReceipt(buildAuthorizationReceipt({
   keyId,
   acceptedAt: issuedAt + 1
 }), priorSealPrivate.export({ type: "pkcs8", format: "pem" }));
-const expectedEvidence = {
+const expectedEvidenceBase = {
   authorization_id: authorization.authorizationId,
   envelope_digest: envelopeDigest,
   executor,
@@ -230,12 +266,12 @@ if (!verification.valid) throw new Error(`Synthetic authorization did not verify
 const verificationResult = { valid: true, code: verification.code };
 const response = {
   schema: "priorseal.wak-authorization-response.v1",
-  ...expectedEvidence,
+  ...expectedEvidenceBase,
   signedAuthorization: authorization,
   verificationResult,
   acceptance
 };
-expectedEvidence.raw = { signedAuthorization: authorization, verificationResult, acceptance };
+const expectedEvidence = { ...expectedEvidenceBase, raw: { signedAuthorization: authorization, verificationResult, acceptance } };
 const baseline = {
   schema: "wak-insight-priorseal.fixture-baseline.v1",
   mode: "SYNTHETIC_NO_BROADCAST",
@@ -255,7 +291,7 @@ const baseline = {
     blockedDestinationAttestation: blockedDestination,
     positivePairCommitment: positivePair,
     blockedPairCommitment: blockedPair,
-    keyRegistry: previous.insight.keyRegistry
+    keyRegistry: previousKeyRegistry
   },
   priorSeal: { authorization, acceptance, response, expectedWakEvidence: expectedEvidence }
 };

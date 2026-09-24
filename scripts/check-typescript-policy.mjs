@@ -22,13 +22,11 @@ const reviewedPortableJavaScript = /* @__PURE__ */ new Set([
   "examples/thoughtproof-sentinel-paired-v2/verify.mjs",
   "examples/thoughtproof-sentinel-paired-v2-final/verify.mjs",
   "examples/verify-signed-receipt.mjs",
-  "examples/web3-agent-kit-base-sepolia-live-v1/verify.mjs",
   "examples/web3-agent-kit-base-swap-v1/verify.mjs",
   "examples/web3-agent-kit-context-binding-v1/verify.mjs",
   "examples/web3-agent-kit-integration-spike-v1/verify.mjs",
   "examples/web3-agent-kit-integration-spike-v1/verify.source.mjs",
-  "examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs",
-  "examples/web3-agent-kit-integration-spike-v1.0.1/verify.source.mjs"
+  "examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs"
 ]);
 const reviewedLegacyJavaScriptTests = /* @__PURE__ */ new Set();
 function files(directory) {
