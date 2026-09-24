@@ -51,3 +51,17 @@ test('explicit insufficient-freshness probe reports a failed readiness check, no
   await assert.rejects(integrationDoctor({ samples: 99 }), /samples/);
   await assert.rejects(integrationDoctor({ offer: 'insight', insightUrl: 'http://remote.invalid' }), /HTTPS/);
 });
+
+test('malformed remote JSON cannot pass health or paid coverage checks', async () => {
+  const health = await integrationDoctor({ offer: 'insight', fetcher: async () => Response.json([]) });
+  assert.equal(health.ok, false);
+  assert.deepEqual(health.checks.map(check => check.ok), [false, false]);
+
+  const coverage = await integrationDoctor({ offer: 'insight', probe: true, apiKey: 'private-fixture', fetcher: async input => {
+    const url = requestUrl(input);
+    if (url.includes('coverage')) return Response.json({ data: { diagnostic: { freshnessStatus: 'SUFFICIENT', providers: [null] } } });
+    return Response.json({ data: { status: url.includes('ready') ? 'ready' : 'ok' } });
+  } });
+  assert.equal(coverage.ok, false);
+  assert.equal(coverage.checks[2]?.ok, false);
+});

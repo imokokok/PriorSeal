@@ -1,9 +1,13 @@
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
-type JsonObject = Record<string, any>;
+type JsonObject = Record<string, unknown>;
 type DiagnosticCheck = { path: string; status: number | null; durationMs: number; ok: boolean; error?: string; billing?: JsonObject; diagnostic?: JsonObject | null; capabilities?: JsonObject | null };
 type DoctorOptions = { offer?: 'insight' | 'priorseal' | 'combined'; probe?: boolean; samples?: number; asset?: string; chainId?: number; maxSourceAgeSeconds?: number; fetcher?: typeof fetch; apiKey?: string; insightUrl?: string; priorsealUrl?: string };
+
+function record(value: unknown): JsonObject | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : null;
+}
 
 function origin(value: string) {
   const url = new URL(value);
@@ -23,8 +27,8 @@ export async function integrationDoctor(options: DoctorOptions = {}) {
     const startedAt = performance.now();
     try {
       const response = await fetcher(`${base}${path}`, { headers: authenticated ? { 'x-api-key': apiKey! } : {}, redirect: 'error', signal: AbortSignal.timeout(30_000) });
-      const body = await response.json() as JsonObject;
-      const check: DiagnosticCheck = { path: path.split('?')[0], status: response.status, durationMs: Math.round(performance.now() - startedAt), ok: response.ok };
+      const body = record(await response.json() as unknown);
+      const check: DiagnosticCheck = { path: path.split('?')[0], status: response.status, durationMs: Math.round(performance.now() - startedAt), ok: response.ok && body !== null };
       if (authenticated) check.billing = { requestId: response.headers.get('x-request-id'), cost: response.headers.get('x-credit-cost'), status: response.headers.get('x-credit-status'), receipt: response.headers.get('x-credit-receipt'), balanceAfter: response.headers.get('x-credit-balance-after') };
       return { check, body };
     } catch {
@@ -38,20 +42,21 @@ export async function integrationDoctor(options: DoctorOptions = {}) {
       read(base, '/api/v1/health'),
       read(base, '/api/v1/health/ready'),
     ]);
-    live.check.ok &&= live.body?.data?.status === 'ok';
-    ready.check.ok &&= ready.body?.data?.status === 'ready';
+    live.check.ok &&= record(live.body?.data)?.status === 'ok';
+    ready.check.ok &&= record(ready.body?.data)?.status === 'ready';
     const checks = [live.check, ready.check];
     if (probe) for (let i = 0; i < samples; i++) {
       if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000));
       const query = new URLSearchParams({ asset: asset.toUpperCase(), chainId: String(chainId), probe: 'true', maxSourceAgeSeconds: String(maxSourceAgeSeconds) });
       const { body, check } = await read(base, `/api/v1/coverage?${query}`, true);
-      const diagnostic = body?.data?.diagnostic;
+      const diagnostic = record(record(body?.data)?.diagnostic);
       check.ok &&= diagnostic?.freshnessStatus === 'SUFFICIENT';
+      if (diagnostic?.providers !== undefined && (!Array.isArray(diagnostic.providers) || !diagnostic.providers.every((provider) => record(provider) !== null))) check.ok = false;
       check.diagnostic = diagnostic ? {
         status: diagnostic.status, freshnessStatus: diagnostic.freshnessStatus,
         freshCount: diagnostic.freshCount, freshNonDerivedGroupCount: diagnostic.freshNonDerivedGroupCount,
         freshnessShortfall: diagnostic.freshnessShortfall,
-        providers: diagnostic.providers?.map((p: JsonObject) => ({ provider: p.provider, reason: p.reason, dataAgeSeconds: p.dataAgeSeconds, fetchDurationMs: p.fetchDurationMs, fresh: p.fresh, included: p.included })),
+        providers: Array.isArray(diagnostic.providers) ? diagnostic.providers.filter((provider): provider is JsonObject => record(provider) !== null).map((p) => ({ provider: p.provider, reason: p.reason, dataAgeSeconds: p.dataAgeSeconds, fetchDurationMs: p.fetchDurationMs, fresh: p.fresh, included: p.included })) : undefined,
       } : null;
       checks.push(check);
     }

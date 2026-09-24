@@ -2,7 +2,26 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
 import { canonicalize, verifyAuthorization, verifyAuthorizationReceipt, verifyTimestampEvidence } from '../src/index.mjs';
 
-type ApiBody = Record<string, any>;
+type ApiBody = Record<string, unknown>;
+
+function record(value: unknown, label: string): ApiBody {
+  assert(value !== null && typeof value === 'object' && !Array.isArray(value), `${label} must be a JSON object`);
+  return value as ApiBody;
+}
+
+function optionalRecord(value: unknown): ApiBody | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as ApiBody : null;
+}
+
+function string(value: unknown, label: string): string {
+  assert(typeof value === 'string', `${label} must be a string`);
+  return value;
+}
+
+function number(value: unknown, label: string): number {
+  assert(typeof value === 'number' && Number.isSafeInteger(value), `${label} must be a safe integer`);
+  return value;
+}
 
 if (process.argv.includes('--read-only')) {
   const { runReadOnlySmoke } = await import('./production-smoke-readonly.mjs');
@@ -40,10 +59,12 @@ async function request(path: string, init: RequestInit = {}): Promise<{ response
       await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
       continue;
     }
-    const body = await response.json().catch(() => null) as ApiBody | null;
-    if (response.ok) return { response, body: body as ApiBody };
-    const code = body?.error?.code ?? body?.code ?? 'REQUEST_FAILED';
-    const message = body?.error?.message ?? body?.message ?? response.statusText;
+    const body: unknown = await response.json().catch(() => null);
+    if (response.ok) return { response, body: record(body, `${path} response`) };
+    const errorBody = optionalRecord(body);
+    const detail = optionalRecord(errorBody?.error);
+    const code = detail?.code ?? errorBody?.code ?? 'REQUEST_FAILED';
+    const message = detail?.message ?? errorBody?.message ?? response.statusText;
     const error = new Error(`${response.status} ${code}: ${message}`);
     if (![502, 503, 504].includes(response.status) || attempt === 3) throw error;
     lastError = error;
@@ -76,10 +97,10 @@ const homeText = await home.text();
 
 assert(live.body.status === 'ok', 'Liveness check failed');
 assert(ready.body.status === 'ready' && ready.body.storage === 'd1', 'D1 readiness check failed');
-assert(version.body.service === 'priorseal' && version.body.version === expectedVersion, `Unexpected production build: ${version.body.version}`);
+assert(version.body.service === 'priorseal' && version.body.version === expectedVersion, `Unexpected production build: ${String(version.body.version)}`);
 assert(!version.response.headers.has('x-render-origin-server') && !version.response.headers.has('rndr-id'), 'Request still reached Render');
 assert(home.ok && /PriorSeal/i.test(homeText), 'Production console is unavailable');
-assert(registry.body.keys?.some((key: ApiBody) => key.status === 'active'), 'No active issuer key is published');
+assert(Array.isArray(registry.body.keys) && registry.body.keys.some((key) => optionalRecord(key)?.status === 'active'), 'No active issuer key is published');
 
 const account = privateKeyToAccount(`0x${randomHex()}`);
 const now = Math.floor(Date.now() / 1000);
@@ -110,26 +131,50 @@ const draft = {
 };
 
 const prepared = (await post('/v1/authorizations/prepare', draft)).body;
-const signature = await account.signTypedData(prepared.typedData);
-const accepted = (await post('/v1/authorizations', { ...prepared.authorization, signature }, `smoke-${suffix}`)).body;
-const stored = (await request(`/v1/authorizations/${encodeURIComponent(accepted.authorization.authorizationId)}`)).body;
-const key = registry.body.keys.find((candidate: ApiBody) => candidate.keyId === accepted.acceptance.keyId && candidate.issuer === accepted.acceptance.issuer);
+const typedData = record(prepared.typedData, 'Prepared EIP-712 typed data');
+record(typedData.domain, 'Prepared EIP-712 domain');
+record(typedData.types, 'Prepared EIP-712 types');
+record(typedData.message, 'Prepared EIP-712 message');
+string(typedData.primaryType, 'Prepared EIP-712 primaryType');
+const signature = await account.signTypedData(typedData as Parameters<typeof account.signTypedData>[0]);
+const preparedAuthorization = record(prepared.authorization, 'Prepared authorization');
+const accepted = (await post('/v1/authorizations', { ...preparedAuthorization, signature }, `smoke-${suffix}`)).body;
+const authorization = record(accepted.authorization, 'Accepted authorization');
+const acceptance = record(accepted.acceptance, 'Authorization acceptance');
+const authorizationId = string(authorization.authorizationId, 'Authorization id');
+const acceptedAt = number(acceptance.acceptedAt, 'Acceptance time');
+const keyId = string(acceptance.keyId, 'Acceptance key id');
+const issuer = string(acceptance.issuer, 'Acceptance issuer');
+const entryHash = string(acceptance.entryHash, 'Acceptance entry hash');
+const stored = (await request(`/v1/authorizations/${encodeURIComponent(authorizationId)}`)).body;
+const storedAuthorization = record(stored.authorization, 'Stored authorization');
+const storedAcceptance = record(stored.acceptance, 'Stored acceptance');
+const keys = registry.body.keys as unknown[];
+const key = keys.map((candidate) => optionalRecord(candidate)).find((candidate) => candidate?.keyId === keyId && candidate.issuer === issuer);
 
 assert(key, 'Production issuer key is not published');
-const authorizationCheck = await verifyAuthorization(accepted.authorization, { now: accepted.acceptance.acceptedAt, audience: 'priorseal.xyz' });
+const publicKey = string(key.publicKey, 'Issuer public key');
+const authorizationCheck = await verifyAuthorization(authorization, { now: acceptedAt, audience: 'priorseal.xyz' });
 assert(authorizationCheck.valid, `Authorization verification failed: ${authorizationCheck.code}`);
-assert(verifyAuthorizationReceipt(accepted.acceptance, key.publicKey), 'Issuer acceptance signature is invalid');
-assert(accepted.policy?.allowed && accepted.policyEvidence?.document?.policyId === 'priorseal-public-beta-v1', 'Public beta policy was not applied');
-assert(accepted.timestampEvidence, 'RFC 3161 timestamp evidence is missing');
+assert(verifyAuthorizationReceipt(acceptance, publicKey), 'Issuer acceptance signature is invalid');
+const policy = record(accepted.policy, 'Applied policy');
+const policyEvidence = record(accepted.policyEvidence, 'Policy evidence');
+const policyDocument = record(policyEvidence.document, 'Policy document');
+assert(policy.allowed === true && policyDocument.policyId === 'priorseal-public-beta-v1', 'Public beta policy was not applied');
+const timestampEvidence = record(accepted.timestampEvidence, 'RFC 3161 timestamp evidence');
+for (const field of ['schema', 'domain', 'profile', 'tsaUrl', 'authorizationHash', 'nonce', 'serialNumber', 'policyOid', 'digestAlgorithm', 'responseHash', 'response'] as const) string(timestampEvidence[field], `Timestamp ${field}`);
+number(timestampEvidence.requestedAt, 'Timestamp request time');
+number(timestampEvidence.timestamp, 'Timestamp time');
+const authorizationHash = string(acceptance.authorizationHash, 'Acceptance authorization hash');
 const timestampCheck = await verifyTimestampEvidence(
-  accepted.timestampEvidence,
-  new TextEncoder().encode(canonicalize(accepted.authorization)),
-  accepted.policyEvidence.document.timestampPolicy,
-  { authorizationHash: accepted.acceptance.authorizationHash, requestedAt: accepted.acceptance.acceptedAt, before: expiresAt },
+  timestampEvidence as NonNullable<Parameters<typeof verifyTimestampEvidence>[0]>,
+  new TextEncoder().encode(canonicalize(authorization)),
+  policyDocument.timestampPolicy,
+  { authorizationHash, requestedAt: acceptedAt, before: expiresAt },
 );
 assert(timestampCheck.valid, `Timestamp verification failed: ${timestampCheck.code}`);
-assert(stored.authorization.authorizationId === accepted.authorization.authorizationId, 'Persisted authorization does not match the accepted response');
-assert(stored.acceptance.entryHash === accepted.acceptance.entryHash, 'Persisted acceptance does not match the accepted response');
+assert(storedAuthorization.authorizationId === authorizationId, 'Persisted authorization does not match the accepted response');
+assert(storedAcceptance.entryHash === entryHash, 'Persisted acceptance does not match the accepted response');
 
 let pending = null;
 if (runPendingFlow) {
@@ -158,30 +203,33 @@ if (runPendingFlow) {
       txHash: `0x${'f'.repeat(64)}`,
       confirmations: 12,
     }, `smoke-pending-observe-${pendingSuffix}`)).body;
-    const expectedOutcome = observed.observation?.status === 'PENDING' ? 'PENDING' : 'UNDETERMINED';
-    assert(observed.receipt?.outcome === expectedOutcome, 'Non-final execution was incorrectly classified');
-    if (observed.receipt.schema === 'priorseal.execution-receipt.v1') {
-      assert(observed.receipt.compliance === undefined, 'Legacy receipt unexpectedly included v3 compliance claims');
+    const observation = record(observed.observation, 'Execution observation');
+    const receipt = record(observed.receipt, 'Execution receipt');
+    const expectedOutcome = observation.status === 'PENDING' ? 'PENDING' : 'UNDETERMINED';
+    assert(receipt.outcome === expectedOutcome, 'Non-final execution was incorrectly classified');
+    if (receipt.schema === 'priorseal.execution-receipt.v1') {
+      assert(receipt.compliance === undefined, 'Legacy receipt unexpectedly included v3 compliance claims');
     } else {
-      assert(observed.receipt.schema === 'priorseal.execution-receipt.v3' && observed.receipt.compliance?.status === 'NOT_ASSESSABLE', 'Non-final execution was incorrectly assessed for compliance');
+      assert(receipt.schema === 'priorseal.execution-receipt.v3' && optionalRecord(receipt.compliance)?.status === 'NOT_ASSESSABLE', 'Non-final execution was incorrectly assessed for compliance');
     }
     assert(observed.authorizationAssociation !== 'FINAL', 'Non-final execution incorrectly claimed the authorization');
-    assert(observed.observationJob?.jobId, 'Pending execution did not return a durable job');
-    receiptId = observed.receipt.receiptId;
-    job = observed.observationJob;
+    job = record(observed.observationJob, 'Observation job');
+    string(job.jobId, 'Observation job id');
+    receiptId = string(receipt.receiptId, 'Execution receipt id');
   }
 
   const deadline = Date.now() + pendingTimeoutMs;
   let reportedAttempts = -1;
-  while (!['COMPLETED', 'UNDETERMINED', 'FAILED'].includes(job.state) && Date.now() < deadline) {
-    if (job.attempts !== reportedAttempts) {
-      console.error(JSON.stringify({ event: 'pending-progress', jobId: job.jobId, state: job.state, attempts: job.attempts, nextAttemptAt: job.nextAttemptAt }));
-      reportedAttempts = job.attempts;
+  while (!['COMPLETED', 'UNDETERMINED', 'FAILED'].includes(string(job.state, 'Observation job state')) && Date.now() < deadline) {
+    const attempts = number(job.attempts, 'Observation job attempts');
+    if (attempts !== reportedAttempts) {
+      console.error(JSON.stringify({ event: 'pending-progress', jobId: job.jobId, state: job.state, attempts, nextAttemptAt: job.nextAttemptAt }));
+      reportedAttempts = attempts;
     }
     await new Promise((resolve) => setTimeout(resolve, 5_000));
-    job = (await request(`/v1/observation-jobs/${encodeURIComponent(job.jobId)}`)).body;
+    job = (await request(`/v1/observation-jobs/${encodeURIComponent(string(job.jobId, 'Observation job id'))}`)).body;
   }
-  assert(job.state === 'UNDETERMINED' && job.attempts > 0, `Pending job did not close safely within ${pendingTimeoutMs} ms: ${job.state}`);
+  assert(job.state === 'UNDETERMINED' && number(job.attempts, 'Observation job attempts') > 0, `Pending job did not close safely within ${pendingTimeoutMs} ms: ${String(job.state)}`);
   pending = { receiptId, jobId: job.jobId, state: job.state, attempts: job.attempts };
 }
 
@@ -189,11 +237,11 @@ console.log(JSON.stringify({
   ok: true,
   baseUrl: baseUrl.origin,
   version: version.body.version,
-  authorizationId: accepted.authorization.authorizationId,
-  issuer: accepted.acceptance.issuer,
-  keyId: accepted.acceptance.keyId,
-  policyId: accepted.policyEvidence.document.policyId,
-  timestampProfile: accepted.timestampEvidence.profile,
+  authorizationId,
+  issuer,
+  keyId,
+  policyId: policyDocument.policyId,
+  timestampProfile: timestampEvidence.profile,
   timestampVerified: true,
   persisted: true,
   pending,

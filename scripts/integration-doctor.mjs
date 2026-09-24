@@ -1,6 +1,9 @@
 // Generated from integration-doctor.mts by npm run core:build. Do not edit directly.
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+function record(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
 function origin(value) {
   const url = new URL(value);
   if (url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error("Use a base origin without credentials, path or query");
@@ -18,8 +21,8 @@ async function integrationDoctor(options = {}) {
     const startedAt = performance.now();
     try {
       const response = await fetcher(`${base}${path}`, { headers: authenticated ? { "x-api-key": apiKey } : {}, redirect: "error", signal: AbortSignal.timeout(3e4) });
-      const body = await response.json();
-      const check = { path: path.split("?")[0], status: response.status, durationMs: Math.round(performance.now() - startedAt), ok: response.ok };
+      const body = record(await response.json());
+      const check = { path: path.split("?")[0], status: response.status, durationMs: Math.round(performance.now() - startedAt), ok: response.ok && body !== null };
       if (authenticated) check.billing = { requestId: response.headers.get("x-request-id"), cost: response.headers.get("x-credit-cost"), status: response.headers.get("x-credit-status"), receipt: response.headers.get("x-credit-receipt"), balanceAfter: response.headers.get("x-credit-balance-after") };
       return { check, body };
     } catch {
@@ -33,22 +36,23 @@ async function integrationDoctor(options = {}) {
       read(base, "/api/v1/health"),
       read(base, "/api/v1/health/ready")
     ]);
-    live.check.ok &&= live.body?.data?.status === "ok";
-    ready.check.ok &&= ready.body?.data?.status === "ready";
+    live.check.ok &&= record(live.body?.data)?.status === "ok";
+    ready.check.ok &&= record(ready.body?.data)?.status === "ready";
     const checks2 = [live.check, ready.check];
     if (probe) for (let i = 0; i < samples; i++) {
       if (i > 0) await new Promise((resolve) => setTimeout(resolve, 1e3));
       const query = new URLSearchParams({ asset: asset.toUpperCase(), chainId: String(chainId), probe: "true", maxSourceAgeSeconds: String(maxSourceAgeSeconds) });
       const { body, check } = await read(base, `/api/v1/coverage?${query}`, true);
-      const diagnostic = body?.data?.diagnostic;
+      const diagnostic = record(record(body?.data)?.diagnostic);
       check.ok &&= diagnostic?.freshnessStatus === "SUFFICIENT";
+      if (diagnostic?.providers !== void 0 && (!Array.isArray(diagnostic.providers) || !diagnostic.providers.every((provider) => record(provider) !== null))) check.ok = false;
       check.diagnostic = diagnostic ? {
         status: diagnostic.status,
         freshnessStatus: diagnostic.freshnessStatus,
         freshCount: diagnostic.freshCount,
         freshNonDerivedGroupCount: diagnostic.freshNonDerivedGroupCount,
         freshnessShortfall: diagnostic.freshnessShortfall,
-        providers: diagnostic.providers?.map((p) => ({ provider: p.provider, reason: p.reason, dataAgeSeconds: p.dataAgeSeconds, fetchDurationMs: p.fetchDurationMs, fresh: p.fresh, included: p.included }))
+        providers: Array.isArray(diagnostic.providers) ? diagnostic.providers.filter((provider) => record(provider) !== null).map((p) => ({ provider: p.provider, reason: p.reason, dataAgeSeconds: p.dataAgeSeconds, fetchDurationMs: p.fetchDurationMs, fresh: p.fresh, included: p.included })) : void 0
       } : null;
       checks2.push(check);
     }

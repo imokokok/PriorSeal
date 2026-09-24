@@ -15,7 +15,6 @@ const reviewedPortableJavaScript = /* @__PURE__ */ new Set([
   "examples/boundaryattest-paired-v0.2/verify.mjs",
   "examples/create-signed-receipt.mjs",
   "examples/headless-market-state-pair-v1/verify.mjs",
-  "examples/insight-boundaryattest-three-object-v0.2/jcs.mjs",
   "examples/insight-boundaryattest-three-object-v0.2/verify.mjs",
   "examples/rwa-v1/verify.mjs",
   "examples/rwa-v2/verify.mjs",
