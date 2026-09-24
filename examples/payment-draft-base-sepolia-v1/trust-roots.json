@@ -1,0 +1,9 @@
+{
+  "schema": "payment-draft.base-sepolia-trust-roots.v1",
+  "draftId": "66238009-a717-4746-96c5-4b2b013d7f3a",
+  "txHash": "0x9d6502f4cf45e838a11208269dc2407b01c9fe56e40660f78b90465c07866523",
+  "blockHash": "0x3929326deb7d43dbcc2a026f01f717e0f07d830fa6fa7291f7f49c740f60d451",
+  "tokenAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "payer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+  "issuerKeySpkiSha256": "f5d746fef024e72f757b2efc6fba357536ae2a1f1e921fc6fbdd6f388e9b363e"
+}
