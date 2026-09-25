@@ -1,7 +1,12 @@
 /** Validates one explicitly confirmed, READY-gated InterAI Track 1 window. */
 
 type Json = Record<string, unknown>;
-const ORIGINAL_THREAD_ID = "19fcde01ce31cf7e";
+// Both IDs were independently checked against Gmail originals. The second is
+// the continuation thread used for the current coordination exchange.
+const VERIFIED_THREAD_IDS = new Set([
+	"19fcde01ce31cf7e",
+	"1a0da1a463040f6d",
+]);
 
 function assert(value: unknown, message: string): asserts value {
 	if (!value) throw new Error(message);
@@ -29,7 +34,7 @@ function isoTime(value: unknown, label: string): number {
 function messageId(value: unknown, label: string): string {
 	assert(
 		typeof value === "string" && /^[0-9a-f]{12,32}$/.test(value),
-		`${label} must be an original-thread Gmail message ID`,
+		`${label} must be a Gmail message ID`,
 	);
 	return value;
 }
@@ -42,8 +47,9 @@ export function validateTrack1ReadyWindow(
 	const ready = object(value, "READY record");
 	assert(
 		ready.schema === "interai.track1.ready-window.v1" &&
-			ready.channel === "original-email-thread" &&
-			ready.threadId === ORIGINAL_THREAD_ID &&
+			ready.channel === "verified-email-thread" &&
+			typeof ready.threadId === "string" &&
+			VERIFIED_THREAD_IDS.has(ready.threadId) &&
 			ready.message === "READY" &&
 			ready.gate === "enabled-and-verified",
 		"Explicit READY and verified bounded gate are required",
@@ -52,9 +58,9 @@ export function validateTrack1ReadyWindow(
 	const readyAt = isoTime(ready.receivedAtIso, "READY receivedAtIso");
 	const window = object(ready.window, "confirmed window");
 	assert(
-		window.channel === "original-email-thread" &&
-			window.threadId === ORIGINAL_THREAD_ID,
-		"Window confirmation must be in the original email thread",
+		window.channel === "verified-email-thread" &&
+			window.threadId === ready.threadId,
+		"Window confirmation and READY must be in the same verified email thread",
 	);
 	const confirmationMessageId = messageId(
 		window.confirmationMessageId,
