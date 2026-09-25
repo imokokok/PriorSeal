@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateTrack1ReadyWindow } from "./interai-track1-window.mjs";
 function assert(value, message) {
   if (!value) throw new Error(message);
 }
@@ -55,19 +56,8 @@ async function main() {
   const opts = args();
   const readyFile = path.resolve(opts.get("--ready-file") ?? "");
   const outputRoot = path.resolve(opts.get("--output-root") ?? "");
-  const now = Date.now();
-  const start = Date.parse("2026-09-25T15:45:00Z");
-  const end = Date.parse("2026-09-25T16:30:00Z");
-  assert(now >= start && now < end, "Outside agreed Asia/Shanghai live window");
-  const ready = JSON.parse(await readFile(readyFile, "utf8"));
-  assert(
-    ready.channel === "original-email-thread" && ready.message === "READY" && typeof ready.receivedAtIso === "string",
-    "Alejandro READY not recorded from original email thread"
-  );
-  const readyAt = Date.parse(ready.receivedAtIso);
-  assert(
-    Number.isFinite(readyAt) && readyAt >= start && readyAt <= now && readyAt < end,
-    "READY time outside agreed window"
+  validateTrack1ReadyWindow(
+    JSON.parse(await readFile(readyFile, "utf8"))
   );
   const priorSealRoot = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),

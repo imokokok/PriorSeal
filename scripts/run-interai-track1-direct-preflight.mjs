@@ -19,11 +19,10 @@ import {
   assertTrack1Registry,
   assertTrack1SignedDescriptor
 } from "./interai-track1-registry.mjs";
+import { validateTrack1ReadyWindow } from "./interai-track1-window.mjs";
 const ENDPOINT = "https://api.interailabs.dev/verify";
 const KEYCHAIN_SERVICE = "priorseal.interai.track1-pilot";
 const KEYCHAIN_ACCOUNT = "YuTao Peng";
-const WINDOW_START = Date.parse("2026-09-25T15:45:00Z");
-const WINDOW_END = Date.parse("2026-09-25T16:30:00Z");
 const EXECUTOR = "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc";
 const ROUTER = "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4";
 const WETH = "0x4200000000000000000000000000000000000006";
@@ -174,22 +173,8 @@ async function verifyChecksums(directory) {
 }
 async function validateInputs(candidateDir, requestFile, readyFile) {
   const now = Date.now();
-  assert(
-    now >= WINDOW_START && now < WINDOW_END,
-    "Outside proposed 2026-09-25 23:45\u20132026-09-26 00:30 Asia/Shanghai window"
-  );
   const ready = await jsonFile(readyFile);
-  assert(
-    ready.channel === "original-email-thread" && ready.message === "READY",
-    "Alejandro READY in original email thread has not been recorded"
-  );
-  const readyAt = Date.parse(
-    string(ready.receivedAtIso, "READY receivedAtIso")
-  );
-  assert(
-    Number.isFinite(readyAt) && readyAt >= WINDOW_START && readyAt <= now && readyAt < WINDOW_END,
-    "READY time is outside the agreed window"
-  );
+  const window = validateTrack1ReadyWindow(ready, now);
   await verifyChecksums(candidateDir);
   const candidate = await jsonFile(
     path.join(candidateDir, "candidate-run-package.json")
@@ -467,7 +452,9 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
   return {
     requestBytes,
     packageId,
-    quoteExpiresAt: quote.expiresAt * 1e3
+    quoteExpiresAt: quote.expiresAt * 1e3,
+    windowStart: window.start,
+    windowEnd: window.end
   };
 }
 function curlConfig(token, requestPath, idempotencyKey, headerPath, proxy, endpoint = ENDPOINT) {
@@ -545,11 +532,7 @@ async function main() {
   const outputDir = path.resolve(
     string(opts.get("--output-dir"), "--output-dir")
   );
-  const { requestBytes, packageId, quoteExpiresAt } = await validateInputs(
-    candidateDir,
-    requestFile,
-    readyFile
-  );
+  const { requestBytes, packageId, quoteExpiresAt, windowStart, windowEnd } = await validateInputs(candidateDir, requestFile, readyFile);
   assert(
     !outputDir.startsWith(path.resolve(process.cwd(), ".git") + path.sep),
     "Output cannot be inside Git metadata"
@@ -589,7 +572,7 @@ async function main() {
   await mkdir(attemptDir, { recursive: true, mode: 448 });
   const attemptPath = path.join(
     attemptDir,
-    "2026-09-25-single-verify.attempt.json"
+    `${new Date(windowStart).toISOString().replace(/[-:.]/g, "")}-single-verify.attempt.json`
   );
   const attempt = await open(
     attemptPath,
@@ -601,6 +584,8 @@ async function main() {
       schema: "interai.track1.single-verify-attempt.v1",
       packageId,
       status: "ATTEMPT_RESERVED",
+      windowStartIso: new Date(windowStart).toISOString(),
+      windowEndIso: new Date(windowEnd).toISOString(),
       reservedAt: (/* @__PURE__ */ new Date()).toISOString(),
       requestSha256: sha256(requestBytes)
     })}
@@ -618,6 +603,10 @@ async function main() {
   assert(
     quoteExpiresAt - Date.now() >= 15e3,
     "Quote aged out immediately before InterAI request"
+  );
+  assert(
+    Date.now() < windowEnd,
+    "Confirmed window ended before InterAI request"
   );
   const response = await runCurl(
     curlConfig(key, requestPath, packageId, headersPath, opts.get("--proxy"))
