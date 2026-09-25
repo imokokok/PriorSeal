@@ -1,6 +1,6 @@
 // Generated from run-interai-track1-live-window.mts by npm run core:build. Do not edit directly.
 import { spawn } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { access, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateTrack1ReadyWindow } from "./interai-track1-window.mjs";
@@ -11,7 +11,7 @@ function args() {
   const values = process.argv.slice(2);
   assert(
     values.length % 2 === 0,
-    "Usage: --ready-file FILE --output-root DIR [--proxy http://127.0.0.1:7890]"
+    "Usage: --ready-file FILE --output-root DIR [--insight-root DIR --insight-env-file FILE] [--proxy http://127.0.0.1:7890]"
   );
   const parsed = /* @__PURE__ */ new Map();
   for (let i = 0; i < values.length; i += 2) {
@@ -23,11 +23,23 @@ function args() {
   }
   for (const key of parsed.keys())
     assert(
-      ["--ready-file", "--output-root", "--proxy"].includes(key),
+      [
+        "--ready-file",
+        "--output-root",
+        "--insight-root",
+        "--insight-env-file",
+        "--proxy"
+      ].includes(key),
       `Unsupported option: ${key}`
     );
   for (const key of ["--ready-file", "--output-root"])
     assert(parsed.has(key), `Missing ${key}`);
+  for (const key of ["--insight-root", "--insight-env-file"])
+    if (parsed.has(key))
+      assert(
+        path.isAbsolute(parsed.get(key) ?? ""),
+        `${key} must be an absolute path`
+      );
   if (parsed.has("--proxy"))
     assert(
       parsed.get("--proxy") === "http://127.0.0.1:7890",
@@ -64,7 +76,12 @@ async function main() {
     ".."
   );
   const documentsRoot = path.resolve(priorSealRoot, "..");
-  const insightRoot = path.join(documentsRoot, "insight");
+  const insightRoot = opts.get("--insight-root") ?? path.join(documentsRoot, "insight");
+  const insightEnvFile = opts.get("--insight-env-file") ?? path.join(insightRoot, ".env.local");
+  await access(
+    path.join(insightRoot, "scripts/interai-track1/capture-preflight-gates.mts")
+  );
+  await access(insightEnvFile);
   const trustRootDir = path.join(
     documentsRoot,
     "partnerships/interai-collaboration/file/2026-09-24-interai-track1-final-binding-review-candidate-source-record"
@@ -86,7 +103,7 @@ async function main() {
     insightRoot,
     "node",
     [
-      "--env-file=.env.local",
+      `--env-file=${insightEnvFile}`,
       "--import",
       "tsx",
       "scripts/interai-track1/capture-preflight-gates.mts",
