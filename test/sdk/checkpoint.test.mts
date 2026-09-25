@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { authorizationTypedData, buildAuthorization } from '../../src/index.mjs';
-import { createPriorSealClient, type AuthorizationCheckpoint, type Eip1193Provider, type WalletAuthorizationInput } from '../../sdk/dist/index.js';
+import { createPriorSealClient, parseAuthorizationCheckpoint, type AuthorizationCheckpoint, type Eip1193Provider, type WalletAuthorizationInput } from '../../sdk/dist/index.js';
 
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const hasCode = (error: unknown, code: string) => record(error) && error.code === code;
@@ -29,11 +29,11 @@ const typedDataMessage = (checkpoint: AuthorizationCheckpoint): Record<string, u
   return message;
 };
 
-function setup({ expire = false }: { expire?: boolean } = {}) {
+function setup({ expire = false, optionalNonce = false }: { expire?: boolean; optionalNonce?: boolean } = {}) {
   const signer = privateKeyToAccount(generatePrivateKey());
   const account = signer.address.toLowerCase();
   const now = Math.floor(Date.now() / 1000);
-  const intent = { intentId: 'checkpoint-test', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '1', sender: account, recipient: `0x${'b'.repeat(40)}`, validUntil: expire ? now - 1 : now + 600, nonce: '1' };
+  const intent: WalletAuthorizationInput['intent'] = { intentId: 'checkpoint-test', chainId: optionalNonce ? '8453' : 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '1', sender: account, recipient: `0x${'b'.repeat(40)}`, validUntil: expire ? now - 1 : now + 600, ...(optionalNonce ? {} : { nonce: '1' }) };
   const input: WalletAuthorizationInput = { intent, principal: { type: 'user', id: 'user:1' }, delegate: { agentId: 'agent:1', executor: account }, account, issuedAt: expire ? now - 600 : now, authorizationNonce: `0x${'4'.repeat(64)}` };
   let failAccept = true, signs = 0, prepares = 0;
   const acceptedKeys: Array<string | null> = [];
@@ -72,6 +72,26 @@ test('signed checkpoint resumes lost acceptance with the same bytes and idempote
   const mutated = structuredClone(roundTrip);
   mutated.prepared.authorization.intent.recipient = `0x${'c'.repeat(40)}`;
   await assert.rejects(f.client.authorizeWithWallet(f.input, f.provider, { checkpoint: mutated }), { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' });
+});
+
+test('imported checkpoints reject malformed nested state before reaching the wallet', async () => {
+  const f = setup(); let checkpoint: AuthorizationCheckpoint | undefined;
+  await assert.rejects(f.client.authorizeWithWallet(f.input, f.provider, { onCheckpoint: value => { checkpoint = value; } }));
+  assert.ok(checkpoint);
+  assert.equal(parseAuthorizationCheckpoint(checkpoint).stage, 'SIGNED');
+  for (const malformed of [null, { ...checkpoint, request: null }, { ...checkpoint, request: { ...checkpoint.request, intent: null } }, { ...checkpoint, prepared: { ...checkpoint.prepared, typedData: [] } }]) {
+    assert.throws(() => parseAuthorizationCheckpoint(malformed));
+  }
+});
+
+test('checkpoint recovery accepts a valid string chain ID and omitted optional nonce', async () => {
+  const f = setup({ optionalNonce: true }); let checkpoint: AuthorizationCheckpoint | undefined;
+  await assert.rejects(f.client.authorizeWithWallet(f.input, f.provider, { onCheckpoint: value => { checkpoint = value; } }));
+  assert.ok(checkpoint);
+  const imported = parseAuthorizationCheckpoint(JSON.parse(JSON.stringify(checkpoint)));
+  const result = await f.client.authorizeWithWallet(f.input, f.provider, { checkpoint: imported });
+  assert.equal(result.checkpoint.stage, 'ACCEPTED');
+  assert.equal(f.stats().signs, 1);
 });
 
 test('expired prepare never opens wallet signing and observation timeout preserves a resumable job', async () => {

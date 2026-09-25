@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { buildExactCallIntent } from 'priorseal-sdk'
+import { buildExactCallIntent, parseAuthorizationCheckpoint, parseContextCommitments, parseExactCallTransaction } from 'priorseal-sdk'
 import { AppShell, CodeValue, Field, Notice, PageHeader, Status } from '../components'
 import { api, getCapabilities, type Capabilities } from '../lib/api'
 import { downloadJson } from '../lib/download'
 import { dateTime, fromUnix, toUnix } from '../lib/format'
 import { session } from '../lib/storage'
-import type { AuthorizationCheckpoint, AuthorizationRecord, ContextCommitment, Eip1193Provider, ExactCallTransaction, PreparedAuthorization, WalletAuthorizationInput } from '../types'
+import type { AuthorizationCheckpoint, AuthorizationRecord, Eip1193Provider, PreparedAuthorization, WalletAuthorizationInput } from '../types'
 
 const example = JSON.stringify({ chainId: 8453, from: '0x1111111111111111111111111111111111111111', to: '0x2222222222222222222222222222222222222222', nonce: '0', value: '0', data: '0x' }, null, 2)
 
@@ -36,9 +36,8 @@ export function ExactCallPage() {
   const draft = useMemo(() => {
     if (!raw.trim()) return { intent: null, error: '' }
     try {
-      const transaction = JSON.parse(raw) as ExactCallTransaction
-      const contextCommitments = contexts.trim() ? JSON.parse(contexts) as ContextCommitment[] : undefined
-      if (contextCommitments && !Array.isArray(contextCommitments)) throw new Error('Context commitments must be a JSON array.')
+      const transaction = parseExactCallTransaction(JSON.parse(raw) as unknown)
+      const contextCommitments = contexts.trim() ? parseContextCommitments(JSON.parse(contexts) as unknown) : undefined
       const intent = buildExactCallIntent({ transaction, intentId, asset: asset.trim() || `eip155:${transaction.chainId}/native`, amount, validUntil: toUnix(expiry), constraints: { minConfirmations: confirmations }, contextCommitments })
       if (!Number.isSafeInteger(confirmations) || confirmations < (caps?.minConfirmations ?? 0)) throw new Error('Confirmations must satisfy the deployment minimum.')
       if (intent.validUntil <= Math.floor(Date.now() / 1000)) throw new Error('Choose a future authorization expiry.')
@@ -73,8 +72,7 @@ export function ExactCallPage() {
     setBusy(true); setError('')
     try {
       if (file.size > 1_000_000) throw new Error('Use a checkpoint file smaller than 1 MB.')
-      const value = JSON.parse(await file.text()) as AuthorizationCheckpoint
-      if (value.schema !== 'priorseal.authorization-checkpoint.v1' || !['PREPARED', 'SIGNED', 'ACCEPTED'].includes(value.stage) || !value.request || !value.prepared?.authorization || !value.prepared.typedData || !value.account || !value.acceptIdempotencyKey) throw new Error('Import a complete SDK authorization checkpoint.')
+      const value = parseAuthorizationCheckpoint(JSON.parse(await file.text()) as unknown)
       const { authorizationSigningData } = await import('priorseal-sdk/verifier')
       await authorizationSigningData(value.prepared.authorization)
       setCheckpoint(value); setPrepared(value.prepared)

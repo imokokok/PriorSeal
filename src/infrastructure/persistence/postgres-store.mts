@@ -6,6 +6,7 @@ import { createMerkleProof, merkleLeafHash, merkleNodeKey, merkleParentHash, req
 import type { Pool, PoolClient } from 'pg';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
+import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedTimestamp, persistedWorkerObservation } from './persisted-records.mjs';
 
 type MemoryStore = ReturnType<typeof createMemoryStore>;
 type ArchiveEntry = Parameters<MemoryStore['saveArchiveEntry']>[0];
@@ -15,8 +16,8 @@ type Observation = Parameters<MemoryStore['saveObservation']>[0];
 type AuthorizationRecord = Parameters<MemoryStore['saveAuthorization']>[0];
 type LogEntry = Awaited<ReturnType<MemoryStore['appendAuthorizationLog']>>;
 type Receipt = Parameters<MemoryStore['saveReceipt']>[0] & { intentHash: string; execution: { txHash: string }; schema: string; issuer: string; keyId: string; outcome: string; signature?: string };
-type PgJobRow = { job_id: string; idempotency_key: string; input_json: ObservationJob['input']; state: string; attempts: number; next_attempt_at: string | Date; observation_json: ObservationJob['observation']; result_json: ObservationJob['result']; error_json: ObservationJob['error']; created_at: string | Date; lease_token: string; lease_expires_at: string | Date };
-type PgAuthorizationRow = { authorization_json: AuthorizationRecord['authorization']; acceptance_json: AuthorizationRecord['acceptance']; policy_json: AuthorizationRecord['policyEvidence']; timestamp_evidence_json: unknown; witness_evidence_json: unknown; status: string; bound_tx_hash: string | null; uses: number };
+type PgJobRow = { job_id: string; idempotency_key: string; input_json: unknown; state: string; attempts: number; next_attempt_at: string | Date; observation_json: unknown; result_json: unknown; error_json: unknown; created_at: string | Date; lease_token: string; lease_expires_at: string | Date };
+type PgAuthorizationRow = { authorization_json: unknown; acceptance_json: unknown; policy_json: unknown; timestamp_evidence_json: unknown; witness_evidence_json: unknown; status: string; bound_tx_hash: string | null; uses: number };
 type MerkleAcceptance = Pick<AuthorizationRecord['acceptance'], 'sequence' | 'entryHash'>;
 
 async function appendMerkleIndex(client: PoolClient, sequence: number, entryHash: string) {
@@ -38,34 +39,34 @@ export function createPostgresStore(pool: Pool) {
     archiveRetention: 'until_operator_deletion',
     async saveArchiveEntry(entry: ArchiveEntry) {
       const result = await pool.query('INSERT INTO project_evidence_archive (project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (project_id,environment,entry_id) DO NOTHING RETURNING entry_json,sequence', [entry.projectId, entry.environment, entry.id, entry.artifactHash, entry.kind, entry.createdAt, entry.txHash, entry.authorizationId, entry.status, entry.supersedesId, entry]);
-      if (result.rows[0]) return { ...result.rows[0].entry_json, sequence: Number(result.rows[0].sequence) };
+      if (result.rows[0]) return { ...persistedArchiveEntry(result.rows[0].entry_json), sequence: Number(result.rows[0].sequence) };
       const existing = await this.getArchiveEntry(entry, entry.id);
       if (existing?.supersedesId !== entry.supersedesId) { const error: Error & { code?: string } = new Error('Archive entry already has a different supersession relationship'); error.code = 'ARCHIVE_CONFLICT'; throw error; }
       return existing;
     },
     async getArchiveEntry(access: Pick<ArchiveAccess, 'projectId' | 'environment'>, id: string) {
       const result = await pool.query('SELECT entry_json,sequence FROM project_evidence_archive WHERE project_id=$1 AND environment=$2 AND entry_id=$3', [access.projectId, access.environment, id]);
-      return result.rows[0] && { ...result.rows[0].entry_json, sequence: Number(result.rows[0].sequence) };
+      return result.rows[0] && { ...persistedArchiveEntry(result.rows[0].entry_json), sequence: Number(result.rows[0].sequence) };
     },
     async listArchiveEntries(query: ArchiveQuery) {
       const snapshot = query.cursor?.snapshot ?? Number((await pool.query('SELECT COALESCE(MAX(sequence),0) AS snapshot FROM project_evidence_archive WHERE project_id=$1 AND environment=$2', [query.projectId, query.environment])).rows[0]?.snapshot ?? 0);
       const columns = query.includeArtifacts ? 'entry_json,sequence' : 'sequence,project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id';
       const result = await pool.query(`SELECT ${columns} FROM project_evidence_archive WHERE project_id=$1 AND environment=$2 AND sequence <= $3 AND ($4::bigint IS NULL OR sequence < $4) AND ($5::text IS NULL OR tx_hash=$5) AND ($6::text IS NULL OR authorization_id=$6) AND ($7::text IS NULL OR status=$7) AND ($8::bigint IS NULL OR created_at >= $8) AND ($9::bigint IS NULL OR created_at <= $9) ORDER BY sequence DESC LIMIT $10`, [query.projectId, query.environment, snapshot, query.cursor?.after ?? null, query.filters.txHash, query.filters.authorizationId, query.filters.status, query.filters.from, query.filters.to, query.limit + 1]);
       const rows = result.rows.map((row) => query.includeArtifacts
-        ? { ...row.entry_json, sequence: Number(row.sequence) }
+        ? { ...persistedArchiveEntry(row.entry_json), sequence: Number(row.sequence) }
         : { id: row.entry_id, projectId: row.project_id, environment: row.environment, kind: row.kind, createdAt: Number(row.created_at), artifactHash: row.artifact_hash, supersedesId: row.supersedes_id, txHash: row.tx_hash, authorizationId: row.authorization_id, status: row.status, verification: 'NOT_VERIFIED_BY_ARCHIVE', sequence: Number(row.sequence) });
       return archivePage(rows, query, snapshot);
     },
     async saveIntent(intent: Intent) {
       const result = await pool.query(`INSERT INTO intents (intent_id,intent_hash,schema_version,chain_id,action,sender,recipient,asset,amount,nonce,valid_until,constraints_json,intent_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (intent_id) DO UPDATE SET intent_id=EXCLUDED.intent_id WHERE intents.intent_hash=EXCLUDED.intent_hash RETURNING intent_json`, [intent.intentId, intent.intentHash, intent.schema, intent.chainId, intent.action, intent.sender, intent.recipient, intent.asset, intent.amount, intent.nonce, intent.validUntil, intent.constraints ?? null, intent]);
-      if (result.rows[0]) return result.rows[0].intent_json;
+      if (result.rows[0]) return persistedIntent(result.rows[0].intent_json);
       const error: Error & { code?: string } = new Error('DUPLICATE_INTENT');
       error.code = 'DUPLICATE_INTENT';
       throw error;
     },
-    async getIntent(intentId: string) { const result = await pool.query<{ intent_json: Intent }>('SELECT intent_json FROM intents WHERE intent_id = $1 LIMIT 1', [intentId]); return result.rows[0]?.intent_json; },
-    async saveObservation(observation: Observation) { const result = await pool.query<{ observation_json: Observation }>(`INSERT INTO execution_observations (intent_hash,chain_id,tx_hash,status,block_number,observed_at,finality_state,observation_json,observation_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (chain_id,tx_hash,observation_hash) DO NOTHING RETURNING observation_json`, [observation.intentHash ?? null, observation.chainId, observation.txHash, observation.status, observation.blockNumber, observation.observedAt, observation.finalityState, observation, hashJson(observation)]); return result.rows[0]?.observation_json ?? observation; },
-    async getObservation(chainId: number | string | undefined, txHash: string) { const result = await pool.query<{ observation_json: Observation }>('SELECT observation_json FROM execution_observations WHERE chain_id = $1 AND tx_hash = $2 ORDER BY id DESC LIMIT 1', [chainId, txHash]); return result.rows[0]?.observation_json; },
+    async getIntent(intentId: string) { const result = await pool.query<{ intent_json: unknown }>('SELECT intent_json FROM intents WHERE intent_id = $1 LIMIT 1', [intentId]); return result.rows[0] ? persistedIntent(result.rows[0].intent_json) : undefined; },
+    async saveObservation(observation: Observation) { const result = await pool.query<{ observation_json: unknown }>(`INSERT INTO execution_observations (intent_hash,chain_id,tx_hash,status,block_number,observed_at,finality_state,observation_json,observation_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (chain_id,tx_hash,observation_hash) DO NOTHING RETURNING observation_json`, [observation.intentHash ?? null, observation.chainId, observation.txHash, observation.status, observation.blockNumber, observation.observedAt, observation.finalityState, observation, hashJson(observation)]); return result.rows[0] ? persistedObservation(result.rows[0].observation_json) : observation; },
+    async getObservation(chainId: number | string | undefined, txHash: string) { const result = await pool.query<{ observation_json: unknown }>('SELECT observation_json FROM execution_observations WHERE chain_id = $1 AND tx_hash = $2 ORDER BY id DESC LIMIT 1', [chainId, txHash]); return result.rows[0] ? persistedObservation(result.rows[0].observation_json) : undefined; },
     async appendAuthorizationLog({ authorizationHash, acceptedAt }: { authorizationHash: string; acceptedAt: number }) {
       const client = await pool.connect();
       try {
@@ -147,7 +148,7 @@ export function createPostgresStore(pool: Pool) {
         await client.query('BEGIN');
         if (receipt) {
           const existingReceipt = await client.query('SELECT receipt_json FROM receipts WHERE receipt_id=$1', [receipt.receiptId]);
-          assertReceiptIdentity(existingReceipt.rows[0]?.receipt_json, receipt);
+          assertReceiptIdentity(existingReceipt.rows[0] ? persistedReceipt(existingReceipt.rows[0].receipt_json) : null, receipt);
         }
         if (claimAuthorization) {
           const bound = await client.query(`UPDATE authorizations SET bound_tx_hash=COALESCE(bound_tx_hash,$2),uses=CASE WHEN bound_tx_hash IS NULL THEN 1 ELSE uses END,status='BOUND' WHERE authorization_id=$1 AND (bound_tx_hash IS NULL OR bound_tx_hash=$2) RETURNING *`, [authorizationId, observation.txHash]);
@@ -161,22 +162,22 @@ export function createPostgresStore(pool: Pool) {
           const insertedReceipt = await client.query('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (receipt_id) DO NOTHING RETURNING receipt_json', [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, receipt, receipt.signature ?? null]);
           if (!insertedReceipt.rows[0]) {
             const existingReceipt = await client.query('SELECT receipt_json FROM receipts WHERE receipt_id=$1', [receipt.receiptId]);
-            assertReceiptIdentity(existingReceipt.rows[0]?.receipt_json, receipt);
+            assertReceiptIdentity(existingReceipt.rows[0] ? persistedReceipt(existingReceipt.rows[0].receipt_json) : null, receipt);
           }
         }
         await client.query('COMMIT'); return { ok: true };
       } catch (error) { await client.query('ROLLBACK'); if (errorCode(error) === 'AUTHORIZATION_ALREADY_USED' || errorCode(error) === 'AUTHORIZATION_NOT_FOUND') return { ok: false, code: errorCode(error) }; throw error; } finally { client.release(); }
     },
-    async saveReceipt(receipt: Receipt) { const result = await pool.query<{ receipt_json: Receipt }>('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (receipt_id) DO NOTHING RETURNING receipt_json', [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, receipt, receipt.signature ?? null]); if (result.rows[0]) return result.rows[0].receipt_json; const existing = await pool.query<{ receipt_json: Receipt }>('SELECT receipt_json FROM receipts WHERE receipt_id = $1', [receipt.receiptId]); assertReceiptIdentity(existing.rows[0]?.receipt_json, receipt); return existing.rows[0]?.receipt_json; },
-    async getReceipt(receiptId: string) { const result = await pool.query<{ receipt_json: Receipt }>('SELECT receipt_json FROM receipts WHERE receipt_id = $1', [receiptId]); return result.rows[0]?.receipt_json; },
-    async getIdempotency<Response>(scope: string, key: string) { const result = await pool.query<{ request_hash: string; response_json: Response; expires_at: Date | string }>('SELECT request_hash,response_json,expires_at FROM idempotency_records WHERE scope = $1 AND idempotency_key = $2', [scope, key]); const row = result.rows[0]; return row ? { requestHash: row.request_hash, response: row.response_json, expiresAt: new Date(row.expires_at).getTime() } : undefined; },
+    async saveReceipt(receipt: Receipt) { const result = await pool.query<{ receipt_json: unknown }>('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (receipt_id) DO NOTHING RETURNING receipt_json', [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, receipt, receipt.signature ?? null]); if (result.rows[0]) return persistedReceipt(result.rows[0].receipt_json); const existing = await pool.query<{ receipt_json: unknown }>('SELECT receipt_json FROM receipts WHERE receipt_id = $1', [receipt.receiptId]); const stored = existing.rows[0] ? persistedReceipt(existing.rows[0].receipt_json) : undefined; assertReceiptIdentity(stored, receipt); return stored; },
+    async getReceipt(receiptId: string) { const result = await pool.query<{ receipt_json: unknown }>('SELECT receipt_json FROM receipts WHERE receipt_id = $1', [receiptId]); return result.rows[0] ? persistedReceipt(result.rows[0].receipt_json) : undefined; },
+    async getIdempotency<Response>(scope: string, key: string) { const result = await pool.query<{ request_hash: string; response_json: unknown; expires_at: Date | string }>('SELECT request_hash,response_json,expires_at FROM idempotency_records WHERE scope = $1 AND idempotency_key = $2', [scope, key]); const row = result.rows[0]; return row ? { requestHash: row.request_hash, response: persistedJson(row.response_json, 'idempotency response') as Response, expiresAt: persistedTimestamp(row.expires_at, 'idempotency.expiresAt') } : undefined; },
     async reserveIdempotency<Response>({ scope, key, requestHash, response, expiresAt }: { scope: string; key: string; requestHash: string; response: Response; expiresAt: number }) {
       const result = await pool.query(`INSERT INTO idempotency_records (scope,idempotency_key,request_hash,response_json,expires_at) VALUES ($1,$2,$3,$4,to_timestamp($5 / 1000.0)) ON CONFLICT (scope,idempotency_key) DO UPDATE SET request_hash=EXCLUDED.request_hash,response_json=EXCLUDED.response_json,expires_at=EXCLUDED.expires_at,created_at=now() WHERE idempotency_records.expires_at <= now() RETURNING response_json`, [scope, key, requestHash, response, expiresAt]);
       if (result.rows[0]) return { replay: false, response };
       const existing = await pool.query('SELECT request_hash,response_json,expires_at FROM idempotency_records WHERE scope = $1 AND idempotency_key = $2', [scope, key]);
       if (!existing.rows[0]) throw new Error('Idempotency record disappeared during request');
       if (existing.rows[0].request_hash !== requestHash) { const error: Error & { code?: string } = new Error('Idempotency key was reused with a different request'); error.code = 'IDEMPOTENCY_CONFLICT'; throw error; }
-      return { replay: true, response: existing.rows[0].response_json };
+      return { replay: true, response: persistedJson(existing.rows[0].response_json, 'idempotency response') as Response };
     },
     async enqueueJob(job: ObservationJob) { const result = await pool.query<PgJobRow>(`INSERT INTO observation_jobs (job_id,idempotency_key,input_json,state,attempts,next_attempt_at) VALUES ($1,$2,$3,$4,$5,to_timestamp($6 / 1000.0)) ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key RETURNING *`, [job.jobId, job.idempotencyKey, job.input, job.state, job.attempts, job.nextAttemptAt]); return rowToJob(result.rows[0]); },
     async claimDueJobs(now: number, limit = 10, leaseDurationMs = 15 * 60_000) {
@@ -193,8 +194,8 @@ export function createPostgresStore(pool: Pool) {
   };
 }
 
-function rowToJob(row: PgJobRow, { includeLease = false } = {}): ObservationJob { return { jobId: row.job_id, idempotencyKey: row.idempotency_key, input: row.input_json, state: row.state, attempts: row.attempts, nextAttemptAt: new Date(row.next_attempt_at).getTime(), observation: row.observation_json, result: row.result_json ?? null, error: row.error_json, createdAt: new Date(row.created_at).getTime(), ...(includeLease ? { leaseToken: row.lease_token, leaseExpiresAt: new Date(row.lease_expires_at).getTime() } : {}) }; }
-function rowToAuthorization(row: PgAuthorizationRow) { return { authorization: row.authorization_json, acceptance: row.acceptance_json, policy: row.policy_json?.result ?? row.policy_json, policyEvidence: row.policy_json?.schema === 'priorseal.policy-evidence.v1' ? row.policy_json : undefined, ...(row.timestamp_evidence_json ? { timestampEvidence: row.timestamp_evidence_json } : {}), ...(row.witness_evidence_json ? { witnessEvidence: row.witness_evidence_json } : {}), status: row.status, boundTxHash: row.bound_tx_hash, uses: row.uses }; }
+function rowToJob(row: PgJobRow, { includeLease = false } = {}): ObservationJob { return { jobId: persistedStatus(row.job_id, 'job.jobId'), idempotencyKey: row.idempotency_key, input: persistedJobInput(row.input_json), state: persistedStatus(row.state, 'job.state'), attempts: persistedCount(row.attempts, 'job.attempts'), nextAttemptAt: persistedTimestamp(row.next_attempt_at, 'job.nextAttemptAt'), observation: row.observation_json == null ? null : persistedWorkerObservation(row.observation_json), result: persistedJobResult(row.result_json), error: persistedJobError(row.error_json), createdAt: persistedTimestamp(row.created_at, 'job.createdAt'), ...(includeLease ? { leaseToken: row.lease_token, leaseExpiresAt: persistedTimestamp(row.lease_expires_at, 'job.leaseExpiresAt') } : {}) }; }
+function rowToAuthorization(row: PgAuthorizationRow): AuthorizationRecord { const policyEvidence = persistedPolicy(row.policy_json); return { authorization: persistedAuthorization(row.authorization_json), acceptance: persistedAcceptance(row.acceptance_json), policy: policyEvidence?.result ?? policyEvidence, policyEvidence: policyEvidence?.schema === 'priorseal.policy-evidence.v1' ? policyEvidence : undefined, ...(row.timestamp_evidence_json ? { timestampEvidence: persistedJson(row.timestamp_evidence_json, 'timestamp evidence') } : {}), ...(row.witness_evidence_json ? { witnessEvidence: persistedJson(row.witness_evidence_json, 'witness evidence') } : {}), status: persistedStatus(row.status, 'authorization.status'), boundTxHash: row.bound_tx_hash, uses: persistedCount(row.uses, 'authorization.uses') }; }
 
 function assertReceiptIdentity(existing: unknown, candidate: Receipt) {
   if (!existing || hashJson(existing) === hashJson(candidate)) return;

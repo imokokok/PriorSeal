@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PriorSealApiError, buildExactCallIntent, createPriorSealClient, generateAuthorizationNonce } from '../../sdk/dist/index.js';
+import { PriorSealApiError, buildExactCallIntent, createPriorSealClient, generateAuthorizationNonce, parseContextCommitments, parseExactCallTransaction } from '../../sdk/dist/index.js';
 import { keccak256 } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { authorizationTypedData, buildAuthorization } from '../../src/index.mjs';
@@ -34,6 +34,13 @@ test('SDK maps typed methods to the PriorSeal API and sends stable idempotency k
   assert.equal(call.url, 'https://priorseal.test/v1/executions/observe');
   assert.equal(new Headers(call.init.headers).get('idempotency-key'), 'idem-fixed');
   assert.deepEqual(parseRequestBody(call.init.body), { authorizationId: 'auth_1', chainId: 8453, txHash: '0x1', confirmations: 0 });
+});
+
+test('SDK rejects malformed successful API responses before exposing typed values', async () => {
+  const client = createPriorSealClient({ fetch: async () => response({ observation: { status: 1, txHash: '0x1' }, receipt: null }) });
+  await assert.rejects(client.observeExecution({ chainId: 8453, txHash: '0x1' }), { code: 'INVALID_RESPONSE' });
+  const health = createPriorSealClient({ fetch: async () => response({ status: 42 }) });
+  await assert.rejects(health.health(), { code: 'INVALID_RESPONSE' });
 });
 
 test('SDK binds the browser global fetch implementation', async () => {
@@ -112,6 +119,13 @@ test('SDK builds canonical exact-call intents with external context commitments'
   assert.equal(intent.transactionValue, '0');
   assert.equal(intent.nonce, '7');
   assert.deepEqual(intent.contextCommitments?.map((entry) => entry.namespace), ['insight.pretrade-pair.v1', 'treasury.approval.v1']);
+});
+
+test('imported exact-call JSON is checked before entering the typed intent builder', () => {
+  const transaction = { chainId: 8453, from: `0x${'a'.repeat(40)}`, to: `0x${'b'.repeat(40)}`, nonce: '7', data: '0x1234' };
+  assert.equal(parseExactCallTransaction(transaction).nonce, '7');
+  for (const malformed of [null, [], { ...transaction, from: 7 }, { ...transaction, nonce: false }, { ...transaction, data: '0x1' }]) assert.throws(() => parseExactCallTransaction(malformed));
+  assert.throws(() => parseContextCommitments([{ namespace: 7, algorithm: 'sha256', digest: `0x${'1'.repeat(64)}` }]));
 });
 
 test('SDK waits for a durable observation job and returns its final receipt', async () => {

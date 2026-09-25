@@ -27,6 +27,11 @@ test('SDK verifier validates a v1 receipt locally and detects mutations', async 
   const intent = buildIntent({ intentId: 'sdk-v1', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2_000, nonce: '1' });
   const execution = { chainId: 8453, txHash: `0x${'1'.repeat(64)}`, status: 'CONFIRMED' as const, action: 'TRANSFER', executedAt: 1_100, observedAt: 1_101, sender, recipient, asset: intent.asset, amount: intent.amount, finalityState: 'CONFIRMED' };
   const receipt = signReceipt(buildReceipt({ intent, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), keys.privateKey);
+  for (const malformed of ['not-a-key', [null], { schema: 'priorseal.keys.v1', issuer: 'test', keys: [null] }]) {
+    const result = await verifyReceiptLocally(receipt, { trustedKeys: malformed as unknown as ReturnType<typeof trustedKey> });
+    assert.equal(result.valid, false);
+    assert.ok(['INVALID_KEY', 'INVALID_KEY_REGISTRY'].includes(result.code));
+  }
   const verified = await verifyReceiptLocally(receipt, { trustedKeys: { schema: 'priorseal.keys.v1', issuer: 'test', keys: [trustedKey(keys.publicKey)] }, now: 1_200 });
   assert.equal(verified.valid, true);
   assert.equal(verified.verificationScope, 'LOCAL_COMPLETE');
@@ -37,6 +42,7 @@ test('SDK verifier validates a v1 receipt locally and detects mutations', async 
   assert.equal((await verifyReceiptLocally(receipt, { trustedKeys: { ...trustedKey(keys.publicKey), status: 'unknown' }, now: 1_200 })).code, 'INVALID_KEY');
   assert.equal((await verifyReceiptLocally(receipt, { trustedKeys: { schema: 'priorseal.keys.v1', issuer: 'lookalike', keys: [trustedKey(keys.publicKey)] }, now: 1_200 })).code, 'INVALID_KEY_REGISTRY');
   const bundle = buildVerificationBundle({ receipt, keyRegistry: { schema: 'priorseal.keys.v1', issuer: 'test', keys: [trustedKey(keys.publicKey)] }, assembledAt: 1_101 });
+  assert.equal((await verifyVerificationBundleLocally({ ...bundle, receipt: null })).code, 'INVALID_VERIFICATION_BUNDLE');
   assert.equal((await verifyVerificationBundleLocally(bundle, { now: 1_200 })).code, 'UNKNOWN_KEY');
   assert.equal((await verifyVerificationBundleLocally(bundle, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).valid, true);
   const tampered = structuredClone(bundle);

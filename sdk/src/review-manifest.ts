@@ -19,15 +19,19 @@ export type TrustProfile = {
   insightProtocolTrust?: InsightProtocolTrust
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
 /** Parsing never confers trust: the caller must confirm the source independently. */
 export function parseTrustProfile(input: unknown): TrustProfile {
+  if (!isRecord(input) || input.schema !== 'priorseal.trust-profile.v1' || typeof input.issuer !== 'string' || !input.issuer.trim() || typeof input.audience !== 'string' || !input.audience.trim() || typeof input.source !== 'string' || !input.source.trim() || !Number.isSafeInteger(input.confirmedAt) || Number(input.confirmedAt) < 0 || !Array.isArray(input.keys) || !input.keys.length || input.keys.length > 100 || (input.name !== undefined && typeof input.name !== 'string') || (input.id !== undefined && typeof input.id !== 'string')) throw new TypeError('Invalid trust profile')
   const p = input as TrustProfile
-  if (!p || p.schema !== 'priorseal.trust-profile.v1' || !p.issuer?.trim() || !p.audience?.trim() || !p.source?.trim() || !Number.isSafeInteger(p.confirmedAt) || p.confirmedAt < 0 || !Array.isArray(p.keys) || !p.keys.length || p.keys.length > 100) throw new TypeError('Invalid trust profile')
   const ids = new Set<string>()
   for (const key of p.keys) {
-    if (key.issuer !== p.issuer || !key.keyId || ids.has(key.keyId) || key.algorithm !== 'Ed25519' || !key.publicKey?.includes('BEGIN PUBLIC KEY') || !['active', 'retired', 'revoked'].includes(key.status)) throw new TypeError('Invalid or ambiguous trust key')
+    if (!isRecord(key) || key.issuer !== p.issuer || typeof key.keyId !== 'string' || !key.keyId || ids.has(key.keyId) || key.algorithm !== 'Ed25519' || typeof key.publicKey !== 'string' || !key.publicKey.includes('BEGIN PUBLIC KEY') || typeof key.status !== 'string' || !['active', 'retired', 'revoked'].includes(key.status)) throw new TypeError('Invalid or ambiguous trust key')
     ids.add(key.keyId)
-    for (const time of [key.validFrom, key.validUntil]) if (time !== null && (!Number.isSafeInteger(time) || time < 0)) throw new TypeError('Invalid key time window')
+    for (const time of [key.validFrom, key.validUntil]) if (time !== null && (!Number.isSafeInteger(time) || Number(time) < 0)) throw new TypeError('Invalid key time window')
     if (key.validFrom !== null && key.validUntil !== null && key.validFrom > key.validUntil) throw new TypeError('Invalid key time window')
   }
   if (p.insightKeyRegistry) validateInsightKeyRegistry(p.insightKeyRegistry)
@@ -64,13 +68,14 @@ const txHashPattern = /^0x[0-9a-fA-F]{64}$/
 const MAX_ATTACHMENT_BYTES = 512 * 1024
 
 function validateInsightKeyRegistry(registry: InsightKeyRegistry) {
-  if (!registry || typeof registry !== 'object' || (registry.public_keys && registry.keys) || (registry.revoked_keys && registry.revoked)) throw new TypeError('Ambiguous Insight key registry')
+  if (!isRecord(registry) || (registry.public_keys && registry.keys) || (registry.revoked_keys && registry.revoked)) throw new TypeError('Ambiguous Insight key registry')
   const keys = registry.public_keys ?? registry.keys
   if (!Array.isArray(keys) || !keys.length || keys.length > 100) throw new TypeError('Invalid Insight key registry')
   const addresses = new Set<string>(), ids = new Set<string>()
   for (const key of keys) {
+    if (!isRecord(key)) throw new TypeError('Invalid Insight trust key')
     const address = typeof key?.public_key === 'string' ? key.public_key.toLowerCase() : ''
-    if (!/^0x[0-9a-f]{40}$/.test(address) || addresses.has(address) || typeof key.key_id !== 'string' || !key.key_id || ids.has(key.key_id) || typeof key.revoked !== 'boolean' || (key.role !== undefined && !['attester', 'sample'].includes(key.role)) || typeof key.validFrom !== 'string' || !Number.isFinite(Date.parse(key.validFrom)) || (key.validUntil !== null && (typeof key.validUntil !== 'string' || !Number.isFinite(Date.parse(key.validUntil)) || Date.parse(key.validUntil) < Date.parse(key.validFrom)))) throw new TypeError('Invalid or ambiguous Insight trust key')
+    if (!/^0x[0-9a-f]{40}$/.test(address) || addresses.has(address) || typeof key.key_id !== 'string' || !key.key_id || ids.has(key.key_id) || typeof key.revoked !== 'boolean' || (key.role !== undefined && (typeof key.role !== 'string' || !['attester', 'sample'].includes(key.role))) || typeof key.validFrom !== 'string' || !Number.isFinite(Date.parse(key.validFrom)) || (key.validUntil !== null && (typeof key.validUntil !== 'string' || !Number.isFinite(Date.parse(key.validUntil)) || Date.parse(key.validUntil) < Date.parse(key.validFrom)))) throw new TypeError('Invalid or ambiguous Insight trust key')
     addresses.add(address); ids.add(key.key_id)
   }
   const revoked = registry.revoked_keys ?? registry.revoked ?? []

@@ -58,6 +58,9 @@ test('trust profile rejects ambiguous key identity and invalid windows while pre
   assert.equal(parseTrustProfile(profile).audience, 'custom-audience');
   assert.throws(() => parseTrustProfile({ ...profile, keys: [key, key] }), /ambiguous/);
   assert.throws(() => parseTrustProfile({ ...profile, keys: [{ ...key, validFrom: 2000, validUntil: 1000 }] }), /window/);
+  for (const malformed of [[], { ...profile, issuer: 7 }, { ...profile, keys: [null] }, { ...profile, keys: [{ ...key, publicKey: 7 }] }, { ...profile, keys: [{ ...key, status: {} }] }]) {
+    assert.throws(() => parseTrustProfile(malformed), /trust profile|trust key/);
+  }
 });
 
 test('Insight trust follows the published default attester role and rejects ambiguous registries', () => {

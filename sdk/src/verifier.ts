@@ -67,9 +67,10 @@ export async function verifyVerificationBundleLocally(bundleValue: unknown, opti
   const bundle = bundleValue as VerificationBundle
   const receipt = bundle?.receipt
   const fail = (code: string): LocalVerificationResult => ({ valid: false, code, outcome: receipt?.outcome, receiptId: receipt?.receiptId, verificationScope: 'LOCAL_COMPLETE', requiredExternalChecks: [] })
-  if (!bundle || bundle.schema !== 'priorseal.verification-bundle.v1' || bundle.trust?.model !== 'PIN_ISSUER_KEY_OUT_OF_BAND' || bundle.keyRegistry?.schema !== 'priorseal.keys.v1' || !Array.isArray(bundle.keyRegistry.keys) || bundle.keyRegistry.issuer !== receipt?.issuer || !Number.isSafeInteger(bundle.assembledAt) || bundle.assembledAt < 0 || !/^[0-9a-f]{64}$/.test(bundle.bundleHash ?? '')) return fail('INVALID_VERIFICATION_BUNDLE')
+  if (!isRecord(receipt) || bundle.schema !== 'priorseal.verification-bundle.v1' || !isRecord(bundle.trust) || bundle.trust.model !== 'PIN_ISSUER_KEY_OUT_OF_BAND' || !isRecord(bundle.keyRegistry) || bundle.keyRegistry.schema !== 'priorseal.keys.v1' || !Array.isArray(bundle.keyRegistry.keys) || bundle.keyRegistry.issuer !== receipt.issuer || !Number.isSafeInteger(bundle.assembledAt) || bundle.assembledAt < 0 || typeof bundle.bundleHash !== 'string' || !/^[0-9a-f]{64}$/.test(bundle.bundleHash)) return fail('INVALID_VERIFICATION_BUNDLE')
   const { bundleHash, ...unsigned } = bundle
-  if (bundleHash !== await hashCanonicalJson(unsigned)) return fail('BUNDLE_HASH_MISMATCH')
+  try { if (bundleHash !== await hashCanonicalJson(unsigned)) return fail('BUNDLE_HASH_MISMATCH') }
+  catch { return fail('INVALID_VERIFICATION_BUNDLE') }
   return verifyReceiptLocally(receipt, options)
 }
 
@@ -78,7 +79,7 @@ export function verifyTimestampProofLocally(receipt: Receipt): Promise<Timestamp
 }
 
 function resolveTrustedKey(receipt: Receipt, source?: KeyEntry | readonly KeyEntry[] | KeyRegistry) {
-  if (isKeyRegistry(source) && (source.schema !== 'priorseal.keys.v1' || source.issuer !== receipt?.issuer)) return { key: undefined, code: 'INVALID_KEY_REGISTRY' }
+  if (isKeyRegistry(source) && (source.schema !== 'priorseal.keys.v1' || source.issuer !== receipt?.issuer || !Array.isArray(source.keys) || !source.keys.every(isKeyEntry))) return { key: undefined, code: 'INVALID_KEY_REGISTRY' }
   const keys: readonly KeyEntry[] = !source
     ? []
     : Array.isArray(source)
@@ -86,13 +87,18 @@ function resolveTrustedKey(receipt: Receipt, source?: KeyEntry | readonly KeyEnt
       : isKeyRegistry(source)
         ? source.keys
         : [source as KeyEntry]
+  if (!keys.every(isKeyEntry)) return { key: undefined, code: 'INVALID_KEY' }
   const matches = keys.filter((key) => key.keyId === receipt?.keyId && key.issuer === receipt?.issuer)
   if (matches.length > 1) return { key: undefined, code: 'AMBIGUOUS_KEY' }
   return { key: matches[0], code: 'UNKNOWN_KEY' }
 }
 
 function isKeyRegistry(source?: KeyEntry | readonly KeyEntry[] | KeyRegistry): source is KeyRegistry {
-  return Boolean(source && !Array.isArray(source) && 'keys' in source)
+  return isRecord(source) && 'keys' in source
+}
+
+function isKeyEntry(value: unknown): value is KeyEntry {
+  return isRecord(value) && typeof value.issuer === 'string' && typeof value.keyId === 'string' && typeof value.algorithm === 'string' && typeof value.publicKey === 'string' && typeof value.status === 'string' && (value.validFrom === null || Number.isSafeInteger(value.validFrom)) && (value.validUntil === null || Number.isSafeInteger(value.validUntil))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

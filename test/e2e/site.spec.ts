@@ -42,6 +42,15 @@ test('asks for the real local-storage choice without setting cookies', async ({ 
   await expect(page.getByRole('heading', { level: 1, name: 'Privacy in plain language' })).toBeFocused()
 })
 
+test('damaged saved activity cannot become a typed local receipt or authorization', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Allow local saving' }).click()
+  await page.evaluate(() => localStorage.setItem('priorseal.local-session.v4', JSON.stringify({ intents: [null], authorizations: [{}], receipts: [{ receiptId: 'broken' }], observations: [null], observationJobs: [{}] })))
+  await page.goto('/app/receipts')
+  await expect(page.getByRole('heading', { name: 'Receipts', exact: true })).toBeVisible()
+  await expect(page.getByText('0 saved on this device')).toBeVisible()
+})
+
 test('preserves the console shell, resets scroll and moves focus on navigation', async ({ page }) => {
   let healthRequests = 0
   page.on('request', (request) => { if (request.url().endsWith('/health/live')) healthRequests += 1 })

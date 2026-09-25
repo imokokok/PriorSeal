@@ -23,6 +23,8 @@ import type {
   DeploymentCapabilities,
 } from './types.js'
 import { buildExactCallIntent } from './exact-call.js'
+import { validatePriorSealResponse } from './response-validation.js'
+import { parseAuthorizationCheckpoint } from './checkpoint.js'
 
 export type PriorSealClientOptions = {
   baseUrl?: string
@@ -184,7 +186,9 @@ export class PriorSealClient {
   }
 
   async authorizeWithWallet(input: WalletAuthorizationInput, provider: Eip1193Provider, options: AuthorizationFlowOptions = {}) {
-    const checkpoint = options.checkpoint
+    let checkpoint: AuthorizationCheckpoint | undefined
+    try { checkpoint = options.checkpoint ? parseAuthorizationCheckpoint(options.checkpoint) : undefined }
+    catch (error) { throw new PriorSealApiError('Checkpoint is malformed', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH', cause: error }) }
     if (checkpoint && (checkpoint.schema !== 'priorseal.authorization-checkpoint.v1' || stableJson(checkpoint.request) !== stableJson(input) || !checkpoint.acceptIdempotencyKey || !['PREPARED', 'SIGNED', 'ACCEPTED'].includes(checkpoint.stage))) throw new PriorSealApiError('Checkpoint does not belong to this authorization request', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
     const accounts = checkpoint ? [checkpoint.account] : input.account ? [input.account] : await provider.request({ method: 'eth_requestAccounts' }) as string[]
     const account = accounts[0]?.toLowerCase()
@@ -274,9 +278,12 @@ export class PriorSealClient {
       const text = await response.text()
       const data = text ? safeJson(text) : null
       if (!response.ok) {
-        const payload = data as { error?: { code?: string; message?: string; details?: unknown } } | null
-        throw new PriorSealApiError(payload?.error?.message ?? `PriorSeal request failed (${response.status})`, { code: payload?.error?.code, status: response.status, details: payload?.error?.details })
+        const payload = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : null
+        const detail = payload?.error && typeof payload.error === 'object' && !Array.isArray(payload.error) ? payload.error as Record<string, unknown> : null
+        throw new PriorSealApiError(typeof detail?.message === 'string' ? detail.message : `PriorSeal request failed (${response.status})`, { code: typeof detail?.code === 'string' ? detail.code : undefined, status: response.status, details: detail?.details })
       }
+      try { validatePriorSealResponse(path, data) }
+      catch (error) { throw new PriorSealApiError('PriorSeal API returned an invalid response', { code: 'INVALID_RESPONSE', status: response.status, cause: error }) }
       return data as T
     } catch (error) {
       if (error instanceof PriorSealApiError) throw error

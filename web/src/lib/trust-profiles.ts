@@ -7,15 +7,19 @@ let memory: TrustProfile[] = []
 window.addEventListener('priorseal:trust-clear', () => { memory = [] })
 
 export function parseTrustProfile(value: unknown): TrustProfile {
-  if (!value || typeof value !== 'object') throw new Error('Import a trust profile JSON object.')
-  const input = value as Partial<SdkTrustProfile>
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Import a trust profile JSON object.')
+  const input = value as Record<string, unknown>
   const profile = parseSdkTrustProfile({ ...input, confirmedAt: input.confirmedAt ?? 0 })
   return { ...profile, name: profile.name?.trim() || profile.issuer }
 }
 
 export function getTrustProfiles(): TrustProfile[] {
   if (getStoragePreference() !== 'granted') return memory
-  try { const value = JSON.parse(localStorage.getItem(storageKey) ?? '[]'); return Array.isArray(value) ? value.map(parseTrustProfile) : [] } catch { return [] }
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(storageKey) ?? '[]')
+    if (!Array.isArray(value)) return []
+    return value.flatMap((entry: unknown) => { try { return [parseTrustProfile(entry)] } catch { return [] } }).slice(0, 20)
+  } catch { return [] }
 }
 
 export function saveTrustProfile(profile: TrustProfile) {

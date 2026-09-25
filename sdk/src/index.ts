@@ -1,5 +1,7 @@
 export { PriorSealApiError, PriorSealClient, createPriorSealClient, generateAuthorizationNonce } from './client.js'
-export { buildExactCallIntent } from './exact-call.js'
+export { parseAuthorizationCheckpoint } from './checkpoint.js'
+export { validatePriorSealResponse } from './response-validation.js'
+export { buildExactCallIntent, parseExactCallTransaction, parseContextCommitments } from './exact-call.js'
 export * from './rwa-binding.js'
 export { verifyRwaReceiptBundle, inspectRwaReceiptBundle } from './rwa-receipt.js'
 export * from './insight-rwa.js'

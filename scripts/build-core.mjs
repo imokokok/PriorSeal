@@ -52,6 +52,7 @@ const onDemandOperationSources = [
   "scripts/rotation-impact.mts"
 ].map((path) => join(projectRoot, path));
 const onDemandPaths = /* @__PURE__ */ new Set([...onDemandGeneratorSources, ...onDemandToolSources, ...onDemandOperationSources]);
+const existingOnDemandSources = [...onDemandPaths].filter((path) => existsSync(path.replace(/\.mts$/, ".mjs")));
 function findSources(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
@@ -65,7 +66,8 @@ const sources = testsOnly ? findSources(join(projectRoot, "test")) : generatorsO
   ...findSources(sourceRoot),
   ...findSources(join(projectRoot, "scripts")).filter((path) => !onDemandPaths.has(path)),
   ...findSources(join(projectRoot, "sdk", "scripts")),
-  ...findSources(join(projectRoot, "examples"))
+  ...findSources(join(projectRoot, "examples")),
+  ...check ? existingOnDemandSources : []
 ].sort();
 if (sources.length === 0) throw new Error("No TypeScript runtime sources found");
 for (const source of testsOnly || generatorsOnly || toolsOnly || operationsOnly ? [] : frozenExamples.keys()) {
@@ -121,7 +123,7 @@ for (const sourcePath of sources) {
   const name = sourcePath.slice(sourcePath.lastIndexOf(sep) + 1, -4);
   const source = readFileSync(sourcePath, "utf8");
   const compiled = transformSync(source, { loader: "ts", format: "esm", target: "es2022" }).code;
-  const command = generatorsOnly ? "core:build:generators" : toolsOnly ? "core:build:tools" : operationsOnly ? "core:build:operations" : testsOnly ? "core:build:tests" : "core:build";
+  const command = testsOnly ? "core:build:tests" : onDemandGeneratorSources.includes(sourcePath) ? "core:build:generators" : onDemandToolSources.includes(sourcePath) ? "core:build:tools" : onDemandOperationSources.includes(sourcePath) ? "core:build:operations" : "core:build";
   const notice = `// Generated from ${name}.mts by npm run ${command}. Do not edit directly.
 `;
   const shebangEnd = compiled.startsWith("#!") ? compiled.indexOf("\n") + 1 : 0;

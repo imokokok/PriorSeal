@@ -4,6 +4,7 @@ import { archivePage, type ArchiveAccess, type ArchiveQuery } from '../../applic
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from '../../domain/merkle-log.mjs';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
+import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedWorkerObservation } from './persisted-records.mjs';
 
 type MemoryStore = ReturnType<typeof createMemoryStore>;
 type Intent = Parameters<MemoryStore['saveIntent']>[0];
@@ -18,31 +19,31 @@ type AuthorizationRow = { authorization_json: string; acceptance_json: string; p
 type JobRow = { job_id: string; idempotency_key: string; input_json: string; state: ObservationJob['state']; attempts: number; next_attempt_at: number; observation_json: string | null; result_json: string | null; error_json: string | null; created_at: number; lease_token: string | null; lease_expires_at: number | null };
 
 const json = (value: unknown): string | null => value == null ? null : JSON.stringify(value);
-const parsed = <T,>(value: string | null | undefined): T | null => value == null ? null : JSON.parse(value) as T;
+const parsed = (value: string | null | undefined, label: string): unknown => value == null ? null : persistedJson(value, label);
 const numeric = (value: unknown): number | null => value == null ? null : typeof value === 'number' && Number.isFinite(value) ? value : null;
 const failed = (code: string, message = code): Error & { code: string } => Object.assign(new Error(message), { code });
 const logEntry = (row: LogRow): LogEntry => ({ sequence: Number(row.sequence), authorizationHash: row.authorization_hash, acceptedAt: Number(row.accepted_at), previousEntryHash: row.previous_entry_hash, entryHash: row.entry_hash });
 function authorizationRecord(row: AuthorizationRow): AuthorizationRecord {
-  const policyEvidence = parsed<AuthorizationRecord['policyEvidence']>(row.policy_json);
+  const policyEvidence = persistedPolicy(row.policy_json);
   return {
-    authorization: parsed<AuthorizationRecord['authorization']>(row.authorization_json)!,
-    acceptance: parsed<AuthorizationRecord['acceptance']>(row.acceptance_json)!,
+    authorization: persistedAuthorization(row.authorization_json),
+    acceptance: persistedAcceptance(row.acceptance_json),
     policy: policyEvidence?.result ?? policyEvidence,
     ...(policyEvidence?.schema === 'priorseal.policy-evidence.v1' ? { policyEvidence } : {}),
-    ...(row.timestamp_evidence_json ? { timestampEvidence: parsed(row.timestamp_evidence_json) } : {}),
-    ...(row.witness_evidence_json ? { witnessEvidence: parsed(row.witness_evidence_json) } : {}),
-    status: row.status,
+    ...(row.timestamp_evidence_json ? { timestampEvidence: parsed(row.timestamp_evidence_json, 'timestamp evidence') } : {}),
+    ...(row.witness_evidence_json ? { witnessEvidence: parsed(row.witness_evidence_json, 'witness evidence') } : {}),
+    status: persistedStatus(row.status, 'authorization.status'),
     boundTxHash: row.bound_tx_hash,
-    uses: Number(row.uses),
+    uses: persistedCount(row.uses, 'authorization.uses'),
   };
 }
 function jobRecord(row: JobRow, includeLease = false): ObservationJob {
   return {
-    jobId: row.job_id, idempotencyKey: row.idempotency_key, input: parsed<ObservationJob['input']>(row.input_json)!,
-    state: row.state, attempts: Number(row.attempts), nextAttemptAt: Number(row.next_attempt_at),
-    observation: parsed<ObservationJob['observation']>(row.observation_json),
-    result: parsed<ObservationJob['result']>(row.result_json), error: parsed<ObservationJob['error']>(row.error_json),
-    createdAt: Number(row.created_at),
+    jobId: persistedStatus(row.job_id, 'job.jobId'), idempotencyKey: row.idempotency_key, input: persistedJobInput(row.input_json),
+    state: persistedStatus(row.state, 'job.state'), attempts: persistedCount(row.attempts, 'job.attempts'), nextAttemptAt: persistedCount(row.next_attempt_at, 'job.nextAttemptAt'),
+    observation: row.observation_json == null ? null : persistedWorkerObservation(row.observation_json),
+    result: persistedJobResult(row.result_json), error: persistedJobError(row.error_json),
+    createdAt: persistedCount(row.created_at, 'job.createdAt'),
     ...(includeLease && row.lease_token ? { leaseToken: row.lease_token } : {}),
   };
 }
@@ -88,7 +89,7 @@ export function createD1Store(database: D1Database) {
       catch (error) {
         if (record) {
           const saved = await first<AuthorizationRow>('SELECT * FROM authorizations WHERE authorization_id=?', record.authorization.authorizationId);
-          if (saved) return logEntry((await first<LogRow>('SELECT * FROM authorization_log WHERE sequence=?', (parsed<AuthorizationRecord['acceptance']>(saved.acceptance_json)!).sequence))!);
+          if (saved) return logEntry((await first<LogRow>('SELECT * FROM authorization_log WHERE sequence=?', persistedAcceptance(saved.acceptance_json).sequence))!);
           const nonce = await first('SELECT authorization_id FROM authorizations WHERE authorization_nonce=?', record.authorization.authorizationNonce);
           if (nonce) throw failed('AUTHORIZATION_NONCE_REUSED', 'Authorization nonce has already been used');
         }
@@ -120,7 +121,7 @@ export function createD1Store(database: D1Database) {
     },
     async getArchiveEntry(access: Pick<ArchiveAccess, 'projectId' | 'environment'>, id: string) {
       const row = await first<{ entry_json: string; sequence: number }>('SELECT entry_json,sequence FROM project_evidence_archive WHERE project_id=? AND environment=? AND entry_id=?', access.projectId, access.environment, id);
-      return row && { ...parsed<ArchiveEntry>(row.entry_json)!, sequence: Number(row.sequence) };
+      return row && { ...persistedArchiveEntry(row.entry_json), sequence: Number(row.sequence) };
     },
     async listArchiveEntries(query: ArchiveQuery) {
       const snapshot = query.cursor?.snapshot ?? Number((await first<{ snapshot: number }>('SELECT COALESCE(MAX(sequence),0) AS snapshot FROM project_evidence_archive WHERE project_id=? AND environment=?', query.projectId, query.environment))?.snapshot ?? 0);
@@ -128,20 +129,20 @@ export function createD1Store(database: D1Database) {
       type ArchiveDbRow = { entry_json?: string; sequence: number; entry_id: string; project_id: string; environment: string; artifact_hash: string; kind: string; created_at: number; tx_hash: string | null; authorization_id: string | null; status: string; supersedes_id: string | null };
       const rows = await all<ArchiveDbRow>(`SELECT ${columns} FROM project_evidence_archive WHERE project_id=? AND environment=? AND sequence<=? AND (? IS NULL OR sequence<?) AND (? IS NULL OR tx_hash=?) AND (? IS NULL OR authorization_id=?) AND (? IS NULL OR status=?) AND (? IS NULL OR created_at>=?) AND (? IS NULL OR created_at<=?) ORDER BY sequence DESC LIMIT ?`, query.projectId, query.environment, snapshot, query.cursor?.after ?? null, query.cursor?.after ?? null, query.filters.txHash, query.filters.txHash, query.filters.authorizationId, query.filters.authorizationId, query.filters.status, query.filters.status, query.filters.from, query.filters.from, query.filters.to, query.filters.to, query.limit + 1);
       return archivePage(rows.map((row) => query.includeArtifacts
-        ? { ...parsed<ArchiveEntry>(row.entry_json)!, sequence: Number(row.sequence) }
+        ? { ...persistedArchiveEntry(row.entry_json), sequence: Number(row.sequence) }
         : { id: row.entry_id, projectId: row.project_id, environment: row.environment, kind: row.kind, createdAt: Number(row.created_at), artifactHash: row.artifact_hash, supersedesId: row.supersedes_id, txHash: row.tx_hash, authorizationId: row.authorization_id, status: row.status, artifact: undefined, verification: 'NOT_VERIFIED_BY_ARCHIVE' as const, sequence: Number(row.sequence) }), query, snapshot);
     },
     async saveIntent(intent: Intent) {
       const saved = await first<{ intent_json: string }>(`INSERT INTO intents (intent_id,intent_hash,schema_version,chain_id,action,sender,recipient,asset,amount,nonce,valid_until,constraints_json,intent_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(intent_id) DO UPDATE SET intent_id=excluded.intent_id WHERE intents.intent_hash=excluded.intent_hash RETURNING intent_json`, intent.intentId, intent.intentHash, intent.schema, Number(intent.chainId), intent.action, intent.sender, intent.recipient, intent.asset, intent.amount, intent.nonce, Number(intent.validUntil), json(intent.constraints), json(intent));
       if (!saved) throw failed('DUPLICATE_INTENT');
-      return parsed<Intent>(saved.intent_json)!;
+      return persistedIntent(saved.intent_json);
     },
-    async getIntent(id: string) { return parsed<Intent>((await first<{ intent_json: string }>('SELECT intent_json FROM intents WHERE intent_id=?', id))?.intent_json) ?? undefined; },
+    async getIntent(id: string) { const row = await first<{ intent_json: string }>('SELECT intent_json FROM intents WHERE intent_id=?', id); return row ? persistedIntent(row.intent_json) : undefined; },
     async saveObservation(observation: Observation) {
       await run('INSERT INTO execution_observations (intent_hash,chain_id,tx_hash,status,block_number,observed_at,finality_state,observation_json,observation_hash) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(chain_id,tx_hash,observation_hash) DO NOTHING', String(observation.intentHash ?? '') || null, Number(observation.chainId), observation.txHash, observation.status, numeric(observation.blockNumber), numeric(observation.observedAt), typeof observation.finalityState === 'string' ? observation.finalityState : null, json(observation), hashJson(observation));
       return observation;
     },
-    async getObservation(chainId: number | string | undefined, txHash: string) { return parsed<Observation>((await first<{ observation_json: string }>('SELECT observation_json FROM execution_observations WHERE chain_id=? AND tx_hash=? ORDER BY id DESC LIMIT 1', Number(chainId), txHash))?.observation_json) ?? undefined; },
+    async getObservation(chainId: number | string | undefined, txHash: string) { const row = await first<{ observation_json: string }>('SELECT observation_json FROM execution_observations WHERE chain_id=? AND tx_hash=? ORDER BY id DESC LIMIT 1', Number(chainId), txHash); return row ? persistedObservation(row.observation_json) : undefined; },
     async appendAuthorizationLog({ authorizationHash, acceptedAt }: { authorizationHash: string; acceptedAt: number }) { return appendLog(authorizationHash, acceptedAt); },
     async listAuthorizationLog() { return (await all<LogRow>('SELECT * FROM authorization_log ORDER BY sequence')).map(logEntry); },
     async getAuthorizationMerkleSnapshot(acceptance: Pick<AuthorizationRecord['acceptance'], 'sequence' | 'entryHash'>, size: number | null = null) {
@@ -206,7 +207,7 @@ export function createD1Store(database: D1Database) {
     async saveObservationReceipt({ authorizationId, claimAuthorization, observation, receipt }: { authorizationId?: string; claimAuthorization: boolean; observation: Observation; receipt: Receipt | null }) {
       for (let attempt = 0; attempt < 2; attempt++) {
         const existing = receipt && await first<{ receipt_json: string }>('SELECT receipt_json FROM receipts WHERE receipt_id=?', receipt.receiptId);
-        if (existing && receipt) assertReceiptIdentity(parsed(existing.receipt_json), receipt);
+        if (existing && receipt) assertReceiptIdentity(persistedReceipt(existing.receipt_json), receipt);
         const statements: D1PreparedStatement[] = [];
         if (claimAuthorization) statements.push(statement(`UPDATE authorizations SET bound_tx_hash=COALESCE(bound_tx_hash,?),uses=CASE WHEN bound_tx_hash IS NULL THEN 1 ELSE uses END,status='BOUND' WHERE authorization_id=? AND (bound_tx_hash IS NULL OR bound_tx_hash=?) RETURNING authorization_id`, observation.txHash, authorizationId ?? null, observation.txHash));
         const guard = claimAuthorization ? ' WHERE EXISTS (SELECT 1 FROM authorizations WHERE authorization_id=? AND bound_tx_hash=?)' : ' WHERE 1';
@@ -225,14 +226,15 @@ export function createD1Store(database: D1Database) {
     },
     async saveReceipt(receipt: Receipt) {
       await run('INSERT INTO receipts (receipt_id,intent_hash,tx_hash,schema,issuer,key_id,outcome,receipt_json,signature) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(receipt_id) DO NOTHING', receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.schema, receipt.issuer, receipt.keyId, receipt.outcome, json(receipt), receipt.signature ?? null);
-      const existing = parsed<Receipt>((await first<{ receipt_json: string }>('SELECT receipt_json FROM receipts WHERE receipt_id=?', receipt.receiptId))?.receipt_json);
+      const row = await first<{ receipt_json: string }>('SELECT receipt_json FROM receipts WHERE receipt_id=?', receipt.receiptId);
+      const existing = row ? persistedReceipt(row.receipt_json) : null;
       assertReceiptIdentity(existing, receipt);
       return existing!;
     },
-    async getReceipt(id: string) { return parsed<Receipt>((await first<{ receipt_json: string }>('SELECT receipt_json FROM receipts WHERE receipt_id=?', id))?.receipt_json); },
+    async getReceipt(id: string) { const row = await first<{ receipt_json: string }>('SELECT receipt_json FROM receipts WHERE receipt_id=?', id); return row ? persistedReceipt(row.receipt_json) : null; },
     async getIdempotency<Response>(scope: string, key: string) {
       const row = await first<{ request_hash: string; response_json: string; expires_at: number }>('SELECT request_hash,response_json,expires_at FROM idempotency_records WHERE scope=? AND idempotency_key=?', scope, key);
-      return row ? { requestHash: row.request_hash, response: parsed<Response>(row.response_json)!, expiresAt: Number(row.expires_at) } : undefined;
+      return row ? { requestHash: row.request_hash, response: persistedJson(row.response_json, 'idempotency response') as Response, expiresAt: Number(row.expires_at) } : undefined;
     },
     async reserveIdempotency<Response>({ scope, key, requestHash, response, expiresAt }: { scope: string; key: string; requestHash: string; response: Response; expiresAt: number }) {
       const saved = await first<{ response_json: string }>(`INSERT INTO idempotency_records (scope,idempotency_key,request_hash,response_json,expires_at) VALUES (?,?,?,?,?) ON CONFLICT(scope,idempotency_key) DO UPDATE SET request_hash=excluded.request_hash,response_json=excluded.response_json,expires_at=excluded.expires_at,created_at=unixepoch()*1000 WHERE idempotency_records.expires_at<=unixepoch()*1000 RETURNING response_json`, scope, key, requestHash, json(response), expiresAt);
