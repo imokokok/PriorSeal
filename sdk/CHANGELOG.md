@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 — 2026-09-25
+
+- Improve the SDK README entry path, offline receipt example, expected result, and issuer-key trust guidance. Published runtime files are unchanged from 0.7.0.
+
 ## 0.7.0 — 2026-09-21
 
 - Verify compact v2 Merkle transparency checkpoints and Merkle-root EVM anchors

@@ -3,10 +3,10 @@
 Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.7.0
+npm install priorseal-sdk@0.7.1
 ```
 
-This documentation targets **0.7.0**. It includes v2 Merkle transparency verification, the optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+The latest npm release is **0.7.1**, a documentation-only patch with the same runtime files as 0.7.0. The repository workspace still declares 0.7.0 until its next source release. The published package includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
 
 ## Start with a local receipt
 
