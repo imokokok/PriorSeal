@@ -56,8 +56,8 @@ async function main() {
   const readyFile = path.resolve(opts.get("--ready-file") ?? "");
   const outputRoot = path.resolve(opts.get("--output-root") ?? "");
   const now = Date.now();
-  const start = Date.parse("2026-09-25T15:00:00Z");
-  const end = Date.parse("2026-09-25T15:30:00Z");
+  const start = Date.parse("2026-09-25T15:45:00Z");
+  const end = Date.parse("2026-09-25T16:30:00Z");
   assert(now >= start && now < end, "Outside agreed Asia/Shanghai live window");
   const ready = JSON.parse(await readFile(readyFile, "utf8"));
   assert(
