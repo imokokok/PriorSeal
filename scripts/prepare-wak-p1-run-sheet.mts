@@ -38,6 +38,10 @@ const FEE = 3_000;
 const AMOUNT_IN = 1_000_000_000_000n;
 const MAX_SLIPPAGE_BPS = 500;
 const MIN_CONFIRMATIONS = 2;
+const BROADCAST_MARGIN_SECONDS = 180;
+const EXPECTED_PRIORSEAL_ISSUER = 'priorseal-local';
+const EXPECTED_PRIORSEAL_KEY_ID = 'default';
+const EXPECTED_PRIORSEAL_TRUST_KEY_SHA256 = 'd79930ec4fbadb5d3c4268fec2badd2d77149712370bc3855472636dd43a7fe7';
 const PUBLIC_DEV_MNEMONIC = 'test test test test test test test test test test test junk';
 const EXPECTED_PUBLIC_DEV_ACCOUNT = '0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc';
 const INSIGHT_TYPES = {
@@ -295,6 +299,8 @@ assert(authorizationCheck.valid, `PriorSeal authorization invalid: ${authorizati
 
 const issuer = string(process.env.PRIORSEAL_ISSUER, 'PRIORSEAL_ISSUER');
 const keyId = string(process.env.PRIORSEAL_KEY_ID, 'PRIORSEAL_KEY_ID');
+assert(issuer === EXPECTED_PRIORSEAL_ISSUER, 'PriorSeal issuer differs from the approved static input');
+assert(keyId === EXPECTED_PRIORSEAL_KEY_ID, 'PriorSeal key ID differs from the approved static input');
 const privateKeyPath = string(process.env.PRIORSEAL_PRIVATE_KEY_FILE, 'PRIORSEAL_PRIVATE_KEY_FILE');
 const publicKeyPath = string(process.env.PRIORSEAL_PUBLIC_KEY_FILE, 'PRIORSEAL_PUBLIC_KEY_FILE');
 const [privateKeyPem, publicKeyPem] = await Promise.all([
@@ -305,6 +311,9 @@ const acceptance = signAuthorizationReceipt(buildAuthorizationReceipt({
 }), privateKeyPem);
 assert(verifyAuthorizationReceipt(acceptance, publicKeyPem), 'PriorSeal acceptance signature invalid');
 const trustKeyFingerprint = sha256(createPublicKey(publicKeyPem).export({ type: 'spki', format: 'der' }));
+assert(trustKeyFingerprint === EXPECTED_PRIORSEAL_TRUST_KEY_SHA256, 'PriorSeal trust key differs from the approved static pin');
+const broadcastCutoff = Math.min(validUntil, Number(authorization.expiresAt)) - BROADCAST_MARGIN_SECONDS;
+assert(broadcastCutoff - Math.floor(Date.now() / 1_000) >= 60, 'less than 60 seconds remain before the broadcast cutoff');
 
 const runSheet = {
   schema: 'wak-insight-priorseal.p1-run-sheet.v1',
@@ -312,7 +321,15 @@ const runSheet = {
   authorization: 'NO_GO_TRANSACTION_SIGNING_AND_BROADCAST_PROHIBITED',
   generatedAt: Math.floor(Date.now() / 1_000),
   expiresAt: validUntil,
-  volatileFields: ['insightEvidence', 'nonce', 'quote', 'amountOutMinimum', 'gas', 'maxFeePerGas', 'maxPriorityFeePerGas', 'authorization', 'acceptance'],
+  offChainValidity: {
+    rule: 'Broadcast the signed transaction no later than the cutoff; WAK must enforce this before its single broadcast call.',
+    insightValidUntil: validUntil,
+    priorSealAuthorizationExpiresAt: authorization.expiresAt,
+    broadcastMarginSeconds: BROADCAST_MARGIN_SECONDS,
+    latestBroadcastAt: broadcastCutoff,
+    onChainDeadlineInDirectCall: false,
+  },
+  volatileFields: ['insightEvidence', 'nonce', 'quote', 'amountOutMinimum', 'gas', 'maxFeePerGas', 'maxPriorityFeePerGas', 'authorization', 'acceptance', 'offChainValidity.latestBroadcastAt'],
   regenerationRule: 'Regenerate the complete sheet if any volatile field expires or changes; do not patch individual fields.',
   network: {
     name: 'Base Sepolia', chainId: CHAIN_ID, rpc: 'https://sepolia.base.org',
