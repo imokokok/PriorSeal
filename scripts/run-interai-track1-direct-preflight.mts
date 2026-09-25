@@ -27,8 +27,8 @@ import {
 const ENDPOINT = "https://api.interailabs.dev/verify";
 const KEYCHAIN_SERVICE = "priorseal.interai.track1-pilot";
 const KEYCHAIN_ACCOUNT = "YuTao Peng";
-const WINDOW_START = Date.parse("2026-09-25T12:00:00Z");
-const WINDOW_END = Date.parse("2026-09-25T13:00:00Z");
+const WINDOW_START = Date.parse("2026-09-25T15:00:00Z");
+const WINDOW_END = Date.parse("2026-09-25T15:30:00Z");
 const EXECUTOR: Address = "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc";
 const ROUTER: Address = "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4";
 const WETH: Address = "0x4200000000000000000000000000000000000006";
@@ -202,7 +202,7 @@ async function validateInputs(
 	const now = Date.now();
 	assert(
 		now >= WINDOW_START && now < WINDOW_END,
-		"Outside agreed 2026-09-25 20:00–21:00 Asia/Shanghai window",
+		"Outside proposed 2026-09-25 23:00–23:30 Asia/Shanghai window",
 	);
 	const ready = await jsonFile(readyFile);
 	assert(
