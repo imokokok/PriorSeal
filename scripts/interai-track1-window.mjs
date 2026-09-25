@@ -1,4 +1,5 @@
 // Generated from interai-track1-window.mts by npm run core:build. Do not edit directly.
+const ORIGINAL_THREAD_ID = "19fcde01ce31cf7e";
 function assert(value, message) {
   if (!value) throw new Error(message);
 }
@@ -29,14 +30,14 @@ function validateTrack1ReadyWindow(value, now = Date.now()) {
   assert(Number.isFinite(now), "Current time is invalid");
   const ready = object(value, "READY record");
   assert(
-    ready.schema === "interai.track1.ready-window.v1" && ready.channel === "original-email-thread" && ready.message === "READY" && ready.gate === "enabled-and-verified",
+    ready.schema === "interai.track1.ready-window.v1" && ready.channel === "original-email-thread" && ready.threadId === ORIGINAL_THREAD_ID && ready.message === "READY" && ready.gate === "enabled-and-verified",
     "Explicit READY and verified bounded gate are required"
   );
   const readyMessageId = messageId(ready.messageId, "READY messageId");
   const readyAt = isoTime(ready.receivedAtIso, "READY receivedAtIso");
   const window = object(ready.window, "confirmed window");
   assert(
-    window.channel === "original-email-thread",
+    window.channel === "original-email-thread" && window.threadId === ORIGINAL_THREAD_ID,
     "Window confirmation must be in the original email thread"
   );
   const confirmationMessageId = messageId(

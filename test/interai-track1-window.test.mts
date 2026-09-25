@@ -7,12 +7,14 @@ const start = Date.parse("2026-09-27T02:00:00+08:00");
 const valid = {
 	schema: "interai.track1.ready-window.v1",
 	channel: "original-email-thread",
+	threadId: "19fcde01ce31cf7e",
 	message: "READY",
 	messageId: "1a0d9ad08132449b",
 	gate: "enabled-and-verified",
 	receivedAtIso: "2026-09-27T02:01:00+08:00",
 	window: {
 		channel: "original-email-thread",
+		threadId: "19fcde01ce31cf7e",
 		confirmationMessageId: "1a0d9ad08132449a",
 		confirmedAtIso: "2026-09-27T01:50:00+08:00",
 		startIso: "2026-09-27T02:00:00+08:00",
@@ -70,5 +72,24 @@ test("rejects a changed window, stale READY, or reused confirmation message", ()
 				start + 2 * 60_000,
 			),
 		/independently confirmed/,
+	);
+});
+
+test("rejects a READY or confirmation from a different thread", () => {
+	assert.throws(
+		() =>
+			validateTrack1ReadyWindow(
+				{ ...valid, threadId: "1a0d9ad08132449a" },
+				start + 2 * 60_000,
+			),
+		/Explicit READY/,
+	);
+	assert.throws(
+		() =>
+			validateTrack1ReadyWindow(
+				{ ...valid, window: { ...valid.window, threadId: "1a0d9ad08132449a" } },
+				start + 2 * 60_000,
+			),
+		/original email thread/,
 	);
 });

@@ -1,6 +1,7 @@
 /** Validates one explicitly confirmed, READY-gated InterAI Track 1 window. */
 
 type Json = Record<string, unknown>;
+const ORIGINAL_THREAD_ID = "19fcde01ce31cf7e";
 
 function assert(value: unknown, message: string): asserts value {
 	if (!value) throw new Error(message);
@@ -42,6 +43,7 @@ export function validateTrack1ReadyWindow(
 	assert(
 		ready.schema === "interai.track1.ready-window.v1" &&
 			ready.channel === "original-email-thread" &&
+			ready.threadId === ORIGINAL_THREAD_ID &&
 			ready.message === "READY" &&
 			ready.gate === "enabled-and-verified",
 		"Explicit READY and verified bounded gate are required",
@@ -50,7 +52,8 @@ export function validateTrack1ReadyWindow(
 	const readyAt = isoTime(ready.receivedAtIso, "READY receivedAtIso");
 	const window = object(ready.window, "confirmed window");
 	assert(
-		window.channel === "original-email-thread",
+		window.channel === "original-email-thread" &&
+			window.threadId === ORIGINAL_THREAD_ID,
 		"Window confirmation must be in the original email thread",
 	);
 	const confirmationMessageId = messageId(
