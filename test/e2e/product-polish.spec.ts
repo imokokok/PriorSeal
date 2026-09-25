@@ -246,12 +246,13 @@ test('undetermined observation preserves reconciliation and never suggests anoth
   const txHash = `0x${'9'.repeat(64)}`
   await page.addInitScript(({ authorizationId }) => {
     localStorage.setItem('priorseal.storage-preference.v1', JSON.stringify({ choice: 'granted', updatedAt: Date.now() }))
-    const authorization = { authorizationId, intent: { intentId: 'intent_reconcile', chainId: 8453, asset: 'native', amount: '1' }, authorizer: { address: `0x${'1'.repeat(40)}` }, delegate: { agentId: 'fixture', executor: `0x${'2'.repeat(40)}` }, expiresAt: 4_102_444_800 }
+    const authorization = { authorizationId, intent: { intentId: 'intent_reconcile', chainId: 8453, action: 'TRANSFER', asset: 'native', amount: '1', sender: `0x${'2'.repeat(40)}`, recipient: `0x${'3'.repeat(40)}`, validUntil: 4_102_444_800, nonce: '1' }, principal: { type: 'user', id: 'user:reconcile', account: `0x${'1'.repeat(40)}` }, authorizer: { address: `0x${'1'.repeat(40)}` }, delegate: { agentId: 'fixture', executor: `0x${'2'.repeat(40)}` }, expiresAt: 4_102_444_800 }
     localStorage.setItem('priorseal.local-session.v4', JSON.stringify({ intents: [], authorizations: [{ authorization, acceptance: { acceptedAt: 1_800_000_000 } }], receipts: [], observations: [], observationJobs: [] }))
   }, { authorizationId })
   await page.route('**/v1/executions/observe', (route) => route.fulfill({ json: { observation: { chainId: 8453, txHash, status: 'RPC_TIMEOUT' }, receipt: null, observationJob: { jobId: 'job_reconcile', input: { authorizationId, txHash, chainId: 8453 }, state: 'UNDETERMINED', attempts: 5, nextAttemptAt: Date.now(), observation: { chainId: 8453, txHash, status: 'RPC_TIMEOUT' }, error: null } } }))
   await page.goto('/app/observe')
   await page.getByLabel('Transaction hash').fill(txHash)
+  await expect(page.getByRole('button', { name: 'Observe authorized execution' })).toBeEnabled()
   await page.getByRole('button', { name: 'Observe authorized execution' }).click()
   await expect(page.getByText('Reconciliation required', { exact: true })).toBeVisible()
   await expect(page.getByText(/do not infer that the transaction failed or broadcast it again/)).toBeVisible()
