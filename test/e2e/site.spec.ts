@@ -51,6 +51,20 @@ test('damaged saved activity cannot become a typed local receipt or authorizatio
   await expect(page.getByText('0 saved on this device')).toBeVisible()
 })
 
+test('developer routes load the key registry, rotation diagnostics and API reference', async ({ page }) => {
+  await page.route('**/.well-known/priorseal-keys.json', async (route) => route.fulfill({ json: {
+    schema: 'priorseal.keys.v1', issuer: 'priorseal.test', keys: [{ issuer: 'priorseal.test', keyId: 'key-1', algorithm: 'Ed25519', publicKey: 'test-public-key', status: 'active', validFrom: null, validUntil: null }],
+  } }))
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Use without saving' }).click()
+  await page.goto('/app/keys')
+  await expect(page.getByRole('heading', { level: 1, name: 'Key registry' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'In-flight authorization and key rotation' })).toBeVisible()
+  await expect(page.getByText('key-1', { exact: true })).toBeVisible()
+  await page.goto('/app/api')
+  await expect(page.getByRole('heading', { level: 1, name: 'API reference' })).toBeVisible()
+})
+
 test('preserves the console shell, resets scroll and moves focus on navigation', async ({ page }) => {
   let healthRequests = 0
   page.on('request', (request) => { if (request.url().endsWith('/health/live')) healthRequests += 1 })
