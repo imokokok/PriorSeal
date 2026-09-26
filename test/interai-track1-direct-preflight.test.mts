@@ -6,9 +6,34 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
+	assertTrack1ExecutionContext,
 	curlConfig,
 	runCurl,
 } from "../scripts/run-interai-track1-direct-preflight.mjs";
+
+test("final preflight accepts all five agreed context fields and rejects drift", () => {
+	const runId = "candidate-test-001";
+	const context = {
+		schema: "interai-host-execution-context/v1",
+		workspace_id: "interai-priorseal-track1",
+		environment: "base-sepolia-testnet",
+		actor_id: "agent:yutao:interai-track1",
+		run_id: runId,
+	};
+	assert.doesNotThrow(() => assertTrack1ExecutionContext(context, runId));
+	const { workspace_id: _workspace, ...missingWorkspace } = context;
+	for (const value of [
+		missingWorkspace,
+		{ ...context, workspace_id: "other" },
+		{ ...context, run_id: "other" },
+		{ ...context, additional: true },
+	]) {
+		assert.throws(
+			() => assertTrack1ExecutionContext(value, runId),
+			/Host execution context mismatch/,
+		);
+	}
+});
 
 test("direct /verify transport sends one authenticated request and retains response headers", async () => {
 	process.env.NODE_ENV = "test";
@@ -44,6 +69,7 @@ test("direct /verify transport sends one authenticated request and retains respo
 			`http://127.0.0.1:${address.port}/verify`,
 		);
 		const response = await runCurl(config);
+		assert.match(config, /noproxy = "\*"/);
 		assert.equal(response.exitCode, 0);
 		assert.equal(
 			response.body.toString("utf8"),
