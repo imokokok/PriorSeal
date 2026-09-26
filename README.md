@@ -17,6 +17,16 @@ Bounded intent → Principal signature → Acceptance + time evidence
 
 PriorSeal is for teams building EVM agents, treasury automation, wallets, and transaction infrastructure. It sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys or move funds.
 
+## Choose your integration path
+
+| Need | Start here |
+| --- | --- |
+| Assess oracle and trade risk without changing your signer | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
+| Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
+| Keep assessment, authorization, and execution evidence together | [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) and [composite review manifests](sdk/README.md#composite-review-manifests) |
+
+Insight and PriorSeal work independently. The combined path binds their evidence while keeping each product's trust checks separate. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
+
 ## What the evidence covers
 
 1. **Authority.** A user or organization signs a time-bounded, single-use EIP-712 or ERC-1271 authorization for an agent and executor. A deployment policy can bind a reviewed principal identity to an account; without that registry, a human-readable principal ID is self-asserted.
@@ -43,6 +53,8 @@ npm ci
 npm run example:receipt
 npm run verify:receipt
 ```
+
+The verifier should report `valid: true`, `code: OK`, `outcome: COMPLETED`, `executionStatus: CONFIRMED`, and `complianceStatus: COMPLIANT`. These are results for the synthetic fixture, not proof of an on-chain transaction. Confirm the public key independently before relying on a receipt from another issuer.
 
 The artifacts are written to the ignored `examples/receipt-artifacts/` directory. To verify a different receipt and trusted public key:
 
@@ -94,6 +106,8 @@ const evidence = await priorseal.observeExecutionUntilFinal({
   confirmations: 12,
 })
 ```
+
+This is an integration outline: `intent`, `txHash`, and the wallet provider come from your application. For an executable example with no wallet or RPC dependency, use the [offline example](#run-the-offline-example).
 
 The [SDK guide](sdk/README.md) covers intent construction, recovery checkpoints, exact calls, and offline verification. The HTTP contract is available as [OpenAPI](https://priorseal.xyz/openapi/v1.json); the main flow uses `POST /v1/authorizations/prepare`, `POST /v1/authorizations`, and `POST /v1/executions/observe`.
 

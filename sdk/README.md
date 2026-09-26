@@ -1,27 +1,30 @@
 # priorseal-sdk
 
-The opt-in [RWA exact-call binding and combined receipt verification](https://github.com/imokokok/PriorSeal/tree/main/examples/rwa-v1)
-do not alter existing authorization or receipt semantics. RWA v2 adds linked
-same-second assessments, admitted calldata/receiver checks and
-`inspectRwaReceiptBundle` for separate integrity/trust/time/policy/execution results.
-For safe submission use the Node application entry described in
-[RWA v2 hardening](https://github.com/imokokok/PriorSeal/blob/main/docs/rwa-hardening.md); SDK low-level callbacks alone do not
-enforce principal authorization or durable replay protection.
-
 Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.7.0
+npm install priorseal-sdk@0.7.1
 ```
 
-This documentation targets **0.7.0**. It includes v2 Merkle transparency verification, the optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+The latest npm release is **0.7.1**, a documentation-only patch with the same runtime files as 0.7.0. The repository workspace still declares 0.7.0 until its next source release. The published package includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
 
-The workspace coverage policy also recognizes Band Protocol as an independent
-source group. Insight carries BandChain v3 source age into its shared freshness
-checks, while the default PriorSeal coverage verifier applies the 300-second
-policy carried in the independently pinned policy bytes.
+## Start with a local receipt
+
+The repository has a runnable example that creates a synthetic receipt and checks it locally. With **Node.js 22+**, run from a [PriorSeal checkout](https://github.com/imokokok/PriorSeal):
+
+```bash
+npm ci
+npm run example:receipt
+npm run verify:receipt
+```
+
+Expected verifier fields: `valid: true`, `code: OK`, `outcome: COMPLETED`, `executionStatus: CONFIRMED`, `complianceStatus: COMPLIANT`. No wallet, RPC, funds, or Insight account is needed. The example generates a temporary key; for a third-party receipt, establish issuer-key trust independently. See the [example source](https://github.com/imokokok/PriorSeal/blob/main/examples/create-signed-receipt.mts) and [verification command](https://github.com/imokokok/PriorSeal/blob/main/examples/verify-signed-receipt.mts).
+
+The snippets below show integration points and require your own `intent`, transaction hash, wallet, and trust configuration. They are not standalone programs.
 
 ## Client
+
+This flow uses the hosted API and your application's wallet provider. The application constructs `intent` and submits the transaction before it supplies `txHash` for observation.
 
 ```ts
 import { createPriorSealClient } from 'priorseal-sdk'
@@ -44,6 +47,8 @@ const evidence = await priorseal.observeExecutionUntilFinal({
 ```
 
 ## Independent local verification
+
+Supply `receipt` from your export and `keyRegistry` from a separately confirmed issuer configuration. The verifier does not establish key provenance for you.
 
 ```ts
 import { verifyReceiptLocally } from 'priorseal-sdk/verifier'
@@ -95,6 +100,8 @@ Before requesting a signature, the helper checks the checkpoint/request identiti
 An `OBSERVATION_WAIT_TIMEOUT` error includes `details.jobId`, `authorizationId`, `txHash` and the last job when known. Resume with `waitForObservationJob(jobId)`; a client wait timeout does not prove that the transaction failed. Preserve unknown, pending, undetermined and reorg evidence instead of automatically broadcasting again.
 
 ## Composite review manifests
+
+The workspace coverage policy recognizes Band Protocol as an independent source group. Insight carries BandChain v3 source age into shared freshness checks; the default PriorSeal coverage verifier applies the 300-second policy carried in independently pinned policy bytes.
 
 ```ts
 import {
@@ -162,6 +169,8 @@ Verification checks each native signature, the paired UIDs, the context commitme
 The optional Headless verifier described below remains independently callable. Arbitrary partner attachments are not automatically promoted to a supported verification profile by including them in a manifest.
 
 ## Exact contract calls
+
+The opt-in [RWA exact-call binding and combined receipt verification](https://github.com/imokokok/PriorSeal/tree/main/examples/rwa-v1) do not alter existing authorization or receipt semantics. RWA v2 adds linked same-second assessments, admitted calldata/receiver checks, and `inspectRwaReceiptBundle` for separate integrity, trust, time, policy, and execution results. For safe submission, use the Node application entry described in [RWA v2 hardening](https://github.com/imokokok/PriorSeal/blob/main/docs/rwa-hardening.md); SDK low-level callbacks alone do not enforce principal authorization or durable replay protection.
 
 Use intent v2 when an integration already constructs the exact transaction and another system owns its business semantics:
 

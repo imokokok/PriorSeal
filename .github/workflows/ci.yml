@@ -31,6 +31,10 @@ jobs:
         run: |
           npm ci
           npm ci --prefix examples/aps-priorseal-decision-binding-v1 --ignore-scripts
+      - name: Check the documented offline receipt example
+        run: |
+          npm run example:receipt
+          npm run verify:receipt
       - name: Run non-browser release gates
         run: npm run release:check:pre-browser
       - name: Verify APS producer inputs and adapter boundaries
