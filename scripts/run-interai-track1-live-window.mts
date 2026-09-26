@@ -1,6 +1,6 @@
 /** READY-gated host sequence: Insight capture, JIT candidate, request, one /verify. */
 import { spawn } from "node:child_process";
-import { access, mkdir, readFile } from "node:fs/promises";
+import { access, mkdir, open, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateTrack1ReadyWindow } from "./interai-track1-window.mjs";
@@ -48,25 +48,48 @@ function args(): Map<string, string> {
 		);
 	return parsed;
 }
-async function command(
+export async function command(
 	label: string,
 	cwd: string,
 	commandName: string,
 	commandArgs: string[],
 	env: NodeJS.ProcessEnv,
+	logPrefix: string,
 ): Promise<void> {
 	process.stdout.write(`Starting ${label}\n`);
-	await new Promise<void>((resolve, reject) => {
-		const child = spawn(commandName, commandArgs, {
-			cwd,
-			env,
-			stdio: "inherit",
+	const startedAt = new Date().toISOString();
+	const stdout = await open(`${logPrefix}.stdout.log`, "wx", 0o600);
+	const stderr = await open(`${logPrefix}.stderr.log`, "wx", 0o600);
+	let exitCode: number | null = null;
+	let failure: string | null = null;
+	try {
+		await new Promise<void>((resolve, reject) => {
+			const child = spawn(commandName, commandArgs, {
+				cwd,
+				env,
+				stdio: ["ignore", stdout.fd, stderr.fd],
+			});
+			child.on("error", reject);
+			child.on("close", (code) => {
+				exitCode = code;
+				code === 0
+					? resolve()
+					: reject(
+							new Error(`${label} failed; NO_RUN; inspect private stage logs`),
+						);
+			});
 		});
-		child.on("error", reject);
-		child.on("close", (code) =>
-			code === 0 ? resolve() : reject(new Error(`${label} failed; NO_RUN`)),
+	} catch (error) {
+		failure = error instanceof Error ? error.message : "Unknown stage failure";
+		throw error;
+	} finally {
+		await Promise.all([stdout.close(), stderr.close()]);
+		await writeFile(
+			`${logPrefix}.result.json`,
+			`${JSON.stringify({ label, startedAt, finishedAt: new Date().toISOString(), exitCode, failure }, null, 2)}\n`,
+			{ mode: 0o600, flag: "wx" },
 		);
-	});
+	}
 }
 async function main(): Promise<void> {
 	process.umask(0o077);
@@ -86,9 +109,19 @@ async function main(): Promise<void> {
 	const insightEnvFile =
 		opts.get("--insight-env-file") ?? path.join(insightRoot, ".env.local");
 	await access(
-		path.join(insightRoot, "scripts/interai-track1/capture-preflight-gates.mts"),
+		path.join(
+			insightRoot,
+			"scripts/interai-track1/capture-preflight-gates.mts",
+		),
 	);
 	await access(insightEnvFile);
+	for (const script of [
+		"generate-interai-track1-executable-candidate.mjs",
+		"build-interai-track1-direct-request.mjs",
+		"run-interai-track1-direct-preflight.mjs",
+	]) {
+		await access(path.join(priorSealRoot, "scripts", script));
+	}
 	const trustRootDir = path.join(
 		documentsRoot,
 		"partnerships/interai-collaboration/file/2026-09-24-interai-track1-final-binding-review-candidate-source-record",
@@ -103,6 +136,17 @@ async function main(): Promise<void> {
 	const requestFile = path.join(outputRoot, "interai-verify-request.json");
 	const verifyDir = path.join(outputRoot, "verify-evidence");
 	await mkdir(outputRoot, { recursive: false, mode: 0o700 });
+	await writeFile(
+		path.join(outputRoot, "ready-source.json"),
+		await readFile(readyFile),
+		{ mode: 0o600, flag: "wx" },
+	);
+	await mkdir(path.join(outputRoot, "stage-logs"), { mode: 0o700 });
+	const stage = (name: string) => path.join(outputRoot, "stage-logs", name);
+	const recheckWindow = async () =>
+		validateTrack1ReadyWindow(
+			JSON.parse(await readFile(readyFile, "utf8")) as unknown,
+		);
 	const env = { ...process.env };
 	if (opts.has("--proxy")) env.HTTPS_PROXY = opts.get("--proxy");
 	await command(
@@ -122,7 +166,9 @@ async function main(): Promise<void> {
 			"interai",
 		],
 		env,
+		stage("01-insight-capture"),
 	);
+	await recheckWindow();
 	await command(
 		"JIT Base Sepolia candidate",
 		priorSealRoot,
@@ -141,7 +187,9 @@ async function main(): Promise<void> {
 			"live",
 		],
 		env,
+		stage("02-jit-candidate"),
 	);
+	await recheckWindow();
 	await command(
 		"InterAI request binding",
 		priorSealRoot,
@@ -154,7 +202,9 @@ async function main(): Promise<void> {
 			requestFile,
 		],
 		env,
+		stage("03-request-binding"),
 	);
+	await recheckWindow();
 	const verifyArgs = [
 		"scripts/run-interai-track1-direct-preflight.mjs",
 		"--candidate-dir",
@@ -174,15 +224,20 @@ async function main(): Promise<void> {
 		"node",
 		verifyArgs,
 		env,
+		stage("04-interai-verify"),
 	);
 	process.stdout.write(
 		`Non-broadcast preflight evidence retained under ${outputRoot}\n`,
 	);
 }
 
-main().catch((error: unknown) => {
-	process.stderr.write(
-		`NO_RUN: ${error instanceof Error ? error.message : "unknown error"}\n`,
-	);
-	process.exitCode = 2;
-});
+if (
+	process.argv[1] &&
+	path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+	main().catch((error: unknown) => {
+		process.stderr.write(
+			`NO_RUN: ${error instanceof Error ? error.message : "unknown error"}\n`,
+		);
+		process.exitCode = 2;
+	});

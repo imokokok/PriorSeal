@@ -19,7 +19,10 @@ import {
   assertTrack1Registry,
   assertTrack1SignedDescriptor
 } from "./interai-track1-registry.mjs";
-import { validateTrack1ReadyWindow } from "./interai-track1-window.mjs";
+import {
+  track1SendBudget,
+  validateTrack1ReadyWindow
+} from "./interai-track1-window.mjs";
 const ENDPOINT = "https://api.interailabs.dev/verify";
 const KEYCHAIN_SERVICE = "priorseal.interai.track1-pilot";
 const KEYCHAIN_ACCOUNT = "YuTao Peng";
@@ -113,6 +116,13 @@ function canonicalJson(value) {
     return item;
   };
   return JSON.stringify(normalize(value));
+}
+function assertTrack1ExecutionContext(value, packageId) {
+  const context = object(value, "InterAI execution_context");
+  assert(
+    context.schema === "interai-host-execution-context/v1" && context.environment === "base-sepolia-testnet" && context.run_id === packageId && context.workspace_id === "interai-priorseal-track1" && context.actor_id === "agent:yutao:interai-track1" && Object.keys(context).sort().join(",") === "actor_id,environment,run_id,schema,workspace_id",
+    "Host execution context mismatch"
+  );
 }
 async function jsonFile(file) {
   return object(JSON.parse(await readFile(file, "utf8")), file);
@@ -375,14 +385,7 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
     request.authorization_ttl_seconds === 120,
     "Authorization TTL must be the agreed 120 seconds"
   );
-  const context = object(
-    request.execution_context,
-    "InterAI execution_context"
-  );
-  assert(
-    context.schema === "interai-host-execution-context/v1" && context.environment === "base-sepolia-testnet" && context.run_id === packageId && context.workspace_id === "interai-priorseal-track1" && context.actor_id === "agent:yutao:interai-track1" && Object.keys(context).sort().join(",") === "actor_id,environment,run_id,schema",
-    "Host execution context mismatch"
-  );
+  assertTrack1ExecutionContext(request.execution_context, packageId);
   assert(
     equalJson(request.context, {
       environment: "test",
@@ -454,7 +457,9 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
     packageId,
     quoteExpiresAt: quote.expiresAt * 1e3,
     windowStart: window.start,
-    windowEnd: window.end
+    windowEnd: window.end,
+    sourceExpiresAt: Number(source.validUntil) * 1e3,
+    destinationExpiresAt: Number(destination.validUntil) * 1e3
   };
 }
 function curlConfig(token, requestPath, idempotencyKey, headerPath, proxy, endpoint = ENDPOINT) {
@@ -486,7 +491,8 @@ function curlConfig(token, requestPath, idempotencyKey, headerPath, proxy, endpo
     "max-filesize = 1048576",
     "retry = 0"
   ];
-  if (proxy) config.push(`proxy = "${proxy}"`);
+  if (proxy) config.push('noproxy = ""', `proxy = "${proxy}"`);
+  else config.push('noproxy = "*"');
   return `${config.join("\n")}
 `;
 }
@@ -532,7 +538,15 @@ async function main() {
   const outputDir = path.resolve(
     string(opts.get("--output-dir"), "--output-dir")
   );
-  const { requestBytes, packageId, quoteExpiresAt, windowStart, windowEnd } = await validateInputs(candidateDir, requestFile, readyFile);
+  const {
+    requestBytes,
+    packageId,
+    quoteExpiresAt,
+    windowStart,
+    windowEnd,
+    sourceExpiresAt,
+    destinationExpiresAt
+  } = await validateInputs(candidateDir, requestFile, readyFile);
   assert(
     !outputDir.startsWith(path.resolve(process.cwd(), ".git") + path.sep),
     "Output cannot be inside Git metadata"
@@ -561,9 +575,18 @@ async function main() {
     );
   });
   assert(key.length > 0, "Empty pilot credential in Keychain");
-  assert(
-    quoteExpiresAt - Date.now() >= 15e3,
-    "Quote expired while retrieving the pilot credential"
+  const expiries = {
+    quote: quoteExpiresAt,
+    source: sourceExpiresAt,
+    destination: destinationExpiresAt,
+    window: windowEnd
+  };
+  const budget = track1SendBudget(expiries);
+  await writeFile(
+    path.join(outputDir, `${packageId}.send-budget.json`),
+    `${JSON.stringify({ checkedAt: (/* @__PURE__ */ new Date()).toISOString(), expiries, ...budget }, null, 2)}
+`,
+    { mode: 384, flag: "wx" }
   );
   const attemptDir = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -600,10 +623,7 @@ async function main() {
     { mode: 384, flag: "wx" }
   );
   const headersPath = path.join(outputDir, `${packageId}.response.headers`);
-  assert(
-    quoteExpiresAt - Date.now() >= 15e3,
-    "Quote aged out immediately before InterAI request"
-  );
+  track1SendBudget(expiries);
   assert(
     Date.now() < windowEnd,
     "Confirmed window ended before InterAI request"
@@ -634,6 +654,11 @@ async function main() {
     httpStatus,
     disposition: "NO_RUN"
   };
+  await writeFile(
+    path.join(outputDir, `${packageId}.transport.stderr.log`),
+    response.stderr,
+    { mode: 384, flag: "wx" }
+  );
   if (response.exitCode === 0 && httpStatus === 200) {
     try {
       const parsed = object(
@@ -703,6 +728,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   });
 }
 export {
+  assertTrack1ExecutionContext,
   curlConfig,
   runCurl
 };

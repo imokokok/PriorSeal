@@ -1,8 +1,22 @@
 // Generated from interai-track1-window.mts by npm run core:build. Do not edit directly.
-const VERIFIED_THREAD_IDS = /* @__PURE__ */ new Set([
-  "19fcde01ce31cf7e",
-  "1a0da1a463040f6d"
-]);
+const VERIFIED_THREAD_IDS = /* @__PURE__ */ new Set(["19fcde01ce31cf7e", "1a0da1a463040f6d"]);
+const TRACK1_SEND_BUDGET_MS = 25e3;
+function track1SendBudget(expiries, now = Date.now()) {
+  assert(Number.isFinite(now), "Current time is invalid");
+  const times = Object.values(expiries);
+  assert(times.every(Number.isFinite), "Every expiry must be finite");
+  const earliest = Math.min(...times);
+  const remainingMilliseconds = earliest - now;
+  assert(
+    remainingMilliseconds >= TRACK1_SEND_BUDGET_MS,
+    "Insufficient time for 20-second transport and 5-second cleanup"
+  );
+  return {
+    earliestExpiryIso: new Date(earliest).toISOString(),
+    remainingMilliseconds,
+    requiredMilliseconds: TRACK1_SEND_BUDGET_MS
+  };
+}
 function assert(value, message) {
   if (!value) throw new Error(message);
 }
@@ -15,7 +29,9 @@ function object(value, label) {
 }
 function isoTime(value, label) {
   assert(
-    typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value),
+    typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      value
+    ),
     `${label} must be an explicit ISO timestamp with timezone`
   );
   const time = Date.parse(value);
@@ -47,10 +63,7 @@ function validateTrack1ReadyWindow(value, now = Date.now()) {
     window.confirmationMessageId,
     "Window confirmationMessageId"
   );
-  const confirmedAt = isoTime(
-    window.confirmedAtIso,
-    "Window confirmedAtIso"
-  );
+  const confirmedAt = isoTime(window.confirmedAtIso, "Window confirmedAtIso");
   const start = isoTime(window.startIso, "Window startIso");
   const end = isoTime(window.endIso, "Window endIso");
   assert(end - start === 60 * 6e4, "Window must be exactly 60 minutes");
@@ -65,5 +78,7 @@ function validateTrack1ReadyWindow(value, now = Date.now()) {
   return { start, end, readyAt, readyMessageId };
 }
 export {
+  TRACK1_SEND_BUDGET_MS,
+  track1SendBudget,
   validateTrack1ReadyWindow
 };

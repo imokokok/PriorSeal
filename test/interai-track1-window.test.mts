@@ -1,7 +1,36 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { validateTrack1ReadyWindow } from "../scripts/interai-track1-window.mjs";
+import {
+	track1SendBudget,
+	validateTrack1ReadyWindow,
+} from "../scripts/interai-track1-window.mjs";
+
+test("send budget covers transport and cleanup against the earliest expiry", () => {
+	const now = Date.parse("2026-09-26T22:02:00+08:00");
+	const expiries = {
+		quote: now + 60_000,
+		source: now + 600_000,
+		destination: now + 600_000,
+		window: now + 3_000_000,
+	};
+	assert.equal(track1SendBudget(expiries, now).remainingMilliseconds, 60_000);
+	for (const key of Object.keys(expiries) as (keyof typeof expiries)[]) {
+		assert.throws(
+			() => track1SendBudget({ ...expiries, [key]: now + 24_999 }, now),
+			/Insufficient time/,
+		);
+		assert.equal(
+			track1SendBudget({ ...expiries, [key]: now + 25_000 }, now)
+				.remainingMilliseconds,
+			25_000,
+		);
+	}
+	assert.throws(
+		() => track1SendBudget({ ...expiries, source: NaN }, now),
+		/finite/,
+	);
+});
 
 const start = Date.parse("2026-09-27T02:00:00+08:00");
 const valid = {
@@ -65,7 +94,10 @@ test("rejects a changed window, stale READY, or reused confirmation message", ()
 	assert.throws(
 		() =>
 			validateTrack1ReadyWindow(
-				{ ...valid, window: { ...valid.window, endIso: "2026-09-27T03:01:00+08:00" } },
+				{
+					...valid,
+					window: { ...valid.window, endIso: "2026-09-27T03:01:00+08:00" },
+				},
 				start + 2 * 60_000,
 			),
 		/60 minutes/,
@@ -77,7 +109,10 @@ test("rejects a changed window, stale READY, or reused confirmation message", ()
 	assert.throws(
 		() =>
 			validateTrack1ReadyWindow(
-				{ ...valid, window: { ...valid.window, confirmationMessageId: valid.messageId } },
+				{
+					...valid,
+					window: { ...valid.window, confirmationMessageId: valid.messageId },
+				},
 				start + 2 * 60_000,
 			),
 		/independently confirmed/,
