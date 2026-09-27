@@ -2,7 +2,7 @@
 
 日期：2026-09-27，Asia/Shanghai。范围为前次建议的前三项：独立验证器交付、来源分类与新鲜度、一个完整执行适配器。
 
-**三个优先项的代码、本地验收及独立验证器 npm 公开发布已完成。** 本文及机器记录保存 npm 发布完成时、Git 交付前的验收快照；后续提交、推送和自动部署结果以两个仓库的远端 SHA 与 CI 为准。生产数据库迁移和合作方资金交易不在本次执行范围。
+**三个优先项的代码、本地验收及独立验证器 npm 公开发布已完成。当前消费者固定版本为 0.3.1，见文末补丁验收。** 本文及机器记录保存 npm 发布完成时、Git 交付前的验收快照；后续提交、推送和自动部署结果以两个仓库的远端 SHA 与 CI 为准。生产数据库迁移和合作方资金交易不在本次执行范围。
 
 ## 1. 独立验证器
 
@@ -66,3 +66,11 @@ Cloudflare/D1 的公开证据服务托管保持原配置；新执行器属于 No
 发布后的消费者验收还包括 PriorSeal SDK 构建及 Insight TypeScript 检查，均通过。公开包验收清单在 Insight `.local/verifier-release/registry-verification.json`，同时复制进下方机器记录。
 
 机器可读结果及源文件/原始日志哈希见 [验收记录](priority-hardening-2026-09-27.json)。
+
+## 最终补丁与远端交付：2026-09-28
+
+最终复核复现了快照角色数组被字符串转换接受的问题；`0.3.1` 改为严格要求字符串角色，发布包测试覆盖 sample 和 attester 两种数组的拒绝。公开 npm tarball 与通过 Chromium 的验收包逐字节一致，SHA-256 为 `0b8295574e63602fbebdaa9084d83e336c866a653a8d7c919e964fce3d9d5194`，28,947 字节；独立注册表消费者的 CJS、ESM、CLI、历史与失败场景全部通过。两个项目的依赖均固定为 0.3.1；PriorSeal SDK 构建与 59 项相关消费者回归通过。此前 0.3.0 的记录保留为历史验收。
+
+PriorSeal 首批优化提交 `f61bc0400d150a82cdd5872c95e628c1c9927cf7` 已核对远端 main，且 [正式 CI](https://github.com/imokokok/PriorSeal/actions/runs/36331033284) 全部通过：真实 PostgreSQL 17、完整测试、浏览器与本地 EVM 演练。补丁后的最终仓库验收以对应 SHA 的最新 CI 为准。Insight 通过 [PR #50](https://github.com/imokokok/Insight/pull/50) 交付 main，并遵循三项必需检查及用户明确授权的自动部署。
+
+补丁包与源码/日志哈希见 [补丁验收记录](priority-verifier-patch-2026-09-28.json)。

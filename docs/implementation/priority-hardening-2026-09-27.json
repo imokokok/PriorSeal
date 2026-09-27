@@ -474,5 +474,10 @@
     "source": "remote refs and GitHub Actions",
     "PriorSeal": "https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml",
     "Insight": "https://github.com/imokokok/Insight/actions/workflows/ci.yml"
-  }
+  },
+  "sourceSnapshotCommits": {
+    "PriorSeal": "f61bc0400d150a82cdd5872c95e628c1c9927cf7",
+    "Insight": "1318f004e29fb1810ae8d345605539dc021177ce"
+  },
+  "followUpRecord": "priority-verifier-patch-2026-09-28.json"
 }

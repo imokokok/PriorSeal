@@ -11,7 +11,7 @@ Its separate domain does not replace any historical Insight receipt schema.
 
 ## Insight execution receipt verifier
 
-The `insight-execution-v5` compatibility module re-exports the independently published `verify-insight-receipt@0.3.0` offline verifier. Earlier SDK releases adapted the implementation originally at:
+The `insight-execution-v5` compatibility module re-exports the independently published `verify-insight-receipt@0.3.1` offline verifier. Earlier SDK releases adapted the implementation originally at:
 
 https://github.com/imokokok/Insight/blob/76a22ac242512c06cd0e21e3fcd4452867b52e57/verifier/src/execution.ts
 

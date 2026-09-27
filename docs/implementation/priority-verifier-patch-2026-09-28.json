@@ -1,0 +1,226 @@
+{
+  "schema": "insight-priorseal.verifier-patch-acceptance.v1",
+  "recordedAt": "2026-09-27T16:08:32.141Z",
+  "humanTimezone": "Asia/Shanghai",
+  "recordStage": "FINAL_LOCAL_PATCH_ACCEPTANCE_BEFORE_GIT_DELIVERY",
+  "reason": "Reject non-string registry roles instead of coercing sample/attester arrays",
+  "publishedPackage": {
+    "schema": "insight.registry-release-verification.v1",
+    "verifiedAt": "2026-09-27T16:04:11.362Z",
+    "package": "verify-insight-receipt",
+    "version": "0.3.1",
+    "tarballSha256": "0b8295574e63602fbebdaa9084d83e336c866a653a8d7c919e964fce3d9d5194",
+    "integrity": "sha512-1RASig9+aH2uKxIMbHP4aKrlkWj9SrvP0HeONTFhkuqo8vjdRegDYL1gD3nuNTWiwLt8OxMvJKXy2gKAC8ZqTA==",
+    "registryTarball": "https://registry.npmjs.org/verify-insight-receipt/-/verify-insight-receipt-0.3.1.tgz",
+    "registryShasum": "029524ecae719fdea8fa78e87b83719b39c6596b",
+    "consumerLockSha256": "c7b6c966daa8b13ff2fa7eedec7be2e9f026ad57c7a4850292d572c415c02ce8",
+    "viem": "2.56.9",
+    "scope": "REGISTRY_SYNTHETIC_CONFORMANCE_NOT_PRODUCTION_ISSUER_EVIDENCE",
+    "cjs": true,
+    "esm": true,
+    "preTradeSchemas": [
+      1,
+      2,
+      3
+    ],
+    "recheckSchemas": [
+      2,
+      3
+    ],
+    "executionSchemas": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "pinnedSnapshot": true,
+    "typedRolesRejected": true,
+    "unknownProfileRejected": true,
+    "tamperRejected": true,
+    "trustFailuresRejected": true,
+    "malformedPairRejected": true,
+    "historicalPairVerified": true,
+    "offlineCli": true,
+    "browserTestedIdenticalTarball": true
+  },
+  "packageManifest": {
+    "schema": "insight.verifier-release-check.v1",
+    "package": "verify-insight-receipt",
+    "version": "0.3.1",
+    "checkedAt": "2026-09-27T16:01:11.970Z",
+    "tarball": "verify-insight-receipt-0.3.1.tgz",
+    "sha256": "0b8295574e63602fbebdaa9084d83e336c866a653a8d7c919e964fce3d9d5194",
+    "byteLength": 28947,
+    "integrity": "sha512-1RASig9+aH2uKxIMbHP4aKrlkWj9SrvP0HeONTFhkuqo8vjdRegDYL1gD3nuNTWiwLt8OxMvJKXy2gKAC8ZqTA==",
+    "testedDependencies": {
+      "viem": "2.56.9"
+    },
+    "consumerLockSha256": "fc12a76d87efa805fc5019b56555230bc867348fb62ddd595a2c58ad95fd0de1",
+    "scope": "PACKED_SYNTHETIC_CONFORMANCE_NOT_PRODUCTION_ISSUER_EVIDENCE",
+    "cjs": true,
+    "esm": true,
+    "preTradeSchemas": [
+      1,
+      2,
+      3
+    ],
+    "recheckSchemas": [
+      2,
+      3
+    ],
+    "executionSchemas": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "pinnedSnapshot": true,
+    "typedRolesRejected": true,
+    "unknownProfileRejected": true,
+    "tamperRejected": true,
+    "trustFailuresRejected": true,
+    "malformedPairRejected": true,
+    "historicalPairVerified": true,
+    "offlineCli": true,
+    "browser": true
+  },
+  "consumers": {
+    "Insight": "verify-insight-receipt@0.3.1",
+    "PriorSealSdk": "verify-insight-receipt@0.3.1"
+  },
+  "verification": {
+    "priorSealSdkBuild": "PASS",
+    "affectedPriorSealConsumerTests": {
+      "passed": 59,
+      "failed": 0
+    },
+    "InsightScriptTypecheck": "PASS"
+  },
+  "initialRemoteDelivery": {
+    "PriorSeal": {
+      "sha": "f61bc0400d150a82cdd5872c95e628c1c9927cf7",
+      "ci": "https://github.com/imokokok/PriorSeal/actions/runs/36331033284",
+      "conclusion": "success",
+      "realPostgres17": true,
+      "browserReleaseGate": true,
+      "rwaLocalEvmDrill": true
+    },
+    "Insight": {
+      "pr": "https://github.com/imokokok/Insight/pull/50",
+      "requiredChecks": [
+        "validate",
+        "smoke",
+        "analyze"
+      ],
+      "productionDeploymentExplicitlyAuthorized": true
+    }
+  },
+  "sourceFiles": [
+    {
+      "project": "Insight",
+      "path": "verifier/src/snapshot.ts",
+      "sha256": "83e5c81aac3034042c041f20a49eaad8315cdc89ea3dd1c07ddf36cf506ca78c",
+      "byteLength": 3067
+    },
+    {
+      "project": "Insight",
+      "path": "verifier/package.json",
+      "sha256": "067978ce2159e315da0a51a59d3ada115a01a70935588f29038ebe3bf430b2e5",
+      "byteLength": 1008
+    },
+    {
+      "project": "Insight",
+      "path": "scripts/lib/verifier-package-conformance.mts",
+      "sha256": "ed1c9ef47a1379f918b60a849fbfbaa8112f570c591ca2765f8cf0e6c8e70957",
+      "byteLength": 10525
+    },
+    {
+      "project": "Insight",
+      "path": "package.json",
+      "sha256": "f21e99a7d94a66d36ae46519a0188bbff43de8934be731a036e6f7a182f586ab",
+      "byteLength": 6763
+    },
+    {
+      "project": "Insight",
+      "path": "package-lock.json",
+      "sha256": "b9059a070c764d4d1a8869fefe93cc9adf65a6d40682a8a5c0b64e5980857a5a",
+      "byteLength": 915904
+    },
+    {
+      "project": "Insight",
+      "path": "src/lib/npmPackageVersions.ts",
+      "sha256": "ec163b243b3145c4d170604e48a158e6c0a485e7b143c27ad7d176a0a88ff219",
+      "byteLength": 181
+    },
+    {
+      "project": "Insight",
+      "path": ".github/workflows/ci.yml",
+      "sha256": "e23aa8491d44051c22d7825ee9167a1981347e9d4c450574ad1e41aa4feb0511",
+      "byteLength": 6080
+    },
+    {
+      "project": "PriorSeal",
+      "path": "sdk/package.json",
+      "sha256": "010f9509624d0b36c0e83eae3e3e7e99cec0b6ef517a14dfae651e568014f655",
+      "byteLength": 1506
+    },
+    {
+      "project": "PriorSeal",
+      "path": "package-lock.json",
+      "sha256": "50185dbf77b497096b13cdcde25a90aeed28d0243841f7d298947b142f280f38",
+      "byteLength": 162864
+    },
+    {
+      "project": "PriorSeal",
+      "path": "sdk/CHANGELOG.md",
+      "sha256": "1d0fc7993d34c04924a02185c2dc9d11380a97c59371efb293a9570b5432b2ce",
+      "byteLength": 4010
+    },
+    {
+      "project": "PriorSeal",
+      "path": "sdk/THIRD_PARTY_NOTICES.md",
+      "sha256": "f3d36c64556d516605d1962f99939c324e4585d8e4188f333db8ebbecec84bf5",
+      "byteLength": 2456
+    }
+  ],
+  "logs": [
+    {
+      "project": "Insight",
+      "path": ".local/priority-package-patch-check.log",
+      "sha256": "76f9b201242ea96ec59ea95e6af04d5eb6d4f9462bc67666c7f43dbfcc96a5a3",
+      "byteLength": 1271
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-registry-patch-check.log",
+      "sha256": "683cfc934c3caf67bf24e54c95913e61a540bf730c858d33a7572737430c52f4",
+      "byteLength": 1211
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-patch-typecheck.log",
+      "sha256": "523123dbb63462d75ab908f96dfa3bb6f945a63e2844e8e4c27881cddbdc2c31",
+      "byteLength": 76
+    },
+    {
+      "project": "PriorSeal",
+      "path": ".priorseal/priority-validation/github-ci-complete.log",
+      "sha256": "17d012b8d48dad42a98dd8992b151893f84b5941e1d8bbc406e744958955fdc7",
+      "byteLength": 434247
+    },
+    {
+      "project": "PriorSeal",
+      "path": ".priorseal/priority-validation/patch-sdk-build.log",
+      "sha256": "493ea3e33094734b7f26ae4645be96bba37e0225d86ec24273b319ecd64612a9",
+      "byteLength": 255
+    },
+    {
+      "project": "PriorSeal",
+      "path": ".priorseal/priority-validation/patch-consumer-tests.log",
+      "sha256": "1dc3d3ff5d0d1e65dd73081f70d7399b1aa3bda56a9651d4396acf0994c3db51",
+      "byteLength": 5638
+    }
+  ]
+}

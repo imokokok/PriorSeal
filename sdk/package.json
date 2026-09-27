@@ -38,7 +38,7 @@
     "access": "public"
   },
   "dependencies": {
-    "verify-insight-receipt": "0.3.0",
+    "verify-insight-receipt": "0.3.1",
     "viem": "2.56.3"
   },
   "devDependencies": {
