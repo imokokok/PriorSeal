@@ -1,5 +1,7 @@
 # RWA v2 加固与接入边界
 
+2026-09-27 增量：可选的 [Node/PostgreSQL 执行适配器](runbooks/rwa-node-executor.md) 提供共享原子授权/nonce 占用、签名原始交易核对、广播前再次检查和数据库恢复演练。下文的单机日志限制描述原有文件系统适配器；新适配器不改变 Cloudflare/D1 托管或现有合作方激活。
+
 本轮针对上一轮审查的六项问题进行增量加固。v1 签名域、原 Agent/DeFi API、原授权和回执格式保留；没有自动把现有用户迁移到 RWA。
 
 [最新验证结果与历史问题复验](rwa-hardening-validation.md)：本地 RWA 联合流程与推送前整库检查通过，不等于生产 RWA 交易已激活。

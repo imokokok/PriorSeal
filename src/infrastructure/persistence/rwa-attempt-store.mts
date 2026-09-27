@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rename, rmdir } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { hashJson } from '../../domain/hashing.mjs';
+import { transitionRwaAttempt } from './rwa-attempt-model.mjs';
 
 export type RwaTransaction = { chainId: number; data: string; from: string; nonce: string; to: string; value: string };
 export type RwaAttemptStatus = 'RESERVED' | 'SUBMITTING' | 'SUBMITTED' | 'UNCERTAIN' | 'REJECTED' | 'CONFIRMED' | 'REVERTED';
@@ -89,14 +90,8 @@ export function createRwaAttemptStore({ directory }: { directory: string }) {
       return mutate((j) => {
         const a = j.attempts[hashJson(authorizationId)];
         if (!a || !expected.includes(a.status)) fail('RWA_ATTEMPT_STATE_CONFLICT');
-        if (!time(changes.updatedAt) || changes.updatedAt < a.updatedAt) fail('RWA_ATTEMPT_TIME_INVALID');
-        const allowed: Record<string, string[]> = { RESERVED: ['SUBMITTING', 'REJECTED'], SUBMITTING: ['SUBMITTED', 'UNCERTAIN', 'CONFIRMED', 'REVERTED'], SUBMITTED: ['CONFIRMED', 'REVERTED'], UNCERTAIN: ['CONFIRMED', 'REVERTED'] };
-        if (!allowed[a.status]?.includes(changes.status) || Object.keys(changes).some(k => !['status', 'txHash', 'updatedAt'].includes(k))) fail('RWA_ATTEMPT_TRANSITION_INVALID');
-        if (changes.txHash != null && !/^0x[0-9a-f]{64}$/.test(changes.txHash)) fail('RWA_TX_HASH_INVALID');
-        if (['SUBMITTED', 'CONFIRMED', 'REVERTED'].includes(changes.status) && !hash(changes.txHash ?? a.txHash)) fail('RWA_TX_HASH_REQUIRED');
-        if (['REJECTED', 'SUBMITTING', 'UNCERTAIN'].includes(changes.status) && changes.txHash != null) fail('RWA_TX_HASH_UNEXPECTED');
-        if (a.txHash && changes.txHash && a.txHash !== changes.txHash) fail('RWA_TX_HASH_CONFLICT');
-        Object.assign(a, changes); return a;
+        const next = transitionRwaAttempt(a, expected, changes);
+        j.attempts[hashJson(authorizationId)] = next; return next;
       });
     },
   };

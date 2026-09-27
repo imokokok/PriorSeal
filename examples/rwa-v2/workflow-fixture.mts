@@ -5,9 +5,9 @@ import { rwaV2Fixture, signRwaV2Fixture } from './fixture.mjs';
 import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, createMemoryStore, signReceipt } from '../../src/index.mjs';
 type PriorApi = typeof import('../../sdk/dist/index.js');
 
-export async function workflowFixture(prior: PriorApi, insight: typeof import('../../sdk/dist/index.js') = prior) {
+export async function workflowFixture(prior: PriorApi, insight: typeof import('../../sdk/dist/index.js') = prior, fixture?: ReturnType<typeof rwaV2Fixture>) {
   const signer = privateKeyToAccount(('0x'+'12'.repeat(32)) as `0x${string}`), principal = privateKeyToAccount(('0x'+'34'.repeat(32)) as `0x${string}`);
-  const f = rwaV2Fixture(insight), authority = await signRwaV2Fixture(insight,signer,f), execution = await signRwaV2Fixture(insight,signer,f,'1',authority.proof.digest);
+  const f = fixture ?? rwaV2Fixture(insight), authority = await signRwaV2Fixture(insight,signer,f), execution = await signRwaV2Fixture(insight,signer,f,'1',authority.proof.digest);
   const intent = await prior.buildRwaBoundIntent({transaction:f.transaction,intentId:'simulation-rwa-v2',asset:'eip155:8453/erc20:'+f.input.instrument.tokenAddress,amount:f.input.request.amount,validUntil:f.now+30},authority,f.now);
   const draft = buildAuthorization({intent,principal:{type:'user' as const,id:'simulation-user',account:principal.address},authorizer:{type:'eip712' as const,address:principal.address},delegate:{agentId:'simulation-rwa-agent',executor:f.transaction.from},issuedAt:f.now,notBefore:f.now,expiresAt:intent.validUntil,authorizationNonce:'0x'+'55'.repeat(32),maxUses:'1',audience:'priorseal',policyHash:'0x'+'00'.repeat(32)});
   const authorization = buildAuthorization({...draft,signature:await principal.signTypedData(authorizationTypedData(draft))});

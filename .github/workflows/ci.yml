@@ -16,6 +16,22 @@ jobs:
   release-check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: priorseal_test
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: priorseal_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U priorseal_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      RWA_TEST_DATABASE_URL: postgresql://priorseal_test:ci-test-only@127.0.0.1:5432/priorseal_test
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -51,3 +67,7 @@ jobs:
         env:
           GANACHE_MODULE: ${{ runner.temp }}/local-evm/node_modules/ganache/dist/node/core.js
         run: node scripts/local-execution-drill.mjs
+      - name: Exercise the RWA signer boundary against local token transfers
+        env:
+          GANACHE_MODULE: ${{ runner.temp }}/local-evm/node_modules/ganache/dist/node/core.js
+        run: node scripts/rwa-local-execution-drill.mjs

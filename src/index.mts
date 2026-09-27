@@ -1,6 +1,9 @@
 /** Public, stable library surface. Internal modules are intentionally not re-exported. */
 export { executeRwaAuthorized, reconcileRwaAttempt } from './application/rwa/execute-rwa.mjs';
+export { createRwaViemSubmitter } from './application/rwa/viem-rwa-submitter.mjs';
 export { createRwaAttemptStore } from './infrastructure/persistence/rwa-attempt-store.mjs';
+export { createPostgresRwaAttemptStore } from './infrastructure/persistence/postgres-rwa-attempt-store.mjs';
+export type { RwaAttemptStore } from './infrastructure/persistence/rwa-attempt-model.mjs';
 export { createHttpServer } from './interfaces/http/create-http-server.mjs';
 export { createObservationWorker } from './application/observations/observation-worker.mjs';
 export { createMemoryStore } from './infrastructure/persistence/memory-store.mjs';

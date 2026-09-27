@@ -5,7 +5,7 @@ import { evaluateAuthorizationPolicy } from '../../domain/intent-policy.mjs';
 import type { Authorization, AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { KeyEntry } from '../../domain/key-registry.mjs';
 import type { RwaAttempt, RwaTransaction } from '../../infrastructure/persistence/rwa-attempt-store.mjs';
-import type { createRwaAttemptStore } from '../../infrastructure/persistence/rwa-attempt-store.mjs';
+import type { RwaAttemptStore } from '../../infrastructure/persistence/rwa-attempt-model.mjs';
 import type { withRwaExecutionPair } from '../../../sdk/dist/index.js';
 // SDK build is a prerequisite, as for the existing application examples.
 
@@ -15,7 +15,7 @@ type RwaInput = Pair & { audience: string; authorizationId: string; transaction:
 type AuthorizationRecord = { authorization: Authorization; acceptance: AuthorizationAcceptance; policyEvidence?: { document?: Record<string, unknown> | null }; boundTxHash: string | null; uses: number; status: string };
 type AuthorizationStore = { getAuthorization: (id: string) => Promise<AuthorizationRecord | null | undefined>; bindAuthorization: (id: string, txHash: string) => Promise<{ ok: boolean; code?: string }> };
 type ContractSignatureVerifier = NonNullable<NonNullable<Parameters<typeof verifyAuthorization>[1]>['verifyContractSignature']>;
-type AttemptStore = ReturnType<typeof createRwaAttemptStore>;
+type AttemptStore = RwaAttemptStore;
 type RecoveryObservation = { transaction: RwaTransaction; txHash: string; status: 'CONFIRMED' | 'REVERTED'; finalized: boolean };
 function need(ok: unknown, code?: string): asserts ok { if (!ok) throw new Error(code); }
 function checkReplayAttempt(attempt: RwaAttempt, transaction: ExactTransaction, executionDigest: string) {
@@ -50,7 +50,7 @@ async function checkAuthorization(p: RwaInput, record: AuthorizationRecord, now:
  * durable authorization/nonce claim. An ambiguous RPC response NEVER authorizes resending.
  * All workers sharing a signer must share this attempt store and route through this entry.
  */
-export async function executeRwaAuthorized(input: RwaInput, { authorizationStore, attempts, submit, clock = () => Math.floor(Date.now() / 1000), verifyContractSignature }: { authorizationStore: AuthorizationStore; attempts: AttemptStore; submit: (transaction: ExactTransaction) => Promise<string>; clock?: () => number; verifyContractSignature?: ContractSignatureVerifier }) {
+export async function executeRwaAuthorized(input: RwaInput, { authorizationStore, attempts, submit, clock = () => Math.floor(Date.now() / 1000), verifyContractSignature }: { authorizationStore: AuthorizationStore; attempts: AttemptStore; submit: (transaction: ExactTransaction, assertBeforeBroadcast: () => Promise<void>) => Promise<string>; clock?: () => number; verifyContractSignature?: ContractSignatureVerifier }) {
   const p = structuredClone(input);
   const { withRwaExecutionPair } = await import('../../../sdk/dist/index.js');
   need(typeof p.audience === 'string' && p.audience.length > 0, 'RWA_AUDIENCE_REQUIRED');
@@ -79,13 +79,23 @@ export async function executeRwaAuthorized(input: RwaInput, { authorizationStore
       const fresh = structuredClone(await authorizationStore.getAuthorization(p.authorizationId));
       need(fresh, 'AUTHORIZATION_NOT_FOUND');
       await checkAuthorization(p, fresh, clock(), verifyContractSignature);
-      need(!fresh.boundTxHash && fresh.uses === 0, 'AUTHORIZATION_ALREADY_USED');
+      need(!fresh.boundTxHash && fresh.uses === 0 && fresh.status === 'ACCEPTED', 'AUTHORIZATION_ALREADY_USED');
       await attempts.transition(p.authorizationId, ['RESERVED'], { status: 'SUBMITTING', updatedAt: clock() });
       started = true;
       return await withRwaExecutionPair(pair, transaction, async exact => {
         const now = clock();
         need(now >= fresh.authorization.notBefore && now < fresh.authorization.expiresAt, 'RWA_AUTHORIZATION_EXPIRED');
-        const txHash = await submit(exact);
+        const assertBeforeBroadcast = async () => {
+          const current = structuredClone(await authorizationStore.getAuthorization(p.authorizationId));
+          need(current, 'AUTHORIZATION_NOT_FOUND');
+          await checkAuthorization(p, current, clock(), verifyContractSignature);
+          need(!current.boundTxHash && current.uses === 0 && current.status === 'ACCEPTED', 'AUTHORIZATION_ALREADY_USED');
+          await withRwaExecutionPair(pair, exact, async () => {
+            const at = clock();
+            need(at >= current.authorization.notBefore && at < current.authorization.expiresAt, 'RWA_AUTHORIZATION_EXPIRED');
+          }, clock);
+        };
+        const txHash = await submit(exact, assertBeforeBroadcast);
         need(typeof txHash === 'string' && /^0x[0-9a-f]{64}$/.test(txHash), 'RWA_SUBMISSION_RESPONSE_INVALID');
         const attempt = await attempts.transition(p.authorizationId, ['SUBMITTING'], { status: 'SUBMITTED', txHash, updatedAt: clock() });
         const bound = await authorizationStore.bindAuthorization(p.authorizationId, txHash);

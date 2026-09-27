@@ -1,0 +1,121 @@
+{
+  "research_date": "2026-09-27",
+  "timezone": "Asia/Shanghai",
+  "scope": "Selected public files only. Not a full audit or independent production validation.",
+  "sha_semantics": "blob_sha identifies a Git file-content object, not a repository commit. Branch URLs may change.",
+  "local_repository_heads": {
+    "Insight": "bfdada7e0a0c34ba03038e9d75b8708929ffc87f",
+    "PriorSeal": "cf1becc295b1cfcfc978abedc9437f9f77bf3afd"
+  },
+  "npm_registry_check": {
+    "package": "verify-insight-receipt",
+    "observed_latest_version": "0.2.1",
+    "command": "npm view verify-insight-receipt version",
+    "date": "2026-09-27",
+    "repo_verifier_package_version": "0.3.0"
+  },
+  "repository_status_check": {
+    "repository": "ChaosLabsInc/chaos-agents",
+    "observed_archived": true,
+    "date": "2026-09-27",
+    "interpretation": "This repository is archived; this does not establish that the vendor's service is discontinued."
+  },
+  "files": [
+    {
+      "url": "https://github.com/ChaosLabsInc/chaos-agents/blob/main/src/contracts/AgentHub.sol",
+      "blob_sha": "5486321aeb091edb305cfed7a82d2409fc90d0bc",
+      "review_kind": "source",
+      "review_note": "RiskOracle update validation and execution path"
+    },
+    {
+      "url": "https://github.com/MetaMask/delegation-framework/blob/main/src/DelegationManager.sol",
+      "blob_sha": "4d6a9811aeb9219fe69ad2fd21fe6cbc97496437",
+      "review_kind": "source",
+      "review_note": "Delegation chain signatures, authority relationships and caveat hooks"
+    },
+    {
+      "url": "https://github.com/aeoess/agent-passport-system/blob/main/src/decisionReceipt.ts",
+      "blob_sha": "5dae283a8cf3ad39194e859182c8d545c381d041",
+      "review_kind": "source",
+      "review_note": "Decision receipt construction and signing"
+    },
+    {
+      "url": "https://github.com/Commonguy25/authproof-sdk/blob/main/src/pre-execution-verifier.js",
+      "blob_sha": "fbf563521ce57d5e2d26bfb10c0b8c96001c82f4",
+      "review_kind": "source",
+      "review_note": "Pre-execution verification and local delegation log"
+    },
+    {
+      "url": "https://github.com/aerf-spec/aerf/blob/main/verifiers/go/internal/aerf/verify.go",
+      "blob_sha": "bd55e1088b5411d86541153451c3a618332ed73d",
+      "review_kind": "source",
+      "review_note": "Selected AERF Go verifier implementation"
+    },
+    {
+      "url": "https://github.com/aerf-spec/aerf/blob/main/verifiers/go/README.md",
+      "blob_sha": "a57d4e8a075ddc1ff9abd7280543b494a0d06bda",
+      "review_kind": "documentation",
+      "review_note": "Go verifier supported version and stated limitations"
+    },
+    {
+      "url": "https://github.com/euler-xyz/euler-price-oracle/blob/master/README.md",
+      "blob_sha": "0127fca69b90472b8f26838e2223cc8eaee4f2b0",
+      "review_kind": "documentation",
+      "review_note": "Quote interfaces, adapters and documented checks"
+    },
+    {
+      "url": "https://github.com/agent-intent/verifiable-intent/blob/main/README.md",
+      "blob_sha": "61eac0b297d381b0003f3f0e3668fa7d37e608b6",
+      "review_kind": "documentation",
+      "review_note": "Draft v0.1, layered authority and disclosure"
+    },
+    {
+      "url": "https://github.com/google-agentic-commerce/AP2/blob/main/README.md",
+      "blob_sha": "60fb2ecf95534fe52fd432039f30a8be0a15b753",
+      "review_kind": "documentation",
+      "review_note": "Agent commerce and payment mandate protocol"
+    },
+    {
+      "url": "https://github.com/visa/trusted-agent-protocol/blob/main/README.md",
+      "blob_sha": "7430be264cdd5703b05c197095099d1efec74a06",
+      "review_kind": "documentation",
+      "review_note": "HTTP signatures and merchant/action binding"
+    },
+    {
+      "url": "https://github.com/redstone-finance/redstone-oracles-monorepo/blob/main/README.md",
+      "blob_sha": "ebf884378f0c2e44526f12df02e4e7b70b3c5f2c",
+      "review_kind": "documentation",
+      "review_note": "Oracle data attached to consumer transactions"
+    },
+    {
+      "url": "https://github.com/aerf-spec/aerf/blob/main/README.md",
+      "blob_sha": "7e7aca7829a3415e2ef19185116132d23e9c6eb8",
+      "review_kind": "documentation",
+      "review_note": "Protocol root README; compare with implementation-specific version"
+    },
+    {
+      "url": "https://github.com/aerf-spec/agentmint-python/blob/main/README.md",
+      "blob_sha": "8b733808f7254feba69d86c27d7db1fbdc17cbeb",
+      "review_kind": "documentation",
+      "review_note": "Python evidence receipt producer"
+    },
+    {
+      "url": "https://github.com/Commonguy25/authproof-sdk/blob/main/README.md",
+      "blob_sha": "359b070da94a4ac945c6f4567758a81b01f57d22",
+      "review_kind": "documentation",
+      "review_note": "Delegation and production integration guidance"
+    },
+    {
+      "url": "https://github.com/aeoess/agent-passport-system/blob/main/README.md",
+      "blob_sha": "9fbbe354cc03f93c3a292ac0835c6ad0230e72a3",
+      "review_kind": "documentation",
+      "review_note": "Protocol core, extensions, experimental scope and delegation formats"
+    },
+    {
+      "url": "https://github.com/ChaosLabsInc/chaos-agents/blob/main/README.md",
+      "blob_sha": "6ae3106a3fb6ada1c96ac5c1f6f2db89ba3748b3",
+      "review_kind": "documentation",
+      "review_note": "Risk parameter agent architecture"
+    }
+  ]
+}

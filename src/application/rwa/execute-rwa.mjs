@@ -55,13 +55,23 @@ async function executeRwaAuthorized(input, { authorizationStore, attempts, submi
       const fresh = structuredClone(await authorizationStore.getAuthorization(p.authorizationId));
       need(fresh, "AUTHORIZATION_NOT_FOUND");
       await checkAuthorization(p, fresh, clock(), verifyContractSignature);
-      need(!fresh.boundTxHash && fresh.uses === 0, "AUTHORIZATION_ALREADY_USED");
+      need(!fresh.boundTxHash && fresh.uses === 0 && fresh.status === "ACCEPTED", "AUTHORIZATION_ALREADY_USED");
       await attempts.transition(p.authorizationId, ["RESERVED"], { status: "SUBMITTING", updatedAt: clock() });
       started = true;
       return await withRwaExecutionPair(pair, transaction, async (exact) => {
         const now = clock();
         need(now >= fresh.authorization.notBefore && now < fresh.authorization.expiresAt, "RWA_AUTHORIZATION_EXPIRED");
-        const txHash = await submit(exact);
+        const assertBeforeBroadcast = async () => {
+          const current = structuredClone(await authorizationStore.getAuthorization(p.authorizationId));
+          need(current, "AUTHORIZATION_NOT_FOUND");
+          await checkAuthorization(p, current, clock(), verifyContractSignature);
+          need(!current.boundTxHash && current.uses === 0 && current.status === "ACCEPTED", "AUTHORIZATION_ALREADY_USED");
+          await withRwaExecutionPair(pair, exact, async () => {
+            const at = clock();
+            need(at >= current.authorization.notBefore && at < current.authorization.expiresAt, "RWA_AUTHORIZATION_EXPIRED");
+          }, clock);
+        };
+        const txHash = await submit(exact, assertBeforeBroadcast);
         need(typeof txHash === "string" && /^0x[0-9a-f]{64}$/.test(txHash), "RWA_SUBMISSION_RESPONSE_INVALID");
         const attempt = await attempts.transition(p.authorizationId, ["SUBMITTING"], { status: "SUBMITTED", txHash, updatedAt: clock() });
         const bound = await authorizationStore.bindAuthorization(p.authorizationId, txHash);

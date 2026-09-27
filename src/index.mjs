@@ -1,6 +1,8 @@
 // Generated from index.mts by npm run core:build. Do not edit directly.
 import { executeRwaAuthorized, reconcileRwaAttempt } from "./application/rwa/execute-rwa.mjs";
+import { createRwaViemSubmitter } from "./application/rwa/viem-rwa-submitter.mjs";
 import { createRwaAttemptStore } from "./infrastructure/persistence/rwa-attempt-store.mjs";
+import { createPostgresRwaAttemptStore } from "./infrastructure/persistence/postgres-rwa-attempt-store.mjs";
 import { createHttpServer } from "./interfaces/http/create-http-server.mjs";
 import { createObservationWorker } from "./application/observations/observation-worker.mjs";
 import { createMemoryStore } from "./infrastructure/persistence/memory-store.mjs";
@@ -53,8 +55,10 @@ export {
   createKeyRegistry,
   createMemoryStore,
   createObservationWorker,
+  createPostgresRwaAttemptStore,
   createPostgresStore,
   createRwaAttemptStore,
+  createRwaViemSubmitter,
   createTimestampRequest,
   createWitnessHttpServer,
   executeRwaAuthorized,

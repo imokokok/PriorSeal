@@ -3,9 +3,9 @@ import { generateKeyPairSync } from "node:crypto";
 import { privateKeyToAccount } from "viem/accounts";
 import { rwaV2Fixture, signRwaV2Fixture } from "./fixture.mjs";
 import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, createMemoryStore, signReceipt } from "../../src/index.mjs";
-async function workflowFixture(prior, insight = prior) {
+async function workflowFixture(prior, insight = prior, fixture) {
   const signer = privateKeyToAccount("0x" + "12".repeat(32)), principal = privateKeyToAccount("0x" + "34".repeat(32));
-  const f = rwaV2Fixture(insight), authority = await signRwaV2Fixture(insight, signer, f), execution = await signRwaV2Fixture(insight, signer, f, "1", authority.proof.digest);
+  const f = fixture ?? rwaV2Fixture(insight), authority = await signRwaV2Fixture(insight, signer, f), execution = await signRwaV2Fixture(insight, signer, f, "1", authority.proof.digest);
   const intent = await prior.buildRwaBoundIntent({ transaction: f.transaction, intentId: "simulation-rwa-v2", asset: "eip155:8453/erc20:" + f.input.instrument.tokenAddress, amount: f.input.request.amount, validUntil: f.now + 30 }, authority, f.now);
   const draft = buildAuthorization({ intent, principal: { type: "user", id: "simulation-user", account: principal.address }, authorizer: { type: "eip712", address: principal.address }, delegate: { agentId: "simulation-rwa-agent", executor: f.transaction.from }, issuedAt: f.now, notBefore: f.now, expiresAt: intent.validUntil, authorizationNonce: "0x" + "55".repeat(32), maxUses: "1", audience: "priorseal", policyHash: "0x" + "00".repeat(32) });
   const authorization = buildAuthorization({ ...draft, signature: await principal.signTypedData(authorizationTypedData(draft)) });

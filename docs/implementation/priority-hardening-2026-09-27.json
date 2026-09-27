@@ -1,0 +1,478 @@
+{
+  "schema": "insight-priorseal.priority-implementation.v1",
+  "recordedAt": "2026-09-27T15:47:50.667Z",
+  "humanTimezone": "Asia/Shanghai",
+  "scope": [
+    "standalone-verifier-delivery",
+    "strict-source-quality-and-freshness",
+    "durable-rwa-node-executor"
+  ],
+  "worktree": {
+    "committed": false,
+    "pushed": false,
+    "bases": {
+      "PriorSeal": "cf1becc295b1cfcfc978abedc9437f9f77bf3afd",
+      "Insight": "bfdada7e0a0c34ba03038e9d75b8708929ffc87f"
+    },
+    "asOf": "2026-09-27T15:47:50.667Z"
+  },
+  "publication": {
+    "package": "verify-insight-receipt",
+    "version": "0.3.0",
+    "status": "PUBLISHED_AND_VERIFIED",
+    "reason": "User completed npm web authentication; exact validated tarball accepted by npm and public registry download independently verified",
+    "lastAuthFailureAt": "2026-09-27T14:59:46.516Z",
+    "consumerPinsUpdated": true,
+    "registryVerifiedAt": "2026-09-27T15:23:26.008Z",
+    "registryTarball": "https://registry.npmjs.org/verify-insight-receipt/-/verify-insight-receipt-0.3.0.tgz",
+    "priorSealSdkPublished": false
+  },
+  "deployment": {
+    "productionDeployed": false,
+    "productionMigrationsApplied": false,
+    "partnerActivationsChanged": false,
+    "fundedTransactions": false,
+    "asOf": "2026-09-27T15:47:50.667Z"
+  },
+  "verification": {
+    "node": "24.19.0",
+    "priorSealTests": {
+      "passed": 395,
+      "failed": 0
+    },
+    "insightJest": {
+      "passed": 2242,
+      "skipped": 1,
+      "failed": 0
+    },
+    "insightSdk": {
+      "passed": 183,
+      "failed": 0
+    },
+    "insightReliability": {
+      "passed": 30,
+      "failed": 0
+    },
+    "finalAffectedRegression": {
+      "passed": 87,
+      "failed": 0
+    },
+    "applicationBuild": {
+      "webpack": "PASS",
+      "turbopack": "BLOCKED_SANDBOX_INTERNAL_PORT",
+      "homepageInitialGzipKB": 306
+    },
+    "postgres": {
+      "local": "PGlite embedded PostgreSQL",
+      "realPostgres17CiConfigured": true,
+      "remoteCiRun": false
+    },
+    "rwaLocalEvm": {
+      "ok": true,
+      "scope": "ISOLATED_LOCAL_EVM_AND_EMBEDDED_POSTGRES_NOT_PRODUCTION_RWA",
+      "broadcasts": 1,
+      "actualTokenTransfers": 2,
+      "minimumOutputObserved": "900000",
+      "receiverBalanceChecked": true,
+      "rawSignedCallChecked": true,
+      "receiptNodeAndBrowserEntryVerified": true,
+      "databaseRestoreReplayBlocked": true
+    },
+    "packageManifest": {
+      "schema": "insight.verifier-release-check.v1",
+      "package": "verify-insight-receipt",
+      "version": "0.3.0",
+      "checkedAt": "2026-09-27T15:01:04.379Z",
+      "tarball": "verify-insight-receipt-0.3.0.tgz",
+      "sha256": "7e480c4fe9ff14b0a770e42c012cccead5c446efe1fed55000611ca38f4c50ab",
+      "byteLength": 28757,
+      "integrity": "sha512-sMAhksp1kV/KnDRSmR9Iy9bsLMVPMWP7LubbXwFTUYqnrXeGQw+uQ0G5GW1YOB6gqXFQ9+NSt1kHQ2hwSApbkA==",
+      "testedDependencies": {
+        "viem": "2.56.9"
+      },
+      "consumerLockSha256": "46b567cae07e9227028f69874a2bec1bb7183d817678e7b684d2536598ef2e80",
+      "scope": "PACKED_SYNTHETIC_CONFORMANCE_NOT_PRODUCTION_ISSUER_EVIDENCE",
+      "cjs": true,
+      "esm": true,
+      "preTradeSchemas": [
+        1,
+        2,
+        3
+      ],
+      "recheckSchemas": [
+        2,
+        3
+      ],
+      "executionSchemas": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "pinnedSnapshot": true,
+      "unknownProfileRejected": true,
+      "tamperRejected": true,
+      "trustFailuresRejected": true,
+      "malformedPairRejected": true,
+      "historicalPairVerified": true,
+      "offlineCli": true,
+      "browser": true
+    },
+    "promotion": {
+      "promotionId": "0x53a3cf97f62ed4b14af2407f66e5f2dce5c42e52919f4031045f737887c2dcac",
+      "path": "protocol/mainline/promotions/2026-09-27-priority-hardening.json"
+    },
+    "registryRelease": {
+      "schema": "insight.registry-release-verification.v1",
+      "verifiedAt": "2026-09-27T15:23:26.008Z",
+      "package": "verify-insight-receipt",
+      "version": "0.3.0",
+      "tarballSha256": "7e480c4fe9ff14b0a770e42c012cccead5c446efe1fed55000611ca38f4c50ab",
+      "integrity": "sha512-sMAhksp1kV/KnDRSmR9Iy9bsLMVPMWP7LubbXwFTUYqnrXeGQw+uQ0G5GW1YOB6gqXFQ9+NSt1kHQ2hwSApbkA==",
+      "registryTarball": "https://registry.npmjs.org/verify-insight-receipt/-/verify-insight-receipt-0.3.0.tgz",
+      "registryShasum": "0a861ddcdd379023eb860baabdc6d319d805e70e",
+      "consumerLockSha256": "8dc53697f0755e6673d9e6ed695c0ee3cc8d2ae0036e45061f609987e794c281",
+      "viem": "2.56.9",
+      "scope": "REGISTRY_SYNTHETIC_CONFORMANCE_NOT_PRODUCTION_ISSUER_EVIDENCE",
+      "cjs": true,
+      "esm": true,
+      "preTradeSchemas": [
+        1,
+        2,
+        3
+      ],
+      "recheckSchemas": [
+        2,
+        3
+      ],
+      "executionSchemas": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "pinnedSnapshot": true,
+      "unknownProfileRejected": true,
+      "tamperRejected": true,
+      "trustFailuresRejected": true,
+      "malformedPairRejected": true,
+      "historicalPairVerified": true,
+      "offlineCli": true,
+      "browser": true
+    },
+    "postReleaseConsumers": {
+      "Insight": {
+        "dependency": "verify-insight-receipt@0.3.0",
+        "typecheck": "PASS"
+      },
+      "PriorSeal": {
+        "sdkDependency": "verify-insight-receipt@0.3.0",
+        "sdkBuild": "PASS",
+        "executionModule": "Compatibility re-export from published verifier",
+        "passed": 395,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "prePushStaticChecks": {
+      "PriorSeal": "PASS",
+      "InsightLint": "PASS",
+      "InsightProtocol": "PASS",
+      "publicNpmVersionDisplay": "0.3.0"
+    }
+  },
+  "sourceFiles": [
+    {
+      "project": "PriorSeal",
+      "path": "src/application/rwa/execute-rwa.mts",
+      "sha256": "441d375c029bacecba2518def88625bedf6be3c0941c8d69d2bbce72b3b89cfd",
+      "byteLength": 10672
+    },
+    {
+      "project": "PriorSeal",
+      "path": "src/application/rwa/execute-rwa.mjs",
+      "sha256": "ace37c2737c69a207bdbb8bce1400b774329f019389b3d51ceccd4a44c651cb4",
+      "byteLength": 7779
+    },
+    {
+      "project": "PriorSeal",
+      "path": "src/application/rwa/viem-rwa-submitter.mts",
+      "sha256": "f38a188bad252b86296c7a07143b28caeb286dbaf99ecd3e19ba99282bd28000",
+      "byteLength": 2929
+    },
+    {
+      "project": "PriorSeal",
+      "path": "src/application/rwa/viem-rwa-submitter.mjs",
+      "sha256": "a2245c9f7fc77b7f5bd2697a1fcaaae9db0a6915208ad7f9c0c8a7bb719144f4",
+      "byteLength": 2453
+    },
+    {
+      "project": "PriorSeal",
+      "path": "src/infrastructure/persistence/rwa-attempt-store.mts",
+      "sha256": "6f088876d59be1f9b35a44ed8e8203b9973f2b101cf0052cdfce676ea27b02b9",
+      "byteLength": 7029
+    },
+    {
+      "project": "PriorSeal",
+      "path": "src/infrastructure/persistence/rwa-attempt-model.mts",
+      "sha256": "c6843b9aaec8b79d7972959a4222922e4b3852e8b36bb0f2059c593c7ab6df58",
+      "byteLength": 4757
+    },
+    {
+      "project": "PriorSeal",
+      "path": "src/infrastructure/persistence/postgres-rwa-attempt-store.mts",
+      "sha256": "ad2fe9a0f324a3decee707c4ad15a9715c2aa43c276668649b7a5a851638d110",
+      "byteLength": 3176
+    },
+    {
+      "project": "PriorSeal",
+      "path": "src/index.mts",
+      "sha256": "9adda2c035f1571e319652e3de44d619721f1d01d62ad484ffebe99ab80e7cfc",
+      "byteLength": 2766
+    },
+    {
+      "project": "PriorSeal",
+      "path": "migrations/011_rwa_execution_attempts.sql",
+      "sha256": "963485207a97057ad43816413f46714e2c9298d450fd7adc6378835b16ea2130",
+      "byteLength": 597
+    },
+    {
+      "project": "PriorSeal",
+      "path": "test/infrastructure/postgres-rwa-attempt-store.test.mts",
+      "sha256": "262f7807518f7b077e8371373d1e3120bc88124eb49778cb958df5ee9759ad16",
+      "byteLength": 8865
+    },
+    {
+      "project": "PriorSeal",
+      "path": "test/sdk/rwa-viem-submitter.test.mts",
+      "sha256": "bb03911896bc639ec2ba20d51ab9237d31b5fbf4aa3ef8487b542f1e0a8e467d",
+      "byteLength": 3559
+    },
+    {
+      "project": "PriorSeal",
+      "path": "scripts/rwa-local-execution-drill.mts",
+      "sha256": "ecdbace54329bcad08fa1858755b951c82b10e3ab6d04b50a1d0f4ab42b82b6b",
+      "byteLength": 10178
+    },
+    {
+      "project": "PriorSeal",
+      "path": ".github/workflows/ci.yml",
+      "sha256": "56bb198befacaa0b26a85ece678b46c783c655a0e738f2999ecd68dcd9ecbf59",
+      "byteLength": 2560
+    },
+    {
+      "project": "Insight",
+      "path": "verifier/src/snapshot.ts",
+      "sha256": "0bed33d6bdbcf9f05b37b94cdc451b064d7b9296b7ec211ea3bd5ff655dfa367",
+      "byteLength": 3035
+    },
+    {
+      "project": "Insight",
+      "path": "verifier/src/offline.mts",
+      "sha256": "46e85ce47eaf6b83382300ac75df6ca32202358a7d6109bf18842b2f0a47e9d3",
+      "byteLength": 3527
+    },
+    {
+      "project": "Insight",
+      "path": "verifier/src/execution.ts",
+      "sha256": "92ffd08655a45dde9421a0fcbc82ea48af1a73c9cb7b424163b441c377340554",
+      "byteLength": 14396
+    },
+    {
+      "project": "Insight",
+      "path": "verifier/src/index.ts",
+      "sha256": "d5d4959bc313a1173331a9e91207afe66677d000909fcdc2fe188347db4bc781",
+      "byteLength": 2051
+    },
+    {
+      "project": "Insight",
+      "path": "verifier/package.json",
+      "sha256": "487fca58834ec7096c873c71e776514a62ff12cac2c2f3a3173686836478dfae",
+      "byteLength": 1008
+    },
+    {
+      "project": "Insight",
+      "path": "scripts/check-verifier-release.mts",
+      "sha256": "df7f0536492b76a8cf081b1e33285dbbe8a339e0d7c5d0966903a5491d546d98",
+      "byteLength": 4897
+    },
+    {
+      "project": "Insight",
+      "path": "scripts/lib/verifier-package-conformance.mts",
+      "sha256": "a75ac8b7f5e9c2708c2ad89266a3c3ce20c85578e9faafd892bbb60703277da9",
+      "byteLength": 10310
+    },
+    {
+      "project": "Insight",
+      "path": "src/lib/coverage/observations.ts",
+      "sha256": "2d132951f2ed1a9c5226f45cf87ac1a99c99d49c9ae6c7cfbd13f1ec47ba86bb",
+      "byteLength": 2252
+    },
+    {
+      "project": "Insight",
+      "path": "src/lib/coverage/service.ts",
+      "sha256": "11669177fc4b3e096fb90b0d37bd9cb049b91e24c584de21ffc39279e5db9f2a",
+      "byteLength": 2310
+    },
+    {
+      "project": "Insight",
+      "path": "src/lib/api/services/coverageDiagnostics.ts",
+      "sha256": "ceeaef233246d74f73afe8021e6afac6762a7fa0c37e08a8fc2ba4742f576c12",
+      "byteLength": 8330
+    },
+    {
+      "project": "Insight",
+      "path": "src/lib/protocol/mainlinePromotionRegistry.ts",
+      "sha256": "dc29bf00f050f1ec10dce17e40d165b846fc59f5072c4b042e2477a970e8c0bf",
+      "byteLength": 5033
+    },
+    {
+      "project": "Insight",
+      "path": "protocol/mainline/current-promotion.json",
+      "sha256": "710cbfc657d0fc3887795637dff6146b170f5b6c2dcc34592aa85ca4701180f9",
+      "byteLength": 167
+    },
+    {
+      "project": "Insight",
+      "path": "protocol/mainline/promotions/2026-09-27-priority-hardening.json",
+      "sha256": "6fa66a9bc367d0ee7d3812ef6399c7840a1681dc4a624bdb623437f01fc79a32",
+      "byteLength": 7021
+    },
+    {
+      "project": "Insight",
+      "path": ".github/workflows/ci.yml",
+      "sha256": "2469cf00182e0ef8e95d762ae2607f06c3f57e9bcb9ab1009ac2f7e3e554e442",
+      "byteLength": 6083
+    },
+    {
+      "project": "Insight",
+      "path": "package.json",
+      "sha256": "9cb5ad431610e0815bb676374c12a8ef210723052ad339c8425fa9bcf9ffe990",
+      "byteLength": 6763
+    },
+    {
+      "project": "Insight",
+      "path": "package-lock.json",
+      "sha256": "c21360608d62976c18b0a6a80419014184dab898a937638f62c973e14d0e26dd",
+      "byteLength": 915904
+    },
+    {
+      "project": "PriorSeal",
+      "path": "sdk/package.json",
+      "sha256": "2016f0e3239d621179460a14c7a614321feb10165dd8745c12316c79f6199d42",
+      "byteLength": 1506
+    },
+    {
+      "project": "PriorSeal",
+      "path": "package-lock.json",
+      "sha256": "c517380dd1e9060fe7935900627622137963e8e91347379cff3e1215dd5d411a",
+      "byteLength": 162864
+    },
+    {
+      "project": "PriorSeal",
+      "path": "sdk/src/insight-execution-v5.ts",
+      "sha256": "0a0760fd600231044b3c0685eab7e79f850cf2973162e4747ea831e7a1c29fae",
+      "byteLength": 643
+    },
+    {
+      "project": "PriorSeal",
+      "path": "sdk/THIRD_PARTY_NOTICES.md",
+      "sha256": "95294a28827d631537c6d0dff5ce3e2fa7b3acf9f73526bffcc1edd9f86a58c3",
+      "byteLength": 2456
+    },
+    {
+      "project": "PriorSeal",
+      "path": "sdk/CHANGELOG.md",
+      "sha256": "e5b9af62fd1dac2b1c510ae425981ff78f3f4413b83847bd62ae9865b866e680",
+      "byteLength": 4010
+    },
+    {
+      "project": "Insight",
+      "path": "src/lib/npmPackageVersions.ts",
+      "sha256": "414ba91df6b7ef314eb5ae78acb25c6a6bfd6b013eeabe20e9035290142b26a4",
+      "byteLength": 181
+    }
+  ],
+  "logs": [
+    {
+      "project": "PriorSeal",
+      "path": ".priorseal/priority-validation/tests.log",
+      "sha256": "04122e92a13b5306c4c448270af3547a502e43769fe18594f771e28db356d194",
+      "byteLength": 35394
+    },
+    {
+      "project": "PriorSeal",
+      "path": ".priorseal/priority-validation/rwa-local-evm.log",
+      "sha256": "288417cbabecd091f56bdf55c59340dcead2b23b4c6565289f4cc60785a64288",
+      "byteLength": 821
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-validation.log",
+      "sha256": "587d5b723c9ee7f3bbab10e4dd6a63ec183310173f535322f4aeabb1d35ed517",
+      "byteLength": 376042
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-targeted-check.log",
+      "sha256": "4650ff28eedfb3219c0e3dd1b51ec91b9a999818da090bd370fa5249b47ba5eb",
+      "byteLength": 478
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-package-check.log",
+      "sha256": "a53af8c3a70dda5a8c3b7b9d184c06328fdbd50c81f601a247dc861c4aec9c78",
+      "byteLength": 1241
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-build-webpack.log",
+      "sha256": "e3a2ca61c4c1ea11c7c709141156a453432b0346e59d26bd81b6f96176fcd434",
+      "byteLength": 6714
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-registry-check.log",
+      "sha256": "e34c3658084c04e296de7c5673417af09f8a8b8fcb767400c69c3a18790c3f87",
+      "byteLength": 1160
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-post-release-typecheck.log",
+      "sha256": "2152f7cb2fbab170aac15ce91a01e75e0627429c6036541e4f91ff49d7c1ef6e",
+      "byteLength": 43
+    },
+    {
+      "project": "PriorSeal",
+      "path": ".priorseal/priority-validation/post-release-tests.log",
+      "sha256": "87e1d6e3078b0b4042ed3c5b9801278e7a5facefe5634cf261706441477c9bbd",
+      "byteLength": 35321
+    },
+    {
+      "project": "PriorSeal",
+      "path": ".priorseal/priority-validation/pre-push-static.log",
+      "sha256": "21e8d49e8f573040d3759f87443f3aeeabc60297cf17c43e88bc86ad4ca2d2b6",
+      "byteLength": 1392
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-pre-push-lint.log",
+      "sha256": "3422bc91b970c4fd2d8f256f707202c8e6b0522c12effa629c5a20e64c74055a",
+      "byteLength": 32
+    },
+    {
+      "project": "Insight",
+      "path": ".local/priority-pre-push-protocol.log",
+      "sha256": "22dfceb1c11312ab54983963d7547b7a201995e6db034806745d5847ab8fd1a4",
+      "byteLength": 211
+    }
+  ],
+  "recordStage": "LOCAL_ACCEPTANCE_BEFORE_GIT_DELIVERY",
+  "deliveryResults": {
+    "source": "remote refs and GitHub Actions",
+    "PriorSeal": "https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml",
+    "Insight": "https://github.com/imokokok/Insight/actions/workflows/ci.yml"
+  }
+}
