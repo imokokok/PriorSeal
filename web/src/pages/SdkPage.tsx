@@ -86,7 +86,7 @@ export function SdkPage() {
   }, [])
 
   return <AppShell>
-    <PageHeader eyebrow="TYPESCRIPT SDK" title="Integrate the evidence loop." actions={<CopyButton value={install} label="Copy install command" />}>One typed client prepares authority, collects the wallet signature, observes execution and retrieves portable receipts. It never submits a transaction or receives a transaction-signing key.</PageHeader>
+    <PageHeader eyebrow="TYPESCRIPT SDK" title="Connect authorization to execution." actions={<CopyButton value={install} label="Copy install command" />}>One typed client prepares explicit authorization, collects the wallet signature, observes EVM execution and retrieves independently verifiable receipts. It never submits a transaction or receives a transaction-signing key.</PageHeader>
 
     <section className="sdk-hero panel">
       <div className="sdk-package">

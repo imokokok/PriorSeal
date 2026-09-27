@@ -1,5 +1,7 @@
 # PriorSeal first-release product scope
 
+PriorSeal’s core is the independently verifiable relationship between explicit authorization before action and observed EVM execution afterward. It can be used independently. Insight supplies separate oracle transparency, risk assessments, and price/fill evidence when the two products are combined. See [product positioning](positioning.md).
+
 ## Primary user
 
 The first release serves agent builders and treasury engineering teams that need a portable, independently verifiable statement connecting a pre-authorized intent to an observed EVM execution.

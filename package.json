@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Independently verifiable on-chain execution evidence for agents.",
+  "description": "Explicit authorization linked to observed EVM execution through independently verifiable evidence.",
   "homepage": "https://priorseal.xyz",
   "repository": {
     "type": "git",

@@ -76,9 +76,9 @@ export function LandingPage() {
       <main id="main-content">
         <section className="museum-hero">
           <div className="museum-hero__copy">
-            <p className="museum-kicker"><span>PRIORSEAL</span> / EVIDENCE INSTITUTION 001</p>
+            <p className="museum-kicker"><span>PRIORSEAL</span> / AUTHORIZATION &amp; EXECUTION</p>
             <h1 data-route-heading tabIndex={-1}>Authority,<br /><em>before action.</em></h1>
-            <p className="museum-hero__statement">A verifiable record connecting what a person or organization authorized to what an autonomous agent actually executed onchain.</p>
+            <p className="museum-hero__statement">Connect what a person or organization explicitly authorized before action to an agent’s observed EVM execution. Retain a signed receipt others can verify independently.</p>
             <div className="museum-actions">
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Authorize an intent <span>→</span></Link>
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
@@ -107,7 +107,7 @@ export function LandingPage() {
             <h2>An execution proves that something happened. It does not prove that it was allowed.</h2>
             <div className="museum-statement__columns">
               <p>PriorSeal preserves the relationship between a principal-signed, time-bounded authorization and an identified EVM execution.</p>
-              <p>The resulting receipt can be inspected and verified without trusting the service that issued it.</p>
+              <p>Review who signed, what they approved, whether approval preceded execution, and whether supported execution fields matched the authorization.</p>
             </div>
           </div>
           <dl className="museum-system-index" data-reveal>
@@ -122,7 +122,7 @@ export function LandingPage() {
           <header data-reveal>
             <div className="museum-section-id museum-section-id--light"><span>02</span><p>Evidence chain</p></div>
             <div><p className="museum-kicker">SIX ENTRIES / ONE VERIFIABLE HISTORY</p><h2>From proposal<br />to proof.</h2></div>
-            <p>Each transition is explicit. Uncertainty remains visible. Every signed claim can be recomputed.</p>
+            <p>Each transition is explicit. Uncertainty remains visible. Signatures and supported compliance rules can be checked independently.</p>
           </header>
           <ol data-reveal>
             {proofSequence.map((step) => (
@@ -158,7 +158,7 @@ export function LandingPage() {
             <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Open the local verifier <span>↗</span></Link>
           </div>
           <div className="receipt-gallery__record" data-reveal>
-            <p>SPECIMEN DATA / EVERY FIELD MACHINE-VERIFIABLE</p>
+            <p>ILLUSTRATIVE RECEIPT / NOT LIVE EXECUTION EVIDENCE</p>
             <ReceiptRecord />
           </div>
         </section>
@@ -186,7 +186,7 @@ export function LandingPage() {
           <div data-reveal>
             <p className="museum-kicker">DESIGN PARTNERS / EVM AGENTS</p>
             <h2>Build one real<br />evidence flow.</h2>
-            <p className="museum-closing__statement">We are working with agent, treasury, wallet and policy teams to connect one bounded execution path to portable, independently verifiable evidence.</p>
+            <p className="museum-closing__statement">Use PriorSeal for authorization and execution evidence on one bounded EVM path. Pair it with Insight when you also need oracle transparency and risk assessments; each product remains independently usable.</p>
             <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/sdk">Review the SDK <span>↗</span></Link></div>
           </div>
           <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for EVM agents.</span><span><a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>

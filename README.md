@@ -1,6 +1,6 @@
 # PriorSeal
 
-**Verifiable authorization and execution evidence for EVM agents.**
+**Connect explicit authorization to observed EVM execution with independently verifiable evidence.**
 
 [![CI](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml/badge.svg)](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
@@ -8,7 +8,7 @@
 
 [Live console](https://priorseal.xyz/app) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
 
-An agent can propose and execute a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, or whether the observed execution matched it**. PriorSeal connects those steps in a portable receipt that another party can verify independently.
+An agent can propose and execute a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, or whether the observed execution matched it**. PriorSeal connects a principal-signed, time-bounded authorization to an identified EVM execution in a portable receipt that another party can verify independently. Its core is the relationship between **what was authorized before action** and **what was observed afterward**.
 
 ```text
 Bounded intent → Principal signature → Acceptance + time evidence
@@ -21,11 +21,11 @@ PriorSeal is for teams building EVM agents, treasury automation, wallets, and tr
 
 | Need | Start here |
 | --- | --- |
-| Assess oracle and trade risk without changing your signer | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
+| Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
 | Keep assessment, authorization, and execution evidence together | [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) and [composite review manifests](sdk/README.md#composite-review-manifests) |
 
-Insight and PriorSeal work independently. The combined path binds their evidence while keeping each product's trust checks separate. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
+Insight and PriorSeal work independently. Insight provides **oracle transparency and risk intelligence**; PriorSeal provides **authorization and execution evidence**. The combined path links assessment, authorization, execution, and review while keeping each product’s trust checks separate. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
 
 ## What the evidence covers
 
@@ -129,7 +129,7 @@ Other partner fixtures are under [`examples/`](examples/). Insight can be used i
 
 | Topic | Start here |
 | --- | --- |
-| Product scope and evidence limits | [First-release scope](docs/product/first-release-scope.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
+| Product scope and evidence limits | [Positioning](docs/product/positioning.md) · [First-release scope](docs/product/first-release-scope.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
 | Authorization and receipt semantics | [Signed authorization](docs/architecture/signed-authorization.md) · [Lifecycle](docs/architecture/lifecycle.md) · [API compatibility](docs/api/compatibility.md) |
 | Security and operations | [Threat model](docs/security/threat-model.md) · [Operations](docs/runbooks/operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
 | SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |

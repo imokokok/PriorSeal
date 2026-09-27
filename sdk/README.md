@@ -1,6 +1,6 @@
 # priorseal-sdk
 
-Typed browser and Node.js client for the PriorSeal authorization and execution-evidence API. It never receives a transaction-signing key and does not submit asset transfers.
+Typed browser and Node.js client connecting explicit authorization to observed EVM execution and independently verifiable receipts. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
 npm install priorseal-sdk@0.7.1

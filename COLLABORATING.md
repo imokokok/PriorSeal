@@ -1,6 +1,8 @@
 # Collaborate with PriorSeal
 
-PriorSeal is open to focused design partnerships with teams building EVM agents, treasury automation, wallets, policy or risk systems, and transaction infrastructure. The best first engagement connects one bounded execution path to PriorSeal and asks an independent reviewer to verify the resulting evidence outside the service.
+PriorSeal connects explicit, pre-execution authorization to observed EVM execution through independently verifiable evidence. It is open to focused design partnerships with teams building EVM agents, treasury automation, wallets, policy or risk systems, and transaction infrastructure. The best first engagement connects one bounded execution path to PriorSeal and asks an independent reviewer to verify the resulting evidence outside the service.
+
+Use PriorSeal independently when authorization and execution evidence is the need. For oracle transparency and risk assessments, [Insight](https://www.oracleinsight.xyz/) is a separate offer. A combined pilot can bind Insight assessment evidence to PriorSeal authorization and execution without merging their trust roots.
 
 ## Suggested two-week pilot
 

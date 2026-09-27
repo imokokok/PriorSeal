@@ -19,7 +19,7 @@ export const proofSequence = [
   {
     number: '03',
     title: 'Timestamp',
-    body: 'An independent RFC 3161 authority proves the authorization digest existed before execution.',
+    body: 'Use independent time evidence: an RFC 3161 timestamp, witness quorum, or EVM anchor. Issuer-only acceptance has a narrower proof scope.',
   },
   {
     number: '04',
@@ -34,7 +34,7 @@ export const proofSequence = [
   {
     number: '06',
     title: 'Verify',
-    body: 'The complete evidence chain leaves PriorSeal as a signed receipt that can be checked locally.',
+    body: 'Export a signed receipt and check it with independently confirmed keys. Some proof modes require additional chain-state checks.',
   },
 ] as const
 
@@ -55,7 +55,7 @@ export const audiences = [
 
 export const boundaries = [
   ['Artifact integrity & authority', 'CAN ESTABLISH', 'Local verification can recompute the receipt and check its signatures against independently selected trust. It establishes only the claims covered by those artifacts and keys.'],
-  ['Cross-evidence binding', 'CAN ESTABLISH', 'A signed context commitment can bind an exact external digest. A supported review can match related artifacts without merging their trust roots or business semantics.'],
+  ['Cross-evidence binding', 'CAN ESTABLISH', 'A signed context commitment can bind an exact external digest. A supported review can match oracle assessments from Insight or other external evidence without merging trust roots or business semantics.'],
   ['Observed execution & compliance', 'CAN ESTABLISH', 'PriorSeal can correlate an observed EVM transaction with signed constraints and report execution state separately from authorization compliance.'],
   ['External decision use', 'SEPARATE EVIDENCE', 'A commitment does not prove that another application read a decision or placed every signer path behind it. That requires separately reviewed integration evidence.'],
 ] as const
