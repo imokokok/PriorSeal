@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresStore } from '../../src/index.mjs';
 import { testPostgresPool, type TestClient } from '../support/postgres.mjs';
+import { pglitePool } from '../support/postgres.mjs';
+import { PGlite } from '@electric-sql/pglite';
+import { readFile } from 'node:fs/promises';
 
 const hasCode = (error: unknown, code: string) => typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 
@@ -66,4 +69,34 @@ test('Postgres observation claims recover expired leases and reject a stale owne
   assert.ok(save?.parameters);
   assert.match(save.sql, /lease_token=\$8/);
   assert.equal(save.parameters[7], 'lease-token');
+});
+
+test('Postgres targeted claims respect backoff, lease ownership and terminal state', async () => {
+  const database = new PGlite();
+  try {
+    for (const migration of ['001_init.sql', '002_runtime_state.sql', '007_observation_job_results.sql', '008_observation_job_leases.sql']) {
+      await database.exec(await readFile(new URL(`../../migrations/${migration}`, import.meta.url), 'utf8'));
+    }
+    const store = createPostgresStore(pglitePool(database));
+    const job = { jobId: 'targeted', idempotencyKey: 'targeted-key', input: { chainId: 8453, txHash: '0x1' }, state: 'QUEUED', attempts: 0, nextAttemptAt: 1000, createdAt: 0, observation: null, result: null, error: null };
+    await store.enqueueJob(job);
+    await store.enqueueJob({ ...job, jobId: 'other', idempotencyKey: 'other-key' });
+    assert.equal(await store.claimJob(job.jobId, 999, 100), undefined);
+    const first = await store.claimJob(job.jobId, 1000, 100);
+    assert.ok(first);
+    assert.equal(first.attempts, 1);
+    assert.equal(await store.claimJob(job.jobId, 1099, 100), undefined);
+    assert.equal((await store.getJob('other'))?.state, 'QUEUED');
+    const recovered = await store.claimJob(job.jobId, 1100, 100);
+    assert.ok(recovered);
+    assert.equal(recovered.attempts, 2);
+    assert.notEqual(recovered.leaseToken, first.leaseToken);
+    assert.equal(await store.saveJob({ ...first, state: 'COMPLETED' }), undefined);
+    await store.saveJob({ ...recovered, state: 'RETRY_WAIT', nextAttemptAt: 2000 });
+    assert.equal(await store.claimJob(job.jobId, 1999), undefined);
+    const retry = await store.claimJob(job.jobId, 2000);
+    assert.ok(retry);
+    await store.saveJob({ ...retry, state: 'COMPLETED' });
+    assert.equal(await store.claimJob(job.jobId, 3000), undefined);
+  } finally { await database.close(); }
 });

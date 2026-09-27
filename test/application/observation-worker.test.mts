@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createObservationWorker } from '../../src/index.mjs';
 import { detectReorg } from '../../src/domain/execution.mjs';
 import type { ObservationJob } from '../../src/application/observations/observation-worker.mjs';
+import { createMemoryStore } from '../../src/infrastructure/persistence/memory-store.mjs';
 test('observation worker is idempotent and retries pending observations', async () => {
   let now = 1000; let calls = 0; const saved: unknown[] = [];
   const worker = createObservationWorker({ clock: () => now, retryDelayMs: 10, observe: async () => ({ status: ++calls === 1 ? 'PENDING' : 'CONFIRMED', txHash: '0x1' }), saveObservation: async (value) => saved.push(value) });
@@ -62,4 +63,34 @@ test('observation worker clears a transient error after a successful retry', asy
   assert.ok(completed);
   assert.equal(completed.state, 'COMPLETED');
   assert.equal(completed.error, null);
+});
+
+test('observer-managed evidence is not read, rewritten or mutated after receipt signing', async () => {
+  const store = createMemoryStore();
+  const observation = Object.freeze({ status: 'REORGED', txHash: '0x1', blockHash: 'new-block', previousBlockHash: 'old-block', finalityState: 'REORGED' });
+  const receipt = { execution: observation, receiptId: 'signed-reorg' };
+  const worker = createObservationWorker({
+    store: { ...store, async getObservation() { assert.fail('observer owns historical reads'); } },
+    observerManagesEvidence: true,
+    observe: async () => ({ observation, receipt, verification: { valid: true } }),
+    saveObservation: async () => { assert.fail('observer has already committed signed evidence'); },
+  });
+  const job = await worker.enqueuePersistent({ chainId: 8453, txHash: '0x1' });
+  await worker.runJob(job.jobId);
+  const result = await worker.get(job.jobId);
+  assert.equal(result?.state, 'UNDETERMINED');
+  assert.deepEqual(result?.result?.receipt, receipt);
+  assert.deepEqual(result?.observation, observation);
+});
+
+test('an observer-managed persistence failure remains retryable without a successful job result', async () => {
+  const worker = createObservationWorker({
+    observerManagesEvidence: true,
+    observe: async () => { throw new Error('atomic evidence persistence failed'); },
+    saveObservation: async () => { assert.fail('failed evidence must not get a second write path'); },
+  });
+  const job = worker.enqueue({ chainId: 8453, txHash: '0x1' });
+  await worker.runJob(job.jobId);
+  assert.equal((await worker.get(job.jobId))?.state, 'RETRY_WAIT');
+  assert.equal((await worker.get(job.jobId))?.result, null);
 });

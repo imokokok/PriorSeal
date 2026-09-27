@@ -255,6 +255,10 @@ function createPostgresStore(pool) {
         client.release();
       }
     },
+    async claimJob(jobId, now, leaseDurationMs = 15 * 6e4) {
+      const result = await pool.query(`UPDATE observation_jobs SET state='RUNNING',attempts=attempts+1,lease_token=$3,lease_expires_at=to_timestamp(($2 + $4) / 1000.0),updated_at=now() WHERE job_id=$1 AND ((state IN ('QUEUED','RETRY_WAIT') AND next_attempt_at<=to_timestamp($2 / 1000.0)) OR (state='RUNNING' AND lease_expires_at<=to_timestamp($2 / 1000.0))) RETURNING *`, [jobId, now, randomUUID(), leaseDurationMs]);
+      return result.rows[0] && rowToJob(result.rows[0], { includeLease: true });
+    },
     async saveJob(job) {
       const result = await pool.query(`UPDATE observation_jobs SET state=$2,attempts=$3,next_attempt_at=to_timestamp($4 / 1000.0),observation_json=$5,result_json=$6,error_json=$7,lease_token=NULL,lease_expires_at=NULL,updated_at=now() WHERE job_id=$1 AND lease_token=$8 RETURNING *`, [job.jobId, job.state, job.attempts, job.nextAttemptAt, job.observation, job.result, job.error, job.leaseToken]);
       return result.rows[0] && rowToJob(result.rows[0]);

@@ -171,8 +171,9 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
     async enqueueJob(job) {
       const existing = [...jobs.values()].find((candidate) => candidate.idempotencyKey === job.idempotencyKey && !["FAILED", "COMPLETED"].includes(candidate.state));
       if (existing) return existing;
-      jobs.set(job.jobId, { ...job });
-      return jobs.get(job.jobId);
+      const saved = { ...job };
+      jobs.set(job.jobId, saved);
+      return saved;
     },
     async claimDueJobs(now, limit = 10) {
       const due = [...jobs.values()].filter((job) => ["QUEUED", "RETRY_WAIT"].includes(job.state) && job.nextAttemptAt <= now).slice(0, limit);
@@ -182,6 +183,14 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
         job.updatedAt = now;
       });
       return due.map((job) => ({ ...job }));
+    },
+    async claimJob(jobId, now) {
+      const job = jobs.get(jobId);
+      if (!job || !["QUEUED", "RETRY_WAIT"].includes(job.state) || job.nextAttemptAt > now) return void 0;
+      job.state = "RUNNING";
+      job.attempts += 1;
+      job.updatedAt = now;
+      return { ...job };
     },
     async saveJob(job) {
       jobs.set(job.jobId, { ...job });

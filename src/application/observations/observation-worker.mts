@@ -10,12 +10,13 @@ export type ObservationJob = { jobId: string; key?: string; idempotencyKey?: str
 type ObservationJobStore = {
   enqueueJob?: (job: ObservationJob) => Promise<ObservationJob>;
   claimDueJobs?: (now: number, limit: number, leaseMs: number) => Promise<ObservationJob[]>;
+  claimJob?: (jobId: string, now: number, leaseMs: number) => Promise<ObservationJob | undefined>;
   saveJob?: (job: ObservationJob) => Promise<unknown>;
   getJob?: (jobId: string) => Promise<ObservationJob | undefined>;
   listJobs?: () => Promise<ObservationJob[]>;
   getObservation?: (chainId: number | string | undefined, txHash: string) => Promise<WorkerObservation | null | undefined>;
 };
-export function createObservationWorker({ observe, saveObservation, store = null, clock = () => Date.now(), retryDelayMs = 5000, maxAttempts = 8, jobLeaseMs = 15 * 60_000, jitter = () => 0.5 }: { observe: (input: ObservationWork) => Promise<unknown>; saveObservation: (observation: WorkerObservation) => Promise<unknown>; store?: ObservationJobStore | null; clock?: () => number; retryDelayMs?: number; maxAttempts?: number; jobLeaseMs?: number; jitter?: () => number }) {
+export function createObservationWorker({ observe, saveObservation, observerManagesEvidence = false, store = null, clock = () => Date.now(), retryDelayMs = 5000, maxAttempts = 8, jobLeaseMs = 15 * 60_000, jitter = () => 0.5 }: { observe: (input: ObservationWork) => Promise<unknown>; saveObservation: (observation: WorkerObservation) => Promise<unknown>; observerManagesEvidence?: boolean; store?: ObservationJobStore | null; clock?: () => number; retryDelayMs?: number; maxAttempts?: number; jobLeaseMs?: number; jitter?: () => number }) {
   if (typeof observe !== 'function' || typeof saveObservation !== 'function') throw new TypeError('observe and saveObservation are required');
   const jobs = new Map<string, ObservationJob>();
   async function enqueuePersistent(input: ObservationWorkInput) {
@@ -33,16 +34,29 @@ export function createObservationWorker({ observe, saveObservation, store = null
   async function runOnce() {
     const persistentClaims = Boolean(store?.claimDueJobs);
     const due = store?.claimDueJobs ? await store.claimDueJobs(clock(), 10, jobLeaseMs) : [...jobs.values()].filter((job) => ['QUEUED', 'RETRY_WAIT'].includes(job.state) && job.nextAttemptAt <= clock());
+    return processJobs(due, persistentClaims);
+  }
+  async function runJob(jobId: string) {
+    if (store?.claimDueJobs && !store.claimJob) throw new TypeError('Targeted observation requires atomic claimJob support');
+    const job = store?.claimJob ? await store.claimJob(jobId, clock(), jobLeaseMs) : jobs.get(jobId);
+    const due = job && (store?.claimJob || ['QUEUED', 'RETRY_WAIT'].includes(job.state) && job.nextAttemptAt <= clock()) ? [job] : [];
+    return (await processJobs(due, Boolean(store?.claimJob)))[0];
+  }
+  async function processJobs(due: ObservationJob[], persistentClaims: boolean) {
     for (const job of due) {
       job.state = 'RUNNING'; if (!persistentClaims) job.attempts += 1;
       try {
-        const previous = job.observation ?? (store?.getObservation ? await store.getObservation(job.input.chainId, job.input.txHash) : null);
+        // The application observer owns reorg detection and the atomic evidence
+        // transaction when enabled; do not mutate its already-signed result.
+        const previous = observerManagesEvidence ? null : job.observation ?? (store?.getObservation ? await store.getObservation(job.input.chainId, job.input.txHash) : null);
         const observed = await observe(job.input);
         const result = isObservationResult(observed) ? observed : null;
         const observation = result?.observation ?? observed;
         if (!isWorkerObservation(observation)) throw new TypeError('Observer returned an invalid observation');
-        if (detectReorg(previous, observation)) { observation.status = 'REORGED'; observation.finalityState = 'REORGED'; observation.previousBlockHash = previous?.blockHash; }
-        job.observation = observation; job.result = result ? { ...result, observation } : null; await saveObservation(observation); job.error = null;
+        if (!observerManagesEvidence && detectReorg(previous, observation)) { observation.status = 'REORGED'; observation.finalityState = 'REORGED'; observation.previousBlockHash = previous?.blockHash; }
+        job.observation = observation; job.result = result ? { ...result, observation } : null;
+        if (!observerManagesEvidence) await saveObservation(observation);
+        job.error = null;
         if (retryable.has(observation.status) && job.attempts < maxAttempts) { job.state = 'RETRY_WAIT'; job.nextAttemptAt = nextRetry(job.attempts); }
         else { job.state = observation.status === 'CONFIRMED' || observation.status === 'REVERTED' ? 'COMPLETED' : 'UNDETERMINED'; }
       } catch (error) {
@@ -53,7 +67,7 @@ export function createObservationWorker({ observe, saveObservation, store = null
     return due;
   }
   function nextRetry(attempts: number) { const capped = retryDelayMs * Math.min(2 ** Math.max(0, attempts - 1), 32); return clock() + Math.floor(capped * (0.75 + jitter() * 0.5)); }
-  return { enqueue, enqueuePersistent, get(jobId: string) { return store?.getJob ? store.getJob(jobId) : jobs.get(jobId); }, list() { return store?.listJobs ? store.listJobs() : [...jobs.values()]; }, runOnce, start(intervalMs = retryDelayMs) { const timer = setInterval(() => { runOnce().catch(() => {}); }, intervalMs); timer.unref?.(); return () => clearInterval(timer); } };
+  return { enqueue, enqueuePersistent, get(jobId: string) { return store?.getJob ? store.getJob(jobId) : jobs.get(jobId); }, list() { return store?.listJobs ? store.listJobs() : [...jobs.values()]; }, runOnce, runJob, start(intervalMs = retryDelayMs) { const timer = setInterval(() => { runOnce().catch(() => {}); }, intervalMs); timer.unref?.(); return () => clearInterval(timer); } };
 }
 
 function isWorkerObservation(value: unknown): value is WorkerObservation {

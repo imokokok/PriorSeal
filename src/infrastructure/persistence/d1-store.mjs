@@ -50,13 +50,19 @@ function createD1Store(database) {
   const batch = (statements) => database.batch(statements);
   async function merkleStatements(sequence, entryHash) {
     const previous = /* @__PURE__ */ new Map();
+    const ranges = [];
     let level = 0;
     while (sequence % 2 ** (level + 1) === 0) {
-      const start = sequence - 2 ** level;
-      const left = await first("SELECT node_hash FROM authorization_log_merkle_nodes WHERE start_sequence=? AND level=?", start, level);
-      if (!left) throw new TypeError("Authorization Merkle index is incomplete");
-      previous.set(merkleNodeKey(start, level), left.node_hash);
+      ranges.push({ start: sequence - 2 ** (level + 1) + 1, level });
       level++;
+    }
+    if (ranges.length) {
+      const results = await database.batch(ranges.map((node) => statement("SELECT node_hash FROM authorization_log_merkle_nodes WHERE start_sequence=? AND level=?", node.start, node.level)));
+      for (const [index, node] of ranges.entries()) {
+        const left = results[index].results[0];
+        if (!left) throw new TypeError("Authorization Merkle index is incomplete");
+        previous.set(merkleNodeKey(node.start, node.level), left.node_hash);
+      }
     }
     return merkleAppendNodes(sequence, entryHash, (start, depth) => previous.get(merkleNodeKey(start, depth))).map((node) => statement("INSERT INTO authorization_log_merkle_nodes (start_sequence,level,node_hash) VALUES (?,?,?)", node.start, node.level, node.hash));
   }
@@ -112,7 +118,21 @@ function createD1Store(database) {
     async listArchiveEntries(query) {
       const snapshot = query.cursor?.snapshot ?? Number((await first("SELECT COALESCE(MAX(sequence),0) AS snapshot FROM project_evidence_archive WHERE project_id=? AND environment=?", query.projectId, query.environment))?.snapshot ?? 0);
       const columns = query.includeArtifacts ? "entry_json,sequence" : "sequence,project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id";
-      const rows = await all(`SELECT ${columns} FROM project_evidence_archive WHERE project_id=? AND environment=? AND sequence<=? AND (? IS NULL OR sequence<?) AND (? IS NULL OR tx_hash=?) AND (? IS NULL OR authorization_id=?) AND (? IS NULL OR status=?) AND (? IS NULL OR created_at>=?) AND (? IS NULL OR created_at<=?) ORDER BY sequence DESC LIMIT ?`, query.projectId, query.environment, snapshot, query.cursor?.after ?? null, query.cursor?.after ?? null, query.filters.txHash, query.filters.txHash, query.filters.authorizationId, query.filters.authorizationId, query.filters.status, query.filters.status, query.filters.from, query.filters.from, query.filters.to, query.filters.to, query.limit + 1);
+      const predicates = ["project_id=?", "environment=?", "sequence<=?"];
+      const parameters = [query.projectId, query.environment, snapshot];
+      for (const [predicate, value] of [
+        ["sequence<?", query.cursor?.after],
+        ["tx_hash=?", query.filters.txHash],
+        ["authorization_id=?", query.filters.authorizationId],
+        ["status=?", query.filters.status],
+        ["created_at>=?", query.filters.from],
+        ["created_at<=?", query.filters.to]
+      ]) {
+        if (value == null) continue;
+        predicates.push(predicate);
+        parameters.push(value);
+      }
+      const rows = await all(`SELECT ${columns} FROM project_evidence_archive WHERE ${predicates.join(" AND ")} ORDER BY sequence DESC LIMIT ?`, ...parameters, query.limit + 1);
       return archivePage(rows.map((row) => query.includeArtifacts ? { ...persistedArchiveEntry(row.entry_json), sequence: Number(row.sequence) } : { id: row.entry_id, projectId: row.project_id, environment: row.environment, kind: row.kind, createdAt: Number(row.created_at), artifactHash: row.artifact_hash, supersedesId: row.supersedes_id, txHash: row.tx_hash, authorizationId: row.authorization_id, status: row.status, artifact: void 0, verification: "NOT_VERIFIED_BY_ARCHIVE", sequence: Number(row.sequence) }), query, snapshot);
     },
     async saveIntent(intent) {
@@ -144,9 +164,13 @@ function createD1Store(database) {
       const head = size == null ? await first("SELECT * FROM authorization_log ORDER BY sequence DESC LIMIT 1") : await first("SELECT * FROM authorization_log WHERE sequence=?", size);
       if (!head || Number(head.sequence) < acceptance.sequence) throw new TypeError("Authorization is not present in the Merkle checkpoint");
       const nodes = /* @__PURE__ */ new Map();
-      for (const node of requiredMerkleNodes(acceptance.sequence, Number(head.sequence))) {
-        const found = await first("SELECT node_hash FROM authorization_log_merkle_nodes WHERE start_sequence=? AND level=?", node.start, node.level);
-        if (found) nodes.set(merkleNodeKey(node.start, node.level), found.node_hash);
+      const ranges = requiredMerkleNodes(acceptance.sequence, Number(head.sequence));
+      if (ranges.length) {
+        const results = await database.batch(ranges.map((node) => statement("SELECT node_hash FROM authorization_log_merkle_nodes WHERE start_sequence=? AND level=?", node.start, node.level)));
+        for (const [index, node] of ranges.entries()) {
+          const found = results[index].results[0];
+          if (found) nodes.set(merkleNodeKey(node.start, node.level), found.node_hash);
+        }
       }
       const proof = createMerkleProof(acceptance.entryHash, acceptance.sequence, Number(head.sequence), nodes);
       return { size: Number(head.sequence), headEntryHash: head.entry_hash, merkleRoot: proof.root, proof: proof.path };
@@ -262,6 +286,10 @@ function createD1Store(database) {
       const leaseToken = randomUUID();
       const rows = await all(`UPDATE observation_jobs SET state='RUNNING',attempts=attempts+1,lease_token=?,lease_expires_at=?,updated_at=? WHERE job_id IN (SELECT job_id FROM observation_jobs WHERE (state IN ('QUEUED','RETRY_WAIT') AND next_attempt_at<=?) OR (state='RUNNING' AND lease_expires_at<=?) ORDER BY COALESCE(lease_expires_at,next_attempt_at) LIMIT ?) RETURNING *`, leaseToken, now + leaseDurationMs, now, now, now, limit);
       return rows.map((row) => jobRecord(row, true));
+    },
+    async claimJob(jobId, now, leaseDurationMs = 15 * 6e4) {
+      const row = await first(`UPDATE observation_jobs SET state='RUNNING',attempts=attempts+1,lease_token=?,lease_expires_at=?,updated_at=? WHERE job_id=? AND ((state IN ('QUEUED','RETRY_WAIT') AND next_attempt_at<=?) OR (state='RUNNING' AND lease_expires_at<=?)) RETURNING *`, randomUUID(), now + leaseDurationMs, now, jobId, now, now);
+      return row ? jobRecord(row, true) : void 0;
     },
     async saveJob(job) {
       const row = await first(`UPDATE observation_jobs SET state=?,attempts=?,next_attempt_at=?,observation_json=?,result_json=?,error_json=?,lease_token=NULL,lease_expires_at=NULL,updated_at=? WHERE job_id=? AND lease_token=? RETURNING *`, job.state, job.attempts, job.nextAttemptAt, json(job.observation), json(job.result), json(job.error), Date.now(), job.jobId, job.leaseToken ?? null);

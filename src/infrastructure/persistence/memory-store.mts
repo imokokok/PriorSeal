@@ -83,11 +83,17 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) { const int
   async enqueueJob(job: ObservationJob) {
     const existing = [...jobs.values()].find((candidate) => candidate.idempotencyKey === job.idempotencyKey && !['FAILED', 'COMPLETED'].includes(candidate.state));
     if (existing) return existing;
-    jobs.set(job.jobId, { ...job }); return jobs.get(job.jobId);
+    const saved = { ...job }; jobs.set(job.jobId, saved); return saved;
   },
   async claimDueJobs(now: number, limit = 10) {
     const due = [...jobs.values()].filter((job) => ['QUEUED', 'RETRY_WAIT'].includes(job.state) && job.nextAttemptAt <= now).slice(0, limit);
     due.forEach((job) => { job.state = 'RUNNING'; job.attempts += 1; job.updatedAt = now; }); return due.map((job) => ({ ...job }));
+  },
+  async claimJob(jobId: string, now: number) {
+    const job = jobs.get(jobId);
+    if (!job || !['QUEUED', 'RETRY_WAIT'].includes(job.state) || job.nextAttemptAt > now) return undefined;
+    job.state = 'RUNNING'; job.attempts += 1; job.updatedAt = now;
+    return { ...job };
   },
   async saveJob(job: ObservationJob) { jobs.set(job.jobId, { ...job }); return jobs.get(job.jobId); },
   async getJob(jobId: string) { return jobs.get(jobId); },

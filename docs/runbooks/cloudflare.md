@@ -49,6 +49,8 @@ The production Worker requires `DB`, `OBSERVATION_QUEUE`, `HTTP_RATE_LIMITER`, `
 
 If queue deliveries fail, inspect Worker logs without printing request bodies or secrets, fix the dependency, then let the cron recover eligible rows. If D1 is unavailable or its schema check fails, keep readiness failed and do not bypass it. If an RPC endpoint fails, preserve the pending/undetermined distinction and rotate only to another explicitly configured endpoint for the same chain.
 
+Queue consumers handle up to five prompts per invocation and atomically claim only the job named in each message. Each message is acknowledged independently after its terminal state is confirmed or a delayed replacement is sent; a failure retries only that message. The minute cron retains the bounded due-job sweep for lost prompts and expired leases. Queue and cron invocations compose background services without an HTTP server, and the application observation service owns reorg detection and atomic signed-evidence persistence.
+
 ## DNS and rollback
 
 Cloudflare is authoritative through `adrian.ns.cloudflare.com` and `tanner.ns.cloudflare.com`. Worker Custom Domains own the active DNS records and certificates. The previous origin values are `A @ 216.24.57.1` and `CNAME www priorseal.xyz`; retain them only as audited rollback data, not as active Cloudflare records. Recursive resolvers can continue using the previous nameservers until their cached delegation expires, so keep the previous hosting service healthy for at least 48 hours after the registrar cutover. Do not remove it until both domains have served the expected Worker build over HTTPS, the production flow has passed, and the overlap window has elapsed.

@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { loadRuntimeConfig } from '../../src/bootstrap/runtime-config.mjs';
 import { parsePolicyDocument } from '../../src/infrastructure/policy/file-policy-provider.mjs';
 import { parseKeyRegistryDocument } from '../../src/infrastructure/keys/file-key-registry.mjs';
+import { generateKeyPairSync } from 'node:crypto';
+import { createPriorSealRuntime, createPriorSealBackgroundRuntime } from '../../src/bootstrap/create-runtime.mjs';
+import { testD1 } from '../support/d1.mjs';
 
 const privateKeyPem = '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----';
 const publicKeyPem = '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----';
@@ -62,4 +65,23 @@ test('authorization policy parsing rejects malformed allowlists instead of disab
   assert.throws(() => parsePolicyDocument({ maxValiditySeconds: '900' }), /non-negative safe integer/);
   assert.throws(() => parsePolicyDocument({ requireDistinctAuthorizerAndExecutor: 'yes' }), /must be a boolean/);
   assert.equal(parsePolicyDocument({ requireDistinctAuthorizerAndExecutor: true })?.requireDistinctAuthorizerAndExecutor, true);
+});
+
+test('background composition preserves key validation and protocol services without creating an HTTP server', async () => {
+  const fixture = testD1();
+  try {
+    const keys = generateKeyPairSync('ed25519');
+    const config = loadRuntimeConfig({
+      PRIORSEAL_PRIVATE_KEY_PEM: keys.privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      PRIORSEAL_PUBLIC_KEY_PEM: keys.publicKey.export({ type: 'spki', format: 'pem' }),
+    });
+    const background = await createPriorSealBackgroundRuntime({ config, d1: fixture.database });
+    assert.equal(background.server, undefined);
+    assert.ok(background.baseObservationWorker?.runJob);
+    assert.equal(await background.store?.health(), 'd1');
+    const http = await createPriorSealRuntime({ config, d1: fixture.database });
+    assert.equal(typeof http.server.listen, 'function');
+    assert.ok(http.baseObservationWorker?.runJob);
+    await assert.rejects(() => createPriorSealBackgroundRuntime({ config: { ...config, publicKeyPem: publicKeyPem }, d1: fixture.database }));
+  } finally { fixture.sqlite.close(); }
 });

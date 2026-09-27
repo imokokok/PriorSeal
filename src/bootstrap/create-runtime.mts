@@ -28,7 +28,18 @@ const { Pool } = pg;
 
 /** Composes the protocol once for Node or Cloudflare without leaking runtime details into the domain. */
 type RuntimeOptions = { config?: ReturnType<typeof loadRuntimeConfig>; environment?: object; database?: InstanceType<typeof Pool>; d1?: D1Database; databaseConnectionString?: string; poolOptions?: PoolConfig; staticDir?: string; dispatchObservationJob?: (job: ObservationJob) => Promise<unknown>; rateLimiter?: NonNullable<Parameters<typeof createHttpServer>[0]>['rateLimiter']; assertSchema?: boolean };
-export async function createPriorSealRuntime({ config, environment = process.env, database, d1, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, assertSchema = true }: RuntimeOptions = {}) {
+export async function createPriorSealRuntime(options: RuntimeOptions = {}) {
+  const runtime = await composeRuntime(options, true);
+  if (!runtime.server) throw new TypeError('HTTP runtime requires a server');
+  return { ...runtime, server: runtime.server };
+}
+
+/** Queue and scheduled work share protocol services without constructing HTTP infrastructure. */
+export async function createPriorSealBackgroundRuntime(options: RuntimeOptions = {}) {
+  return composeRuntime(options, false);
+}
+
+async function composeRuntime({ config, environment = process.env, database, d1, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, assertSchema = true }: RuntimeOptions, http: boolean) {
   if (!config) throw new TypeError('Runtime config is required');
   const ownsPool = !database;
   const pool = d1 ? null : database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
@@ -74,7 +85,7 @@ export async function createPriorSealRuntime({ config, environment = process.env
       return evidence;
     } : null;
     const observer = (input: Parameters<typeof observeEvm>[0]) => observeEvm({ ...input, rpcUrls: rpcUrls(input.chainId), rpcClient });
-    const baseObservationWorker = store ? createObservationWorker({ store, observe: async (input: ObservationWorkInput) => (await observeExecution({ input, store, observer, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response, saveObservation: (observation) => store.saveObservation(observation as Parameters<typeof store.saveObservation>[0]) }) : null;
+    const baseObservationWorker = store ? createObservationWorker({ store, observerManagesEvidence: true, observe: async (input: ObservationWorkInput) => (await observeExecution({ input, store, observer, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response, saveObservation: (observation) => store.saveObservation(observation as Parameters<typeof store.saveObservation>[0]) }) : null;
     const observationWorker = baseObservationWorker && dispatchObservationJob ? {
       ...baseObservationWorker,
       async enqueuePersistent(input: ObservationWorkInput) {
@@ -83,7 +94,7 @@ export async function createPriorSealRuntime({ config, environment = process.env
         return job;
       },
     } : baseObservationWorker;
-    const server = createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter });
+    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter }) : undefined;
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {});

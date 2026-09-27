@@ -4,6 +4,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
 import { authorizationTypedData, authorizeIntent, buildAuthorization, buildAuthorizationReceipt, buildIntent, createMemoryStore } from '../../src/index.mjs';
 import { classifyExecutionCorrelation, observeExecution } from '../../src/application/observations/observe-execution.mjs';
+import { createObservationWorker } from '../../src/application/observations/observation-worker.mjs';
 
 const sender = `0x${'a'.repeat(40)}`;
 const recipient = `0x${'b'.repeat(40)}`;
@@ -55,6 +56,47 @@ test('observation is idempotent, linked to its intent, signed, and reorg-aware',
   assert.equal(reorg.response.receipt.outcome, 'REORGED');
   assert.notEqual(reorg.response.receipt.receiptId, first.response.receipt.receiptId);
   assert.equal((await store.getReceipt(first.response.receipt.receiptId))?.receiptId, first.response.receipt.receiptId);
+});
+
+test('background observation detects a reorg and commits its signed evidence once', async () => {
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
+  const memory = createMemoryStore();
+  const intent = buildIntent({ intentId: 'worker-reorg', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2000, nonce: '0' });
+  await memory.saveIntent(intent);
+  const previous = { chainId: 8453, txHash, status: 'CONFIRMED', blockHash: `0x${'c'.repeat(64)}` };
+  await memory.saveObservation(previous);
+  let historicalReads = 0;
+  let evidenceCommits = 0;
+  let redundantWrites = 0;
+  const store = {
+    ...memory,
+    async getObservation(chainId: number | string | undefined, hash: string) { historicalReads++; return memory.getObservation(chainId, hash); },
+    async saveObservationReceipt(input: Parameters<typeof memory.saveObservationReceipt>[0]) { evidenceCommits++; return memory.saveObservationReceipt(input); },
+    async saveObservation(observation: Parameters<typeof memory.saveObservation>[0]) { redundantWrites++; return memory.saveObservation(observation); },
+  };
+  const worker = createObservationWorker({
+    store, observerManagesEvidence: true,
+    observe: async (input) => (await observeExecution({ input, store, privateKeyPem, publicKeyPem, issuer: 'test', keyId: 'key-1', now: () => 1000000,
+      observer: async () => ({ ...previous, action: 'TRANSFER', executedAt: 900, observedAt: 1000, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: '0', confirmations: 12, gasUsed: '21000', transfers: [], finalityState: 'CONFIRMED', blockNumber: 10, blockHash: `0x${'d'.repeat(64)}`, observationSource: 'evm-json-rpc:eip155:8453:configured-1' }),
+    })).response,
+    saveObservation: async (observation) => store.saveObservation({ ...observation, chainId: 8453 }),
+  });
+  const job = await worker.enqueuePersistent({ intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 });
+  await worker.runJob(job.jobId);
+  const finished = await worker.get(job.jobId);
+  assert.equal(finished?.observation?.status, 'REORGED');
+  assert.equal(finished?.observation?.previousBlockHash, previous.blockHash);
+  const result = finished?.result;
+  assert.ok(result && isRecord(result.receipt));
+  assert.equal(result.receipt.outcome, 'REORGED');
+  assert.deepEqual(result.receipt.execution, finished?.observation);
+  assert.ok(isRecord(result.verification));
+  assert.equal(result.verification.valid, true);
+  assert.equal(historicalReads, 1);
+  assert.equal(evidenceCommits, 1);
+  assert.equal(redundantWrites, 0);
 });
 
 test('pending transactions remain candidates and only final correlated execution claims authorization', async () => {

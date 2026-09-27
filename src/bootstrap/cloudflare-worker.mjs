@@ -1,8 +1,9 @@
 // Generated from cloudflare-worker.mts by npm run core:build. Do not edit directly.
 import { httpServerHandler } from "cloudflare:node";
-import { createPriorSealRuntime } from "./create-runtime.mjs";
+import { createPriorSealRuntime, createPriorSealBackgroundRuntime } from "./create-runtime.mjs";
 import { loadRuntimeConfig } from "./runtime-config.mjs";
-import { retryDelaySeconds, shouldRedeliverJob } from "./cloudflare-retry.mjs";
+import { retryDelaySeconds } from "./cloudflare-retry.mjs";
+import { processObservationQueue } from "./cloudflare-observations.mjs";
 import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter } from "./cloudflare-bindings.mjs";
 import { errorMessage } from "../shared/error-code.mjs";
 async function assertSchemaCached(database, config, context) {
@@ -16,13 +17,13 @@ async function assertSchemaCached(database, config, context) {
   if (rows.results.length !== required.length) throw new TypeError("Required D1 production tables are missing");
   context.waitUntil(cache.put(cacheKey, new Response("ready", { headers: { "cache-control": "public, max-age=300" } })));
 }
-async function withRuntime(environment, context, operation) {
+async function withRuntime(environment, context, createRuntime, operation) {
   const runtimeEnvironment = cloudflareRuntimeEnvironment(environment);
   const config = loadRuntimeConfig(runtimeEnvironment);
   let runtime;
   try {
     await assertSchemaCached(environment.DB, config, context);
-    runtime = await createPriorSealRuntime({
+    runtime = await createRuntime({
       config,
       environment: runtimeEnvironment,
       d1: environment.DB,
@@ -44,7 +45,7 @@ function unavailable(error) {
 var stdin_default = {
   async fetch(request, environment, context) {
     try {
-      return await withRuntime(environment, context, async (runtime) => {
+      return await withRuntime(environment, context, createPriorSealRuntime, async (runtime) => {
         const handler = httpServerHandler(runtime.server);
         if (!handler.fetch) throw new TypeError("Cloudflare Node HTTP handler is unavailable");
         return handler.fetch(request, environment, context);
@@ -55,29 +56,17 @@ var stdin_default = {
   },
   async queue(batch, environment, context) {
     try {
-      const promptedJobs = await withRuntime(environment, context, async (runtime) => {
-        await runtime.baseObservationWorker?.runOnce();
-        const jobs = await Promise.all(batch.messages.map(async (message) => {
-          const jobId = message.body?.jobId;
-          if (typeof jobId !== "string" || !jobId) {
-            console.warn(JSON.stringify({ level: "warn", event: "observation.queue_invalid_message" }));
-            return null;
-          }
-          return runtime.baseObservationWorker?.get(jobId);
-        }));
-        return jobs.filter(shouldRedeliverJob);
+      await withRuntime(environment, context, createPriorSealBackgroundRuntime, async (runtime) => {
+        if (!runtime.baseObservationWorker) throw new TypeError("Observation worker is unavailable");
+        await processObservationQueue(batch, runtime.baseObservationWorker, environment.OBSERVATION_QUEUE);
       });
-      for (const job of promptedJobs) {
-        await environment.OBSERVATION_QUEUE.send({ jobId: job.jobId }, { delaySeconds: retryDelaySeconds([job]) ?? void 0 });
-      }
-      batch.ackAll();
     } catch (error) {
       console.error(JSON.stringify({ level: "error", event: "observation.queue_failed", message: errorMessage(error) }));
       batch.retryAll({ delaySeconds: 30 });
     }
   },
   async scheduled(_controller, environment, context) {
-    context.waitUntil(withRuntime(environment, context, async (runtime) => {
+    context.waitUntil(withRuntime(environment, context, createPriorSealBackgroundRuntime, async (runtime) => {
       const jobs = await runtime.baseObservationWorker?.runOnce() ?? [];
       for (const job of jobs.filter((candidate) => candidate.state === "RETRY_WAIT")) {
         await environment.OBSERVATION_QUEUE.send({ jobId: job.jobId }, { delaySeconds: retryDelaySeconds([job]) ?? void 0 });

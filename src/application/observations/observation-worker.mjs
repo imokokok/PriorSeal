@@ -3,7 +3,7 @@ import { errorCode } from "../../shared/error-code.mjs";
 import { randomUUID } from "node:crypto";
 import { detectReorg } from "../../domain/execution.mjs";
 const retryable = /* @__PURE__ */ new Set(["PENDING", "NOT_FOUND", "RPC_ERROR", "RPC_TIMEOUT"]);
-function createObservationWorker({ observe, saveObservation, store = null, clock = () => Date.now(), retryDelayMs = 5e3, maxAttempts = 8, jobLeaseMs = 15 * 6e4, jitter = () => 0.5 }) {
+function createObservationWorker({ observe, saveObservation, observerManagesEvidence = false, store = null, clock = () => Date.now(), retryDelayMs = 5e3, maxAttempts = 8, jobLeaseMs = 15 * 6e4, jitter = () => 0.5 }) {
   if (typeof observe !== "function" || typeof saveObservation !== "function") throw new TypeError("observe and saveObservation are required");
   const jobs = /* @__PURE__ */ new Map();
   async function enqueuePersistent(input) {
@@ -25,23 +25,32 @@ function createObservationWorker({ observe, saveObservation, store = null, clock
   async function runOnce() {
     const persistentClaims = Boolean(store?.claimDueJobs);
     const due = store?.claimDueJobs ? await store.claimDueJobs(clock(), 10, jobLeaseMs) : [...jobs.values()].filter((job) => ["QUEUED", "RETRY_WAIT"].includes(job.state) && job.nextAttemptAt <= clock());
+    return processJobs(due, persistentClaims);
+  }
+  async function runJob(jobId) {
+    if (store?.claimDueJobs && !store.claimJob) throw new TypeError("Targeted observation requires atomic claimJob support");
+    const job = store?.claimJob ? await store.claimJob(jobId, clock(), jobLeaseMs) : jobs.get(jobId);
+    const due = job && (store?.claimJob || ["QUEUED", "RETRY_WAIT"].includes(job.state) && job.nextAttemptAt <= clock()) ? [job] : [];
+    return (await processJobs(due, Boolean(store?.claimJob)))[0];
+  }
+  async function processJobs(due, persistentClaims) {
     for (const job of due) {
       job.state = "RUNNING";
       if (!persistentClaims) job.attempts += 1;
       try {
-        const previous = job.observation ?? (store?.getObservation ? await store.getObservation(job.input.chainId, job.input.txHash) : null);
+        const previous = observerManagesEvidence ? null : job.observation ?? (store?.getObservation ? await store.getObservation(job.input.chainId, job.input.txHash) : null);
         const observed = await observe(job.input);
         const result = isObservationResult(observed) ? observed : null;
         const observation = result?.observation ?? observed;
         if (!isWorkerObservation(observation)) throw new TypeError("Observer returned an invalid observation");
-        if (detectReorg(previous, observation)) {
+        if (!observerManagesEvidence && detectReorg(previous, observation)) {
           observation.status = "REORGED";
           observation.finalityState = "REORGED";
           observation.previousBlockHash = previous?.blockHash;
         }
         job.observation = observation;
         job.result = result ? { ...result, observation } : null;
-        await saveObservation(observation);
+        if (!observerManagesEvidence) await saveObservation(observation);
         job.error = null;
         if (retryable.has(observation.status) && job.attempts < maxAttempts) {
           job.state = "RETRY_WAIT";
@@ -66,7 +75,7 @@ function createObservationWorker({ observe, saveObservation, store = null, clock
     return store?.getJob ? store.getJob(jobId) : jobs.get(jobId);
   }, list() {
     return store?.listJobs ? store.listJobs() : [...jobs.values()];
-  }, runOnce, start(intervalMs = retryDelayMs) {
+  }, runOnce, runJob, start(intervalMs = retryDelayMs) {
     const timer = setInterval(() => {
       runOnce().catch(() => {
       });

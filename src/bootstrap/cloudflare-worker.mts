@@ -1,7 +1,8 @@
 import { httpServerHandler } from 'cloudflare:node';
-import { createPriorSealRuntime } from './create-runtime.mjs';
+import { createPriorSealRuntime, createPriorSealBackgroundRuntime } from './create-runtime.mjs';
 import { loadRuntimeConfig } from './runtime-config.mjs';
-import { retryDelaySeconds, shouldRedeliverJob } from './cloudflare-retry.mjs';
+import { retryDelaySeconds } from './cloudflare-retry.mjs';
+import { processObservationQueue } from './cloudflare-observations.mjs';
 import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter } from './cloudflare-bindings.mjs';
 import { errorMessage } from '../shared/error-code.mjs';
 import type { ObservationJob } from '../application/observations/observation-worker.mjs';
@@ -20,13 +21,13 @@ async function assertSchemaCached(database: D1Database, config: ReturnType<typeo
   context.waitUntil(cache.put(cacheKey, new Response('ready', { headers: { 'cache-control': 'public, max-age=300' } })));
 }
 
-async function withRuntime<T>(environment: Env, context: ExecutionContext, operation: (runtime: Runtime) => Promise<T>): Promise<T> {
+async function withRuntime<T, R extends { server?: Runtime['server'] }>(environment: Env, context: ExecutionContext, createRuntime: (options: Parameters<typeof createPriorSealRuntime>[0]) => Promise<R>, operation: (runtime: R) => Promise<T>): Promise<T> {
   const runtimeEnvironment = cloudflareRuntimeEnvironment(environment);
   const config = loadRuntimeConfig(runtimeEnvironment);
-  let runtime: Runtime | undefined;
+  let runtime: R | undefined;
   try {
     await assertSchemaCached(environment.DB, config, context);
-    runtime = await createPriorSealRuntime({
+    runtime = await createRuntime({
       config,
       environment: runtimeEnvironment,
       d1: environment.DB,
@@ -50,7 +51,7 @@ function unavailable(error: unknown) {
 export default {
   async fetch(request: Request, environment: Env, context: ExecutionContext): Promise<Response> {
     try {
-      return await withRuntime(environment, context, async (runtime) => {
+      return await withRuntime(environment, context, createPriorSealRuntime, async (runtime) => {
         // The Node adapter's declared server and request shapes are narrower than
         // the Node Server and Worker Request values it receives at runtime.
         const handler = httpServerHandler(runtime.server as unknown as Parameters<typeof httpServerHandler>[0]);
@@ -64,22 +65,10 @@ export default {
 
   async queue(batch: MessageBatch<{ jobId: string }>, environment: Env, context: ExecutionContext) {
     try {
-      const promptedJobs = await withRuntime(environment, context, async (runtime) => {
-        await runtime.baseObservationWorker?.runOnce();
-        const jobs = await Promise.all(batch.messages.map(async (message) => {
-          const jobId = message.body?.jobId;
-          if (typeof jobId !== 'string' || !jobId) {
-            console.warn(JSON.stringify({ level: 'warn', event: 'observation.queue_invalid_message' }));
-            return null;
-          }
-          return runtime.baseObservationWorker?.get(jobId);
-        }));
-        return jobs.filter(shouldRedeliverJob);
+      await withRuntime(environment, context, createPriorSealBackgroundRuntime, async (runtime) => {
+        if (!runtime.baseObservationWorker) throw new TypeError('Observation worker is unavailable');
+        await processObservationQueue(batch, runtime.baseObservationWorker, environment.OBSERVATION_QUEUE);
       });
-      for (const job of promptedJobs) {
-        await environment.OBSERVATION_QUEUE.send({ jobId: job.jobId }, { delaySeconds: retryDelaySeconds([job]) ?? undefined });
-      }
-      batch.ackAll();
     } catch (error) {
       console.error(JSON.stringify({ level: 'error', event: 'observation.queue_failed', message: errorMessage(error) }));
       batch.retryAll({ delaySeconds: 30 });
@@ -87,7 +76,7 @@ export default {
   },
 
   async scheduled(_controller: ScheduledController, environment: Env, context: ExecutionContext) {
-    context.waitUntil(withRuntime(environment, context, async (runtime) => {
+    context.waitUntil(withRuntime(environment, context, createPriorSealBackgroundRuntime, async (runtime) => {
       const jobs = await runtime.baseObservationWorker?.runOnce() ?? [];
       for (const job of jobs.filter((candidate) => candidate.state === 'RETRY_WAIT')) {
         await environment.OBSERVATION_QUEUE.send({ jobId: job.jobId }, { delaySeconds: retryDelaySeconds([job]) ?? undefined });
