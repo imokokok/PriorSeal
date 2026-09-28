@@ -1,6 +1,6 @@
 {
   "name": "priorseal-sdk",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "TypeScript SDK linking explicit authorization to observed EVM execution and independently verifiable receipts.",
   "type": "module",
   "license": "MIT",
@@ -24,6 +24,11 @@
       "types": "./dist/verifier.d.ts",
       "import": "./dist/verifier.js",
       "default": "./dist/verifier.js"
+    },
+    "./defi": {
+      "types": "./dist/defi.d.ts",
+      "import": "./dist/defi.js",
+      "default": "./dist/defi.js"
     }
   },
   "scripts": {
@@ -38,13 +43,13 @@
     "access": "public"
   },
   "dependencies": {
+    "asn1js": "^3.0.6",
+    "pkijs": "^3.4.0",
     "verify-insight-receipt": "0.3.1",
     "viem": "2.56.3"
   },
   "devDependencies": {
-    "asn1js": "^3.0.6",
     "esbuild": "^0.25.12",
-    "pkijs": "^3.4.0",
     "typescript": "^5.8.3"
   },
   "repository": {

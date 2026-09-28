@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 — 2026-09-28
 
-- Pin `verify-insight-receipt` to the verified npm 0.3.1 release and use its shared v1–v5 execution verifier through the existing compatibility entry point. Malformed pair UIDs fail closed. This source update does not imply a new PriorSeal SDK npm release.
+- Add reviewed Uniswap V3 single-pool swap authorization, including exact asset, amount, recipient, router code, fee and deadline binding.
+- Ship `priorseal-sdk/defi` as a Node-only package entry with preparation, authorization, durable one-broadcast execution, status and finalized recovery. Keep signer and attempt store under integrator control.
+- Pin `verify-insight-receipt` to the verified npm 0.3.1 release and use its shared v1–v5 execution verifier through the existing compatibility entry point. Malformed pair UIDs fail closed.
 
 ## 0.7.1 — 2026-09-25
 

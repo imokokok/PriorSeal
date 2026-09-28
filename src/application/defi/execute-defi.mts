@@ -2,8 +2,7 @@ import { hashJson } from '../../domain/hashing.mjs';
 import { executeAuthorizedExactCall, reconcileAuthorizedExactCall, type AuthorizationStore, type ContractSignatureVerifier, type RecoveryObservation } from '../execution/authorized-exact-call.mjs';
 import type { RwaAttempt, RwaTransaction } from '../../infrastructure/persistence/rwa-attempt-store.mjs';
 import type { RwaAttemptStore } from '../../infrastructure/persistence/rwa-attempt-model.mjs';
-import type { withRwaExecutionPair } from '../../../sdk/dist/index.js';
-import type { PriorSealClient } from '../../../sdk/dist/index.js';
+import type { withRwaExecutionPair, PriorSealClient } from 'priorseal-sdk';
 
 type ExactTransaction = Parameters<typeof withRwaExecutionPair>[1];
 type Input = {
@@ -34,7 +33,7 @@ type Dependencies = {
 export async function executeDefiAuthorized(input: Input, deps: Dependencies) {
   const p = structuredClone(input);
   if (p.adapter?.kind !== 'uniswap-v3-single') throw new Error('DEFI_ADAPTER_UNSUPPORTED');
-  const { parseV3SwapApproval, assertV3SwapAuthorization } = await import('../../../sdk/dist/index.js');
+  const { parseV3SwapApproval, assertV3SwapAuthorization } = await import('priorseal-sdk');
   const approval = parseV3SwapApproval(p.adapter.approval);
   const executionDigest = `0x${hashJson({ schema: 'priorseal.defi-execution.v1', adapter: p.adapter.kind, approval })}`;
   return executeAuthorizedExactCall({
@@ -70,8 +69,8 @@ export async function reconcileDefiAttempt(authorizationId: string, deps: { atte
 export function createDefiExecutionGateway(client: Pick<PriorSealClient, 'prepareAuthorization' | 'acceptAuthorization'>, deps: Dependencies) {
   if (!client || typeof client.prepareAuthorization !== 'function' || typeof client.acceptAuthorization !== 'function') throw new TypeError('DEFI_AUTHORIZATION_CLIENT_REQUIRED');
   return {
-    async prepare(input: { approval: unknown; transaction: ExactTransaction; intentId: string; validUntil: number; constraints?: Parameters<typeof import('../../../sdk/dist/index.js').buildV3SwapIntent>[0]['constraints']; contextCommitments?: Parameters<typeof import('../../../sdk/dist/index.js').buildV3SwapIntent>[0]['contextCommitments']; authorization: Omit<Parameters<PriorSealClient['prepareAuthorization']>[0], 'intent'> }) {
-      const { parseV3SwapApproval, assertV3SwapRouterCode, buildV3SwapIntent } = await import('../../../sdk/dist/index.js');
+    async prepare(input: { approval: unknown; transaction: ExactTransaction; intentId: string; validUntil: number; constraints?: Parameters<typeof import('priorseal-sdk').buildV3SwapIntent>[0]['constraints']; contextCommitments?: Parameters<typeof import('priorseal-sdk').buildV3SwapIntent>[0]['contextCommitments']; authorization: Omit<Parameters<PriorSealClient['prepareAuthorization']>[0], 'intent'> }) {
+      const { parseV3SwapApproval, assertV3SwapRouterCode, buildV3SwapIntent } = await import('priorseal-sdk');
       const approval = parseV3SwapApproval(input.approval);
       if (await deps.chainReader.getChainId() !== approval.chainId) throw new Error('DEFI_RPC_CHAIN_MISMATCH');
       assertV3SwapRouterCode(approval, await deps.chainReader.getBytecode({ address: approval.router as `0x${string}` }));
