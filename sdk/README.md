@@ -198,7 +198,7 @@ const assessmentReference = matchUniqueContextCommitment(intent, {
 })
 ```
 
-The profile binds chain, executor, nonce, target, calldata, native value, time, finality and any namespaced external context digests. It intentionally ignores transfer-log recipient/asset/amount matching and transfer-count ambiguity, so a swap-specific verifier can grade fills without PriorSeal pretending to understand router semantics.
+The profile binds chain, executor, nonce, target, calldata, native value, time, finality and any namespaced external context digests. It intentionally ignores transfer-log recipient/asset/amount matching and transfer-count ambiguity, so a swap-specific verifier can grade fills without PriorSeal pretending to understand router semantics. For one supported Uniswap V3 `exactInputSingle` ERC-20 call, the opt-in [reviewed swap adapter](../docs/product/swap-authorization.md) decodes the concrete calldata, commits the user's asset/amount/recipient/router approval, and checks independently pinned router bytecode before signing. It does not change the generic exact-call profile or authorize an ERC-20 allowance transaction.
 
 `matchUniqueContextCommitment` confirms that exactly one commitment in the
 namespace matches the expected external digest. Verify the containing

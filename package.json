@@ -46,6 +46,7 @@
     "rwa:execution:check": "npm run sdk:build && npm run rwa:execution:check:prepared",
     "rwa:execution:check:prepared": "npm run core:build:tools && node scripts/verify-rwa-execution-profiles.mjs",
     "rwa:execution:check:online": "npm run sdk:build && npm run core:build:tools && node scripts/verify-rwa-execution-profiles.mjs --online",
+    "swap:execution:check": "npm run sdk:build && npm run core:build && node scripts/swap-authorization-local-drill.mjs",
     "sdk:build": "npm run rwa:parity && npm --prefix sdk run build",
     "core:build": "node scripts/build-core.mjs",
     "core:build:tests": "node scripts/build-core.mjs --tests-only",
