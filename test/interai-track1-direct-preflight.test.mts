@@ -7,9 +7,22 @@ import { test } from "node:test";
 
 import {
 	assertTrack1ExecutionContext,
+	assertTrack1VerifyBodySize,
 	curlConfig,
 	runCurl,
 } from "../scripts/run-interai-track1-direct-preflight.mjs";
+
+test("final preflight checks the actual /verify body bytes against the confirmed limit", () => {
+	assert.doesNotThrow(() =>
+		assertTrack1VerifyBodySize(Buffer.alloc(131_072)),
+	);
+	for (const bytes of [Buffer.alloc(0), Buffer.alloc(131_073)]) {
+		assert.throws(
+			() => assertTrack1VerifyBodySize(bytes),
+			/131,072-byte body limit/,
+		);
+	}
+});
 
 test("final preflight accepts all five agreed context fields and rejects drift", () => {
 	const runId = "candidate-test-001";

@@ -24,6 +24,7 @@ import {
   validateTrack1ReadyWindow
 } from "./interai-track1-window.mjs";
 const ENDPOINT = "https://api.interailabs.dev/verify";
+const VERIFY_REQUEST_BODY_LIMIT_BYTES = 131072;
 const KEYCHAIN_SERVICE = "priorseal.interai.track1-pilot";
 const KEYCHAIN_ACCOUNT = "YuTao Peng";
 const EXECUTOR = "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc";
@@ -75,6 +76,12 @@ const EXACT_INPUT_SINGLE_ABI = [
 ];
 function assert(value, message) {
   if (!value) throw new Error(message);
+}
+function assertTrack1VerifyBodySize(requestBytes) {
+  assert(
+    requestBytes.length > 0 && requestBytes.length <= VERIFY_REQUEST_BODY_LIMIT_BYTES,
+    "InterAI /verify request exceeds the confirmed 131,072-byte body limit"
+  );
 }
 function object(value, label) {
   assert(
@@ -365,10 +372,7 @@ async function validateInputs(candidateDir, requestFile, readyFile) {
     );
   }
   const requestBytes = await readFile(requestFile);
-  assert(
-    requestBytes.length > 0 && requestBytes.length <= 1e6,
-    "Request size outside bounds"
-  );
+  assertTrack1VerifyBodySize(requestBytes);
   const request = object(
     JSON.parse(requestBytes.toString("utf8")),
     "InterAI request"
@@ -729,6 +733,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 }
 export {
   assertTrack1ExecutionContext,
+  assertTrack1VerifyBodySize,
   curlConfig,
   runCurl
 };
