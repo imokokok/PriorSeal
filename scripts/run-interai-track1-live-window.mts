@@ -124,12 +124,14 @@ async function main(): Promise<void> {
 	}
 	const trustRootDir = path.join(
 		documentsRoot,
-		"partnerships/interai-collaboration/file/2026-09-24-interai-track1-final-binding-review-candidate-source-record",
+		"partnerships/interai-collaboration/file",
 	);
 	const allowanceRecord = path.join(
 		documentsRoot,
-		"partnerships/interai-collaboration/file/2026-09-24-interai-track1-allowance-prerequisite-record/allowance-receipt.json",
+		"partnerships/interai-collaboration/file/operator-private/20260926-2200-live-02/jit-candidate/allowance-receipt.json",
 	);
+	// Fail before capture creates a temporary Insight key if a retained input is missing.
+	await Promise.all([access(trustRootDir), access(allowanceRecord)]);
 	const gateDir = path.join(outputRoot, "fresh-insight-gates");
 	const candidateDir = path.join(outputRoot, "jit-candidate");
 	const archiveDir = path.join(outputRoot, "jit-candidate-source-record");

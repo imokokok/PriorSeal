@@ -128,6 +128,60 @@ function equalJson(a: unknown, b: unknown): boolean {
 	}
 	return false;
 }
+export function summarizeTrack1PilotBindings(receipt: Json): {
+	status: "BOUND" | "NOT_BOUND";
+	recordStatuses: string[];
+	pilotRoles: string[];
+} {
+	const external = receipt.external_evidence;
+	const records =
+		external && typeof external === "object" && !Array.isArray(external)
+			? (external as Json).processing_records
+			: undefined;
+	if (!Array.isArray(records) || records.length !== 2)
+		return { status: "NOT_BOUND", recordStatuses: [], pilotRoles: [] };
+	const recordStatuses: string[] = [];
+	const pilotRoles: string[] = [];
+	let allBound = true;
+	for (const value of records) {
+		if (!value || typeof value !== "object" || Array.isArray(value)) {
+			recordStatuses.push("INVALID");
+			pilotRoles.push("INVALID");
+			allBound = false;
+			continue;
+		}
+		const record = value as Json;
+		const binding = record.interai_binding;
+		const verification = record.interai_verification;
+		const bindingStatus =
+			typeof record.binding_status === "string"
+				? record.binding_status
+				: "MISSING";
+		recordStatuses.push(bindingStatus);
+		const pilotRole =
+			typeof record.pilot_role === "string"
+				? record.pilot_role
+				: "MISSING";
+		pilotRoles.push(pilotRole);
+		allBound &&=
+			record.verified === true &&
+			bindingStatus === "BOUND" &&
+			binding !== null &&
+			typeof binding === "object" &&
+			!Array.isArray(binding) &&
+			(binding as Json).status === "BOUND" &&
+			verification !== null &&
+			typeof verification === "object" &&
+			!Array.isArray(verification) &&
+			(verification as Json).status === "verified" &&
+			((verification as Json).error === null ||
+				(verification as Json).error === undefined) &&
+			record.pair_complete === true &&
+			(pilotRole === "source" || pilotRole === "destination");
+	}
+	allBound &&= pilotRoles.includes("source") && pilotRoles.includes("destination");
+	return { status: allBound ? "BOUND" : "NOT_BOUND", recordStatuses, pilotRoles };
+}
 function canonicalJson(value: unknown): string {
 	const normalize = (item: unknown): unknown => {
 		if (Array.isArray(item)) return item.map(normalize);
@@ -824,6 +878,8 @@ async function main(): Promise<void> {
 			result.recommendedAction = parsed.recommended_action;
 			result.policyResult = parsed.policy_result;
 			result.trustReceiptId = parsed.trust_receipt_id;
+			const pilotEvidenceBinding = summarizeTrack1PilotBindings(receipt);
+			result.pilotEvidenceBinding = pilotEvidenceBinding;
 			await writeFile(
 				path.join(outputDir, `${packageId}.trust-receipt.json`),
 				`${JSON.stringify(receipt, null, 2)}\n`,
@@ -871,7 +927,9 @@ async function main(): Promise<void> {
 						Date.now()
 				) {
 					result.disposition =
-						"INTERAI_REPORTED_ALLOW_EXACT_INTENT_EVIDENCE_RETAINED_NON_BROADCAST";
+						pilotEvidenceBinding.status === "BOUND"
+							? "INTERAI_REPORTED_ALLOW_EXACT_INTENT_EVIDENCE_BOUND_NON_BROADCAST"
+							: "INTERAI_REPORTED_ALLOW_EXACT_INTENT_EVIDENCE_NOT_BOUND_NON_BROADCAST";
 				}
 			}
 		} catch (error) {
@@ -887,7 +945,11 @@ async function main(): Promise<void> {
 	process.stdout.write(
 		`${String(result.disposition)}; request SHA-256 ${result.requestSha256}; response SHA-256 ${result.responseSha256}\n`,
 	);
-	if (result.disposition === "NO_RUN") process.exitCode = 2;
+	if (
+		result.disposition !==
+		"INTERAI_REPORTED_ALLOW_EXACT_INTENT_EVIDENCE_BOUND_NON_BROADCAST"
+	)
+		process.exitCode = 2;
 }
 
 if (

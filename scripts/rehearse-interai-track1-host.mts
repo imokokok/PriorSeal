@@ -92,10 +92,7 @@ await command(
 		"--output",
 		path.join(output, "diagnostic-insight-gates"),
 		"--trust-root-dir",
-		path.join(
-			collaboration,
-			"2026-09-24-interai-track1-final-binding-review-candidate-source-record",
-		),
+		collaboration,
 		"--profile",
 		"interai",
 	],
@@ -113,7 +110,7 @@ await command(
 		"--allowance-record",
 		path.join(
 			collaboration,
-			"2026-09-24-interai-track1-allowance-prerequisite-record/allowance-receipt.json",
+			"operator-private/20260926-2200-live-02/jit-candidate/allowance-receipt.json",
 		),
 		"--output",
 		path.join(output, "review-only-candidate"),

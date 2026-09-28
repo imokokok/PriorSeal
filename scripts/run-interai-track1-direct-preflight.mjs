@@ -112,6 +112,33 @@ function equalJson(a, b) {
   }
   return false;
 }
+function summarizeTrack1PilotBindings(receipt) {
+  const external = receipt.external_evidence;
+  const records = external && typeof external === "object" && !Array.isArray(external) ? external.processing_records : void 0;
+  if (!Array.isArray(records) || records.length !== 2)
+    return { status: "NOT_BOUND", recordStatuses: [], pilotRoles: [] };
+  const recordStatuses = [];
+  const pilotRoles = [];
+  let allBound = true;
+  for (const value of records) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      recordStatuses.push("INVALID");
+      pilotRoles.push("INVALID");
+      allBound = false;
+      continue;
+    }
+    const record = value;
+    const binding = record.interai_binding;
+    const verification = record.interai_verification;
+    const bindingStatus = typeof record.binding_status === "string" ? record.binding_status : "MISSING";
+    recordStatuses.push(bindingStatus);
+    const pilotRole = typeof record.pilot_role === "string" ? record.pilot_role : "MISSING";
+    pilotRoles.push(pilotRole);
+    allBound &&= record.verified === true && bindingStatus === "BOUND" && binding !== null && typeof binding === "object" && !Array.isArray(binding) && binding.status === "BOUND" && verification !== null && typeof verification === "object" && !Array.isArray(verification) && verification.status === "verified" && (verification.error === null || verification.error === void 0) && record.pair_complete === true && (pilotRole === "source" || pilotRole === "destination");
+  }
+  allBound &&= pilotRoles.includes("source") && pilotRoles.includes("destination");
+  return { status: allBound ? "BOUND" : "NOT_BOUND", recordStatuses, pilotRoles };
+}
 function canonicalJson(value) {
   const normalize = (item) => {
     if (Array.isArray(item)) return item.map(normalize);
@@ -675,6 +702,8 @@ async function main() {
       result.recommendedAction = parsed.recommended_action;
       result.policyResult = parsed.policy_result;
       result.trustReceiptId = parsed.trust_receipt_id;
+      const pilotEvidenceBinding = summarizeTrack1PilotBindings(receipt);
+      result.pilotEvidenceBinding = pilotEvidenceBinding;
       await writeFile(
         path.join(outputDir, `${packageId}.trust-receipt.json`),
         `${JSON.stringify(receipt, null, 2)}
@@ -703,7 +732,7 @@ async function main() {
           "host-attested context"
         );
         if (parsed.request_contract === "autonomous_execution" && intent.schema === "interai-canonical-execution-intent/v2" && intent.action_authority === "host_attested_canonical" && equalJson(intent.canonical_action, exactRequest.action) && equalJson(hostAttested, exactRequest.execution_context) && parsed.execution_intent_digest === intentDigest && receipt.receipt_id === parsed.trust_receipt_id && authorization.schema === "interai-execution-authorization/v1" && authorization.decision === "allow" && authorization.single_use === true && authorization.decision_id === parsed.decision_id && authorization.execution_intent_digest === intentDigest && Date.parse(string(authorization.expires_at, "authorization expiry")) > Date.now()) {
-          result.disposition = "INTERAI_REPORTED_ALLOW_EXACT_INTENT_EVIDENCE_RETAINED_NON_BROADCAST";
+          result.disposition = pilotEvidenceBinding.status === "BOUND" ? "INTERAI_REPORTED_ALLOW_EXACT_INTENT_EVIDENCE_BOUND_NON_BROADCAST" : "INTERAI_REPORTED_ALLOW_EXACT_INTENT_EVIDENCE_NOT_BOUND_NON_BROADCAST";
         }
       }
     } catch (error) {
@@ -720,7 +749,8 @@ async function main() {
     `${String(result.disposition)}; request SHA-256 ${result.requestSha256}; response SHA-256 ${result.responseSha256}
 `
   );
-  if (result.disposition === "NO_RUN") process.exitCode = 2;
+  if (result.disposition !== "INTERAI_REPORTED_ALLOW_EXACT_INTENT_EVIDENCE_BOUND_NON_BROADCAST")
+    process.exitCode = 2;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
@@ -735,5 +765,6 @@ export {
   assertTrack1ExecutionContext,
   assertTrack1VerifyBodySize,
   curlConfig,
-  runCurl
+  runCurl,
+  summarizeTrack1PilotBindings
 };

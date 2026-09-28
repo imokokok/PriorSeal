@@ -10,7 +10,64 @@ import {
 	assertTrack1VerifyBodySize,
 	curlConfig,
 	runCurl,
+	summarizeTrack1PilotBindings,
 } from "../scripts/run-interai-track1-direct-preflight.mjs";
+
+test("pilot result requires two verified bound records while allowing zero decision effect", () => {
+	const boundRecord = {
+		verified: true,
+		binding_status: "BOUND",
+		interai_binding: { status: "BOUND" },
+		interai_verification: { status: "verified" },
+		pair_complete: true,
+		pilot_role: "source",
+		contribution: "ignored",
+		interai_handling: { affects_decision: false },
+	};
+	const receipt = {
+		external_evidence: {
+			processing_records: [
+				boundRecord,
+				{ ...boundRecord, pilot_role: "destination" },
+			],
+		},
+	};
+	assert.deepEqual(summarizeTrack1PilotBindings(receipt), {
+		status: "BOUND",
+		recordStatuses: ["BOUND", "BOUND"],
+		pilotRoles: ["source", "destination"],
+	});
+	assert.deepEqual(
+		summarizeTrack1PilotBindings({
+			external_evidence: {
+				processing_records: [
+					boundRecord,
+					{
+						...boundRecord,
+						binding_status: "MISMATCHED",
+						interai_binding: { status: "MISMATCHED" },
+						pilot_role: "destination",
+					},
+				],
+			},
+		}),
+		{
+			status: "NOT_BOUND",
+			recordStatuses: ["BOUND", "MISMATCHED"],
+			pilotRoles: ["source", "destination"],
+		},
+	);
+	assert.equal(
+		summarizeTrack1PilotBindings({
+			external_evidence: { processing_records: [boundRecord, boundRecord] },
+		}).status,
+		"NOT_BOUND",
+	);
+	assert.equal(
+		summarizeTrack1PilotBindings({ external_evidence: {} }).status,
+		"NOT_BOUND",
+	);
+});
 
 test("final preflight checks the actual /verify body bytes against the confirmed limit", () => {
 	assert.doesNotThrow(() =>
