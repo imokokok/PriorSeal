@@ -10,11 +10,10 @@ import type { Pool } from 'pg'
 import solc from 'solc'
 import { createPublicClient, createWalletClient, custom, defineChain, encodeFunctionData, keccak256, parseAbi, type Abi, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { createHttpServer, createPostgresStore } from '../src/index.mjs'
+import { createDefiExecutionGateway, createDefiViemSubmitter, createHttpServer, createPostgresDefiAttemptStore, createPostgresRwaAttemptStore, createPostgresStore, executeDefiAuthorized } from '../src/index.mjs'
 import { observeEvm } from '../src/infrastructure/blockchain/evm/observer.mjs'
-import { assertV3SwapAuthorization, buildV3SwapIntent, createPriorSealClient, createV3SwapApproval, V3_SINGLE_SWAP_ABI } from '../sdk/dist/index.js'
+import { assertV3SwapAuthorization, buildV3SwapIntent, createPriorSealClient, createV3SwapApproval, generateAuthorizationNonce, V3_SINGLE_SWAP_ABI } from '../sdk/dist/index.js'
 import { verifyReceiptLocally } from '../sdk/dist/verifier.js'
-import type { Eip1193Provider, WalletAuthorizationInput } from '../sdk/dist/index.js'
 
 // Only an in-process EVM, generated accounts and valueless test tokens are used.
 // The optional Ganache dependency is installed outside the product workspace.
@@ -81,22 +80,49 @@ contract Router {
   await once(server, 'listening')
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   const client = createPriorSealClient({ baseUrl })
-  const wallet: Eip1193Provider = { request: async ({ method, params }) => {
-    assert.equal(method, 'eth_signTypedData_v4')
-    assert.ok(params && typeof params[1] === 'string')
-    return senderAccount.signTypedData(JSON.parse(params[1]))
-  } }
-  const request: WalletAuthorizationInput = { intent, account: sender, principal: { type: 'user', id: 'local-swap-user' }, delegate: { agentId: 'local-swap-agent', executor: sender }, issuedAt: now, notBefore: now, expiresAt: now + 240, audience }
-  const authorized = await client.authorizeWithWallet(request, wallet)
-  assert.equal(authorized.accepted.acceptance.status, 'ACCEPTED')
-  assertV3SwapAuthorization({ approval, transaction, intent: authorized.accepted.authorization.intent, routerBytecode: await publicClient.getCode({ address: router }), now })
+  const authorizationStore = createPostgresStore(pool)
+  const attempts = createPostgresDefiAttemptStore(pool)
+  const chainReader = { getChainId: () => publicClient.getChainId(), getBytecode: ({ address }: { address: Hex }) => publicClient.getCode({ address }) }
+  const submit = createDefiViemSubmitter(senderWallet)
+  const deps: Parameters<typeof executeDefiAuthorized>[1] = { authorizationStore, attempts, chainReader, submit, clock: () => now + 2 }
+  const gateway = createDefiExecutionGateway(client, deps)
+  const prepared = await gateway.prepare({ approval, transaction, intentId: intent.intentId, validUntil: intent.validUntil, constraints: intent.constraints,
+    authorization: { principal: { type: 'user', id: 'local-swap-user', account: sender }, authorizer: { type: 'eip712', address: sender },
+      delegate: { agentId: 'local-swap-agent', executor: sender }, issuedAt: now, notBefore: now, expiresAt: now + 240,
+      authorizationNonce: generateAuthorizationNonce(), maxUses: '1', audience } })
+  const { intentHash: _intentHash, ...preparedIntent } = prepared.authorization.intent
+  assert.deepEqual(preparedIntent, intent)
+  const signature = await senderAccount.signTypedData(prepared.typedData as Parameters<typeof senderAccount.signTypedData>[0])
+  const authorized = await gateway.authorize({ ...prepared.authorization, signature })
+  assert.equal(authorized.acceptance.status, 'ACCEPTED')
+  assertV3SwapAuthorization({ approval, transaction, intent: authorized.authorization.intent, routerBytecode: await publicClient.getCode({ address: router }), now })
   const changedData = encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: 'exactInputSingle', args: [{ ...params, recipient: sender }] })
-  assert.throws(() => assertV3SwapAuthorization({ approval, transaction: { ...transaction, data: changedData }, intent: authorized.accepted.authorization.intent, routerBytecode: bytecode, now }))
+  assert.throws(() => assertV3SwapAuthorization({ approval, transaction: { ...transaction, data: changedData }, intent: authorized.authorization.intent, routerBytecode: bytecode, now }))
+  const executionInput: Parameters<typeof executeDefiAuthorized>[0] = {
+    authorizationId: authorized.authorization.authorizationId, audience,
+    intent: authorized.authorization.intent, transaction,
+    acceptanceKey: { issuer, keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null },
+    adapter: { kind: 'uniswap-v3-single', approval },
+  }
+  await assert.rejects(gateway.execute({ ...executionInput, transaction: { ...transaction, data: changedData } }))
   await provider.request({ method: 'evm_increaseTime', params: [2] })
-  const txHash = await senderWallet.sendTransaction({ to: router, data: transaction.data, value: 0n, nonce: Number(transaction.nonce) })
+  const submitted = await gateway.execute(executionInput)
+  assert.equal(submitted.replay, false)
+  const txHash = submitted.attempt.txHash as Hex
+  assert.ok(txHash)
   const mined = await publicClient.waitForTransactionReceipt({ hash: txHash })
   assert.equal(mined.status, 'success')
-  const observed = await client.observeExecutionUntilFinal({ authorizationId: authorized.accepted.authorization.authorizationId, chainId: 8453, txHash, confirmations: 1 }, { pollIntervalMs: 50, timeoutMs: 10_000 })
+  const replay = await gateway.execute(executionInput)
+  assert.equal(replay.replay, true)
+  assert.equal((await gateway.status(executionInput.authorizationId))?.txHash, txHash)
+  const crossRouteClaim = await createPostgresRwaAttemptStore(pool).reserve({ authorizationId: `auth_${'f'.repeat(32)}`,
+    transaction, executionDigest: `0x${'a'.repeat(64)}`, now: now + 3 })
+  assert.equal(crossRouteClaim.claimed, false)
+  assert.equal(crossRouteClaim.code, 'RWA_NONCE_ALREADY_RESERVED')
+  const finalized = await gateway.recover(executionInput.authorizationId,
+    async () => ({ transaction, txHash, status: 'CONFIRMED', finalized: true }))
+  assert.equal(finalized.status, 'CONFIRMED')
+  const observed = await client.observeExecutionUntilFinal({ authorizationId: authorized.authorization.authorizationId, chainId: 8453, txHash, confirmations: 1 }, { pollIntervalMs: 50, timeoutMs: 10_000 })
   assert.equal(observed.receipt?.compliance?.status, 'COMPLIANT')
   assert.equal(observed.receipt?.executionStatus, 'CONFIRMED')
   assert.ok(observed.receipt)
@@ -105,7 +131,27 @@ contract Router {
   assertV3SwapAuthorization({ approval, transaction, intent: observed.receipt.authorizationEvidence!.authorization.intent, routerBytecode: bytecode, now })
   const balanceAbi = parseAbi(['function balanceOf(address) view returns(uint256)'])
   assert.equal(await publicClient.readContract({ address: outputToken, abi: balanceAbi, functionName: 'balanceOf', args: [receiver] }), 900_000n)
-  process.stdout.write(JSON.stringify({ ok: true, scope: 'ISOLATED_LOCAL_EVM_TEST_TOKENS', authorizationAccepted: true, changedRecipientRejected: true, transactionMined: true, receiptCompliant: true, receiptIndependentlyVerified: true, outputBalance: '900000' }, null, 2) + '\n')
+  // A second nonce tests a router change during gas preparation. The guard
+  // must refuse broadcast and keep the nonce claimed as UNCERTAIN.
+  const nextTransaction = { ...transaction, nonce: String(await publicClient.getTransactionCount({ address: sender })) }
+  const nextPrepared = await gateway.prepare({ approval, transaction: nextTransaction, intentId: 'local-swap-router-change', validUntil: now + 240,
+    authorization: { principal: { type: 'user', id: 'local-swap-user', account: sender }, authorizer: { type: 'eip712', address: sender },
+      delegate: { agentId: 'local-swap-agent', executor: sender }, issuedAt: now, notBefore: now, expiresAt: now + 240,
+      authorizationNonce: generateAuthorizationNonce(), maxUses: '1', audience } })
+  const nextSignature = await senderAccount.signTypedData(nextPrepared.typedData as Parameters<typeof senderAccount.signTypedData>[0])
+  const nextAccepted = await gateway.authorize({ ...nextPrepared.authorization, signature: nextSignature })
+  let codeReads = 0, unsafeBroadcasts = 0
+  const guardedGateway = createDefiExecutionGateway(client, { ...deps,
+    chainReader: { getChainId: () => publicClient.getChainId(), getBytecode: async ({ address }) => ++codeReads > 2 ? '0x6000' : publicClient.getCode({ address }) },
+    submit: async (_tx, guard) => { await guard(); unsafeBroadcasts++; return `0x${'a'.repeat(64)}` },
+  })
+  const guardedInput: Parameters<typeof executeDefiAuthorized>[0] = { ...executionInput, authorizationId: nextAccepted.authorization.authorizationId,
+    intent: nextAccepted.authorization.intent, transaction: nextTransaction }
+  await assert.rejects(guardedGateway.execute(guardedInput), /ROUTER_CODE_MISMATCH/)
+  assert.equal(unsafeBroadcasts, 0)
+  assert.equal((await guardedGateway.status(guardedInput.authorizationId))?.status, 'UNCERTAIN')
+  assert.equal((await guardedGateway.execute(guardedInput)).replay, true)
+  process.stdout.write(JSON.stringify({ ok: true, scope: 'ISOLATED_LOCAL_EVM_TEST_TOKENS', authorizationAccepted: true, changedRecipientRejected: true, durableExecutorSubmitted: true, replayBlocked: true, crossRouteNonceClaimBlocked: true, recoveredFinality: true, preBroadcastRouterMutationBlocked: true, uncertainNonceNotRetried: true, transactionMined: true, receiptCompliant: true, receiptIndependentlyVerified: true, outputBalance: '900000' }, null, 2) + '\n')
 } finally {
   if (server?.listening) { const closed = once(server, 'close'); server.close(); server.closeAllConnections(); await closed }
   await db.close()

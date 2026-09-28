@@ -1,8 +1,13 @@
 /** Public, stable library surface. Internal modules are intentionally not re-exported. */
 export { executeRwaAuthorized, reconcileRwaAttempt } from './application/rwa/execute-rwa.mjs';
+export { createDefiExecutionGateway, executeDefiAuthorized, getDefiAttempt, reconcileDefiAttempt } from './application/defi/execute-defi.mjs';
+export type { DefiChainReader, DefiExecutionInput, DefiExecutionDependencies, DefiTransaction } from './application/defi/execute-defi.mjs';
 export { createRwaViemSubmitter } from './application/rwa/viem-rwa-submitter.mjs';
+export { createRwaViemSubmitter as createDefiViemSubmitter } from './application/rwa/viem-rwa-submitter.mjs';
 export { createRwaAttemptStore } from './infrastructure/persistence/rwa-attempt-store.mjs';
+export { createRwaAttemptStore as createDefiAttemptStore } from './infrastructure/persistence/rwa-attempt-store.mjs';
 export { createPostgresRwaAttemptStore } from './infrastructure/persistence/postgres-rwa-attempt-store.mjs';
+export { createPostgresRwaAttemptStore as createPostgresDefiAttemptStore } from './infrastructure/persistence/postgres-rwa-attempt-store.mjs';
 export type { RwaAttemptStore } from './infrastructure/persistence/rwa-attempt-model.mjs';
 export { createHttpServer } from './interfaces/http/create-http-server.mjs';
 export { createObservationWorker } from './application/observations/observation-worker.mjs';
