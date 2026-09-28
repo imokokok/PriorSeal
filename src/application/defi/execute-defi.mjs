@@ -4,7 +4,7 @@ import { executeAuthorizedExactCall, reconcileAuthorizedExactCall } from "../exe
 async function executeDefiAuthorized(input, deps) {
   const p = structuredClone(input);
   if (p.adapter?.kind !== "uniswap-v3-single") throw new Error("DEFI_ADAPTER_UNSUPPORTED");
-  const { parseV3SwapApproval, assertV3SwapAuthorization } = await import("../../../sdk/dist/index.js");
+  const { parseV3SwapApproval, assertV3SwapAuthorization } = await import("priorseal-sdk");
   const approval = parseV3SwapApproval(p.adapter.approval);
   const executionDigest = `0x${hashJson({ schema: "priorseal.defi-execution.v1", adapter: p.adapter.kind, approval })}`;
   return executeAuthorizedExactCall({
@@ -34,7 +34,7 @@ function createDefiExecutionGateway(client, deps) {
   if (!client || typeof client.prepareAuthorization !== "function" || typeof client.acceptAuthorization !== "function") throw new TypeError("DEFI_AUTHORIZATION_CLIENT_REQUIRED");
   return {
     async prepare(input) {
-      const { parseV3SwapApproval, assertV3SwapRouterCode, buildV3SwapIntent } = await import("../../../sdk/dist/index.js");
+      const { parseV3SwapApproval, assertV3SwapRouterCode, buildV3SwapIntent } = await import("priorseal-sdk");
       const approval = parseV3SwapApproval(input.approval);
       if (await deps.chainReader.getChainId() !== approval.chainId) throw new Error("DEFI_RPC_CHAIN_MISMATCH");
       assertV3SwapRouterCode(approval, await deps.chainReader.getBytecode({ address: approval.router }));

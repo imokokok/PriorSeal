@@ -1,6 +1,6 @@
 # General DeFi execution gateway
 
-The Node entry `createDefiExecutionGateway()` exposes five stages:
+The Node package entry `priorseal-sdk/defi` exports `createDefiExecutionGateway()` and exposes five stages:
 
 | Stage | Method | Result |
 | --- | --- | --- |
@@ -50,7 +50,7 @@ fill. For a combined flow, run Insight's fresh transaction review before the
 principal signs, then pass the exact reviewed call and commitments into
 `prepare()`. Changing the call or route requires a new review and signature.
 
-`npm run swap:execution:check` exercises prepare, wallet authorization,
+`npm run swap:execution:check` exercises the public package entry through prepare, wallet authorization,
 execution, query, recovery, a mined test-token swap, an independently verified
 PriorSeal receipt, and changed-recipient rejection on an isolated local EVM.
 It requires `GANACHE_MODULE` pointing at an installed Ganache 7 runtime. The

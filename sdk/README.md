@@ -3,10 +3,16 @@
 Typed browser and Node.js client connecting explicit authorization to observed EVM execution and independently verifiable receipts. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.7.1
+npm install priorseal-sdk@0.8.0
 ```
 
-The latest npm release is **0.7.1**, a documentation-only patch with the same runtime files as 0.7.0. The repository workspace still declares 0.7.0 until its next source release. The published package includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+Version **0.8.0** adds reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+
+## Node DeFi execution gateway
+
+Import `createDefiExecutionGateway`, `createDefiViemSubmitter`, and the durable attempt-store adapter from `priorseal-sdk/defi`. The gateway offers `prepare`, `authorize`, `execute`, `status`, and `recover`. Its first reviewed route is the original Uniswap V3 SwapRouter `exactInputSingle`; unknown routers and selectors fail closed. Keep the wallet and signer in your Node process, provide an independently reviewed router code hash, and use one shared primary PostgreSQL attempt table for every route using the same signer nonce. Apply the repository's migration 011 before using `createPostgresDefiAttemptStore`.
+
+The hosted PriorSeal Worker accepts authorizations and issues evidence. It does not hold funds or broadcast transactions. See [the complete gateway contract](https://github.com/imokokok/PriorSeal/blob/main/docs/product/defi-execution-gateway.md) and [swap authorization semantics](https://github.com/imokokok/PriorSeal/blob/main/docs/product/swap-authorization.md) before integrating a signer.
 
 ## Start with a local receipt
 
