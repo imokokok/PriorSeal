@@ -5,7 +5,18 @@ import { PGlite } from '@electric-sql/pglite';
 import { createMemoryStore } from '../../src/infrastructure/persistence/memory-store.mjs';
 import { createPostgresStore } from '../../src/infrastructure/persistence/postgres-store.mjs';
 import { backfillAuthorizationMerkleIndex } from '../../src/infrastructure/persistence/backfill-merkle-index.mjs';
-import { pgliteClient, pglitePool } from '../support/postgres.mjs';
+import { pgliteClient, pglitePool, testPostgresPool } from '../support/postgres.mjs';
+
+test('memory log proof remains stable if a caller changes a returned entry', async () => {
+  const store = createMemoryStore();
+  const first = await store.appendAuthorizationLog({ authorizationHash: 'a'.repeat(64), acceptedAt: 100 });
+  const acceptance = { ...first };
+  await store.appendAuthorizationLog({ authorizationHash: 'b'.repeat(64), acceptedAt: 101 });
+  const expected = await store.getAuthorizationMerkleSnapshot(acceptance);
+  first.entryHash = 'f'.repeat(64);
+  assert.deepEqual(await store.getAuthorizationMerkleSnapshot(acceptance), expected);
+  assert.deepEqual((await store.listAuthorizationLog())[0], acceptance);
+});
 
 test('Postgres migration backfill gives the same compact proof as the memory log', async () => {
   const db = new PGlite();
@@ -30,6 +41,25 @@ test('Postgres migration backfill gives the same compact proof as the memory log
     const next = { authorizationHash: 'f'.repeat(64), acceptedAt: 500 };
     assert.deepEqual(await postgres.appendAuthorizationLog(next), await memory.appendAuthorizationLog(next));
     assert.deepEqual(await postgres.getAuthorizationMerkleSnapshot(acceptance), await memory.getAuthorizationMerkleSnapshot(acceptance));
+    for (let sequence = 252; sequence <= 255; sequence++) {
+      const input = { authorizationHash: sequence.toString(16).padStart(64, '0'), acceptedAt: 500 + sequence };
+      assert.deepEqual(await postgres.appendAuthorizationLog(input), await memory.appendAuthorizationLog(input));
+    }
+    const indexStatements: string[] = [];
+    const measured = createPostgresStore(testPostgresPool({
+      query: (sql, parameters) => db.query(sql, parameters),
+      connect: async () => ({
+        query: (sql, parameters) => {
+          if (sql.includes('authorization_log_merkle_nodes')) indexStatements.push(sql);
+          return db.query(sql, parameters);
+        },
+        release() {},
+      }),
+    }));
+    const at256 = { authorizationHash: '100'.padStart(64, '0'), acceptedAt: 756 };
+    assert.deepEqual(await measured.appendAuthorizationLog(at256), await memory.appendAuthorizationLog(at256));
+    assert.equal(indexStatements.length, 2, 'a full-height append reads siblings once and inserts nodes once');
+    assert.deepEqual(await measured.getAuthorizationMerkleSnapshot(acceptance), await memory.getAuthorizationMerkleSnapshot(acceptance));
   } finally {
     await db.close();
   }

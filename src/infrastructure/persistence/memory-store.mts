@@ -14,49 +14,70 @@ type Receipt = Record<string, unknown> & { receiptId: string };
 type IdempotencyRecord = { requestHash: string; response: unknown; expiresAt: number };
 type MerkleAcceptance = Pick<AuthorizationAcceptance, 'sequence' | 'entryHash'>;
 
-export function createMemoryStore({ clock = () => Date.now() } = {}) { const intents = new Map<string, Intent>(), receipts = new Map<string, Receipt>(), observations = new Map<string, Observation[]>(), idempotency = new Map<string, IdempotencyRecord>(), jobs = new Map<string, ObservationJob>(), authorizations = new Map<string, AuthorizationRecord>(), archive = new Map<string, ArchiveEntry>(), authorizationLog: LogEntry[] = []; return {
+export function createMemoryStore({ clock = () => Date.now() } = {}) {
+  const intents = new Map<string, Intent>(), receipts = new Map<string, Receipt>(), observations = new Map<string, Observation[]>(), idempotency = new Map<string, IdempotencyRecord>(), jobs = new Map<string, ObservationJob>(), authorizations = new Map<string, AuthorizationRecord>(), archive = new Map<string, ArchiveEntry>();
+  const archiveEntries: ArchiveEntry[] = [], authorizationLog: LogEntry[] = [];
+  const logByAuthorizationHash = new Map<string, LogEntry>(), merkleNodes = new Map<string, string>(), usedAuthorizationNonces = new Set<string>();
+
+  function appendLogEntry(entry: LogEntry) {
+    const nodes = merkleAppendNodes(entry.sequence, entry.entryHash, (start, level) => merkleNodes.get(merkleNodeKey(start, level)));
+    authorizationLog.push(entry);
+    logByAuthorizationHash.set(entry.authorizationHash, entry);
+    for (const node of nodes) merkleNodes.set(merkleNodeKey(node.start, node.level), node.hash);
+  }
+
+  return {
   archiveRetention: 'process_lifetime',
   async saveArchiveEntry(entry: ReturnType<typeof archiveEntry>) {
     const key = JSON.stringify([entry.projectId, entry.environment, entry.id]);
     const existing = archive.get(key);
     if (existing) { if (existing.supersedesId !== entry.supersedesId) { const error: Error & { code?: string } = new Error('Archive entry already has a different supersession relationship'); error.code = 'ARCHIVE_CONFLICT'; throw error; } return structuredClone(existing); }
     if (entry.supersedesId && !archive.has(JSON.stringify([entry.projectId, entry.environment, entry.supersedesId]))) { const error: Error & { code?: string } = new Error('Superseded entry is not in this project'); error.code = 'NOT_FOUND'; throw error; }
-    const saved = { ...structuredClone(entry), sequence: archive.size + 1 };
-    archive.set(key, saved); return structuredClone(saved);
+    const saved = { ...structuredClone(entry), sequence: archiveEntries.length + 1 };
+    archive.set(key, saved); archiveEntries.push(saved); return structuredClone(saved);
   },
   async getArchiveEntry(access: Pick<ArchiveAccess, 'projectId' | 'environment'>, id: string) { const entry = archive.get(JSON.stringify([access.projectId, access.environment, id])); return entry && structuredClone(entry); },
   async listArchiveEntries(query: ArchiveQuery) {
-    const snapshot = query.cursor?.snapshot ?? archive.size;
-    const rows = [...archive.values()].filter(entry => entry.projectId === query.projectId && entry.environment === query.environment && entry.sequence <= snapshot && (!query.cursor || entry.sequence < query.cursor.after) && (!query.filters.txHash || entry.txHash === query.filters.txHash) && (!query.filters.authorizationId || entry.authorizationId === query.filters.authorizationId) && (!query.filters.status || entry.status === query.filters.status) && (query.filters.from === null || entry.createdAt >= query.filters.from) && (query.filters.to === null || entry.createdAt <= query.filters.to)).sort((a, b) => b.sequence - a.sequence).slice(0, query.limit + 1);
+    const snapshot = query.cursor?.snapshot ?? archiveEntries.length;
+    const highestSequence = Math.min(archiveEntries.length, snapshot, query.cursor ? query.cursor.after - 1 : snapshot);
+    const rows: ArchiveEntry[] = [];
+    // Sequence follows insertion order, so scan newest first and stop after the extra pagination row.
+    for (let index = highestSequence - 1; index >= 0 && rows.length <= query.limit; index--) {
+      const entry = archiveEntries[index];
+      if (entry.projectId !== query.projectId || entry.environment !== query.environment ||
+          (query.filters.txHash && entry.txHash !== query.filters.txHash) ||
+          (query.filters.authorizationId && entry.authorizationId !== query.filters.authorizationId) ||
+          (query.filters.status && entry.status !== query.filters.status) ||
+          (query.filters.from !== null && entry.createdAt < query.filters.from) ||
+          (query.filters.to !== null && entry.createdAt > query.filters.to)) continue;
+      rows.push(entry);
+    }
     return { ...archivePage(rows, query, snapshot), retention: 'process_lifetime' };
   },
   async saveIntent(intent: Intent) { const existing = intents.get(intent.intentId); if (existing && existing.intentHash !== intent.intentHash) throw new Error('DUPLICATE_INTENT'); intents.set(intent.intentId, intent); return intent; },
   async getIntent(id: string) { return intents.get(id); }, async saveObservation(value: Observation) { const compound = `${value.chainId}:${value.txHash}`; const versions = observations.get(compound) ?? []; versions.push(value); observations.set(compound, versions); return value; },
   async getObservation(chainId: number | string | undefined, txHash: string) { return observations.get(`${chainId}:${txHash}`)?.at(-1); },
-  async appendAuthorizationLog({ authorizationHash, acceptedAt }: { authorizationHash: string; acceptedAt: number }) { const existing = authorizationLog.find((entry) => entry.authorizationHash === authorizationHash); if (existing) return { ...existing }; const sequence = authorizationLog.length + 1; const previousEntryHash = authorizationLog.at(-1)?.entryHash ?? null; const entryHash = hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash }); const entry = { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash }; authorizationLog.push(entry); return entry; },
+  async appendAuthorizationLog({ authorizationHash, acceptedAt }: { authorizationHash: string; acceptedAt: number }) { const existing = logByAuthorizationHash.get(authorizationHash); if (existing) return { ...existing }; const sequence = authorizationLog.length + 1; const previousEntryHash = authorizationLog.at(-1)?.entryHash ?? null; const entryHash = hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash }); const entry = { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash }; appendLogEntry(entry); return { ...entry }; },
   async listAuthorizationLog() { return authorizationLog.map((entry) => ({ ...entry })); },
   async getAuthorizationMerkleSnapshot(acceptance: MerkleAcceptance, size: number | null = null) {
     if (authorizationLog[acceptance.sequence - 1]?.entryHash !== acceptance.entryHash) throw new TypeError('Authorization acceptance does not match the local log');
     const checkpointSize = size ?? authorizationLog.length;
     if (!Number.isSafeInteger(checkpointSize) || checkpointSize < acceptance.sequence || checkpointSize > authorizationLog.length) throw new TypeError('Authorization is not present in the Merkle checkpoint');
-    const nodes = new Map<string, string>();
-    for (const entry of authorizationLog.slice(0, checkpointSize)) {
-      for (const node of merkleAppendNodes(entry.sequence, entry.entryHash, (start, level) => nodes.get(merkleNodeKey(start, level)))) nodes.set(merkleNodeKey(node.start, node.level), node.hash);
-    }
-    const { root, path } = createMerkleProof(acceptance.entryHash, acceptance.sequence, checkpointSize, nodes);
+    // Completed subtree hashes are immutable, including for historical checkpoint sizes.
+    const { root, path } = createMerkleProof(acceptance.entryHash, acceptance.sequence, checkpointSize, merkleNodes);
     return { size: checkpointSize, headEntryHash: authorizationLog[checkpointSize - 1].entryHash, merkleRoot: root, proof: path };
   },
   async saveAcceptedAuthorization({ authorization, acceptedAt, createRecord }: { authorization: Authorization; acceptedAt: number; createRecord: (log: LogEntry) => AuthorizationRecord }) {
     const existing = authorizations.get(authorization.authorizationId); if (existing) return structuredClone(existing);
-    if ([...authorizations.values()].some((record) => record.authorization.authorizationNonce === authorization.authorizationNonce)) { const error: Error & { code?: string } = new Error('Authorization nonce has already been used'); error.code = 'AUTHORIZATION_NONCE_REUSED'; throw error; }
+    if (usedAuthorizationNonces.has(authorization.authorizationNonce)) { const error: Error & { code?: string } = new Error('Authorization nonce has already been used'); error.code = 'AUTHORIZATION_NONCE_REUSED'; throw error; }
     const existingIntent = intents.get(authorization.intent.intentId); if (existingIntent && existingIntent.intentHash !== authorization.intentHash) throw new Error('DUPLICATE_INTENT');
-    const authorizationHash = hashJson(authorization); const existingLog = authorizationLog.find((entry) => entry.authorizationHash === authorizationHash);
+    const authorizationHash = hashJson(authorization); const existingLog = logByAuthorizationHash.get(authorizationHash);
     const sequence = existingLog?.sequence ?? authorizationLog.length + 1; const previousEntryHash = existingLog?.previousEntryHash ?? authorizationLog.at(-1)?.entryHash ?? null;
     const log = existingLog ?? { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash: hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash }) };
-    const record = createRecord(log); const cloned = structuredClone(record);
-    if (!existingLog) authorizationLog.push(log); intents.set(authorization.intent.intentId, structuredClone(authorization.intent)); authorizations.set(authorization.authorizationId, cloned); return structuredClone(cloned);
+    const record = createRecord({ ...log }); const cloned = structuredClone(record);
+    if (!existingLog) appendLogEntry(log); intents.set(authorization.intent.intentId, structuredClone(authorization.intent)); authorizations.set(authorization.authorizationId, cloned); usedAuthorizationNonces.add(authorization.authorizationNonce); return structuredClone(cloned);
   },
-  async saveAuthorization(record: AuthorizationRecord) { if (authorizations.has(record.authorization.authorizationId)) return authorizations.get(record.authorization.authorizationId); if ([...authorizations.values()].some((existing) => existing.authorization.authorizationNonce === record.authorization.authorizationNonce)) { const error: Error & { code?: string } = new Error('Authorization nonce has already been used'); error.code = 'AUTHORIZATION_NONCE_REUSED'; throw error; } authorizations.set(record.authorization.authorizationId, structuredClone(record)); return structuredClone(record); },
+  async saveAuthorization(record: AuthorizationRecord) { if (authorizations.has(record.authorization.authorizationId)) return authorizations.get(record.authorization.authorizationId); if (usedAuthorizationNonces.has(record.authorization.authorizationNonce)) { const error: Error & { code?: string } = new Error('Authorization nonce has already been used'); error.code = 'AUTHORIZATION_NONCE_REUSED'; throw error; } authorizations.set(record.authorization.authorizationId, structuredClone(record)); usedAuthorizationNonces.add(record.authorization.authorizationNonce); return structuredClone(record); },
   async getAuthorization(id: string) { const record = authorizations.get(id); return record && structuredClone(record); },
   async bindAuthorization(id: string, txHash: string) { const record = authorizations.get(id); if (!record) return { ok: false, code: 'AUTHORIZATION_NOT_FOUND' }; if (record.boundTxHash && record.boundTxHash !== txHash) return { ok: false, code: 'AUTHORIZATION_ALREADY_USED' }; if (!record.boundTxHash) { record.boundTxHash = txHash; record.uses = 1; record.status = 'BOUND'; } return { ok: true, record: structuredClone(record) }; },
   async saveObservationReceipt({ authorizationId, claimAuthorization, observation, receipt }: { authorizationId?: string; claimAuthorization: boolean; observation: Observation; receipt: Receipt | null }) {

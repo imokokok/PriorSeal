@@ -74,6 +74,27 @@ test('private archive isolates same artifact by project, keeps immutable history
   await assert.rejects(store.saveArchiveEntry(archiveEntry(artifact(1), a, { supersedesId: page.items[0].id })), { code: 'ARCHIVE_CONFLICT' });
 });
 
+test('memory archive pages sparse filtered matches in sequence order across a fixed snapshot', async () => {
+  const store = createMemoryStore();
+  const expected: string[] = [];
+  for (let n = 1; n <= 50; n++) {
+    const bundle = { schema: 'priorseal.verification-bundle.v1', receipt: { receiptId: `psr-${n}`, execution: { txHash: `0x${n.toString(16).padStart(64, '0')}`, status: n % 5 === 0 ? 'REVERTED' : 'CONFIRMED' } } };
+    const saved = await store.saveArchiveEntry(archiveEntry(bundle, n % 2 === 0 ? a : b, { now: n * 1000 }));
+    if (n % 10 === 0) expected.unshift(saved.id);
+  }
+  const first = await store.listArchiveEntries(query('/v1/archive?status=REVERTED&limit=2'));
+  await store.saveArchiveEntry(archiveEntry({ schema: 'priorseal.verification-bundle.v1', receipt: { receiptId: 'new', execution: { txHash: `0x${'f'.repeat(64)}`, status: 'REVERTED' } } }, a));
+  const ids = first.items.map(item => item.id);
+  let cursor = first.nextCursor;
+  while (cursor) {
+    const page = await store.listArchiveEntries(query(`/v1/archive?status=REVERTED&limit=2&cursor=${cursor}`));
+    ids.push(...page.items.map(item => item.id));
+    assert.equal(page.snapshot, first.snapshot);
+    cursor = page.nextCursor;
+  }
+  assert.deepEqual(ids, expected);
+});
+
 test('capabilities never equate an active issuer with workflow readiness and suppress incompatible exact-call policy', async () => {
   const base = { issuer: 'test', audience: 'test-env', keyConfigured: true, policy: { allowedChainIds: [8453], allowedAssets: ['eip155:8453/native'] }, proofMode: 'rfc3161', timestampConfigured: false, witnessConfigured: false, anchorConfigured: false, rpcChainIds: [8453], store: createMemoryStore(), now: 1000, archiveEnabled: false };
   const missing = await deploymentCapabilities(base);

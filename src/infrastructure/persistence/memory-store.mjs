@@ -3,7 +3,15 @@ import { hashJson } from "../../domain/hashing.mjs";
 import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from "../../domain/merkle-log.mjs";
 function createMemoryStore({ clock = () => Date.now() } = {}) {
-  const intents = /* @__PURE__ */ new Map(), receipts = /* @__PURE__ */ new Map(), observations = /* @__PURE__ */ new Map(), idempotency = /* @__PURE__ */ new Map(), jobs = /* @__PURE__ */ new Map(), authorizations = /* @__PURE__ */ new Map(), archive = /* @__PURE__ */ new Map(), authorizationLog = [];
+  const intents = /* @__PURE__ */ new Map(), receipts = /* @__PURE__ */ new Map(), observations = /* @__PURE__ */ new Map(), idempotency = /* @__PURE__ */ new Map(), jobs = /* @__PURE__ */ new Map(), authorizations = /* @__PURE__ */ new Map(), archive = /* @__PURE__ */ new Map();
+  const archiveEntries = [], authorizationLog = [];
+  const logByAuthorizationHash = /* @__PURE__ */ new Map(), merkleNodes = /* @__PURE__ */ new Map(), usedAuthorizationNonces = /* @__PURE__ */ new Set();
+  function appendLogEntry(entry) {
+    const nodes = merkleAppendNodes(entry.sequence, entry.entryHash, (start, level) => merkleNodes.get(merkleNodeKey(start, level)));
+    authorizationLog.push(entry);
+    logByAuthorizationHash.set(entry.authorizationHash, entry);
+    for (const node of nodes) merkleNodes.set(merkleNodeKey(node.start, node.level), node.hash);
+  }
   return {
     archiveRetention: "process_lifetime",
     async saveArchiveEntry(entry) {
@@ -22,8 +30,9 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
         error.code = "NOT_FOUND";
         throw error;
       }
-      const saved = { ...structuredClone(entry), sequence: archive.size + 1 };
+      const saved = { ...structuredClone(entry), sequence: archiveEntries.length + 1 };
       archive.set(key, saved);
+      archiveEntries.push(saved);
       return structuredClone(saved);
     },
     async getArchiveEntry(access, id) {
@@ -31,8 +40,14 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
       return entry && structuredClone(entry);
     },
     async listArchiveEntries(query) {
-      const snapshot = query.cursor?.snapshot ?? archive.size;
-      const rows = [...archive.values()].filter((entry) => entry.projectId === query.projectId && entry.environment === query.environment && entry.sequence <= snapshot && (!query.cursor || entry.sequence < query.cursor.after) && (!query.filters.txHash || entry.txHash === query.filters.txHash) && (!query.filters.authorizationId || entry.authorizationId === query.filters.authorizationId) && (!query.filters.status || entry.status === query.filters.status) && (query.filters.from === null || entry.createdAt >= query.filters.from) && (query.filters.to === null || entry.createdAt <= query.filters.to)).sort((a, b) => b.sequence - a.sequence).slice(0, query.limit + 1);
+      const snapshot = query.cursor?.snapshot ?? archiveEntries.length;
+      const highestSequence = Math.min(archiveEntries.length, snapshot, query.cursor ? query.cursor.after - 1 : snapshot);
+      const rows = [];
+      for (let index = highestSequence - 1; index >= 0 && rows.length <= query.limit; index--) {
+        const entry = archiveEntries[index];
+        if (entry.projectId !== query.projectId || entry.environment !== query.environment || query.filters.txHash && entry.txHash !== query.filters.txHash || query.filters.authorizationId && entry.authorizationId !== query.filters.authorizationId || query.filters.status && entry.status !== query.filters.status || query.filters.from !== null && entry.createdAt < query.filters.from || query.filters.to !== null && entry.createdAt > query.filters.to) continue;
+        rows.push(entry);
+      }
       return { ...archivePage(rows, query, snapshot), retention: "process_lifetime" };
     },
     async saveIntent(intent) {
@@ -55,14 +70,14 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
       return observations.get(`${chainId}:${txHash}`)?.at(-1);
     },
     async appendAuthorizationLog({ authorizationHash, acceptedAt }) {
-      const existing = authorizationLog.find((entry2) => entry2.authorizationHash === authorizationHash);
+      const existing = logByAuthorizationHash.get(authorizationHash);
       if (existing) return { ...existing };
       const sequence = authorizationLog.length + 1;
       const previousEntryHash = authorizationLog.at(-1)?.entryHash ?? null;
       const entryHash = hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash });
       const entry = { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash };
-      authorizationLog.push(entry);
-      return entry;
+      appendLogEntry(entry);
+      return { ...entry };
     },
     async listAuthorizationLog() {
       return authorizationLog.map((entry) => ({ ...entry }));
@@ -71,17 +86,13 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
       if (authorizationLog[acceptance.sequence - 1]?.entryHash !== acceptance.entryHash) throw new TypeError("Authorization acceptance does not match the local log");
       const checkpointSize = size ?? authorizationLog.length;
       if (!Number.isSafeInteger(checkpointSize) || checkpointSize < acceptance.sequence || checkpointSize > authorizationLog.length) throw new TypeError("Authorization is not present in the Merkle checkpoint");
-      const nodes = /* @__PURE__ */ new Map();
-      for (const entry of authorizationLog.slice(0, checkpointSize)) {
-        for (const node of merkleAppendNodes(entry.sequence, entry.entryHash, (start, level) => nodes.get(merkleNodeKey(start, level)))) nodes.set(merkleNodeKey(node.start, node.level), node.hash);
-      }
-      const { root, path } = createMerkleProof(acceptance.entryHash, acceptance.sequence, checkpointSize, nodes);
+      const { root, path } = createMerkleProof(acceptance.entryHash, acceptance.sequence, checkpointSize, merkleNodes);
       return { size: checkpointSize, headEntryHash: authorizationLog[checkpointSize - 1].entryHash, merkleRoot: root, proof: path };
     },
     async saveAcceptedAuthorization({ authorization, acceptedAt, createRecord }) {
       const existing = authorizations.get(authorization.authorizationId);
       if (existing) return structuredClone(existing);
-      if ([...authorizations.values()].some((record2) => record2.authorization.authorizationNonce === authorization.authorizationNonce)) {
+      if (usedAuthorizationNonces.has(authorization.authorizationNonce)) {
         const error = new Error("Authorization nonce has already been used");
         error.code = "AUTHORIZATION_NONCE_REUSED";
         throw error;
@@ -89,25 +100,27 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
       const existingIntent = intents.get(authorization.intent.intentId);
       if (existingIntent && existingIntent.intentHash !== authorization.intentHash) throw new Error("DUPLICATE_INTENT");
       const authorizationHash = hashJson(authorization);
-      const existingLog = authorizationLog.find((entry) => entry.authorizationHash === authorizationHash);
+      const existingLog = logByAuthorizationHash.get(authorizationHash);
       const sequence = existingLog?.sequence ?? authorizationLog.length + 1;
       const previousEntryHash = existingLog?.previousEntryHash ?? authorizationLog.at(-1)?.entryHash ?? null;
       const log = existingLog ?? { sequence, authorizationHash, acceptedAt, previousEntryHash, entryHash: hashJson({ sequence, authorizationHash, acceptedAt, previousEntryHash }) };
-      const record = createRecord(log);
+      const record = createRecord({ ...log });
       const cloned = structuredClone(record);
-      if (!existingLog) authorizationLog.push(log);
+      if (!existingLog) appendLogEntry(log);
       intents.set(authorization.intent.intentId, structuredClone(authorization.intent));
       authorizations.set(authorization.authorizationId, cloned);
+      usedAuthorizationNonces.add(authorization.authorizationNonce);
       return structuredClone(cloned);
     },
     async saveAuthorization(record) {
       if (authorizations.has(record.authorization.authorizationId)) return authorizations.get(record.authorization.authorizationId);
-      if ([...authorizations.values()].some((existing) => existing.authorization.authorizationNonce === record.authorization.authorizationNonce)) {
+      if (usedAuthorizationNonces.has(record.authorization.authorizationNonce)) {
         const error = new Error("Authorization nonce has already been used");
         error.code = "AUTHORIZATION_NONCE_REUSED";
         throw error;
       }
       authorizations.set(record.authorization.authorizationId, structuredClone(record));
+      usedAuthorizationNonces.add(record.authorization.authorizationNonce);
       return structuredClone(record);
     },
     async getAuthorization(id) {

@@ -8,7 +8,7 @@ export const ARCHIVE_RETENTION = 'until_operator_deletion';
 
 type ArchiveRole = 'writer' | 'reviewer';
 export type ArchiveAccess = { projectId: string; environment: string; role: ArchiveRole };
-type ArchiveCredential = ArchiveAccess & { tokenHash: string };
+type ArchiveCredential = ArchiveAccess & { digest: Buffer };
 type ArchiveFilters = { txHash: string | null; authorizationId: string | null; status: string | null; from: number | null; to: number | null };
 type ArchiveCursor = { filterHash: string; after: number; snapshot: number };
 export type ArchiveQuery = ArchiveAccess & { filters: ArchiveFilters; filterHash: string; cursor: ArchiveCursor | null; limit: number; includeArtifacts?: boolean };
@@ -24,14 +24,15 @@ export function createArchiveAccess(entries: unknown) {
   const credentials: ArchiveCredential[] = entries.map((entry: unknown) => {
     if (!record(entry) || typeof entry.tokenHash !== 'string' || typeof entry.projectId !== 'string' || typeof entry.environment !== 'string' || !/^[0-9a-f]{64}$/.test(entry.tokenHash) || hashes.has(entry.tokenHash) || !identifier.test(entry.projectId) || !identifier.test(entry.environment) || !['writer', 'reviewer'].includes(String(entry.role))) throw new TypeError('Invalid or duplicate archive credential');
     hashes.add(entry.tokenHash);
-    return { tokenHash: entry.tokenHash, projectId: entry.projectId, environment: entry.environment, role: entry.role as ArchiveRole };
+    return { digest: Buffer.from(entry.tokenHash, 'hex'), projectId: entry.projectId, environment: entry.environment, role: entry.role as ArchiveRole };
   });
   return {
     authenticate(header: string | undefined): ArchiveAccess {
       const token = typeof header === 'string' && /^Bearer [A-Za-z0-9._~-]{32,256}$/.test(header) ? header.slice(7) : '';
       const digest = createHash('sha256').update(token).digest();
       let access: ArchiveCredential | null = null;
-      for (const entry of credentials) if (timingSafeEqual(digest, Buffer.from(entry.tokenHash, 'hex'))) access = entry;
+      // Compare every credential without allocating a decoded hash on each request.
+      for (const entry of credentials) if (timingSafeEqual(digest, entry.digest)) access = entry;
       if (!token || !access) throw new PriorSealError('ARCHIVE_UNAUTHORIZED', 'A valid project archive credential is required');
       return { projectId: access.projectId, environment: access.environment, role: access.role };
     },

@@ -14,14 +14,14 @@ function createArchiveAccess(entries) {
   const credentials = entries.map((entry) => {
     if (!record(entry) || typeof entry.tokenHash !== "string" || typeof entry.projectId !== "string" || typeof entry.environment !== "string" || !/^[0-9a-f]{64}$/.test(entry.tokenHash) || hashes.has(entry.tokenHash) || !identifier.test(entry.projectId) || !identifier.test(entry.environment) || !["writer", "reviewer"].includes(String(entry.role))) throw new TypeError("Invalid or duplicate archive credential");
     hashes.add(entry.tokenHash);
-    return { tokenHash: entry.tokenHash, projectId: entry.projectId, environment: entry.environment, role: entry.role };
+    return { digest: Buffer.from(entry.tokenHash, "hex"), projectId: entry.projectId, environment: entry.environment, role: entry.role };
   });
   return {
     authenticate(header) {
       const token = typeof header === "string" && /^Bearer [A-Za-z0-9._~-]{32,256}$/.test(header) ? header.slice(7) : "";
       const digest = createHash("sha256").update(token).digest();
       let access = null;
-      for (const entry of credentials) if (timingSafeEqual(digest, Buffer.from(entry.tokenHash, "hex"))) access = entry;
+      for (const entry of credentials) if (timingSafeEqual(digest, entry.digest)) access = entry;
       if (!token || !access) throw new PriorSealError("ARCHIVE_UNAUTHORIZED", "A valid project archive credential is required");
       return { projectId: access.projectId, environment: access.environment, role: access.role };
     }

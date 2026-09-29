@@ -2,7 +2,7 @@ import { errorCode } from '../../shared/error-code.mjs';
 import { hashJson } from '../../domain/hashing.mjs';
 import { randomUUID } from 'node:crypto';
 import { archivePage, type ArchiveAccess, type ArchiveQuery } from '../../application/archive/evidence-archive.mjs';
-import { createMerkleProof, merkleLeafHash, merkleNodeKey, merkleParentHash, requiredMerkleNodes } from '../../domain/merkle-log.mjs';
+import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from '../../domain/merkle-log.mjs';
 import type { Pool, PoolClient } from 'pg';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
@@ -21,15 +21,20 @@ type PgAuthorizationRow = { authorization_json: unknown; acceptance_json: unknow
 type MerkleAcceptance = Pick<AuthorizationRecord['acceptance'], 'sequence' | 'entryHash'>;
 
 async function appendMerkleIndex(client: PoolClient, sequence: number, entryHash: string) {
-  let node = { start: sequence, level: 0, hash: merkleLeafHash(entryHash) };
-  await client.query('INSERT INTO authorization_log_merkle_nodes (start_sequence,level,node_hash) VALUES ($1,$2,$3)', [node.start, node.level, node.hash]);
-  while (sequence % (2 ** (node.level + 1)) === 0) {
-    const leftStart = node.start - 2 ** node.level;
-    const left = await client.query('SELECT node_hash FROM authorization_log_merkle_nodes WHERE start_sequence=$1 AND level=$2', [leftStart, node.level]);
-    if (!left.rows[0]) throw new TypeError('Authorization Merkle index is incomplete');
-    node = { start: leftStart, level: node.level + 1, hash: merkleParentHash(left.rows[0].node_hash, node.hash) };
-    await client.query('INSERT INTO authorization_log_merkle_nodes (start_sequence,level,node_hash) VALUES ($1,$2,$3)', [node.start, node.level, node.hash]);
+  const siblings: { start: number; level: number }[] = [];
+  let start = sequence;
+  for (let level = 0; sequence % (2 ** (level + 1)) === 0; level++) {
+    start -= 2 ** level;
+    siblings.push({ start, level });
   }
+  const hashes = new Map<string, string>();
+  if (siblings.length) {
+    const result = await client.query<{ start_sequence: number | string; level: number; node_hash: string }>('SELECT n.start_sequence,n.level,n.node_hash FROM authorization_log_merkle_nodes n JOIN unnest($1::bigint[],$2::integer[]) AS wanted(start_sequence,level) USING (start_sequence,level)', [siblings.map(node => node.start), siblings.map(node => node.level)]);
+    for (const node of result.rows) hashes.set(merkleNodeKey(Number(node.start_sequence), Number(node.level)), node.node_hash);
+  }
+  const nodes = merkleAppendNodes(sequence, entryHash, (nodeStart, level) => hashes.get(merkleNodeKey(nodeStart, level)));
+  // The log row and all immutable subtree nodes commit in the caller's transaction.
+  await client.query('INSERT INTO authorization_log_merkle_nodes (start_sequence,level,node_hash) SELECT start_sequence,level,node_hash FROM unnest($1::bigint[],$2::integer[],$3::text[]) AS nodes(start_sequence,level,node_hash)', [nodes.map(node => node.start), nodes.map(node => node.level), nodes.map(node => node.hash)]);
 }
 
 // The adapter accepts an injected pg Pool, keeping PostgreSQL optional for the offline verifier.
