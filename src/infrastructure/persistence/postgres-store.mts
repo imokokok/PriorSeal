@@ -11,7 +11,6 @@ import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, per
 
 type MemoryStore = ReturnType<typeof createMemoryStore>;
 type ArchiveEntry = Parameters<MemoryStore['saveArchiveEntry']>[0];
-type ArchiveRow = Awaited<ReturnType<MemoryStore['saveArchiveEntry']>>;
 type Intent = Parameters<MemoryStore['saveIntent']>[0];
 type Observation = Parameters<MemoryStore['saveObservation']>[0];
 type AuthorizationRecord = Parameters<MemoryStore['saveAuthorization']>[0];

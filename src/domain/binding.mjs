@@ -20,7 +20,7 @@ const BINDING_CODES = Object.freeze({
   OUTSIDE_AUTHORIZATION_WINDOW: "OUTSIDE_AUTHORIZATION_WINDOW"
 });
 const same = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
-function bindIntentExecution(intent, execution, now = execution.observedAt ?? Math.floor(Date.now() / 1e3)) {
+function bindIntentExecution(intent, execution, _now = void 0) {
   const reasons = [];
   const exactCall = intent.executionProfile === "priorseal.execution-profile.exact-call.v1";
   if (execution?.executionDataAvailable === false) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);

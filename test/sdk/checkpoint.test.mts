@@ -5,7 +5,6 @@ import { authorizationTypedData, buildAuthorization } from '../../src/index.mjs'
 import { createPriorSealClient, parseAuthorizationCheckpoint, type AuthorizationCheckpoint, type Eip1193Provider, type WalletAuthorizationInput } from '../../sdk/dist/index.js';
 
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
-const hasCode = (error: unknown, code: string) => record(error) && error.code === code;
 const hasDetails = (error: unknown, code: string, predicate: (details: Record<string, unknown>) => boolean) => {
   if (!record(error) || error.code !== code || !record(error.details)) return false;
   return predicate(error.details);

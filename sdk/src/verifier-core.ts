@@ -101,7 +101,6 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (receipt.domain !== (receiptV3 ? 'priorseal/execution-receipt/v3' : 'priorseal/execution-receipt/v2') || receipt.algorithm !== 'Ed25519') return fail('INVALID_DOMAIN')
   if (!receiptV3 && (receipt.executionStatus !== undefined || receipt.compliance !== undefined)) return fail('INVALID_RECEIPT')
   if (!validAuthorizationShape(authorization)) return fail('INVALID_AUTHORIZATION')
-  const legacyAuthorization = authorization.schema === 'priorseal.authorization.v1'
   if (authorization.audience !== expectedAudience) return fail('AUTHORIZATION_AUDIENCE_MISMATCH')
   if (authorization.notBefore < authorization.issuedAt || authorization.expiresAt < authorization.notBefore || authorization.expiresAt > authorization.intent.validUntil) return fail('INVALID_AUTHORIZATION')
   if (!validAcceptanceShape(acceptance) || acceptance.schema !== 'priorseal.authorization-receipt.v1' || acceptance.domain !== 'priorseal/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519') return fail('INVALID_AUTHORIZATION_RECEIPT')

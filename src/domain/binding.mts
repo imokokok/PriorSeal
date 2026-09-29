@@ -53,7 +53,7 @@ export type BindingResult = { bound: boolean; reasonCodes: BindingCode[] };
 
 const same = (a: unknown, b: unknown): boolean => String(a ?? '').toLowerCase() === String(b ?? '').toLowerCase();
 
-export function bindIntentExecution(intent: BindingIntent, execution: BindingExecution, now = execution.observedAt ?? Math.floor(Date.now() / 1000)): BindingResult {
+export function bindIntentExecution(intent: BindingIntent, execution: BindingExecution, _now: number | undefined = undefined): BindingResult {
   const reasons: BindingCode[] = [];
   const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1';
   if (execution?.executionDataAvailable === false) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
