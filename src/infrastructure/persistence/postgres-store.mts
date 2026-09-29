@@ -3,6 +3,7 @@ import { hashJson } from '../../domain/hashing.mjs';
 import { randomUUID } from 'node:crypto';
 import { archivePage, type ArchiveAccess, type ArchiveQuery } from '../../application/archive/evidence-archive.mjs';
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from '../../domain/merkle-log.mjs';
+import { assertReceiptIdentity } from './receipt-identity.mjs';
 import type { Pool, PoolClient } from 'pg';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
@@ -205,10 +206,3 @@ export function createPostgresStore(pool: Pool) {
 
 function rowToJob(row: PgJobRow, { includeLease = false } = {}): ObservationJob { return { jobId: persistedStatus(row.job_id, 'job.jobId'), idempotencyKey: row.idempotency_key, input: persistedJobInput(row.input_json), state: persistedStatus(row.state, 'job.state'), attempts: persistedCount(row.attempts, 'job.attempts'), nextAttemptAt: persistedTimestamp(row.next_attempt_at, 'job.nextAttemptAt'), observation: row.observation_json == null ? null : persistedWorkerObservation(row.observation_json), result: persistedJobResult(row.result_json), error: persistedJobError(row.error_json), createdAt: persistedTimestamp(row.created_at, 'job.createdAt'), ...(includeLease ? { leaseToken: row.lease_token, leaseExpiresAt: persistedTimestamp(row.lease_expires_at, 'job.leaseExpiresAt') } : {}) }; }
 function rowToAuthorization(row: PgAuthorizationRow): AuthorizationRecord { const policyEvidence = persistedPolicy(row.policy_json); return { authorization: persistedAuthorization(row.authorization_json), acceptance: persistedAcceptance(row.acceptance_json), policy: policyEvidence?.result ?? policyEvidence, policyEvidence: policyEvidence?.schema === 'priorseal.policy-evidence.v1' ? policyEvidence : undefined, ...(row.timestamp_evidence_json ? { timestampEvidence: persistedJson(row.timestamp_evidence_json, 'timestamp evidence') } : {}), ...(row.witness_evidence_json ? { witnessEvidence: persistedJson(row.witness_evidence_json, 'witness evidence') } : {}), status: persistedStatus(row.status, 'authorization.status'), boundTxHash: row.bound_tx_hash, uses: persistedCount(row.uses, 'authorization.uses') }; }
-
-function assertReceiptIdentity(existing: unknown, candidate: Receipt) {
-  if (!existing || hashJson(existing) === hashJson(candidate)) return;
-  const error: Error & { code?: string } = new Error('Receipt ID is already associated with different signed evidence');
-  error.code = 'RECEIPT_ID_CONFLICT';
-  throw error;
-}

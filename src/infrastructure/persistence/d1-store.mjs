@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { hashJson } from "../../domain/hashing.mjs";
 import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from "../../domain/merkle-log.mjs";
+import { assertReceiptIdentity } from "./receipt-identity.mjs";
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedWorkerObservation } from "./persisted-records.mjs";
 const json = (value) => value == null ? null : JSON.stringify(value);
 const parsed = (value, label) => value == null ? null : persistedJson(value, label);
@@ -37,9 +38,6 @@ function jobRecord(row, includeLease = false) {
     createdAt: persistedCount(row.created_at, "job.createdAt"),
     ...includeLease && row.lease_token ? { leaseToken: row.lease_token } : {}
   };
-}
-function assertReceiptIdentity(existing, candidate) {
-  if (existing && hashJson(existing) !== hashJson(candidate)) throw failed("RECEIPT_ID_CONFLICT", "Receipt ID is already associated with different signed evidence");
 }
 function createD1Store(database) {
   if (!database?.prepare || !database?.batch) throw new TypeError("createD1Store requires a D1 binding");

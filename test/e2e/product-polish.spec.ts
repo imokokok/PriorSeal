@@ -24,6 +24,48 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/v1/capabilities', (route) => route.fulfill({ json: caps }))
 })
 
+test('standard authorization reviews the canonical intent before the SDK signs or accepts it', async ({ page }) => {
+  const signer = privateKeyToAccount(`0x${'5'.repeat(64)}`)
+  const sender = `0x${'a'.repeat(40)}`
+  let approve = false
+  let acceptRequests = 0
+  await page.exposeFunction('__signFixture', (data: unknown) => signer.signTypedData(data as Parameters<typeof signer.signTypedData>[0]))
+  await page.addInitScript((address) => { window.__walletCalls = []; window.ethereum = { request: async ({ method, params }) => { window.__walletCalls.push(method); return method === 'eth_requestAccounts' ? [address] : window.__signFixture(JSON.parse(String(params?.[1]))) } } }, signer.address)
+  page.on('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Review canonical intent:')
+    if (approve) await dialog.accept()
+    else await dialog.dismiss()
+  })
+  await page.route('**/v1/capabilities', (route) => route.fulfill({ json: { ...caps, executionProfiles: ['priorseal.intent.v1'] } }))
+  await page.route('**/v1/authorizations/prepare', async (route) => {
+    const input = route.request().postDataJSON()
+    expect(input.intent.sender).toBe(sender)
+    expect(input.audience).toBe(caps.audience)
+    const authorization = buildAuthorization({ ...input, policyHash: caps.policyHash })
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authorization, typedData: authorizationTypedData(authorization) }, (_key, value) => typeof value === 'bigint' ? value.toString() : value) })
+  })
+  await page.route('**/v1/authorizations', async (route) => {
+    acceptRequests += 1
+    const authorization = route.request().postDataJSON()
+    await route.fulfill({ json: { authorization, acceptance: { acceptedAt: Math.floor(Date.now() / 1000), status: 'ACCEPTED', authorizationId: authorization.authorizationId } } })
+  })
+  await page.goto('/app/intents/new')
+  await page.getByLabel('Amount', { exact: true }).fill('1')
+  await page.getByLabel('Transaction nonce').fill('7')
+  await page.getByLabel('Agent execution wallet').fill(sender)
+  await page.getByLabel('Authorized recipient').fill(`0x${'b'.repeat(40)}`)
+  await page.getByRole('button', { name: 'Review canonical intent' }).click()
+  await expect(page.getByRole('button', { name: 'Review canonical intent' })).toBeEnabled()
+  expect(await page.evaluate(() => window.__walletCalls)).toEqual(['eth_requestAccounts'])
+  expect(acceptRequests).toBe(0)
+
+  approve = true
+  await page.getByRole('button', { name: 'Review canonical intent' }).click()
+  await expect(page.getByRole('heading', { name: 'Authorization accepted' })).toBeVisible()
+  expect(await page.evaluate(() => window.__walletCalls)).toEqual(['eth_requestAccounts', 'eth_requestAccounts', 'eth_signTypedData_v4'])
+  expect(acceptRequests).toBe(1)
+})
+
 test('exact-call canonical preview uses SDK binding and resumes identical acceptance after refresh and expiry without another signature', async ({ page }) => {
   const transaction = { chainId: 84532, from: `0x${'a'.repeat(40)}`, to: `0x${'b'.repeat(40)}`, nonce: '7', value: '0', data: '0x1234' as const }
   const contexts = [{ namespace: 'agent-call-envelope.v1', algorithm: 'sha256' as const, digest: `0x${'c'.repeat(64)}` }]

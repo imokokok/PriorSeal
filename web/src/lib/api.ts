@@ -1,15 +1,10 @@
-import { createPriorSealClient, validatePriorSealResponse } from 'priorseal-sdk'
+import { createPriorSealClient, validatePriorSealResponse, type DeploymentCapabilities } from 'priorseal-sdk'
 
 export const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 export const api = createPriorSealClient({ baseUrl: BASE_URL, timeoutMs: 15_000 })
 
-export type Capabilities = {
-  schema: 'priorseal.capabilities.v1'; issuer: string; audience: string; executionProfiles: string[]; chains: number[]; authorizers: string[]; proofMode: string; policyHash: string; minConfirmations: number
-  dependencies: { issuer: string; timestamp: string; rpc: string; storage: string }; workflowReady: boolean; checkedAt: number
-  chainReadiness?: { chainId: number; rpc: string }[]; readinessScope?: string
-  archive: { enabled: boolean; retention: string; scope: string }
-}
+export type Capabilities = DeploymentCapabilities
 
 export async function consoleRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, { ...options, signal: options.signal ?? AbortSignal.timeout(15_000) })
@@ -25,4 +20,4 @@ export async function consoleRequest<T>(path: string, options: RequestInit = {})
   return body as T
 }
 
-export const getCapabilities = () => consoleRequest<Capabilities>('/v1/capabilities')
+export const getCapabilities = () => api.capabilities()

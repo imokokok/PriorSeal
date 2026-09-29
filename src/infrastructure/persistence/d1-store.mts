@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { hashJson } from '../../domain/hashing.mjs';
 import { archivePage, type ArchiveAccess, type ArchiveQuery } from '../../application/archive/evidence-archive.mjs';
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from '../../domain/merkle-log.mjs';
+import { assertReceiptIdentity } from './receipt-identity.mjs';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedWorkerObservation } from './persisted-records.mjs';
@@ -47,10 +48,6 @@ function jobRecord(row: JobRow, includeLease = false): ObservationJob {
     ...(includeLease && row.lease_token ? { leaseToken: row.lease_token } : {}),
   };
 }
-function assertReceiptIdentity(existing: unknown, candidate: Receipt) {
-  if (existing && hashJson(existing) !== hashJson(candidate)) throw failed('RECEIPT_ID_CONFLICT', 'Receipt ID is already associated with different signed evidence');
-}
-
 /** D1's batch is the transaction boundary; concurrent log appends retry after a unique-sequence collision. */
 export function createD1Store(database: D1Database) {
   if (!database?.prepare || !database?.batch) throw new TypeError('createD1Store requires a D1 binding');

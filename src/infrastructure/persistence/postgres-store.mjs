@@ -4,6 +4,7 @@ import { hashJson } from "../../domain/hashing.mjs";
 import { randomUUID } from "node:crypto";
 import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from "../../domain/merkle-log.mjs";
+import { assertReceiptIdentity } from "./receipt-identity.mjs";
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedTimestamp, persistedWorkerObservation } from "./persisted-records.mjs";
 async function appendMerkleIndex(client, sequence, entryHash) {
   const siblings = [];
@@ -283,12 +284,6 @@ function rowToJob(row, { includeLease = false } = {}) {
 function rowToAuthorization(row) {
   const policyEvidence = persistedPolicy(row.policy_json);
   return { authorization: persistedAuthorization(row.authorization_json), acceptance: persistedAcceptance(row.acceptance_json), policy: policyEvidence?.result ?? policyEvidence, policyEvidence: policyEvidence?.schema === "priorseal.policy-evidence.v1" ? policyEvidence : void 0, ...row.timestamp_evidence_json ? { timestampEvidence: persistedJson(row.timestamp_evidence_json, "timestamp evidence") } : {}, ...row.witness_evidence_json ? { witnessEvidence: persistedJson(row.witness_evidence_json, "witness evidence") } : {}, status: persistedStatus(row.status, "authorization.status"), boundTxHash: row.bound_tx_hash, uses: persistedCount(row.uses, "authorization.uses") };
-}
-function assertReceiptIdentity(existing, candidate) {
-  if (!existing || hashJson(existing) === hashJson(candidate)) return;
-  const error = new Error("Receipt ID is already associated with different signed evidence");
-  error.code = "RECEIPT_ID_CONFLICT";
-  throw error;
 }
 export {
   createPostgresStore

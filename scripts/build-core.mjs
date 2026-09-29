@@ -34,6 +34,7 @@ const onDemandGeneratorSources = [
   "scripts/generate-thoughtproof-sentinel-paired-vectors.mts",
   "scripts/generate-web3-agent-kit-base-swap-v2-vectors.mts",
   "scripts/generate-web3-agent-kit-base-swap-vectors.mts",
+  "scripts/web3-agent-kit-base-swap-generator.mts",
   "scripts/prepare-wak-p1-run-sheet.mts"
 ].map((path) => join(projectRoot, path));
 const onDemandToolSources = [

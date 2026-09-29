@@ -2,6 +2,7 @@
 import { hashJson } from "../../domain/hashing.mjs";
 import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from "../../domain/merkle-log.mjs";
+import { assertReceiptIdentity } from "./receipt-identity.mjs";
 function createMemoryStore({ clock = () => Date.now() } = {}) {
   const intents = /* @__PURE__ */ new Map(), receipts = /* @__PURE__ */ new Map(), observations = /* @__PURE__ */ new Map(), idempotency = /* @__PURE__ */ new Map(), jobs = /* @__PURE__ */ new Map(), authorizations = /* @__PURE__ */ new Map(), archive = /* @__PURE__ */ new Map();
   const archiveEntries = [], authorizationLog = [];
@@ -216,12 +217,6 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
       return [...jobs.values()];
     }
   };
-}
-function assertReceiptIdentity(existing, candidate) {
-  if (!existing || !candidate || hashJson(existing) === hashJson(candidate)) return;
-  const error = new Error("Receipt ID is already associated with different signed evidence");
-  error.code = "RECEIPT_ID_CONFLICT";
-  throw error;
 }
 export {
   createMemoryStore

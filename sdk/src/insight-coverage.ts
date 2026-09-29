@@ -105,33 +105,6 @@ export function coveragePolicyId(policy: CoveragePolicy): string {
   return hash(policy);
 }
 
-/** Policy classification, not a claim of cryptographically proven upstream independence. */
-export const STRICT_COVERAGE_POLICY: CoveragePolicy = {
-  schema: 'insight.coverage-policy.v1',
-  name: 'strict-300s.v2',
-  minProviders: 3,
-  minIndependentGroups: 2,
-  maxSourceAgeSeconds: 300,
-  maxSpreadBps: 100,
-  reportTtlSeconds: 60,
-  sources: {
-    chainlink: { group: 'chainlink', derived: false },
-    api3: { group: 'api3', derived: false },
-    redstone: { group: 'redstone', derived: false },
-    dia: { group: 'dia', derived: false },
-    winklink: { group: 'winklink', derived: false },
-    supra: { group: 'supra', derived: false },
-    twap: { group: 'twap', derived: true },
-    reflector: { group: 'reflector', derived: false },
-    flare: { group: 'flare', derived: false },
-    switchboard: { group: 'switchboard', derived: false },
-    band: { group: 'band', derived: false },
-  },
-};
-for (const source of Object.values(STRICT_COVERAGE_POLICY.sources)) Object.freeze(source);
-Object.freeze(STRICT_COVERAGE_POLICY.sources);
-Object.freeze(STRICT_COVERAGE_POLICY);
-
 export function evaluateCoverage(
   observations: CoverageObservation[],
   policy: CoveragePolicy,

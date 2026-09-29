@@ -8,6 +8,24 @@ import { testD1 } from '../support/d1.mjs';
 
 const txHash = `0x${'a'.repeat(64)}`;
 
+test('D1 preserves receipt identity across direct and atomic observation writes', async () => {
+  const fixture = testD1();
+  try {
+    const store = createD1Store(fixture.database);
+    const receipt = { receiptId: 'psr_same', intentHash: 'intent', execution: { txHash }, schema: 'v1', issuer: 'test', keyId: 'k1', outcome: 'COMPLETED', signature: 'original' };
+    const conflict = { ...receipt, signature: 'different' };
+    assert.deepEqual(await store.saveReceipt(receipt), receipt);
+    assert.deepEqual(await store.saveReceipt(structuredClone(receipt)), receipt);
+    await assert.rejects(() => store.saveReceipt(conflict), { code: 'RECEIPT_ID_CONFLICT' });
+    await assert.rejects(() => store.saveObservationReceipt({
+      claimAuthorization: false,
+      observation: { chainId: 8453, txHash, status: 'CONFIRMED', observedAt: 1, finalityState: 'CONFIRMED' },
+      receipt: conflict,
+    }), { code: 'RECEIPT_ID_CONFLICT' });
+    assert.equal(fixture.sqlite.prepare('SELECT COUNT(*) AS total FROM execution_observations').get()?.total, 0);
+  } finally { fixture.sqlite.close(); }
+});
+
 test('D1 archive filters use existing indexes and retain snapshot, tenancy and export semantics', async () => {
   const fixture = testD1();
   try {

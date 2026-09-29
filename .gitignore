@@ -18,6 +18,7 @@ coverage/
 /scripts/generate-thoughtproof-sentinel-paired-vectors.mjs
 /scripts/generate-web3-agent-kit-base-swap-v2-vectors.mjs
 /scripts/generate-web3-agent-kit-base-swap-vectors.mjs
+/scripts/web3-agent-kit-base-swap-generator.mjs
 /scripts/prepare-wak-p1-run-sheet.mjs
 /scripts/check-web-performance.mjs
 /scripts/compile-contracts.mjs

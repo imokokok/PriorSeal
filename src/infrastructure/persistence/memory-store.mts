@@ -1,6 +1,7 @@
 import { hashJson } from '../../domain/hashing.mjs';
 import { archiveEntry, archivePage, type ArchiveAccess, type ArchiveQuery } from '../../application/archive/evidence-archive.mjs';
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from '../../domain/merkle-log.mjs';
+import { assertReceiptIdentity } from './receipt-identity.mjs';
 import type { Authorization, AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { ObservationJob, WorkerObservation } from '../../application/observations/observation-worker.mjs';
 import type { buildIntent } from '../../domain/intent.mjs';
@@ -120,10 +121,3 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
   async getJob(jobId: string) { return jobs.get(jobId); },
   async listJobs() { return [...jobs.values()]; },
 }; }
-
-function assertReceiptIdentity(existing: Receipt | undefined, candidate: Receipt | null) {
-  if (!existing || !candidate || hashJson(existing) === hashJson(candidate)) return;
-  const error: Error & { code?: string } = new Error('Receipt ID is already associated with different signed evidence');
-  error.code = 'RECEIPT_ID_CONFLICT';
-  throw error;
-}
