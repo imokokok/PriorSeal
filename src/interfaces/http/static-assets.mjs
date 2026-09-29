@@ -1,6 +1,6 @@
 // Generated from static-assets.mts by npm run core:build. Do not edit directly.
 import { errorCode } from "../../shared/error-code.mjs";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { extname, resolve, sep } from "node:path";
 import { promisify } from "node:util";
@@ -23,6 +23,8 @@ const CONTENT_TYPES = Object.freeze({
   ".woff2": "font/woff2"
 });
 const COMPRESSIBLE_TYPES = /* @__PURE__ */ new Set([".css", ".html", ".js", ".json", ".map", ".svg"]);
+const MAX_CACHE_BYTES = 16 * 1024 * 1024;
+const MAX_CACHE_FILES = 128;
 const SECURITY_HEADERS = Object.freeze({
   "content-security-policy": "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
   "referrer-policy": "no-referrer",
@@ -62,10 +64,48 @@ function preferredEncoding(value) {
 function etagFor(body) {
   return `W/"${createHash("sha256").update(body).digest("base64url").slice(0, 24)}"`;
 }
+function fileVersion(metadata) {
+  return [metadata.dev, metadata.ino, metadata.size, metadata.mtimeNs, metadata.ctimeNs].join(":");
+}
+function assetBytes(asset) {
+  return asset.body.length + Object.values(asset.compressed).reduce((bytes, body) => bytes + body.length, 0);
+}
 function createStaticAssetHandler(rootDirectory) {
   const root = resolve(rootDirectory);
   const indexFile = resolve(root, "index.html");
-  const compressedBodies = /* @__PURE__ */ new Map();
+  const cachedAssets = /* @__PURE__ */ new Map();
+  let cachedBytes = 0;
+  function removeCached(file) {
+    const previous = cachedAssets.get(file);
+    if (previous) cachedBytes -= assetBytes(previous);
+    cachedAssets.delete(file);
+  }
+  function cacheAsset(file, asset) {
+    const bytes = assetBytes(asset);
+    if (bytes > MAX_CACHE_BYTES) return;
+    removeCached(file);
+    while (cachedBytes + bytes > MAX_CACHE_BYTES || cachedAssets.size >= MAX_CACHE_FILES) {
+      const oldest = cachedAssets.keys().next().value;
+      if (!oldest) break;
+      removeCached(oldest);
+    }
+    cachedAssets.set(file, asset);
+    cachedBytes += bytes;
+  }
+  async function loadAsset(file) {
+    const version = fileVersion(await stat(file, { bigint: true }));
+    const cached = cachedAssets.get(file);
+    if (cached?.version === version) {
+      cacheAsset(file, cached);
+      return cached;
+    }
+    if (cached) removeCached(file);
+    const body = await readFile(file);
+    const asset = { version, body, etag: etagFor(body), compressed: {} };
+    const afterRead = await stat(file, { bigint: true }).catch(() => null);
+    if (afterRead && fileVersion(afterRead) === version) cacheAsset(file, asset);
+    return asset;
+  }
   return async function serveStaticAsset({ pathname, req, res }) {
     if (!isApplicationPath(pathname)) return false;
     const requested = pathname === "/" ? indexFile : safeAssetPath(root, pathname);
@@ -73,24 +113,24 @@ function createStaticAssetHandler(rootDirectory) {
     const hasExtension = Boolean(extname(pathname));
     const file = hasExtension ? requested : indexFile;
     try {
-      const body = await readFile(file);
+      const asset = await loadAsset(file);
       const extension = extname(file).toLowerCase();
       const cacheControl = pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
-      const etag = etagFor(body);
-      if (req?.headers?.["if-none-match"] === etag) {
-        res.writeHead(304, { ...SECURITY_HEADERS, "cache-control": cacheControl, etag, vary: "Accept-Encoding" });
+      if (req?.headers?.["if-none-match"] === asset.etag) {
+        res.writeHead(304, { ...SECURITY_HEADERS, "cache-control": cacheControl, etag: asset.etag, vary: "Accept-Encoding" });
         res.end();
         return true;
       }
-      const encoding = body.length >= 1024 && COMPRESSIBLE_TYPES.has(extension) ? preferredEncoding(req?.headers?.["accept-encoding"]) : null;
-      const cacheKey = encoding ? `${file}:${etag}:${encoding}` : null;
-      let responseBody = body;
-      if (cacheKey) {
-        const cached = compressedBodies.get(cacheKey);
-        if (cached) responseBody = cached;
+      const encoding = asset.body.length >= 1024 && COMPRESSIBLE_TYPES.has(extension) ? preferredEncoding(req?.headers?.["accept-encoding"]) : null;
+      let responseBody = asset.body;
+      if (encoding) {
+        const compressed = asset.compressed[encoding];
+        if (compressed) responseBody = compressed;
         else {
-          responseBody = encoding === "br" ? await brotliCompress(body, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } }) : await gzip(body, { level: 6 });
-          compressedBodies.set(cacheKey, responseBody);
+          responseBody = encoding === "br" ? await brotliCompress(asset.body, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } }) : await gzip(asset.body, { level: 6 });
+          if (cachedAssets.get(file) === asset) {
+            cacheAsset(file, { ...asset, compressed: { ...asset.compressed, [encoding]: responseBody } });
+          }
         }
       }
       res.writeHead(200, {
@@ -99,7 +139,7 @@ function createStaticAssetHandler(rootDirectory) {
         "cache-control": cacheControl,
         ...encoding ? { "content-encoding": encoding } : {},
         "content-length": responseBody.length,
-        etag,
+        etag: asset.etag,
         vary: "Accept-Encoding"
       });
       res.end(responseBody);

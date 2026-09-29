@@ -1,9 +1,10 @@
 import { errorCode } from '../../shared/error-code.mjs';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { extname, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { brotliCompress as brotliCompressCallback, constants as zlibConstants, gzip as gzipCallback } from 'node:zlib';
+import type { BigIntStats } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const brotliCompress = promisify(brotliCompressCallback);
@@ -26,6 +27,10 @@ const CONTENT_TYPES = Object.freeze({
 });
 
 const COMPRESSIBLE_TYPES = new Set(['.css', '.html', '.js', '.json', '.map', '.svg']);
+const MAX_CACHE_BYTES = 16 * 1024 * 1024;
+const MAX_CACHE_FILES = 128;
+type Encoding = 'br' | 'gzip';
+type CachedAsset = { version: string; body: Buffer; etag: string; compressed: Partial<Record<Encoding, Buffer>> };
 
 const SECURITY_HEADERS = Object.freeze({
   'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
@@ -70,10 +75,55 @@ function etagFor(body: Buffer) {
   return `W/"${createHash('sha256').update(body).digest('base64url').slice(0, 24)}"`;
 }
 
+function fileVersion(metadata: BigIntStats): string {
+  // ctime also changes when a same-sized file is replaced and mtime is restored.
+  return [metadata.dev, metadata.ino, metadata.size, metadata.mtimeNs, metadata.ctimeNs].join(':');
+}
+
+function assetBytes(asset: CachedAsset): number {
+  return asset.body.length + Object.values(asset.compressed).reduce((bytes, body) => bytes + body.length, 0);
+}
+
 export function createStaticAssetHandler(rootDirectory: string) {
   const root = resolve(rootDirectory);
   const indexFile = resolve(root, 'index.html');
-  const compressedBodies = new Map<string, Buffer>();
+  const cachedAssets = new Map<string, CachedAsset>();
+  let cachedBytes = 0;
+
+  function removeCached(file: string) {
+    const previous = cachedAssets.get(file);
+    if (previous) cachedBytes -= assetBytes(previous);
+    cachedAssets.delete(file);
+  }
+
+  function cacheAsset(file: string, asset: CachedAsset) {
+    const bytes = assetBytes(asset);
+    if (bytes > MAX_CACHE_BYTES) return;
+    removeCached(file);
+    while (cachedBytes + bytes > MAX_CACHE_BYTES || cachedAssets.size >= MAX_CACHE_FILES) {
+      const oldest = cachedAssets.keys().next().value;
+      if (!oldest) break;
+      removeCached(oldest);
+    }
+    cachedAssets.set(file, asset);
+    cachedBytes += bytes;
+  }
+
+  async function loadAsset(file: string): Promise<CachedAsset> {
+    const version = fileVersion(await stat(file, { bigint: true }));
+    const cached = cachedAssets.get(file);
+    if (cached?.version === version) {
+      cacheAsset(file, cached); // Refresh recency without reading or hashing the file.
+      return cached;
+    }
+    if (cached) removeCached(file);
+    const body = await readFile(file);
+    const asset: CachedAsset = { version, body, etag: etagFor(body), compressed: {} };
+    // An in-place replacement during read must not be stored under the old version.
+    const afterRead = await stat(file, { bigint: true }).catch(() => null);
+    if (afterRead && fileVersion(afterRead) === version) cacheAsset(file, asset);
+    return asset;
+  }
 
   return async function serveStaticAsset({ pathname, req, res }: { pathname: string; req: IncomingMessage; res: ServerResponse }): Promise<boolean> {
     if (!isApplicationPath(pathname)) return false;
@@ -83,26 +133,26 @@ export function createStaticAssetHandler(rootDirectory: string) {
     const file = hasExtension ? requested : indexFile;
 
     try {
-      const body = await readFile(file);
+      const asset = await loadAsset(file);
       const extension = extname(file).toLowerCase();
       const cacheControl = pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache';
-      const etag = etagFor(body);
-      if (req?.headers?.['if-none-match'] === etag) {
-        res.writeHead(304, { ...SECURITY_HEADERS, 'cache-control': cacheControl, etag, vary: 'Accept-Encoding' });
+      if (req?.headers?.['if-none-match'] === asset.etag) {
+        res.writeHead(304, { ...SECURITY_HEADERS, 'cache-control': cacheControl, etag: asset.etag, vary: 'Accept-Encoding' });
         res.end();
         return true;
       }
-      const encoding = body.length >= 1024 && COMPRESSIBLE_TYPES.has(extension) ? preferredEncoding(req?.headers?.['accept-encoding']) : null;
-      const cacheKey = encoding ? `${file}:${etag}:${encoding}` : null;
-      let responseBody: Buffer = body;
-      if (cacheKey) {
-        const cached = compressedBodies.get(cacheKey);
-        if (cached) responseBody = cached;
+      const encoding = asset.body.length >= 1024 && COMPRESSIBLE_TYPES.has(extension) ? preferredEncoding(req?.headers?.['accept-encoding']) : null;
+      let responseBody: Buffer = asset.body;
+      if (encoding) {
+        const compressed = asset.compressed[encoding];
+        if (compressed) responseBody = compressed;
         else {
           responseBody = encoding === 'br'
-            ? await brotliCompress(body, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } })
-            : await gzip(body, { level: 6 });
-          compressedBodies.set(cacheKey, responseBody);
+            ? await brotliCompress(asset.body, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } })
+            : await gzip(asset.body, { level: 6 });
+          if (cachedAssets.get(file) === asset) {
+            cacheAsset(file, { ...asset, compressed: { ...asset.compressed, [encoding]: responseBody } });
+          }
         }
       }
       res.writeHead(200, {
@@ -111,7 +161,7 @@ export function createStaticAssetHandler(rootDirectory: string) {
         'cache-control': cacheControl,
         ...(encoding ? { 'content-encoding': encoding } : {}),
         'content-length': responseBody.length,
-        etag,
+        etag: asset.etag,
         vary: 'Accept-Encoding',
       });
       res.end(responseBody);

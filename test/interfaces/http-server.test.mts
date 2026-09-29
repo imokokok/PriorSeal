@@ -3,11 +3,11 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
-import { brotliDecompressSync } from 'node:zlib';
+import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { createHttpServer } from '../../src/index.mjs';
 import { authorizationTypedData, buildAuthorization, hashJson } from '../../src/index.mjs';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -273,6 +273,47 @@ test('serves the production console and preserves API 404 responses', async (t) 
   const image = await request(server, '/photo.jpg'); assert.equal(image.headers['content-type'], 'image/jpeg'); assert.ok(image.headers.etag);
   const notModified = await request(server, '/photo.jpg', { headers: { 'if-none-match': image.headers.etag } }); assert.equal(notModified.status, 304);
   assert.equal(missingApi.status, 404); assert.equal(missingApi.json().error.code, 'NOT_FOUND'); assert.equal(rateLimitChecks, 1);
+});
+
+test('static cache preserves encoding and 304 responses while detecting file changes', async (t) => {
+  const staticDir = await mkdtemp(join(tmpdir(), 'priorseal-static-cache-'));
+  const assetsDir = join(staticDir, 'assets');
+  await mkdir(assetsDir);
+  const scriptPath = join(assetsDir, 'app.js');
+  const scriptA = 'globalThis.version = "' + 'a'.repeat(1600) + '";';
+  const scriptB = 'globalThis.version = "' + 'b'.repeat(1600) + '";';
+  await writeFile(scriptPath, scriptA);
+  await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>Console v1</title>');
+  const server = createHttpServer({ staticDir });
+  t.after(() => server.close());
+
+  const brotli = await request(server, '/assets/app.js', { headers: { 'accept-encoding': 'br, gzip' } });
+  assert.equal(brotli.status, 200);
+  assert.equal(brotli.headers['content-encoding'], 'br');
+  assert.equal(brotliDecompressSync(brotli.buffer()).toString(), scriptA);
+  assert.equal(brotli.headers['cache-control'], 'public, max-age=31536000, immutable');
+  const unchanged = await request(server, '/assets/app.js', { headers: { 'if-none-match': brotli.headers.etag } });
+  assert.equal(unchanged.status, 304);
+  assert.equal(unchanged.buffer().length, 0);
+  const gzip = await request(server, '/assets/app.js', { headers: { 'accept-encoding': 'gzip' } });
+  assert.equal(gzip.headers['content-encoding'], 'gzip');
+  assert.equal(gunzipSync(gzip.buffer()).toString(), scriptA);
+
+  const originalMetadata = await stat(scriptPath);
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  await writeFile(scriptPath, scriptB);
+  await utimes(scriptPath, originalMetadata.atime, originalMetadata.mtime);
+  const changed = await request(server, '/assets/app.js', { headers: { 'if-none-match': brotli.headers.etag } });
+  assert.equal(changed.status, 200);
+  assert.notEqual(changed.headers.etag, brotli.headers.etag);
+  assert.equal(changed.text(), scriptB);
+
+  const originalHtml = await request(server, '/');
+  assert.equal(originalHtml.headers['cache-control'], 'no-cache');
+  await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>Console v2</title>');
+  const changedHtml = await request(server, '/', { headers: { 'if-none-match': originalHtml.headers.etag } });
+  assert.equal(changedHtml.status, 200);
+  assert.match(changedHtml.text(), /Console v2/);
 });
 
 test('HTTP handling awaits a shared limiter and uses the trusted Cloudflare client address', async (t) => {
