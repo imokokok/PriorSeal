@@ -3,10 +3,12 @@
 Typed browser and Node.js client connecting explicit authorization to observed EVM execution and independently verifiable receipts. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.8.0
+npm install priorseal-sdk@0.9.0
 ```
 
-Version **0.8.0** adds reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+Version **0.9.0** adds signed temporal-finality constraints and offline replay checks for the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Version 0.8.0 added reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+
+To require an RPC-finalized observation, set `intent.constraints.finalityRequirement` to `RPC_FINALIZED`. An optional `maxToleratedReorgDepth: N` requires at least `N + 1` confirmations. The offline verifier checks signed evidence consistency; an RPC finalized assertion remains an observation by the configured endpoint and issuer, not an embedded consensus proof. See [temporal evidence and finality](https://github.com/imokokok/PriorSeal/blob/main/docs/architecture/temporal-finality.md).
 
 ## Node DeFi execution gateway
 

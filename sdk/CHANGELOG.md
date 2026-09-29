@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — 2026-09-29
 
 - Replay signed temporal evidence for EVM observations, including the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Reject inconsistent `FINALIZED` claims and enforce signed finality constraints and policy requirements offline.
-- Add `finalityRequirement` and `maxToleratedReorgDepth` to intent and capability types. The npm 0.8.0 verifier does not recognize intents using these new constraints; publish an updated SDK before external consumers opt in.
+- Add `finalityRequirement` and `maxToleratedReorgDepth` to intent and capability types. The npm 0.8.0 verifier does not recognize intents using these new constraints; consumers opting in must upgrade.
 
 ## 0.8.0 — 2026-09-28
 
