@@ -40,3 +40,37 @@ test('RPC client validates the transaction and receipt shapes before returning t
     await assert.rejects(() => client.call('https://rpc.invalid', method, []), (error: unknown) => error instanceof Error && 'code' in error && error.code === 'RPC_INVALID_RESPONSE');
   }
 });
+
+test('RPC client rejects invalid retry and timeout settings before network use', () => {
+  for (const options of [{ retries: -1 }, { retries: 0.5 }, { timeoutMs: 0 }, { timeoutMs: Infinity }]) {
+    assert.throws(() => createRpcClient(options), TypeError);
+  }
+});
+
+test('RPC client does not send a pre-aborted request or retry after cancellation', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let calls = 0;
+  const client = createRpcClient({ retries: 2, fetchImpl: async () => { calls += 1; return Response.json({ jsonrpc: '2.0', id: 1, result: '0x1' }); } });
+  await assert.rejects(() => client.call('https://rpc.invalid', 'eth_chainId', [], controller.signal), (error: unknown) => error instanceof Error && 'code' in error && error.code === 'REQUEST_ABORTED');
+  assert.equal(calls, 0);
+});
+
+test('RPC client reports malformed response JSON as invalid wire data', async () => {
+  const client = createRpcClient({ retries: 0, fetchImpl: async () => new Response('{broken', { headers: { 'content-type': 'application/json' } }) });
+  await assert.rejects(() => client.call('https://rpc.invalid', 'eth_chainId', []), (error: unknown) => error instanceof Error && 'code' in error && error.code === 'RPC_INVALID_RESPONSE');
+});
+
+test('RPC client interrupts retry backoff when its caller cancels', async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const client = createRpcClient({
+    retries: 2,
+    fetchImpl: async () => { calls += 1; throw new Error('offline'); },
+    sleep: () => new Promise(() => {}),
+  });
+  const pending = client.call('https://rpc.invalid', 'eth_chainId', [], controller.signal);
+  setTimeout(() => controller.abort(), 0);
+  await assert.rejects(pending, (error: unknown) => error instanceof Error && 'code' in error && error.code === 'REQUEST_ABORTED');
+  assert.equal(calls, 1);
+});

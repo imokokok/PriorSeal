@@ -74,6 +74,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, proof
         if (req.method === 'POST' && path === '/v1/archive') {
           if (access.role !== 'writer') throw new PriorSealError('ARCHIVE_FORBIDDEN', 'This project credential is read-only');
           assertOnlyFields(body, ['artifact', 'supersedesId'], 'archive upload');
+          if (body.supersedesId !== undefined && body.supersedesId !== null && typeof body.supersedesId !== 'string') throw new PriorSealError('INVALID_REQUEST', 'Invalid superseded archive identifier');
           const entry = archiveEntry(body.artifact, access, { supersedesId: body.supersedesId, now: now() });
           if (entry.supersedesId && !await store.getArchiveEntry(access, entry.supersedesId)) throw new PriorSealError('NOT_FOUND', 'Superseded entry is not in this project');
           return respond(201, await store.saveArchiveEntry(entry));
@@ -112,7 +113,11 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, proof
         const result = await observeExecution({ input: body, store, observer, signal: deadline.signal, privateKeyPem, issuer, keyId, publicKeyPem, idempotencyKey: typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : undefined, transparencyProvider, authorizationAudience, verifyContractSignature, now });
         const observationCycle = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : requestId;
         const response = result.response as { observation: { status: string } } & Record<string, unknown>;
-        const observationJob = observationWorker && ['PENDING', 'NOT_FOUND', 'RPC_ERROR', 'RPC_TIMEOUT'].includes(response.observation.status) ? await observationWorker.enqueuePersistent({ ...body, idempotencyKey: `observation:${hashJson(body)}:${observationCycle}` }) : null;
+        let observationJob = null;
+        if (observationWorker && ['PENDING', 'NOT_FOUND', 'RPC_ERROR', 'RPC_TIMEOUT'].includes(response.observation.status)) {
+          if (typeof body.txHash !== 'string') throw new PriorSealError('INVALID_REQUEST', 'Observation transaction hash is required');
+          observationJob = await observationWorker.enqueuePersistent({ ...body, txHash: body.txHash, idempotencyKey: `observation:${hashJson(body)}:${observationCycle}` });
+        }
         return respond(200, { ...response, ...(observationJob ? { observationJob } : {}), requestId }, result.replay ? { 'idempotency-replayed': 'true' } : {});
       }
       const transparencyMatch = req.method === 'GET' && path.match(/^\/v1\/authorizations\/([^/]+)\/transparency$/);
@@ -123,7 +128,18 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, proof
       if (bundleMatch) { const receipt = await store.getReceipt(decodeURIComponent(bundleMatch[1])); if (!receipt) throw new PriorSealError('RECEIPT_NOT_FOUND', 'Receipt not found'); return respond(200, buildVerificationBundle({ receipt, keyRegistry: keyRegistryDocument(issuer, keyRegistry), assembledAt: Math.floor(now() / 1000) })); }
       const match = req.method === 'GET' && path.match(/^\/v1\/receipts\/([^/]+)$/);
       if (match) { const receipt = await store.getReceipt(decodeURIComponent(match[1])); if (!receipt) throw new PriorSealError('RECEIPT_NOT_FOUND', 'Receipt not found'); return respond(200, receipt); }
-      if (req.method === 'POST' && path === '/v1/receipts/verify') { assertOnlyFields(body, ['receipt'], 'verification request'); const entry = keyRegistry.get(body.receipt?.keyId); const result = !entry ? { valid: false, code: 'UNKNOWN_KEY' } : ['priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3'].includes(body.receipt?.schema) ? await verifyAuthorizedReceipt(body.receipt, entry.publicKey, { audience: authorizationAudience, verifyContractSignature, key: entry, now: Math.floor(now() / 1000) }) : verifyReceipt(body.receipt, entry.publicKey, { keyId: entry.keyId, now: Math.floor(now() / 1000), key: entry }); return respond(200, { convenienceEndpoint: true, independentVerification: 'Use the local verifier; do not trust this API response alone.', result, requestId }); }
+      if (req.method === 'POST' && path === '/v1/receipts/verify') {
+        assertOnlyFields(body, ['receipt'], 'verification request');
+        const receipt = body.receipt && typeof body.receipt === 'object' && !Array.isArray(body.receipt)
+          ? body.receipt as Record<string, unknown> : null;
+        const entry = keyRegistry.get(typeof receipt?.keyId === 'string' ? receipt.keyId : '');
+        const verificationOptions = { key: entry, now: Math.floor(now() / 1000) };
+        const result = !entry ? { valid: false, code: 'UNKNOWN_KEY' }
+          : ['priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3'].includes(String(receipt?.schema))
+            ? await verifyAuthorizedReceipt(receipt, entry.publicKey, { ...verificationOptions, audience: authorizationAudience, verifyContractSignature })
+            : verifyReceipt(receipt, entry.publicKey, { ...verificationOptions, keyId: entry.keyId });
+        return respond(200, { convenienceEndpoint: true, independentVerification: 'Use the local verifier; do not trust this API response alone.', result, requestId });
+      }
       if (req.method === 'GET' && path === '/.well-known/priorseal-keys.json') return respond(200, { ...keyRegistryDocument(issuer, keyRegistry), requestId }, { 'cache-control': 'public, max-age=300' });
       throw new PriorSealError('NOT_FOUND', 'Route not found');
     };

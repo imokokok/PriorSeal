@@ -208,6 +208,29 @@ test('native bundle never self-trusts and custom audience is enforced after inde
   await expect(page.locator('.verification-result')).toContainText('AUTHORIZATION_AUDIENCE_MISMATCH')
 })
 
+test('a trust profile draft without confirmedAt stays untrusted until explicit confirmation', async ({ page }) => {
+  const { bundle, profile } = await nativeFixture()
+  const { confirmedAt: _confirmedAt, ...draft } = profile
+  await page.goto('/app/verify')
+  await page.getByLabel('Evidence JSON', { exact: true }).fill(JSON.stringify(bundle))
+  await page.getByText('Import a trust profile', { exact: true }).click()
+  await page.getByLabel('Trust profile JSON', { exact: true }).fill(JSON.stringify(draft))
+  await page.getByRole('button', { name: 'Import profile', exact: true }).click()
+  await expect(page.getByText('Not recorded', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save confirmed profile' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Verify locally' }).click()
+  await expect(page.locator('.verification-result')).toContainText('TRUST SOURCE REQUIRED')
+
+  // Browser storage is input too: an old or injected draft cannot be selected as saved trust.
+  await page.goto('/app')
+  await page.evaluate((storedDraft) => {
+    localStorage.setItem('priorseal.storage-preference.v1', JSON.stringify({ choice: 'granted', updatedAt: Date.now() }))
+    localStorage.setItem('priorseal.trust-profiles.v1', JSON.stringify([storedDraft]))
+  }, { ...draft, confirmedAt: 0 })
+  await page.locator('a[href="/app/verify"]').first().click()
+  await expect(page.getByLabel('Saved trust profile').locator('option')).toHaveCount(1)
+})
+
 test('receipt detail presents unverified receipt fields as signed claims', async ({ page }) => {
   const { bundle } = await nativeFixture()
   await page.route(`**/v1/receipts/${encodeURIComponent(bundle.receipt.receiptId)}`, route => route.fulfill({ json: bundle.receipt }))

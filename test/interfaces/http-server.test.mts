@@ -132,6 +132,9 @@ test('API matches pathnames with query strings and uses idempotency safely', asy
 test('API rejects unknown fields and unsafe JSON keys without exposing internals', async (t) => {
   const server = await serverFor(t); const unknown = await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...intent, unexpected: true }) }); assert.equal(unknown.status, 400); assert.equal(unknown.json().error.code, 'UNKNOWN_FIELD');
   const badType = await request(server, '/v1/intents', { method: 'POST', body: JSON.stringify(intent) }); assert.equal(badType.status, 415);
+  const spoofedType = await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json-extra' }, body: JSON.stringify(intent) }); assert.equal(spoofedType.status, 415);
+  const malformedUtf8 = await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, stream: Readable.from([Buffer.from([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d])]) }); assert.equal(malformedUtf8.status, 400); assert.equal(malformedUtf8.json().error.code, 'INVALID_JSON');
+  const jsonWithCharset = await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' }, body: JSON.stringify(intent) }); assert.equal(jsonWithCharset.status, 201);
   const health = await request(server, '/health/live'); assert.equal(health.json().status, 'ok');
 });
 test('authorization preparation rejects unsupported intent and exact-call policy combinations before wallet signing', async (t) => {

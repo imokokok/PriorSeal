@@ -1,13 +1,27 @@
 import { errorCode } from '../../../shared/error-code.mjs';
 import { PriorSealError } from '../../../domain/errors.mjs';
 
-function rpcError(code: string, message: string) { return new PriorSealError(code, message); }
-type RpcMetrics = { timing?: (name: string, duration: number, tags: Record<string, string>) => void; increment?: (name: string, tags: Record<string, string>) => void };
+type RpcMetrics = {
+  timing?: (name: string, duration: number, tags: Record<string, string>) => void;
+  increment?: (name: string, tags: Record<string, string>) => void;
+};
+type RpcClientOptions = {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  retries?: number;
+  sleep?: (ms: number) => Promise<unknown>;
+  metrics?: RpcMetrics | null;
+};
+
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const hex = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value);
 const hash = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value);
 const data = (value: unknown): value is string => typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2})*$/.test(value);
 const optional = (value: unknown, guard: (value: unknown) => boolean): boolean => value === undefined || value === null || guard(value);
+
+function rpcError(code: string, message: string): PriorSealError {
+  return new PriorSealError(code, message);
+}
 
 function validResult(method: string, value: unknown): boolean {
   if (method === 'eth_chainId' || method === 'eth_blockNumber') return hex(value);
@@ -18,25 +32,102 @@ function validResult(method: string, value: unknown): boolean {
   return true;
 }
 
-export function createRpcClient({ fetchImpl = fetch, timeoutMs = 10_000, retries = 1, sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)), metrics = null }: { fetchImpl?: typeof fetch; timeoutMs?: number; retries?: number; sleep?: (ms: number) => Promise<unknown>; metrics?: RpcMetrics | null } = {}) {
+function validateEnvelope(body: unknown, method: string): unknown {
+  if (!record(body) || body.jsonrpc !== '2.0' || body.id !== 1 || ('error' in body) === ('result' in body)) {
+    throw rpcError('RPC_INVALID_RESPONSE', 'RPC endpoint returned an invalid JSON-RPC envelope');
+  }
+  if ('error' in body) {
+    if (!record(body.error) || !Number.isInteger(body.error.code) || typeof body.error.message !== 'string') {
+      throw rpcError('RPC_INVALID_RESPONSE', 'RPC endpoint returned an invalid JSON-RPC error');
+    }
+    // Never surface remote error text: providers may include the credential-bearing URL.
+    throw rpcError('RPC_REMOTE_ERROR', 'RPC endpoint returned an error');
+  }
+  if (!validResult(method, body.result)) throw rpcError('RPC_INVALID_RESPONSE', 'RPC endpoint returned an invalid result');
+  return body.result;
+}
+
+function aborted(): PriorSealError {
+  return rpcError('REQUEST_ABORTED', 'Request was aborted');
+}
+
+/** One timeout belongs to each RPC attempt; caller cancellation also interrupts retry backoff. */
+export function createRpcClient({
+  fetchImpl = fetch,
+  timeoutMs = 10_000,
+  retries = 1,
+  sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  metrics = null,
+}: RpcClientOptions = {}) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) throw new TypeError('timeoutMs must be a positive integer');
+  if (!Number.isSafeInteger(retries) || retries < 0) throw new TypeError('retries must be a non-negative integer');
+
+  async function request(url: string, method: string, params: unknown[], signal?: AbortSignal): Promise<unknown> {
+    if (signal?.aborted) throw aborted();
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal?.addEventListener('abort', cancel, { once: true });
+    const timer = setTimeout(cancel, timeoutMs);
+    try {
+      const response = await fetchImpl(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw rpcError('RPC_HTTP_ERROR', `RPC endpoint returned HTTP ${response.status}`);
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        throw rpcError('RPC_INVALID_RESPONSE', 'RPC endpoint returned invalid JSON');
+      }
+      if (signal?.aborted) throw aborted();
+      if (controller.signal.aborted) throw rpcError('RPC_TIMEOUT', 'RPC endpoint timed out');
+      return validateEnvelope(body, method);
+    } catch (error) {
+      if (signal?.aborted) throw aborted();
+      if (controller.signal.aborted) throw rpcError('RPC_TIMEOUT', 'RPC endpoint timed out');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', cancel);
+    }
+  }
+
+  async function retryDelay(ms: number, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) throw aborted();
+    if (!signal) { await sleep(ms); return; }
+    let cancel: (() => void) | undefined;
+    const cancellation = new Promise<never>((_resolve, reject) => {
+      cancel = () => reject(aborted());
+      signal.addEventListener('abort', cancel, { once: true });
+    });
+    try {
+      if (signal.aborted) throw aborted();
+      await Promise.race([sleep(ms), cancellation]);
+      if (signal.aborted) throw aborted();
+    } finally {
+      if (cancel) signal.removeEventListener('abort', cancel);
+    }
+  }
+
   return {
     async call<T = unknown>(url: string, method: string, params: unknown[], signal?: AbortSignal): Promise<T> {
       let lastError: unknown;
       for (let attempt = 0; attempt <= retries; attempt += 1) {
-        const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeoutMs); const abort = () => controller.abort(); signal?.addEventListener('abort', abort, { once: true }); const started = Date.now();
+        const started = Date.now();
         try {
-          const response = await fetchImpl(url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: controller.signal });
-          if (!response.ok) throw rpcError('RPC_HTTP_ERROR', `RPC endpoint returned HTTP ${response.status}`);
-          const body: unknown = await response.json();
-          if (!record(body) || body.jsonrpc !== '2.0' || body.id !== 1 || ('error' in body) === ('result' in body)) throw rpcError('RPC_INVALID_RESPONSE', 'RPC endpoint returned an invalid JSON-RPC envelope');
-          if ('error' in body) {
-            if (!record(body.error) || !Number.isInteger(body.error.code) || typeof body.error.message !== 'string') throw rpcError('RPC_INVALID_RESPONSE', 'RPC endpoint returned an invalid JSON-RPC error');
-            throw rpcError('RPC_REMOTE_ERROR', 'RPC endpoint returned an error');
-          }
-          if (!validResult(method, body.result)) throw rpcError('RPC_INVALID_RESPONSE', 'RPC endpoint returned an invalid result');
-          metrics?.timing?.('priorseal_rpc_latency_ms', Date.now() - started, { method, outcome: 'ok' }); return body.result as T;
-        } catch (error) { lastError = error; metrics?.increment?.('priorseal_rpc_errors_total', { method, code: errorCode(error) ?? 'RPC_FAILURE' }); if (signal?.aborted) throw rpcError('REQUEST_ABORTED', 'Request was aborted'); if (controller.signal.aborted) lastError = rpcError('RPC_TIMEOUT', 'RPC endpoint timed out'); if (attempt < retries) await sleep(Math.min(100 * 2 ** attempt, 1_000)); }
-        finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+          const result = await request(url, method, params, signal);
+          metrics?.timing?.('priorseal_rpc_latency_ms', Date.now() - started, { method, outcome: 'ok' });
+          return result as T;
+        } catch (error) {
+          lastError = error;
+          metrics?.increment?.('priorseal_rpc_errors_total', { method, code: errorCode(error) ?? 'RPC_FAILURE' });
+          if (errorCode(error) === 'REQUEST_ABORTED') throw error;
+          if (attempt < retries) await retryDelay(Math.min(100 * 2 ** attempt, 1_000), signal);
+        }
       }
       throw lastError instanceof PriorSealError ? lastError : rpcError('RPC_FAILURE', 'RPC endpoint failed');
     },
