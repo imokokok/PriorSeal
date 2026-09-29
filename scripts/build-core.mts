@@ -8,11 +8,12 @@ import ts from 'typescript';
 
 const check = process.argv[2] === '--check';
 const testsOnly = process.argv[2] === '--tests-only';
+const testsWithOperations = process.argv[2] === '--tests-with-operations';
 const generatorsOnly = process.argv[2] === '--generators-only';
 const toolsOnly = process.argv[2] === '--tools-only';
 const operationsOnly = process.argv[2] === '--operations-only';
-if (process.argv.length > 3 || (process.argv.length === 3 && !check && !testsOnly && !generatorsOnly && !toolsOnly && !operationsOnly)) {
-  throw new Error('Usage: node scripts/build-core.mjs [--check|--tests-only|--generators-only|--tools-only|--operations-only]');
+if (process.argv.length > 3 || (process.argv.length === 3 && !check && !testsOnly && !testsWithOperations && !generatorsOnly && !toolsOnly && !operationsOnly)) {
+  throw new Error('Usage: node scripts/build-core.mjs [--check|--tests-only|--tests-with-operations|--generators-only|--tools-only|--operations-only]');
 }
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -71,7 +72,8 @@ function findSources(directory: string): string[] {
   });
 }
 
-const sources = testsOnly ? findSources(join(projectRoot, 'test')) : generatorsOnly ? onDemandGeneratorSources : toolsOnly ? onDemandToolSources : operationsOnly ? onDemandOperationSources : [
+const testSources = () => findSources(join(projectRoot, 'test'));
+const sources = testsOnly ? testSources() : testsWithOperations ? [...testSources(), ...onDemandOperationSources].sort() : generatorsOnly ? onDemandGeneratorSources : toolsOnly ? onDemandToolSources : operationsOnly ? onDemandOperationSources : [
   ...findSources(sourceRoot),
   ...findSources(join(projectRoot, 'scripts')).filter((path) => !onDemandPaths.has(path)),
   ...findSources(join(projectRoot, 'sdk', 'scripts')),
@@ -79,7 +81,7 @@ const sources = testsOnly ? findSources(join(projectRoot, 'test')) : generatorsO
   ...(check ? existingOnDemandSources : []),
 ].sort();
 if (sources.length === 0) throw new Error('No TypeScript runtime sources found');
-for (const source of testsOnly || generatorsOnly || toolsOnly || operationsOnly ? [] : frozenExamples.keys()) {
+for (const source of testsOnly || testsWithOperations || generatorsOnly || toolsOnly || operationsOnly ? [] : frozenExamples.keys()) {
   if (!existsSync(join(projectRoot, source))) throw new Error(`Frozen TypeScript reference is missing: ${source}`);
 }
 
@@ -92,7 +94,7 @@ function runtimePath(sourcePath: string): string {
 
 const timestampSourcePath = join(sourceRoot, 'domain', 'rfc3161-source.mts');
 const timestampDeclarationPath = join(sourceRoot, 'domain', 'rfc3161.d.mts');
-if (!testsOnly && !generatorsOnly && !toolsOnly && !operationsOnly) {
+if (!testsOnly && !testsWithOperations && !generatorsOnly && !toolsOnly && !operationsOnly) {
   const declaration = ts.transpileDeclaration(readFileSync(timestampSourcePath, 'utf8'), {
     fileName: timestampSourcePath,
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext },
@@ -139,7 +141,7 @@ for (const sourcePath of sources) {
   const name = sourcePath.slice(sourcePath.lastIndexOf(sep) + 1, -4);
   const source = readFileSync(sourcePath, 'utf8');
   const compiled = transformSync(source, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
-  const command = testsOnly ? 'core:build:tests'
+  const command = sourcePath.startsWith(join(projectRoot, 'test') + sep) ? 'core:build:tests'
     : onDemandGeneratorSources.includes(sourcePath) ? 'core:build:generators'
     : onDemandToolSources.includes(sourcePath) ? 'core:build:tools'
     : onDemandOperationSources.includes(sourcePath) ? 'core:build:operations'
@@ -162,7 +164,7 @@ for (const sourcePath of sources) {
 
 // Historical WAK READMEs invoke this Python filename. Its only job is to
 // replace itself with the TypeScript-backed Node packager; keep it generated.
-if (!testsOnly && !generatorsOnly && !toolsOnly && !operationsOnly) {
+if (!testsOnly && !testsWithOperations && !generatorsOnly && !toolsOnly && !operationsOnly) {
   const compatibilityLauncherPath = join(projectRoot, 'scripts', 'package-web3-agent-kit-integration-spike-v1.py');
   const compatibilityLauncher = `#!/usr/bin/env python3
 """Compatibility launcher for the frozen WAK bundle documentation."""

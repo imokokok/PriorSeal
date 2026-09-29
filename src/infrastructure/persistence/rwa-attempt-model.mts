@@ -12,8 +12,10 @@ const object = (v: unknown): v is Record<string, unknown> => v !== null && typeo
 const hash = (v: unknown): v is string => typeof v === 'string' && /^0x[0-9a-f]{64}$/.test(v);
 const time = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 const uint = (v: unknown): v is string => typeof v === 'string' && /^(0|[1-9][0-9]{0,77})$/.test(v) && BigInt(v) < 2n ** 256n;
+const authorizationId = (v: unknown): v is string => typeof v === 'string' && /^auth_[0-9a-f]{32}$/.test(v);
+const nonceKey = (tx: RwaTransaction): string => hashJson({ chainId: tx.chainId, sender: tx.from, nonce: tx.nonce });
 export function assertRwaAuthorizationId(id: unknown): asserts id is string {
-  if (typeof id !== 'string' || !/^auth_[0-9a-f]{32}$/.test(id)) throw new Error('RWA_RESERVATION_INVALID');
+  if (!authorizationId(id)) throw new Error('RWA_RESERVATION_INVALID');
 }
 function transaction(v: unknown): v is RwaTransaction {
   return object(v) && Object.keys(v).sort().join(',') === 'chainId,data,from,nonce,to,value' &&
@@ -26,16 +28,21 @@ export function createRwaReservation(input: RwaReservation): RwaAttempt {
   assertRwaAuthorizationId(v.authorizationId);
   if (!hash(v.executionDigest) || !time(v.now) || !transaction(v.transaction)) throw new Error('RWA_RESERVATION_INVALID');
   return { authorizationId: v.authorizationId, executionDigest: v.executionDigest,
-    nonceKey: hashJson({ chainId: v.transaction.chainId, sender: v.transaction.from, nonce: v.transaction.nonce }),
+    nonceKey: nonceKey(v.transaction),
     transaction: v.transaction, status: 'RESERVED', txHash: null, updatedAt: v.now };
 }
-/** Validate database JSON and its separately indexed identities before any use. */
-export function persistedRwaAttempt(value: unknown, authorizationId: unknown, nonceKey: unknown): RwaAttempt {
+/** Validate a stored attempt without cloning it, so a file journal is checked in one pass. */
+export function assertRwaAttempt(value: unknown, reservationErrorCode = 'RWA_JOURNAL_INVALID'): asserts value is RwaAttempt {
   if (!object(value) || Object.keys(value).sort().join(',') !== 'authorizationId,executionDigest,nonceKey,status,transaction,txHash,updatedAt') throw new Error('RWA_JOURNAL_INVALID');
-  const base = createRwaReservation({ authorizationId: value.authorizationId as string, transaction: value.transaction, executionDigest: value.executionDigest as string, now: value.updatedAt as number });
-  if (base.authorizationId !== authorizationId || base.nonceKey !== nonceKey || value.nonceKey !== nonceKey ||
-    typeof value.status !== 'string' || !['RESERVED','SUBMITTING','SUBMITTED','UNCERTAIN','REJECTED','CONFIRMED','REVERTED'].includes(value.status) ||
+  if (!authorizationId(value.authorizationId) || !hash(value.executionDigest) || !time(value.updatedAt) || !transaction(value.transaction)) throw new Error(reservationErrorCode);
+  if (value.nonceKey !== nonceKey(value.transaction) || typeof value.status !== 'string' ||
+    !['RESERVED','SUBMITTING','SUBMITTED','UNCERTAIN','REJECTED','CONFIRMED','REVERTED'].includes(value.status) ||
     (['SUBMITTED','CONFIRMED','REVERTED'].includes(value.status) ? !hash(value.txHash) : value.txHash !== null)) throw new Error('RWA_JOURNAL_INVALID');
+}
+/** Validate database JSON and its separately indexed identities before any use. */
+export function persistedRwaAttempt(value: unknown, authorizationId: unknown, indexedNonceKey: unknown): RwaAttempt {
+  assertRwaAttempt(value, 'RWA_RESERVATION_INVALID');
+  if (value.authorizationId !== authorizationId || value.nonceKey !== indexedNonceKey) throw new Error('RWA_JOURNAL_INVALID');
   return structuredClone(value) as RwaAttempt;
 }
 export function transitionRwaAttempt(attempt: RwaAttempt, expected: RwaAttemptStatus[], patch: RwaTransition): RwaAttempt {

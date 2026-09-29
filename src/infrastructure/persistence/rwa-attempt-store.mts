@@ -3,7 +3,7 @@ import { mkdir, open, readFile, rename, rmdir } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { hashJson } from '../../domain/hashing.mjs';
-import { transitionRwaAttempt } from './rwa-attempt-model.mjs';
+import { assertRwaAttempt, createRwaReservation, transitionRwaAttempt } from './rwa-attempt-model.mjs';
 
 export type RwaTransaction = { chainId: number; data: string; from: string; nonce: string; to: string; value: string };
 export type RwaAttemptStatus = 'RESERVED' | 'SUBMITTING' | 'SUBMITTED' | 'UNCERTAIN' | 'REJECTED' | 'CONFIRMED' | 'REVERTED';
@@ -14,15 +14,6 @@ type Transition = { status: RwaAttemptStatus; txHash?: string | null; updatedAt:
 const empty = (): Journal => ({ schema: 'priorseal.rwa-attempt-journal.v1', attempts: {}, nonces: {} });
 const fail = (code: string): never => { throw new Error(code); };
 const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
-const uint = (v: unknown): v is string => typeof v === 'string' && /^(0|[1-9][0-9]{0,77})$/.test(v) && BigInt(v) < 2n ** 256n;
-const hash = (v: unknown): v is string => typeof v === 'string' && /^0x[0-9a-f]{64}$/.test(v);
-const time = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
-function validTransaction(tx: unknown): tx is RwaTransaction {
-  return object(tx) && Object.keys(tx).sort().join(',') === 'chainId,data,from,nonce,to,value' &&
-    typeof tx.chainId === 'number' && Number.isSafeInteger(tx.chainId) && tx.chainId > 0 && [tx.from, tx.to].every(v => typeof v === 'string' && /^0x[0-9a-f]{40}$/.test(v)) &&
-    typeof tx.data === 'string' && /^0x(?:[0-9a-fA-F]{2})+$/.test(tx.data) && uint(tx.value) && uint(tx.nonce);
-}
-const nonceId = (tx: RwaTransaction) => hashJson({ chainId: tx.chainId, sender: tx.from, nonce: tx.nonce });
 /** One durable local journal for ALL callers using a signer. Not a distributed/NFS lock.
  * Claims never expire or auto-release. A crashed lock requires offline operator recovery.
  * Keep the directory private, persistent, backed up, and outside ephemeral deployments.
@@ -38,11 +29,8 @@ export function createRwaAttemptStore({ directory }: { directory: string }) {
       const attempts = j.attempts as Record<string, unknown>;
       const nonces = j.nonces as Record<string, unknown>;
       for (const [id, a] of Object.entries(attempts)) {
-        if (!object(a) || Object.keys(a).sort().join(',') !== 'authorizationId,executionDigest,nonceKey,status,transaction,txHash,updatedAt' ||
-          typeof a.authorizationId !== 'string' || !/^auth_[0-9a-f]{32}$/.test(a.authorizationId) || hashJson(a.authorizationId) !== id || !validTransaction(a.transaction) ||
-          typeof a.nonceKey !== 'string' || a.nonceKey !== nonceId(a.transaction) || nonces[a.nonceKey] !== id || !hash(a.executionDigest) || !time(a.updatedAt) ||
-          typeof a.status !== 'string' || !['RESERVED','SUBMITTING','SUBMITTED','UNCERTAIN','REJECTED','CONFIRMED','REVERTED'].includes(a.status) ||
-          (['SUBMITTED','CONFIRMED','REVERTED'].includes(a.status) ? !hash(a.txHash) : a.txHash !== null)) fail('RWA_JOURNAL_INVALID');
+        assertRwaAttempt(a);
+        if (hashJson(a.authorizationId) !== id || nonces[a.nonceKey] !== id) fail('RWA_JOURNAL_INVALID');
       }
       if (Object.entries(nonces).some(([nonce,id]) => typeof id !== 'string' || (object(attempts[id]) ? attempts[id].nonceKey : undefined) !== nonce)) fail('RWA_JOURNAL_INVALID');
       return j as Journal;
@@ -73,14 +61,11 @@ export function createRwaAttemptStore({ directory }: { directory: string }) {
   return {
     async get(authorizationId: string): Promise<RwaAttempt | null> { return structuredClone((await load()).attempts[hashJson(authorizationId)] ?? null); },
     async reserve({ authorizationId, transaction, executionDigest, now }: { authorizationId: string; transaction: unknown; executionDigest: string; now: number }) {
-      const tx = structuredClone(transaction), id = hashJson(authorizationId);
-      if (!/^auth_[0-9a-f]{32}$/.test(authorizationId) || !hash(executionDigest) || !time(now)) fail('RWA_RESERVATION_INVALID');
-      if (!validTransaction(tx)) throw new Error('RWA_RESERVATION_INVALID');
-      const nonceKey = nonceId(tx);
+      const attempt = createRwaReservation({ authorizationId, transaction, executionDigest, now });
+      const id = hashJson(authorizationId), nonceKey = attempt.nonceKey;
       return mutate((j) => {
         if (j.attempts[id]) return { claimed: false, attempt: j.attempts[id] };
         if (j.nonces[nonceKey]) return { claimed: false, attempt: j.attempts[j.nonces[nonceKey]], code: 'RWA_NONCE_ALREADY_RESERVED' };
-        const attempt: RwaAttempt = { authorizationId, nonceKey, transaction: tx, executionDigest, status: 'RESERVED', txHash: null, updatedAt: now };
         j.nonces[nonceKey] = id; j.attempts[id] = attempt;
         return { claimed: true, attempt };
       });
