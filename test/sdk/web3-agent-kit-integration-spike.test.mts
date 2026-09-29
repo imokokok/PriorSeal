@@ -10,6 +10,7 @@ import { runVerification } from '../../examples/web3-agent-kit-integration-spike
 
 const bundle = fileURLToPath(new URL('../../examples/web3-agent-kit-integration-spike-v1/', import.meta.url))
 const maintenanceBundle = fileURLToPath(new URL('../../examples/web3-agent-kit-integration-spike-v1.0.1/', import.meta.url))
+const repinnedBundle = fileURLToPath(new URL('../../examples/web3-agent-kit-integration-spike-v1.1/', import.meta.url))
 const childEnv = { ...process.env }
 delete childEnv.NODE_TEST_CONTEXT
 
@@ -70,4 +71,70 @@ test('the v1.0.1 maintenance bundle closes the stale Base Sepolia compatibility 
   assert.equal(verified.wakAcceptance, 'NOT_RUN')
   assert.match(verified.compatibilityNote, /Chain\.BASE_SEPOLIA with chain ID 84532/)
   assert.doesNotMatch(verified.compatibilityNote, /lacks Base Sepolia/i)
+})
+
+test('v1.1 repins every WAK case to 1.18.5 while preserving the synthetic baseline', () => {
+  const verified = JSON.parse(execFileSync(process.execPath, [join(repinnedBundle, 'verify.mjs')], {
+    encoding: 'utf8', cwd: repinnedBundle, env: childEnv,
+  }))
+  assert.equal(verified.status, 'PASS')
+  assert.equal(verified.fixtureBundleVersion, 'v1.1')
+  assert.equal(verified.wakAcceptance, 'NOT_RUN')
+
+  const cases = JSON.parse(readFileSync(join(repinnedBundle, 'fixture/cases.json'), 'utf8'))
+  assert.deepEqual(new Set(cases.cases.map((entry: { wakVersion: string }) => entry.wakVersion)), new Set(['1.18.5']))
+  assert.deepEqual(
+    readFileSync(join(repinnedBundle, 'fixture/baseline.json')),
+    readFileSync(join(maintenanceBundle, 'fixture/baseline.json')),
+  )
+
+  const report = join(mkdtempSync(join(tmpdir(), 'wak-v1.1-report-')), 'report.json')
+  try {
+    writeFileSync(report, JSON.stringify({ schema: 'wak-insight-priorseal.acceptance-report.v1', fixtureVersion: 'v1' }))
+    const oldReport = spawnSync(process.execPath, [join(repinnedBundle, 'verify.mjs'), '--report', report], {
+      encoding: 'utf8', cwd: repinnedBundle, env: childEnv,
+    })
+    assert.equal(oldReport.status, 1)
+    assert.equal(JSON.parse(oldReport.stdout).code, 'REPORT_SCHEMA_INVALID')
+  } finally {
+    rmSync(join(report, '..'), { recursive: true, force: true })
+  }
+})
+
+test('v1.1 requires independently pinned runtime provenance before P1 receipt checks', () => {
+  const baseline = JSON.parse(readFileSync(join(repinnedBundle, 'fixture/baseline.json'), 'utf8'))
+  const vectors = JSON.parse(readFileSync(join(repinnedBundle, 'fixture/cases.json'), 'utf8')).cases as Array<{
+    id: string; wakVersion: string; inputArtifactHashes: Record<string, string>; terminal: string;
+    reason: string; counts: Record<string, number>;
+  }>
+  const report = {
+    schema: 'wak-insight-priorseal.acceptance-report.v1', fixtureVersion: 'v1.1',
+    envelopeDigest: baseline.wak.callEnvelope.digest,
+    policyCommitmentDigest: baseline.wak.policyDecisionCommitment.digest,
+    instrumentation: { explicitSignerProtocol: true, explicitBroadcastFn: true },
+    adapter: { newFieldTypes: 0 },
+    adapterAcceptance: { expectedNewFieldTypes: 0, actualNewFieldTypes: 0, terminal: 'PASS' },
+    cases: vectors.map((vector) => ({
+      id: vector.id, wakVersion: vector.wakVersion,
+      inputArtifactHashes: { ...vector.inputArtifactHashes, ...(vector.id === 'P1' ? { liveInputSha256: 'a'.repeat(64) } : {}) },
+      expectedTerminal: vector.terminal, actualTerminal: vector.terminal, reason: vector.reason,
+      counts: vector.counts,
+      ...(vector.id === 'N5b' ? { reconstruction: { differentProviderInstance: true, samePersistedAcceptanceId: true } } : {}),
+    })),
+    runtime: { packageVersion: '1.18.5', commit: 'b'.repeat(40), treeClean: true },
+    versionAlignment: { fixturePinnedWakVersion: '1.18.5', runtimePackageVersion: '1.18.5', aligned: true },
+  }
+  const temporary = mkdtempSync(join(tmpdir(), 'wak-v1.1-p1-'))
+  try {
+    const reportPath = join(temporary, 'report.json')
+    writeFileSync(reportPath, JSON.stringify(report))
+    const verify = (...args: string[]) => JSON.parse(spawnSync(process.execPath, [join(repinnedBundle, 'verify.mjs'), '--report', reportPath, ...args], {
+      encoding: 'utf8', cwd: repinnedBundle, env: childEnv,
+    }).stdout)
+    assert.equal(verify().code, 'WAK_COMMIT_PIN_REQUIRED')
+    assert.equal(verify('--wak-commit', 'c'.repeat(40)).code, 'REPORT_RUNTIME_COMMIT_MISMATCH')
+    assert.equal(verify('--wak-commit', 'b'.repeat(40)).code, 'LIVE_KEY_PIN_REQUIRED')
+  } finally {
+    rmSync(temporary, { recursive: true, force: true })
+  }
 })

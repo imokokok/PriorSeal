@@ -18,7 +18,7 @@ const FILES = [
 const DOS_EPOCH_DATE = 0x21;
 const UNIX_FILE_MODE = 0o644 << 16;
 
-type Version = 'v1' | 'v1.0.1';
+type Version = 'v1' | 'v1.0.1' | 'v1.1';
 
 interface Options {
   version: Version;
@@ -42,7 +42,7 @@ const CRC32_TABLE = Uint32Array.from({ length: 256 }, (_, index) => {
 
 function usage(message?: string): never {
   if (message) console.error(message);
-  console.error('Usage: node scripts/package-web3-agent-kit-integration-spike-v1.mjs [--version v1|v1.0.1] [--output PATH]');
+  console.error('Usage: node scripts/package-web3-agent-kit-integration-spike-v1.mjs [--version v1|v1.0.1|v1.1] [--output PATH]');
   process.exit(2);
 }
 
@@ -52,7 +52,7 @@ function parseArguments(arguments_: string[]): Options {
     const argument = arguments_[index];
     const value = arguments_[index + 1];
     if (argument === '--version') {
-      if (value !== 'v1' && value !== 'v1.0.1') usage(`Unsupported version: ${value ?? '<missing>'}`);
+      if (value !== 'v1' && value !== 'v1.0.1' && value !== 'v1.1') usage(`Unsupported version: ${value ?? '<missing>'}`);
       options.version = value;
       index += 1;
     } else if (argument === '--output') {
@@ -176,7 +176,7 @@ function createStoredZip(files: ReadonlyArray<readonly [string, Buffer]>): Buffe
 
 async function main(): Promise<void> {
   const options = parseArguments(process.argv.slice(2));
-  const suffix = options.version === 'v1' ? 'v1' : 'v1.0.1';
+  const suffix = options.version;
   const bundle = resolve(ROOT, `examples/web3-agent-kit-integration-spike-${suffix}`);
   const output = options.output ?? resolve(ROOT, `wak-insight-priorseal-conformance-${suffix}.zip`);
   const manifest = manifestFiles(JSON.parse(await readFile(resolve(bundle, 'fixture/manifest.json'), 'utf8')) as unknown);

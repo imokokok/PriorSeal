@@ -28,6 +28,7 @@ const reviewedPortableJavaScript = new Map<string, string | null>([
   ['examples/web3-agent-kit-integration-spike-v1/verify.mjs', 'examples/web3-agent-kit-integration-spike-v1/verify.source.reference.mts'],
   ['examples/web3-agent-kit-integration-spike-v1/verify.source.mjs', 'examples/web3-agent-kit-integration-spike-v1/verify.source.reference.mts'],
   ['examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs', 'examples/web3-agent-kit-integration-spike-v1.0.1/verify.source.mts'],
+  ['examples/web3-agent-kit-integration-spike-v1.1/verify.mjs', 'examples/web3-agent-kit-integration-spike-v1.1/verify.source.mts'],
 ]);
 
 const reviewedLegacyJavaScriptTests = new Set<string>();

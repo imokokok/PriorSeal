@@ -24,7 +24,7 @@ const CRC32_TABLE = Uint32Array.from({ length: 256 }, (_, index) => {
 });
 function usage(message) {
   if (message) console.error(message);
-  console.error("Usage: node scripts/package-web3-agent-kit-integration-spike-v1.mjs [--version v1|v1.0.1] [--output PATH]");
+  console.error("Usage: node scripts/package-web3-agent-kit-integration-spike-v1.mjs [--version v1|v1.0.1|v1.1] [--output PATH]");
   process.exit(2);
 }
 function parseArguments(arguments_) {
@@ -33,7 +33,7 @@ function parseArguments(arguments_) {
     const argument = arguments_[index];
     const value = arguments_[index + 1];
     if (argument === "--version") {
-      if (value !== "v1" && value !== "v1.0.1") usage(`Unsupported version: ${value ?? "<missing>"}`);
+      if (value !== "v1" && value !== "v1.0.1" && value !== "v1.1") usage(`Unsupported version: ${value ?? "<missing>"}`);
       options.version = value;
       index += 1;
     } else if (argument === "--output") {
@@ -146,7 +146,7 @@ function createStoredZip(files) {
 }
 async function main() {
   const options = parseArguments(process.argv.slice(2));
-  const suffix = options.version === "v1" ? "v1" : "v1.0.1";
+  const suffix = options.version;
   const bundle = resolve(ROOT, `examples/web3-agent-kit-integration-spike-${suffix}`);
   const output = options.output ?? resolve(ROOT, `wak-insight-priorseal-conformance-${suffix}.zip`);
   const manifest = manifestFiles(JSON.parse(await readFile(resolve(bundle, "fixture/manifest.json"), "utf8")));

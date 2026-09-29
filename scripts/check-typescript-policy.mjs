@@ -22,7 +22,8 @@ const reviewedPortableJavaScript = /* @__PURE__ */ new Map([
   ["examples/web3-agent-kit-base-swap-v1/verify.mjs", "examples/web3-agent-kit-base-swap-v1/verify.reference.mts"],
   ["examples/web3-agent-kit-integration-spike-v1/verify.mjs", "examples/web3-agent-kit-integration-spike-v1/verify.source.reference.mts"],
   ["examples/web3-agent-kit-integration-spike-v1/verify.source.mjs", "examples/web3-agent-kit-integration-spike-v1/verify.source.reference.mts"],
-  ["examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs", "examples/web3-agent-kit-integration-spike-v1.0.1/verify.source.mts"]
+  ["examples/web3-agent-kit-integration-spike-v1.0.1/verify.mjs", "examples/web3-agent-kit-integration-spike-v1.0.1/verify.source.mts"],
+  ["examples/web3-agent-kit-integration-spike-v1.1/verify.mjs", "examples/web3-agent-kit-integration-spike-v1.1/verify.source.mts"]
 ]);
 const reviewedLegacyJavaScriptTests = /* @__PURE__ */ new Set();
 const trackedFiles = execFileSync("git", ["ls-files", "-z"], { cwd: projectRoot, encoding: "utf8" }).split("\0").filter(Boolean);
