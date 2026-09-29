@@ -97,8 +97,16 @@ async function makeTestReceipt({
   return receiptFromAuthorization(result.authorization, name, executionEdits);
 }
 async function generatePriorSealFixtures() {
+  const permit = await makeTestReceipt();
+  const paymentOverLimit = receiptFromAuthorization(
+    permit.authorizationEvidence.authorization,
+    "payment-over-limit",
+    { nativeValue: "6000000000000000" }
+  );
   const fixtures = {
-    permit: await makeTestReceipt(),
+    permit,
+    "payment-within-limit": permit,
+    "payment-over-limit": paymentOverLimit,
     narrow: await makeTestReceipt({ apsCase: "narrow" }),
     "execution-mismatch": await makeTestReceipt({ name: "execution-mismatch", executionEdits: { nativeValue: "2" } }),
     "decision-reused": await makeTestReceipt({ name: "decision-reused", nonce: "8" })

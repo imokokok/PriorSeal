@@ -75,8 +75,15 @@ export async function makeTestReceipt({ apsCase = 'permit', name = apsCase, nonc
 }
 
 export async function generatePriorSealFixtures() {
+  const permit = await makeTestReceipt();
+  // Both payment observations retain the same APS decision and principal-signed authorization.
+  // Only the synthetic execution observation and its PriorSeal receipt signature differ.
+  const paymentOverLimit = receiptFromAuthorization(permit.authorizationEvidence.authorization,
+    'payment-over-limit', { nativeValue: '6000000000000000' });
   const fixtures = {
-    permit: await makeTestReceipt(),
+    permit,
+    'payment-within-limit': permit,
+    'payment-over-limit': paymentOverLimit,
     narrow: await makeTestReceipt({ apsCase: 'narrow' }),
     'execution-mismatch': await makeTestReceipt({ name: 'execution-mismatch', executionEdits: { nativeValue: '2' } }),
     'decision-reused': await makeTestReceipt({ name: 'decision-reused', nonce: '8' }),

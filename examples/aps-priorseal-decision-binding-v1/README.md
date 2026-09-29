@@ -12,9 +12,11 @@ From this directory, with Node.js 22 or later:
 npm ci --ignore-scripts
 npm run verify:producer
 npm run verify
+npm run verify:payment-limit
 ```
 
-Installation needs the npm registry; both verification commands run offline afterward. The example independently pins `agent-passport-system@6.0.1`, `priorseal-sdk@0.4.0` and `viem@2.56.3`. It is not a root workspace dependency and does not change either SDK's core exports. `npm run verify` emits machine-readable JSON and exits nonzero on an unexpected result.
+Installation needs the npm registry; the verification commands run offline afterward. The example independently pins `agent-passport-system@6.0.1`, `priorseal-sdk@0.4.0` and `viem@2.56.3`. It is not a root workspace dependency and does not change either SDK's core exports. `npm run verify` emits machine-readable JSON and exits nonzero on an unexpected result.
+`npm run verify:payment-limit` emits the focused [payment-limit report](./PAYMENT-LIMIT-REPORT.json) and exits nonzero if the two cases or their source and signing boundaries differ from the agreed inputs. To reproduce the checked-in report, run `node payment-limit-report.mjs > /tmp/aps-payment-limit-report.json` and compare that file with `PAYMENT-LIMIT-REPORT.json`.
 
 From the PriorSeal repository root, after `npm ci` and the example install:
 
@@ -35,6 +37,19 @@ CI installs this isolated lockfile and runs both the unmodified producer consume
 | expired | Composite `valid: true`, expired at reference time | Rejected before authorization callback |
 | changed observed execution value | Verified permit | Cryptographically valid evidence, `NON_COMPLIANT`; decision/authorization binding remains valid |
 | reused decision ref | Same verified permit | Two distinct signed authorizations with different nonces; `singleUseEstablished: false` |
+
+## Payment-limit offline pair for review
+
+Tymofii [confirmed the existing APS inputs and the two-case scope](https://github.com/aeoess/agent-passport-system/issues/163#issuecomment-5882979942). This author-produced pair reuses the unchanged APS 6.0.1 `permit` inputs from `948f99b8`. Their signed delegation has `spend.per_action = 5000000000000000` for `eip155:31337:native:wei`, while the verified `requested_call.value_wei` is `1000000000000000`. Those are different limits: the APS delegation cap and the exact call chosen by the decision.
+
+| PriorSeal fixture | Synthetic observed native value | Result |
+|---|---:|---|
+| [`payment-within-limit.json`](./priorseal-inputs/payment-within-limit.json) | `1000000000000000` wei | APS valid at the fixed reference time; PriorSeal receipt valid and `COMPLIANT`; decision/authorization correlation verified |
+| [`payment-over-limit.json`](./priorseal-inputs/payment-over-limit.json) | `6000000000000000` wei | Above both the signed exact call and APS per-action cap; APS and original authorization still valid; PriorSeal receipt valid but `NON_COMPLIANT` with `TRANSACTION_VALUE_MISMATCH`; correlation remains verifiable without a compliance claim |
+
+The two files contain the **same principal-signed authorization**, authorization hash and APS `decision_ref`. The positive is byte-identical to the earlier `permit.json`; the negative has a different synthetic execution observation and a separate PriorSeal receipt signature. The [machine-readable report](./PAYMENT-LIMIT-REPORT.json) pins the upstream manifest and input hashes, the fixture hashes, both observed amounts, the cap comparison, each verifier result and the shared authorization identity. `payment-limit-report.mts` independently checks these properties from the committed inputs and signed receipts before reporting success.
+
+These are synthetic observations with `observationSource: "fixture"` at the fixed historical reference time. No transaction was sent or independently observed on chain. The report does not establish live APS currency, decision-level single use, production adoption, or conformance-lab acceptance. A real testnet run remains a separate scope requiring agreed chain, asset, operator, observation/finality method, test funds and acceptance criteria.
 
 Additional tests cover missing, changed, ambiguous and wrong-algorithm commitments; overlong and expired validity; chain/target/calldata/value mismatch; failed and unmapped narrow predicates; unresolved/wrong APS keys; wrong delegation and PriorSeal keys; altered principal signature; swapped decision evidence; duplicate JSON members; and reference-time boundaries. Composition failures preserve the other system's independently valid evidence.
 

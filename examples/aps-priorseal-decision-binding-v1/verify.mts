@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadApsCase, verifyAps, verifyPair, verifySourceIntegrity } from './adapter.mjs';
+import { runPaymentLimitReport } from './payment-limit-report.mjs';
 import { REFERENCE_TIME } from './trust.mjs';
 
 export async function runExample() {
@@ -41,7 +42,7 @@ export async function runExample() {
     producerCommit: '948f99b85343bef2c6fa677c8543965caacfc087',
     dependencies: { aps: '6.0.1', priorseal: '0.4.0' },
     syntheticExecution: true, independentlyVerifiedChainExecution: false,
-    singleUseEstablished: false, cases };
+    singleUseEstablished: false, cases, paymentLimitPair: await runPaymentLimitReport() };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

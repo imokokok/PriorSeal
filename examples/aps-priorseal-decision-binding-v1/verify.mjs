@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadApsCase, verifyAps, verifyPair, verifySourceIntegrity } from "./adapter.mjs";
+import { runPaymentLimitReport } from "./payment-limit-report.mjs";
 import { REFERENCE_TIME } from "./trust.mjs";
 async function runExample() {
   const source = verifySourceIntegrity();
@@ -48,7 +49,8 @@ async function runExample() {
     syntheticExecution: true,
     independentlyVerifiedChainExecution: false,
     singleUseEstablished: false,
-    cases
+    cases,
+    paymentLimitPair: await runPaymentLimitReport()
   };
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

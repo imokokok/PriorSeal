@@ -1,15 +1,35 @@
 // Generated from adapter.test.mts by npm run core:build. Do not edit directly.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { createReceiptV1, verifyReceiptV1Serialized } from "agent-passport-system";
 import { authorizeFromAps, checkIntent, evaluateConstraints, loadApsCase, verifyAps, verifyPair, verifySourceIntegrity } from "./adapter.mjs";
 import { EXECUTOR, makeTestReceipt } from "./generate-priorseal.mjs";
+import { runPaymentLimitReport } from "./payment-limit-report.mjs";
 import { APS_KEYS, PRIORSEAL_KEY, resolveApsKey } from "./trust.mjs";
 import { runExample } from "./verify.mjs";
 test("committed source bytes and all six offline outcomes", async () => {
   assert.equal(verifySourceIntegrity().files, 17);
   assert.equal((await runExample()).cases.length, 6);
+});
+test("payment-limit pair shares one authorization, crosses the APS cap, and matches the published report", async () => {
+  const report = await runPaymentLimitReport();
+  const published = JSON.parse(readFileSync(new URL("./PAYMENT-LIMIT-REPORT.json", import.meta.url), "utf8"));
+  assert.deepEqual(report, published);
+  assert.equal(report.payment.apsPerActionCapWei, "5000000000000000");
+  assert.equal(report.positive.observedNativeValueWei, "1000000000000000");
+  assert.equal(report.overLimitNegative.observedNativeValueWei, "6000000000000000");
+  assert.equal(report.overLimitNegative.priorSealCompliance, "NON_COMPLIANT");
+  assert.deepEqual(report.overLimitNegative.reasonCodes, ["TRANSACTION_VALUE_MISMATCH"]);
+  assert.equal(report.scope.independentlyVerifiedChainExecution, false);
+});
+test("changing the signed synthetic over-limit observation invalidates its PriorSeal receipt", async () => {
+  const receipt = JSON.parse(readFileSync(new URL("./priorseal-inputs/payment-over-limit.json", import.meta.url), "utf8"));
+  receipt.execution.nativeValue = "1000000000000000";
+  const result = await verifyPair(loadApsCase("permit"), receipt);
+  assert.equal(result.aps.ok, true);
+  assert.equal(result.priorSeal.valid, false);
 });
 for (const [name, code, valid] of [["deny", "APS_GATE_REJECTED", false], ["expired", "APS_EXPIRED_AT_REFERENCE", true]]) {
   test(`${name} rejects before any principal signing callback`, async () => {

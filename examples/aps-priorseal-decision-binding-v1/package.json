@@ -6,6 +6,7 @@
   "scripts": {
     "verify:producer": "node aps-inputs/verify-from-package-root.mjs aps-inputs",
     "verify": "node verify.mjs",
+    "verify:payment-limit": "node payment-limit-report.mjs",
     "test": "node --test adapter.test.mjs"
   },
   "dependencies": {
