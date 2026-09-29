@@ -38,6 +38,8 @@ function bindIntentExecution(intent, execution, now = execution.observedAt ?? Ma
   if (executedAt != null && executedAt > intent.validUntil) reasons.push(BINDING_CODES.OUTSIDE_TIME_WINDOW);
   const constraints = intent.constraints ?? {};
   if (constraints.minConfirmations != null && Number(execution.confirmations ?? 0) < Number(constraints.minConfirmations)) reasons.push(BINDING_CODES.INSUFFICIENT_FINALITY);
+  if (constraints.maxToleratedReorgDepth != null && Number(execution.confirmations ?? 0) <= constraints.maxToleratedReorgDepth) reasons.push(BINDING_CODES.INSUFFICIENT_FINALITY);
+  if (constraints.finalityRequirement === "RPC_FINALIZED" && execution.finalityState !== "FINALIZED") reasons.push(BINDING_CODES.INSUFFICIENT_FINALITY);
   if (constraints.maxGasUsed != null) {
     if (execution.gasUsed == null) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
     else if (BigInt(execution.gasUsed) > BigInt(constraints.maxGasUsed)) reasons.push(BINDING_CODES.GAS_LIMIT_EXCEEDED);

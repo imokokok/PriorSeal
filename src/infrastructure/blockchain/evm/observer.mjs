@@ -20,8 +20,10 @@ const actionFor = (tx) => {
 function isTransferLog(log) {
   return clean(log.topics?.[0]) === TRANSFER_TOPIC && log.topics?.length === 3 && /^0x[0-9a-fA-F]{40}$/.test(log.address ?? "") && Boolean(address(log.topics[1])) && Boolean(address(log.topics[2])) && ABI_WORD.test(log.data ?? "") && hexBig(log.logIndex) !== null;
 }
-async function observeEvm({ chainId, txHash, confirmations = 0, rpcUrls, timeoutMs = 1e4, signal, rpcClient = createRpcClient({ timeoutMs }) }) {
+async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirement = "CONFIRMATIONS", maxToleratedReorgDepth = null, rpcUrls, timeoutMs = 1e4, signal, rpcClient = createRpcClient({ timeoutMs }) }) {
   if (!Number.isSafeInteger(confirmations) || confirmations < 0 || confirmations > 1e4) throw new PriorSealError("INVALID_REQUEST", "confirmations must be an integer between 0 and 10000");
+  if (!["CONFIRMATIONS", "RPC_FINALIZED"].includes(finalityRequirement)) throw new PriorSealError("INVALID_REQUEST", "Unsupported finality requirement");
+  if (maxToleratedReorgDepth != null && (!Number.isSafeInteger(maxToleratedReorgDepth) || maxToleratedReorgDepth < 0 || maxToleratedReorgDepth > 9999)) throw new PriorSealError("INVALID_REQUEST", "Invalid reorg tolerance depth");
   if (!SUPPORTED_CHAINS[Number(chainId)]) return normalizeExecution({ chainId, txHash, status: "UNSUPPORTED_CHAIN", executionDataAvailable: false, observationSource: "evm-json-rpc" });
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new PriorSealError("INVALID_TX_HASH", "txHash must be a 32-byte hex hash");
   const urls = rpcUrls ?? getRpcUrls(chainId);
@@ -61,8 +63,34 @@ async function observeEvm({ chainId, txHash, confirmations = 0, rpcUrls, timeout
       const txBlockNumber = tx.blockNumber == null ? receiptBlockNumber : hexBig(tx.blockNumber);
       if (!containingBlock || clean(containingBlock.hash) !== clean(receipt.blockHash) || hexBig(containingBlock.timestamp) === null || containingBlockNumber !== receiptBlockNumber) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC endpoint returned inconsistent block evidence");
       if (headNumber === null || BigInt(headNumber) < BigInt(receiptBlockNumber)) throw new PriorSealError("RPC_INVALID_RESPONSE", "Receipt block is ahead of the reported chain head");
+      if (BigInt(headNumber) > BigInt(Number.MAX_SAFE_INTEGER) || BigInt(receiptBlockNumber) > BigInt(Number.MAX_SAFE_INTEGER)) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC block height exceeds the supported safe integer range");
       if (tx.blockHash != null && clean(tx.blockHash) !== clean(receipt.blockHash) || txBlockNumber !== receiptBlockNumber) throw new PriorSealError("RPC_INVALID_RESPONSE", "Transaction and receipt block evidence do not match");
       const confirmationsSeen = Number(BigInt(headNumber) - BigInt(receiptBlockNumber) + 1n);
+      const requiredConfirmations = Math.max(confirmations, (maxToleratedReorgDepth ?? -1) + 1);
+      let finalizedBlock = null;
+      let observedHeadHash = null;
+      let canonicalInclusion = true;
+      if (finalityRequirement === "RPC_FINALIZED") {
+        const observedHead = await rpcClient.call(url, "eth_getBlockByNumber", [`0x${BigInt(headNumber).toString(16)}`, false], signal);
+        if (!observedHead || !BLOCK_HASH.test(observedHead.hash ?? "") || hexBig(observedHead.number) !== headNumber) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC endpoint did not return the observed chain head");
+        observedHeadHash = observedHead.hash.toLowerCase();
+        const canonical = await rpcClient.call(url, "eth_getBlockByNumber", [`0x${BigInt(receiptBlockNumber).toString(16)}`, false], signal);
+        if (!canonical || !BLOCK_HASH.test(canonical.hash ?? "") || hexBig(canonical.number) !== receiptBlockNumber) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC endpoint did not return a canonical inclusion block");
+        canonicalInclusion = clean(canonical.hash) === clean(receipt.blockHash);
+        try {
+          const finalized2 = await rpcClient.call(url, "eth_getBlockByNumber", ["finalized", false], signal);
+          if (finalized2 && BLOCK_HASH.test(finalized2.hash ?? "") && hexBig(finalized2.number) !== null && BigInt(finalized2.number) <= BigInt(headNumber)) {
+            finalizedBlock = { number: Number(BigInt(finalized2.number)), hash: finalized2.hash.toLowerCase() };
+          }
+        } catch (error) {
+          if (signal?.aborted) throw error;
+        }
+        if (finalizedBlock) {
+          const canonicalFinalized = await rpcClient.call(url, "eth_getBlockByNumber", [`0x${BigInt(finalizedBlock.number).toString(16)}`, false], signal);
+          if (!canonicalFinalized || hexBig(canonicalFinalized.number) !== String(finalizedBlock.number) || clean(canonicalFinalized.hash) !== finalizedBlock.hash) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC finalized block is not canonical at its height");
+        }
+        if (finalizedBlock && (canonicalInclusion && finalizedBlock.number === Number(BigInt(receiptBlockNumber)) && finalizedBlock.hash !== clean(receipt.blockHash) || finalizedBlock.number === Number(BigInt(headNumber)) && finalizedBlock.hash !== observedHeadHash)) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC finalized block conflicts with the observed chain");
+      }
       const logs = receipt.logs ?? [];
       if (!Array.isArray(logs)) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC endpoint returned invalid receipt logs");
       const transfers = [];
@@ -72,8 +100,10 @@ async function observeEvm({ chainId, txHash, confirmations = 0, rpcUrls, timeout
       }
       const first = transfers[0];
       const gasPrice = receipt.effectiveGasPrice ?? tx.gasPrice;
-      const finalityReached = confirmationsSeen >= confirmations;
-      return normalizeExecution({ chainId, txHash, status: finalityReached ? receiptStatus === "0x0" ? "REVERTED" : "CONFIRMED" : "PENDING", executedAt: Number(BigInt(containingBlock.timestamp)), action: actionFor(tx), nonce: transactionNonce, sender: tx.from, recipient: first?.recipient ?? tx.to, target: tx.to, calldataHash: keccak256(tx.input ?? "0x"), asset: first ? `eip155:${chainId}/erc20:${first.asset}` : `eip155:${chainId}/native`, amount: first?.amount ?? hexBig(tx.value), transfers, nativeValue: hexBig(tx.value), gasUsed, fee: gasPrice ? (BigInt(gasPrice) * BigInt(gasUsed)).toString() : null, blockNumber: Number(BigInt(receiptBlockNumber)), blockHash: receipt.blockHash, confirmations: confirmationsSeen, observationSource, finalityState: finalityReached ? "CONFIRMED" : "INSUFFICIENT_FINALITY" });
+      const depthReached = confirmationsSeen >= requiredConfirmations;
+      const finalized = finalityRequirement === "RPC_FINALIZED" && finalizedBlock !== null && finalizedBlock.number >= Number(BigInt(receiptBlockNumber));
+      const finalityReached = depthReached && (finalityRequirement === "CONFIRMATIONS" || finalized);
+      return normalizeExecution({ chainId, txHash, status: !canonicalInclusion ? "REORGED" : finalityReached ? receiptStatus === "0x0" ? "REVERTED" : "CONFIRMED" : "PENDING", executedAt: Number(BigInt(containingBlock.timestamp)), action: actionFor(tx), nonce: transactionNonce, sender: tx.from, recipient: first?.recipient ?? tx.to, target: tx.to, calldataHash: keccak256(tx.input ?? "0x"), asset: first ? `eip155:${chainId}/erc20:${first.asset}` : `eip155:${chainId}/native`, amount: first?.amount ?? hexBig(tx.value), transfers, nativeValue: hexBig(tx.value), gasUsed, fee: gasPrice ? (BigInt(gasPrice) * BigInt(gasUsed)).toString() : null, blockNumber: Number(BigInt(receiptBlockNumber)), blockHash: receipt.blockHash, confirmations: confirmationsSeen, observationSource, finalityState: !canonicalInclusion ? "REORGED" : finalityReached ? finalityRequirement === "RPC_FINALIZED" ? "FINALIZED" : "CONFIRMED" : "INSUFFICIENT_FINALITY", temporalEvidence: { schema: "priorseal.temporal-evidence.v1", criterion: finalityRequirement, requiredConfirmations, maxToleratedReorgDepth, observedHeadNumber: Number(BigInt(headNumber)), observedHeadHash, finalizedBlock } });
     } catch (error) {
       lastError = error;
     }

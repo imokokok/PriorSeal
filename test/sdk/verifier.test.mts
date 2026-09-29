@@ -51,6 +51,23 @@ test('SDK verifier validates a v1 receipt locally and detects mutations', async 
   assert.equal((await verifyVerificationBundleLocally(tampered, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'BUNDLE_HASH_MISMATCH');
 });
 
+test('SDK offline verifier replays signed finalized-block requirements from temporal evidence', async () => {
+  const keys = issuerKeys();
+  const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);
+  const executor = `0x${'a'.repeat(40)}`;
+  const intent = { intentId: 'sdk-temporal', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender: executor, recipient: `0x${'b'.repeat(40)}`, validUntil: 2_000, nonce: '7', constraints: { minConfirmations: 2, maxToleratedReorgDepth: 2, finalityRequirement: 'RPC_FINALIZED' } };
+  const policy = { policyId: 'temporal-v1', finalityRequirement: 'RPC_FINALIZED', maxToleratedReorgDepth: 2 };
+  const draft = buildAuthorization({ intent, principal: { type: 'user', id: 'user-1', account: account.address }, authorizer: { type: 'eip712', address: account.address }, delegate: { agentId: 'agent-1', executor }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'2'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${hashJson(policy)}` });
+  const authorization = buildAuthorization({ ...draft, signature: await account.signTypedData(authorizationTypedData(draft)) });
+  const accepted = await authorizeIntent({ input: authorization, store: createMemoryStore({ clock: () => 1_001_000 }), privateKeyPem: keys.privateKey, issuer: 'test', keyId: 'key-1', policy, now: () => 1_001_000 });
+  const execution = { chainId: 8453, txHash: `0x${'3'.repeat(64)}`, status: 'CONFIRMED' as const, action: 'TRANSFER', sender: executor, recipient: intent.recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, executedAt: 1_100, observedAt: 1_101, blockNumber: 10, blockHash: `0x${'c'.repeat(64)}`, confirmations: 3, gasUsed: '21000', transfers: [], finalityState: 'FINALIZED', temporalEvidence: { schema: 'priorseal.temporal-evidence.v1' as const, criterion: 'RPC_FINALIZED' as const, requiredConfirmations: 3, maxToleratedReorgDepth: 2, observedHeadNumber: 12, observedHeadHash: `0x${'d'.repeat(64)}`, finalizedBlock: { number: 10, hash: `0x${'c'.repeat(64)}` } } };
+  const receipt = signReceipt(buildAuthorizedReceipt({ authorization: accepted.response.authorization, acceptance: accepted.response.acceptance, policyEvidence: accepted.response.policyEvidence, execution, issuer: 'test', keyId: 'key-1', issuedAt: 1_101 }), keys.privateKey);
+  assert.equal((await verifyReceiptLocally(receipt, { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).valid, true);
+  const changed = structuredClone(receipt);
+  changed.execution.temporalEvidence.finalizedBlock.number = 9;
+  assert.equal((await verifyReceiptLocally(signReceipt(changed, keys.privateKey), { trustedKeys: trustedKey(keys.publicKey), now: 1_200 })).code, 'INVALID_TEMPORAL_EVIDENCE');
+});
+
 test('SDK verifier independently validates authorization-bound receipt v3, policy, compliance and signatures', async () => {
   const keys = issuerKeys();
   const account = privateKeyToAccount(`0x${'1'.repeat(64)}`);

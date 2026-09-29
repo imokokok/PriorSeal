@@ -27,10 +27,19 @@ export type ExecutionInput = {
   observationSource?: string;
   finalityState?: string;
   confirmations?: number;
+  temporalEvidence?: {
+    schema: 'priorseal.temporal-evidence.v1';
+    criterion: 'CONFIRMATIONS' | 'RPC_FINALIZED';
+    requiredConfirmations: number;
+    maxToleratedReorgDepth: number | null;
+    observedHeadNumber: number;
+    observedHeadHash: string | null;
+    finalizedBlock: { number: number; hash: string } | null;
+  };
 };
 
 export function normalizeExecution(input: ExecutionInput) {
-  return { schema: EXECUTION_SCHEMA, chainId: input.chainId, txHash: input.txHash?.toLowerCase(), status: input.status, blockNumber: input.blockNumber ?? null, blockHash: input.blockHash ?? null, executedAt: input.executedAt ?? null, observedAt: input.observedAt ?? Math.floor(Date.now() / 1000), action: input.action ?? null, nonce: input.nonce ?? null, sender: input.sender?.toLowerCase() ?? null, recipient: input.recipient?.toLowerCase() ?? null, target: input.target?.toLowerCase() ?? null, calldataHash: input.calldataHash?.toLowerCase() ?? null, asset: input.asset ?? null, amount: input.amount ?? null, transfers: input.transfers ?? [], transferMatchUnique: input.transferMatchUnique ?? false, nativeValue: input.nativeValue ?? null, tokenValue: input.tokenValue ?? null, gasUsed: input.gasUsed ?? null, fee: input.fee ?? null, executionDataAvailable: input.executionDataAvailable ?? true, observationSource: input.observationSource ?? 'unknown', finalityState: input.finalityState ?? 'UNKNOWN', confirmations: input.confirmations ?? 0 };
+  return { schema: EXECUTION_SCHEMA, chainId: input.chainId, txHash: input.txHash?.toLowerCase(), status: input.status, blockNumber: input.blockNumber ?? null, blockHash: input.blockHash ?? null, executedAt: input.executedAt ?? null, observedAt: input.observedAt ?? Math.floor(Date.now() / 1000), action: input.action ?? null, nonce: input.nonce ?? null, sender: input.sender?.toLowerCase() ?? null, recipient: input.recipient?.toLowerCase() ?? null, target: input.target?.toLowerCase() ?? null, calldataHash: input.calldataHash?.toLowerCase() ?? null, asset: input.asset ?? null, amount: input.amount ?? null, transfers: input.transfers ?? [], transferMatchUnique: input.transferMatchUnique ?? false, nativeValue: input.nativeValue ?? null, tokenValue: input.tokenValue ?? null, gasUsed: input.gasUsed ?? null, fee: input.fee ?? null, executionDataAvailable: input.executionDataAvailable ?? true, observationSource: input.observationSource ?? 'unknown', finalityState: input.finalityState ?? 'UNKNOWN', confirmations: input.confirmations ?? 0, ...(input.temporalEvidence ? { temporalEvidence: input.temporalEvidence } : {}) };
 }
 
 type ReorgObservation = Pick<ExecutionInput, 'txHash' | 'blockHash' | 'status'>;

@@ -16,7 +16,7 @@ const sha256 = (bytes: string | Buffer) => createHash('sha256').update(bytes).di
 
 execFileSync(process.execPath, [join(root, 'scripts/build-core.mjs'), '--check'], { stdio: 'inherit' })
 
-const built = await build({
+const built = check ? null : await build({
   entryPoints: [join(bundle, 'verify.source.mjs')],
   outfile: verifierPath,
   bundle: true,
@@ -28,9 +28,11 @@ const built = await build({
   banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
   legalComments: 'inline',
 })
-const output = built.outputFiles?.find((file) => file.path === verifierPath)
-if (!output) throw new Error('Standalone verifier was not produced')
-const verifier = output.text.replace(/[ \t]+$/gm, '')
+const output = built?.outputFiles?.find((file) => file.path === verifierPath)
+if (!check && !output) throw new Error('Standalone verifier was not produced')
+// A published portable verifier is immutable. Check its pinned bytes rather
+// than rebuilding it against a later version of the live core protocol.
+const verifier = check ? await readFile(verifierPath, 'utf8') : output!.text.replace(/[ \t]+$/gm, '')
 if (sha256(verifier) !== frozenVerifierSha256) throw new Error('Frozen v1.1 verifier changed; publish a new version instead')
 
 const files: Record<string, string> = {}
@@ -52,7 +54,6 @@ const manifest = `${JSON.stringify({
 }, null, 2)}\n`
 if (sha256(manifest) !== frozenManifestSha256) throw new Error('Frozen v1.1 manifest changed; publish a new version instead')
 if (check) {
-  if (await readFile(verifierPath, 'utf8') !== verifier) throw new Error('Frozen v1.1 verifier is stale')
   if (await readFile(join(bundle, 'fixture/manifest.json'), 'utf8') !== manifest) throw new Error('Frozen v1.1 manifest is stale')
 } else {
   await writeFile(verifierPath, verifier)

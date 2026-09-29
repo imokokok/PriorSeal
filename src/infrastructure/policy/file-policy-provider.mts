@@ -12,7 +12,7 @@ export function readPolicyFile(file: string | null | undefined) {
 export function parsePolicyDocument(policy: unknown) {
   if (policy == null) return null;
   assertSafeJson(policy);
-  policy = assertOnlyFields(policy, ['policyId', 'principals', 'allowedChainIds', 'allowedActions', 'allowedAssets', 'allowedSenders', 'allowedRecipients', 'maxAmount', 'maxValiditySeconds', 'minConfirmations', 'requireDistinctAuthorizerAndExecutor', 'witnessQuorum', 'timestampPolicy'], 'policy');
+  policy = assertOnlyFields(policy, ['policyId', 'principals', 'allowedChainIds', 'allowedActions', 'allowedAssets', 'allowedSenders', 'allowedRecipients', 'maxAmount', 'maxValiditySeconds', 'minConfirmations', 'maxToleratedReorgDepth', 'finalityRequirement', 'requireDistinctAuthorizerAndExecutor', 'witnessQuorum', 'timestampPolicy'], 'policy');
   const document = policy as Record<string, unknown>;
   const policyId = document.policyId == null ? undefined : protocolId(document.policyId, 'policy.policyId');
   const allowedChainIds = normalizeList(document.allowedChainIds, 'policy.allowedChainIds', chainId);
@@ -23,6 +23,8 @@ export function parsePolicyDocument(policy: unknown) {
   const maxAmount = document.maxAmount == null ? undefined : uintString(document.maxAmount, 'policy.maxAmount');
   if (document.maxValiditySeconds != null && (typeof document.maxValiditySeconds !== 'number' || !Number.isSafeInteger(document.maxValiditySeconds) || document.maxValiditySeconds < 0)) throw new TypeError('policy.maxValiditySeconds must be a non-negative safe integer');
   if (document.minConfirmations != null && (typeof document.minConfirmations !== 'number' || !Number.isSafeInteger(document.minConfirmations) || document.minConfirmations < 1 || document.minConfirmations > 10_000)) throw new TypeError('policy.minConfirmations must be an integer between 1 and 10000');
+  if (document.maxToleratedReorgDepth != null && (typeof document.maxToleratedReorgDepth !== 'number' || !Number.isSafeInteger(document.maxToleratedReorgDepth) || document.maxToleratedReorgDepth < 0 || document.maxToleratedReorgDepth > 9_999)) throw new TypeError('policy.maxToleratedReorgDepth must be an integer between 0 and 9999');
+  if (document.finalityRequirement != null && !['CONFIRMATIONS', 'RPC_FINALIZED'].includes(String(document.finalityRequirement))) throw new TypeError('policy.finalityRequirement must be CONFIRMATIONS or RPC_FINALIZED');
   if (document.requireDistinctAuthorizerAndExecutor != null && typeof document.requireDistinctAuthorizerAndExecutor !== 'boolean') throw new TypeError('policy.requireDistinctAuthorizerAndExecutor must be a boolean');
   const witnessQuorum = document.witnessQuorum ? buildWitnessPolicy(document.witnessQuorum) : undefined;
   const timestampPolicy = document.timestampPolicy ? buildTimestampPolicy(document.timestampPolicy) : undefined;
@@ -47,6 +49,8 @@ export function parsePolicyDocument(policy: unknown) {
     ...(maxAmount != null ? { maxAmount } : {}),
     ...(document.maxValiditySeconds != null ? { maxValiditySeconds: document.maxValiditySeconds as number } : {}),
     ...(document.minConfirmations != null ? { minConfirmations: document.minConfirmations as number } : {}),
+    ...(document.maxToleratedReorgDepth != null ? { maxToleratedReorgDepth: document.maxToleratedReorgDepth as number } : {}),
+    ...(document.finalityRequirement != null ? { finalityRequirement: document.finalityRequirement as 'CONFIRMATIONS' | 'RPC_FINALIZED' } : {}),
     ...(document.requireDistinctAuthorizerAndExecutor != null ? { requireDistinctAuthorizerAndExecutor: document.requireDistinctAuthorizerAndExecutor as boolean } : {}),
     ...(witnessQuorum ? { witnessQuorum } : {}),
     ...(timestampPolicy ? { timestampPolicy } : {}),

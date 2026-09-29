@@ -14,7 +14,7 @@ const frozenVerifierSha256 = "f980718188ab77d0d96afe179ab0aa79c07d31b93f22d5fb6f
 const frozenManifestSha256 = "30a5e9b0bfcfed97a8c005c6e419fbb9b6ef257b2ade6acfeb1f35b2adcaf8ba";
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 execFileSync(process.execPath, [join(root, "scripts/build-core.mjs"), "--check"], { stdio: "inherit" });
-const built = await build({
+const built = check ? null : await build({
   entryPoints: [join(bundle, "verify.source.mjs")],
   outfile: verifierPath,
   bundle: true,
@@ -26,9 +26,9 @@ const built = await build({
   banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
   legalComments: "inline"
 });
-const output = built.outputFiles?.find((file) => file.path === verifierPath);
-if (!output) throw new Error("Standalone verifier was not produced");
-const verifier = output.text.replace(/[ \t]+$/gm, "");
+const output = built?.outputFiles?.find((file) => file.path === verifierPath);
+if (!check && !output) throw new Error("Standalone verifier was not produced");
+const verifier = check ? await readFile(verifierPath, "utf8") : output.text.replace(/[ \t]+$/gm, "");
 if (sha256(verifier) !== frozenVerifierSha256) throw new Error("Frozen v1.1 verifier changed; publish a new version instead");
 const files = {};
 for (const relative of [
@@ -50,7 +50,6 @@ const manifest = `${JSON.stringify({
 `;
 if (sha256(manifest) !== frozenManifestSha256) throw new Error("Frozen v1.1 manifest changed; publish a new version instead");
 if (check) {
-  if (await readFile(verifierPath, "utf8") !== verifier) throw new Error("Frozen v1.1 verifier is stale");
   if (await readFile(join(bundle, "fixture/manifest.json"), "utf8") !== manifest) throw new Error("Frozen v1.1 manifest is stale");
 } else {
   await writeFile(verifierPath, verifier);

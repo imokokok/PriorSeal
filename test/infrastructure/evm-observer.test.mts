@@ -8,9 +8,9 @@ const sender = `0x${'a'.repeat(40)}`;
 const recipient = `0x${'b'.repeat(40)}`;
 const blockHash = `0x${'c'.repeat(64)}`;
 type ObserverRpcClient = NonNullable<Parameters<typeof observeEvm>[0]['rpcClient']>;
-const mockRpcClient = (handler: (url: string, method: string) => unknown | Promise<unknown>): ObserverRpcClient => ({
-  async call<T>(url: string, method: string): Promise<T> {
-    return await handler(url, method) as T;
+const mockRpcClient = (handler: (url: string, method: string, params: unknown[]) => unknown | Promise<unknown>): ObserverRpcClient => ({
+  async call<T>(url: string, method: string, params: unknown[]): Promise<T> {
+    return await handler(url, method, params) as T;
   },
 });
 const hasCode = (error: unknown, code: string) => typeof error === 'object' && error !== null && 'code' in error && error.code === code;
@@ -101,6 +101,67 @@ test('under-finalized reverted receipts remain pending until the confirmation fl
   const final = await observeEvm({ chainId: 8453, txHash, confirmations: 12, rpcUrls: ['rpc'], rpcClient });
   assert.equal(final.status, 'REVERTED');
   assert.equal(final.finalityState, 'CONFIRMED');
+});
+
+test('RPC finalized requirement freezes the finalized checkpoint and never promotes depth alone', async () => {
+  let finalizedHeight = 9;
+  let finalizedCanonical = true;
+  const rpcClient = mockRpcClient(async (_url, method, params) => {
+    if (method === 'eth_chainId') return '0x2105';
+    if (method === 'eth_getTransactionByHash') return { hash: txHash, from: sender, to: recipient, nonce: '0x4', value: '0x0', input: '0x', blockNumber: '0xa', blockHash };
+    if (method === 'eth_getTransactionReceipt') return { transactionHash: txHash, status: '0x1', blockNumber: '0xa', blockHash, gasUsed: '0x5208', logs: [] };
+    if (method === 'eth_blockNumber') return '0xc';
+    if (method === 'eth_getBlockByHash') return { number: '0xa', hash: blockHash, timestamp: '0x64' };
+    if (method === 'eth_getBlockByNumber' && params[0] === 'finalized') return { number: `0x${finalizedHeight.toString(16)}`, hash: finalizedHeight === 10 ? blockHash : `0x${'d'.repeat(64)}`, timestamp: '0x64' };
+    if (method === 'eth_getBlockByNumber' && params[0] === '0xc') return { number: '0xc', hash: `0x${'e'.repeat(64)}`, timestamp: '0x64' };
+    if (method === 'eth_getBlockByNumber' && params[0] === '0xa') return { number: '0xa', hash: blockHash, timestamp: '0x64' };
+    if (method === 'eth_getBlockByNumber' && params[0] === '0x9') return { number: '0x9', hash: `0x${(finalizedCanonical ? 'd' : 'f').repeat(64)}`, timestamp: '0x64' };
+    throw new Error('unexpected method');
+  });
+  const input = { chainId: 8453, txHash, confirmations: 1, finalityRequirement: 'RPC_FINALIZED' as const, maxToleratedReorgDepth: 2, rpcUrls: ['rpc'], rpcClient };
+  const pending = await observeEvm(input);
+  assert.equal(pending.status, 'PENDING');
+  assert.equal(pending.finalityState, 'INSUFFICIENT_FINALITY');
+  assert.equal(pending.temporalEvidence?.requiredConfirmations, 3);
+  assert.equal(pending.temporalEvidence?.finalizedBlock?.number, 9);
+  finalizedHeight = 10;
+  const final = await observeEvm(input);
+  assert.equal(final.status, 'CONFIRMED');
+  assert.equal(final.finalityState, 'FINALIZED');
+  assert.equal(final.temporalEvidence?.observedHeadNumber, 12);
+  assert.equal(final.temporalEvidence?.observedHeadHash, `0x${'e'.repeat(64)}`);
+  assert.equal(final.temporalEvidence?.finalizedBlock?.number, 10);
+  finalizedHeight = 9;
+  finalizedCanonical = false;
+  await assert.rejects(() => observeEvm(input), (error) => hasCode(error, 'RPC_FAILURE'));
+});
+
+test('RPC finalized requirement rejects a noncanonical inclusion and stays pending when finalized is unavailable', async () => {
+  let canonicalHash = `0x${'d'.repeat(64)}`;
+  let finalizedAvailable = true;
+  const rpcClient = mockRpcClient(async (_url, method, params) => {
+    if (method === 'eth_chainId') return '0x2105';
+    if (method === 'eth_getTransactionByHash') return { hash: txHash, from: sender, to: recipient, nonce: '0x4', value: '0x0', input: '0x', blockNumber: '0xa', blockHash };
+    if (method === 'eth_getTransactionReceipt') return { transactionHash: txHash, status: '0x1', blockNumber: '0xa', blockHash, gasUsed: '0x5208', logs: [] };
+    if (method === 'eth_blockNumber') return '0xc';
+    if (method === 'eth_getBlockByHash') return { number: '0xa', hash: blockHash, timestamp: '0x64' };
+    if (method === 'eth_getBlockByNumber' && params[0] === '0xa') return { number: '0xa', hash: canonicalHash, timestamp: '0x64' };
+    if (method === 'eth_getBlockByNumber' && params[0] === '0xc') return { number: '0xc', hash: `0x${'e'.repeat(64)}`, timestamp: '0x64' };
+    if (method === 'eth_getBlockByNumber' && params[0] === 'finalized') {
+      if (!finalizedAvailable) throw new Error('unsupported finalized tag');
+      return { number: '0xa', hash: canonicalHash, timestamp: '0x64' };
+    }
+    throw new Error('unexpected method');
+  });
+  const input = { chainId: 8453, txHash, confirmations: 1, finalityRequirement: 'RPC_FINALIZED' as const, rpcUrls: ['rpc'], rpcClient };
+  const reorged = await observeEvm(input);
+  assert.equal(reorged.status, 'REORGED');
+  assert.equal(reorged.finalityState, 'REORGED');
+  canonicalHash = blockHash;
+  finalizedAvailable = false;
+  const pending = await observeEvm(input);
+  assert.equal(pending.status, 'PENDING');
+  assert.equal(pending.temporalEvidence?.finalizedBlock, null);
 });
 
 test('EVM observer rejects receipt blocks ahead of the reported chain head', async () => {

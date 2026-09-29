@@ -101,6 +101,7 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (receipt.domain !== (receiptV3 ? 'priorseal/execution-receipt/v3' : 'priorseal/execution-receipt/v2') || receipt.algorithm !== 'Ed25519') return fail('INVALID_DOMAIN')
   if (!receiptV3 && (receipt.executionStatus !== undefined || receipt.compliance !== undefined)) return fail('INVALID_RECEIPT')
   if (!validAuthorizationShape(authorization)) return fail('INVALID_AUTHORIZATION')
+  if (!validTemporalEvidence(authorization.intent, receipt.execution)) return fail('INVALID_TEMPORAL_EVIDENCE')
   if (authorization.audience !== expectedAudience) return fail('AUTHORIZATION_AUDIENCE_MISMATCH')
   if (authorization.notBefore < authorization.issuedAt || authorization.expiresAt < authorization.notBefore || authorization.expiresAt > authorization.intent.validUntil) return fail('INVALID_AUTHORIZATION')
   if (!validAcceptanceShape(acceptance) || acceptance.schema !== 'priorseal.authorization-receipt.v1' || acceptance.domain !== 'priorseal/authorization-receipt/v1' || acceptance.status !== 'ACCEPTED' || acceptance.algorithm !== 'Ed25519') return fail('INVALID_AUTHORIZATION_RECEIPT')
@@ -194,10 +195,44 @@ function validIntentShape(value: Intent) {
   if (exactCall && (value.nonce == null || value.callTarget == null || value.calldataHash == null || value.transactionValue == null || !validContextCommitments(value.contextCommitments))) return false
   if (!exactCall && (value.executionProfile != null || value.contextCommitments != null)) return false
   if (value.constraints !== undefined) {
-    if (!hasOnlyFields(value.constraints, ['maxGasUsed', 'minConfirmations'])) return false
+    if (!hasOnlyFields(value.constraints, ['maxGasUsed', 'minConfirmations', 'maxToleratedReorgDepth', 'finalityRequirement'])) return false
     if (value.constraints.minConfirmations != null && (!Number.isSafeInteger(Number(value.constraints.minConfirmations)) || Number(value.constraints.minConfirmations) < 0 || Number(value.constraints.minConfirmations) > 10_000)) return false
+    if (value.constraints.maxToleratedReorgDepth != null && (!Number.isSafeInteger(value.constraints.maxToleratedReorgDepth) || value.constraints.maxToleratedReorgDepth < 0 || value.constraints.maxToleratedReorgDepth > 9_999)) return false
+    if (value.constraints.finalityRequirement != null && !['CONFIRMATIONS', 'RPC_FINALIZED'].includes(value.constraints.finalityRequirement)) return false
     if (value.constraints.maxGasUsed != null && !uintPattern.test(value.constraints.maxGasUsed)) return false
   }
+  return true
+}
+
+function validTemporalEvidence(intent: Intent, execution: Receipt['execution']): boolean {
+  const criterion = intent.constraints?.finalityRequirement ?? 'CONFIRMATIONS'
+  const maxDepth = intent.constraints?.maxToleratedReorgDepth ?? null
+  const evidence: unknown = execution.temporalEvidence
+  if (evidence == null) return execution.finalityState !== 'FINALIZED' && (criterion !== 'RPC_FINALIZED' || !['CONFIRMED', 'REVERTED'].includes(execution.status))
+  if (!hasOnlyFields(evidence, ['schema', 'criterion', 'requiredConfirmations', 'maxToleratedReorgDepth', 'observedHeadNumber', 'observedHeadHash', 'finalizedBlock'])) return false
+  if (evidence.schema !== 'priorseal.temporal-evidence.v1' || evidence.criterion !== criterion || evidence.maxToleratedReorgDepth !== maxDepth) return false
+  const height = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+  if (!height(evidence.requiredConfirmations) || evidence.requiredConfirmations > 10_000 || !height(evidence.observedHeadNumber)) return false
+  if (criterion === 'RPC_FINALIZED' ? typeof evidence.observedHeadHash !== 'string' || !/^0x[0-9a-f]{64}$/.test(evidence.observedHeadHash) : evidence.observedHeadHash !== null) return false
+  if (evidence.requiredConfirmations < Math.max(intent.constraints?.minConfirmations ?? 0, maxDepth == null ? 0 : maxDepth + 1)) return false
+  if (!height(execution.blockNumber) || typeof execution.blockHash !== 'string' || !/^0x[0-9a-f]{64}$/.test(execution.blockHash) || !height(execution.confirmations) || execution.blockNumber > evidence.observedHeadNumber) return false
+  if (execution.confirmations !== evidence.observedHeadNumber - execution.blockNumber + 1) return false
+  let finalizedNumber: number | null = null
+  if (evidence.finalizedBlock !== null) {
+    if (!hasOnlyFields(evidence.finalizedBlock, ['number', 'hash'])) return false
+    if (!height(evidence.finalizedBlock.number) || evidence.finalizedBlock.number > evidence.observedHeadNumber || typeof evidence.finalizedBlock.hash !== 'string' || !/^0x[0-9a-f]{64}$/.test(evidence.finalizedBlock.hash)) return false
+    if (execution.status !== 'REORGED' && evidence.finalizedBlock.number === execution.blockNumber && evidence.finalizedBlock.hash !== execution.blockHash) return false
+    if (evidence.finalizedBlock.number === evidence.observedHeadNumber && evidence.finalizedBlock.hash !== evidence.observedHeadHash) return false
+    finalizedNumber = evidence.finalizedBlock.number
+  }
+  const reachedDepth = execution.confirmations >= evidence.requiredConfirmations
+  const reachedFinalized = finalizedNumber !== null && finalizedNumber >= execution.blockNumber
+  if (['CONFIRMED', 'REVERTED'].includes(execution.status)) {
+    if (!reachedDepth) return false
+    return criterion === 'RPC_FINALIZED' ? execution.finalityState === 'FINALIZED' && reachedFinalized : execution.finalityState === 'CONFIRMED'
+  }
+  if (execution.finalityState === 'FINALIZED' || execution.finalityState === 'CONFIRMED') return false
+  if (execution.status === 'PENDING' && execution.finalityState === 'INSUFFICIENT_FINALITY' && reachedDepth && (criterion === 'CONFIRMATIONS' || reachedFinalized)) return false
   return true
 }
 
@@ -267,6 +302,8 @@ function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
   if (intent.transactionValue != null && String(execution.nativeValue ?? '') !== String(intent.transactionValue)) reasons.push('TRANSACTION_VALUE_MISMATCH')
   if ((execution.executedAt ?? execution.observedAt ?? 0) > intent.validUntil) reasons.push('OUTSIDE_TIME_WINDOW')
   if (intent.constraints?.minConfirmations != null && Number(execution.confirmations ?? 0) < intent.constraints.minConfirmations) reasons.push('INSUFFICIENT_FINALITY')
+  if (intent.constraints?.maxToleratedReorgDepth != null && Number(execution.confirmations ?? 0) <= intent.constraints.maxToleratedReorgDepth) reasons.push('INSUFFICIENT_FINALITY')
+  if (intent.constraints?.finalityRequirement === 'RPC_FINALIZED' && execution.finalityState !== 'FINALIZED') reasons.push('INSUFFICIENT_FINALITY')
   if (intent.constraints?.maxGasUsed != null) {
     if (execution.gasUsed == null) reasons.push('EXECUTION_UNAVAILABLE')
     else if (BigInt(execution.gasUsed) > BigInt(intent.constraints.maxGasUsed)) reasons.push('GAS_LIMIT_EXCEEDED')
@@ -462,6 +499,8 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
     || (policy.maxAmount != null && !/^(0|[1-9][0-9]*)$/.test(String(policy.maxAmount)))
     || (policy.maxValiditySeconds != null && (typeof policy.maxValiditySeconds !== 'number' || !Number.isSafeInteger(policy.maxValiditySeconds) || policy.maxValiditySeconds < 0))
     || (policy.minConfirmations != null && (typeof policy.minConfirmations !== 'number' || !Number.isSafeInteger(policy.minConfirmations) || policy.minConfirmations < 1 || policy.minConfirmations > 10_000))
+    || (policy.maxToleratedReorgDepth != null && (typeof policy.maxToleratedReorgDepth !== 'number' || !Number.isSafeInteger(policy.maxToleratedReorgDepth) || policy.maxToleratedReorgDepth < 0 || policy.maxToleratedReorgDepth > 9_999))
+    || (policy.finalityRequirement != null && !['CONFIRMATIONS', 'RPC_FINALIZED'].includes(String(policy.finalityRequirement)))
     || (policy.requireDistinctAuthorizerAndExecutor != null && typeof policy.requireDistinctAuthorizerAndExecutor !== 'boolean')
   if (invalidPolicy) reasons.push('POLICY_INVALID')
   if (listMisses(policy.allowedChainIds, intent.chainId)) reasons.push('POLICY_CHAIN_NOT_ALLOWED')
@@ -473,6 +512,8 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
     if (policy.maxAmount != null && BigInt(intent.amount) > BigInt(String(policy.maxAmount))) reasons.push('POLICY_AMOUNT_EXCEEDED')
     if (policy.maxValiditySeconds != null && intent.validUntil > evaluatedAt + Number(policy.maxValiditySeconds)) reasons.push('POLICY_EXPIRY_TOO_FAR')
     if (policy.minConfirmations != null && Number(intent.constraints?.minConfirmations ?? 0) < Number(policy.minConfirmations)) reasons.push('POLICY_MIN_CONFIRMATIONS_REQUIRED')
+    if (policy.finalityRequirement === 'RPC_FINALIZED' && intent.constraints?.finalityRequirement !== 'RPC_FINALIZED') reasons.push('POLICY_FINALIZED_BLOCK_REQUIRED')
+    if (policy.maxToleratedReorgDepth != null && Number(intent.constraints?.maxToleratedReorgDepth ?? -1) < Number(policy.maxToleratedReorgDepth)) reasons.push('POLICY_REORG_BUFFER_REQUIRED')
   } catch {
     reasons.push('POLICY_INVALID')
   }

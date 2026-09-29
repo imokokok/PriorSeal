@@ -212,6 +212,20 @@ test('signed confirmation constraints cannot be relaxed by the observer request'
   await assert.rejects(() => observeExecution({ input: { intentId: intent.intentId, txHash, confirmations: -1 }, store, observer: async () => ({ chainId: 8453, txHash, status: 'PENDING' }) }), (error) => hasCode(error, 'INVALID_REQUEST'));
 });
 
+test('RPC-finalized intent stays pending on depth alone and rejects a bare FINALIZED assertion', async () => {
+  const store = createMemoryStore();
+  const intent = buildIntent({ intentId: 'finality-criterion', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2_000, nonce: '0', constraints: { minConfirmations: 2, maxToleratedReorgDepth: 2, finalityRequirement: 'RPC_FINALIZED' } });
+  await store.saveIntent(intent);
+  let requested: Record<string, unknown> = {};
+  const observed = { chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', sender, recipient, asset: intent.asset, amount: intent.amount, nonce: '0', executedAt: 900, observedAt: 1_000, confirmations: 3, finalityState: 'CONFIRMED' };
+  const pending = await observeExecution({ input: { intentId: intent.intentId, txHash, confirmations: 0 }, store, observer: async (input) => { requested = input; return observed; } });
+  assert.equal(requested.confirmations, 3);
+  assert.equal(requested.finalityRequirement, 'RPC_FINALIZED');
+  assert.equal(requested.maxToleratedReorgDepth, 2);
+  assert.equal(pending.response.observation.status, 'PENDING');
+  await assert.rejects(() => observeExecution({ input: { intentId: intent.intentId, txHash }, store, observer: async () => ({ ...observed, finalityState: 'FINALIZED' }) }), (error) => hasCode(error, 'INVALID_TEMPORAL_EVIDENCE'));
+});
+
 test('an adapter cannot claim authorization with an under-finalized reverted observation', async () => {
   const store = createMemoryStore();
   const authorization = buildAuthorization({ intent: { intentId: 'revert-finality-safe', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '10', sender, recipient, validUntil: 2_000, nonce: '6', constraints: { minConfirmations: 12 } }, principal: { type: 'user', id: 'user-1', account: `0x${'c'.repeat(40)}` }, authorizer: { type: 'eip712', address: `0x${'c'.repeat(40)}` }, delegate: { agentId: 'agent-1', executor: sender }, issuedAt: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'6'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}`, signature: '0x01' });

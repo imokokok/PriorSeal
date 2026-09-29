@@ -1,7 +1,7 @@
 import { hashJson } from '../domain/hashing.mjs';
 import { SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
 
-type CapabilityPolicy = { allowedChainIds?: number[]; allowedActions?: unknown; allowedAssets?: string[]; allowedRecipients?: string[]; maxAmount?: string; minConfirmations?: number };
+type CapabilityPolicy = { allowedChainIds?: number[]; allowedActions?: unknown; allowedAssets?: string[]; allowedRecipients?: string[]; maxAmount?: string; minConfirmations?: number; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' };
 type CapabilityStore = { health?: () => Promise<unknown> | unknown; archiveRetention?: string };
 export async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, store, archiveEnabled, contractSignatureConfigured = false, now }: { issuer: string; audience: string; keyConfigured: boolean; policy?: CapabilityPolicy | null; proofMode: string; timestampConfigured: boolean; witnessConfigured: boolean; anchorConfigured: boolean; rpcChainIds?: number[]; store: CapabilityStore; archiveEnabled: boolean; contractSignatureConfigured?: boolean; now: number }) {
   let storage = 'available';
@@ -19,6 +19,8 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
     chains, authorizers: ['eip712', ...(contractSignatureConfigured ? ['eip1271'] : [])], proofMode,
     policyHash: policy ? `0x${hashJson(policy)}` : `0x${'0'.repeat(64)}`,
     minConfirmations: policy?.minConfirmations ?? 0,
+    maxToleratedReorgDepth: policy?.maxToleratedReorgDepth ?? null,
+    finalityRequirement: policy?.finalityRequirement ?? 'CONFIRMATIONS',
     dependencies: { issuer: keyConfigured ? 'configured' : 'unavailable', timestamp: proofMode === 'issuer' ? 'not_required' : proofConfigured ? 'configured' : 'unavailable', rpc, storage },
     workflowReady: Boolean(keyConfigured && proofConfigured && rpc === 'configured' && storage === 'available' && chains.length && (transfer || exactCall)),
     chainReadiness: chains.map(chainId => ({ chainId, rpc: rpcChainIds === undefined ? 'unknown' : rpcChainIds.includes(chainId) ? 'configured' : 'unavailable' })),

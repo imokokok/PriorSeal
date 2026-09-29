@@ -73,7 +73,7 @@ export type Intent = {
   calldataHash?: string
   transactionValue?: string
   contextCommitments?: ContextCommitment[]
-  constraints?: { minConfirmations?: number; maxGasUsed?: string }
+  constraints?: { minConfirmations?: number; maxGasUsed?: string; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' }
 }
 
 export type ExecutionStatus = 'PENDING' | 'CONFIRMED' | 'REVERTED' | 'REORGED' | 'NOT_FOUND' | 'RPC_ERROR' | 'RPC_TIMEOUT' | 'UNSUPPORTED_CHAIN'
@@ -105,6 +105,15 @@ export type Execution = {
   observationSource?: string
   finalityState?: string
   confirmations?: number
+  temporalEvidence?: {
+    schema: 'priorseal.temporal-evidence.v1'
+    criterion: 'CONFIRMATIONS' | 'RPC_FINALIZED'
+    requiredConfirmations: number
+    maxToleratedReorgDepth: number | null
+    observedHeadNumber: number
+    observedHeadHash: string | null
+    finalizedBlock: { number: number; hash: string } | null
+  }
   previousBlockHash?: string
 }
 
@@ -275,6 +284,8 @@ export type DeploymentCapabilities = {
   proofMode: string
   policyHash: string
   minConfirmations: number
+  maxToleratedReorgDepth: number | null
+  finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'
   dependencies: { issuer: string; timestamp: string; rpc: string; storage: string }
   workflowReady: boolean
   chainReadiness: { chainId: number; rpc: 'configured' | 'unknown' | 'unavailable' }[]

@@ -9,6 +9,8 @@ export const POLICY_CODES = Object.freeze({
   PRINCIPAL_NOT_ALLOWED: 'POLICY_PRINCIPAL_NOT_ALLOWED',
   AUTHORIZER_EXECUTOR_NOT_DISTINCT: 'POLICY_AUTHORIZER_EXECUTOR_NOT_DISTINCT',
   MIN_CONFIRMATIONS_REQUIRED: 'POLICY_MIN_CONFIRMATIONS_REQUIRED',
+  FINALIZED_BLOCK_REQUIRED: 'POLICY_FINALIZED_BLOCK_REQUIRED',
+  REORG_BUFFER_REQUIRED: 'POLICY_REORG_BUFFER_REQUIRED',
   INVALID_POLICY: 'POLICY_INVALID',
   EXACT_CALL_SEMANTICS_UNSUPPORTED: 'POLICY_EXACT_CALL_SEMANTICS_UNSUPPORTED',
 } as const);
@@ -23,7 +25,7 @@ type IntentForPolicy = {
   sender: string;
   recipient: string;
   validUntil: number;
-  constraints?: { minConfirmations?: unknown; maxGasUsed?: unknown } | null;
+  constraints?: { minConfirmations?: unknown; maxGasUsed?: unknown; maxToleratedReorgDepth?: unknown; finalityRequirement?: unknown } | null;
   executionProfile?: string | null;
 };
 
@@ -50,6 +52,8 @@ export function evaluateIntentPolicy(intent: IntentForPolicy, policy: RuntimePol
     if (policy.maxAmount != null && BigInt(intent.amount) > BigInt(policy.maxAmount as string)) reasonCodes.push(POLICY_CODES.AMOUNT_EXCEEDED);
     if (policy.maxValiditySeconds != null && Number(intent.validUntil) > now + Number(policy.maxValiditySeconds)) reasonCodes.push(POLICY_CODES.EXPIRY_TOO_FAR);
     if (policy.minConfirmations != null && Number(intent.constraints?.minConfirmations ?? 0) < Number(policy.minConfirmations)) reasonCodes.push(POLICY_CODES.MIN_CONFIRMATIONS_REQUIRED);
+    if (policy.finalityRequirement === 'RPC_FINALIZED' && intent.constraints?.finalityRequirement !== 'RPC_FINALIZED') reasonCodes.push(POLICY_CODES.FINALIZED_BLOCK_REQUIRED);
+    if (policy.maxToleratedReorgDepth != null && Number(intent.constraints?.maxToleratedReorgDepth ?? -1) < Number(policy.maxToleratedReorgDepth)) reasonCodes.push(POLICY_CODES.REORG_BUFFER_REQUIRED);
   } catch {
     reasonCodes.push(POLICY_CODES.INVALID_POLICY);
   }
@@ -98,6 +102,8 @@ function validRuntimePolicy(policy: unknown): boolean {
   if (fields.maxAmount != null && !/^(0|[1-9][0-9]*)$/.test(String(fields.maxAmount))) return false;
   if (fields.maxValiditySeconds != null && (!Number.isSafeInteger(fields.maxValiditySeconds) || (fields.maxValiditySeconds as number) < 0)) return false;
   if (fields.minConfirmations != null && (!Number.isSafeInteger(fields.minConfirmations) || (fields.minConfirmations as number) < 1 || (fields.minConfirmations as number) > 10_000)) return false;
+  if (fields.finalityRequirement != null && !['CONFIRMATIONS', 'RPC_FINALIZED'].includes(String(fields.finalityRequirement))) return false;
+  if (fields.maxToleratedReorgDepth != null && (!Number.isSafeInteger(fields.maxToleratedReorgDepth) || (fields.maxToleratedReorgDepth as number) < 0 || (fields.maxToleratedReorgDepth as number) > 9_999)) return false;
   if (fields.requireDistinctAuthorizerAndExecutor != null && typeof fields.requireDistinctAuthorizerAndExecutor !== 'boolean') return false;
   return true;
 }

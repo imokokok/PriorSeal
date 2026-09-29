@@ -16,10 +16,11 @@ type ContextCommitment = { namespace: string; algorithm: string; digest: string 
  * accepted by older releases.
  */
 export function assertIssuableIntentInput<T>(input: T): T {
-  const candidate = input as { chainIds?: unknown; nonce?: unknown; constraints?: { minConfirmations?: unknown } | null } | null | undefined;
+  const candidate = input as { chainIds?: unknown; nonce?: unknown; constraints?: { minConfirmations?: unknown; maxToleratedReorgDepth?: unknown } | null } | null | undefined;
   if (candidate?.chainIds !== undefined) throw new PriorSealError('INVALID_INTENT', 'chainIds is not supported for new intents; use chainId');
   if (candidate?.nonce == null) throw new PriorSealError('INVALID_INTENT', 'nonce is required for new intents');
   if (candidate?.constraints?.minConfirmations != null && typeof candidate.constraints.minConfirmations !== 'number') throw new PriorSealError('INVALID_CONSTRAINT', 'minConfirmations must be a JSON number');
+  if (candidate?.constraints?.maxToleratedReorgDepth != null && typeof candidate.constraints.maxToleratedReorgDepth !== 'number') throw new PriorSealError('INVALID_CONSTRAINT', 'maxToleratedReorgDepth must be a JSON number');
   return input;
 }
 
@@ -39,13 +40,21 @@ export function buildIntent(inputValue: unknown) {
   const chainIds = input.chainIds;
   if (chainIds != null && !Array.isArray(chainIds)) throw new PriorSealError('INVALID_INTENT', 'chainIds must be an array when provided');
   const contextCommitments = normalizeContextCommitments(input.contextCommitments, exactCall);
-  const constraints = input.constraints == null ? undefined : assertOnlyFields(input.constraints, ['minConfirmations', 'maxGasUsed'], 'intent.constraints');
+  const constraints = input.constraints == null ? undefined : assertOnlyFields(input.constraints, ['minConfirmations', 'maxGasUsed', 'maxToleratedReorgDepth', 'finalityRequirement'], 'intent.constraints');
   if (constraints !== undefined) {
     if (constraints.minConfirmations != null && (!Number.isSafeInteger(Number(constraints.minConfirmations)) || Number(constraints.minConfirmations) < 0 || Number(constraints.minConfirmations) > 10_000)) throw new PriorSealError('INVALID_CONSTRAINT', 'minConfirmations must be an integer between 0 and 10000');
+    if (constraints.maxToleratedReorgDepth != null && (typeof constraints.maxToleratedReorgDepth !== 'number' || !Number.isSafeInteger(constraints.maxToleratedReorgDepth) || constraints.maxToleratedReorgDepth < 0 || constraints.maxToleratedReorgDepth > 9_999)) throw new PriorSealError('INVALID_CONSTRAINT', 'maxToleratedReorgDepth must be an integer between 0 and 9999');
+    if (constraints.finalityRequirement != null && !['CONFIRMATIONS', 'RPC_FINALIZED'].includes(String(constraints.finalityRequirement))) throw new PriorSealError('INVALID_CONSTRAINT', 'finalityRequirement must be CONFIRMATIONS or RPC_FINALIZED');
     if (constraints.maxGasUsed != null) uintString(constraints.maxGasUsed, 'maxGasUsed');
   }
+  const normalizedConstraints = constraints === undefined ? undefined : {
+    ...(constraints.minConfirmations != null ? { minConfirmations: constraints.minConfirmations as number | string } : {}),
+    ...(constraints.maxGasUsed != null ? { maxGasUsed: String(constraints.maxGasUsed) } : {}),
+    ...(constraints.maxToleratedReorgDepth != null ? { maxToleratedReorgDepth: constraints.maxToleratedReorgDepth as number } : {}),
+    ...(constraints.finalityRequirement != null ? { finalityRequirement: constraints.finalityRequirement as 'CONFIRMATIONS' | 'RPC_FINALIZED' } : {}),
+  };
   if (input.calldataHash != null && !/^0x[0-9a-fA-F]{64}$/.test(input.calldataHash as string)) throw new PriorSealError('INVALID_INTENT', 'calldataHash must be a 32-byte hex value');
-  const intent = { schema, ...(exactCall ? { executionProfile: EXACT_CALL_PROFILE } : {}), intentId: protocolId(input.intentId, 'intentId'), chainId: chainId(input.chainId), ...(chainIds ? { chainIds: chainIds.map(chainId) } : {}), action: protocolId(input.action, 'action'), asset: String(input.asset), amount: uintString(input.amount, 'amount'), sender: evmAddress(input.sender, 'sender'), recipient: evmAddress(input.recipient, 'recipient'), validUntil: unixSeconds(input.validUntil, 'validUntil'), nonce: uintString(input.nonce ?? '0', 'nonce'), ...(input.callTarget != null ? { callTarget: evmAddress(input.callTarget, 'callTarget') } : {}), ...(input.calldataHash != null ? { calldataHash: (input.calldataHash as string).toLowerCase() } : {}), ...(input.transactionValue != null ? { transactionValue: uintString(input.transactionValue, 'transactionValue') } : {}), ...(contextCommitments ? { contextCommitments } : {}), ...(constraints ? { constraints: { ...constraints, ...(constraints.maxGasUsed != null ? { maxGasUsed: String(constraints.maxGasUsed) } : {}) } } : {}) };
+  const intent = { schema, ...(exactCall ? { executionProfile: EXACT_CALL_PROFILE } : {}), intentId: protocolId(input.intentId, 'intentId'), chainId: chainId(input.chainId), ...(chainIds ? { chainIds: chainIds.map(chainId) } : {}), action: protocolId(input.action, 'action'), asset: String(input.asset), amount: uintString(input.amount, 'amount'), sender: evmAddress(input.sender, 'sender'), recipient: evmAddress(input.recipient, 'recipient'), validUntil: unixSeconds(input.validUntil, 'validUntil'), nonce: uintString(input.nonce ?? '0', 'nonce'), ...(input.callTarget != null ? { callTarget: evmAddress(input.callTarget, 'callTarget') } : {}), ...(input.calldataHash != null ? { calldataHash: (input.calldataHash as string).toLowerCase() } : {}), ...(input.transactionValue != null ? { transactionValue: uintString(input.transactionValue, 'transactionValue') } : {}), ...(contextCommitments ? { contextCommitments } : {}), ...(normalizedConstraints ? { constraints: normalizedConstraints } : {}) };
   const assetMatch = /^eip155:([1-9][0-9]*)\/(native|erc20:0x[0-9a-fA-F]{40})$/.exec(intent.asset);
   if (!assetMatch) throw new PriorSealError('INVALID_ASSET', 'asset must be eip155:<chain>/native or eip155:<chain>/erc20:<address>');
   if (Number(assetMatch[1]) !== intent.chainId) throw new PriorSealError('INVALID_ASSET', 'asset chain must match intent.chainId');

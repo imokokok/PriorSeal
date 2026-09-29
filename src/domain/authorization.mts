@@ -12,6 +12,7 @@ import { verifyTransparencyEvidence } from './transparency.mjs';
 import { verifyWitnessEvidence } from './witness.mjs';
 import { validateTimestampEvidenceClaims, verifyTimestampEvidence } from './rfc3161.mjs';
 import { assessCompliance, classifyExecutionOutcome } from './compliance.mjs';
+import { validateTemporalEvidence } from './temporal-evidence.mjs';
 import { signEd25519Statement, verifyEd25519Statement as verifyEd25519StatementStrict } from './ed25519.mjs';
 import type { KeyEntry } from './key-registry.mjs';
 import type { TimestampEvidence } from './rfc3161.mjs';
@@ -200,6 +201,7 @@ export function verifyAuthorizationReceipt(receiptValue: unknown, publicKeyPem: 
 export function buildAuthorizedReceipt<E extends ReceiptExecution, W = unknown, T extends ReceiptTransparency = ReceiptTransparency>({ authorization, acceptance, policyEvidence = null, timestampEvidence = null, witnessEvidence = null, transparency = null, execution, issuer, keyId = 'default', issuedAt = Math.floor(Date.now() / 1000), verifierVersion, schema = AUTHORIZED_RECEIPT_SCHEMA }: { authorization: Authorization; acceptance: AuthorizationAcceptance; policyEvidence?: PolicyEvidence | null; timestampEvidence?: TimestampEvidence | null; witnessEvidence?: W | null; transparency?: T | null; execution: E; issuer: string; keyId?: string; issuedAt?: number; verifierVersion?: string; schema?: string }) {
   if (![AUTHORIZED_RECEIPT_SCHEMA, LEGACY_AUTHORIZED_RECEIPT_SCHEMA].includes(schema)) throw new PriorSealError('UNSUPPORTED_SCHEMA', 'Authorized receipt schema is not supported');
   const intent = authorization.intent;
+  if (!validateTemporalEvidence(intent, execution)) throw new PriorSealError('INVALID_TEMPORAL_EVIDENCE', 'Execution temporal evidence does not match the signed intent');
   if (!Number.isSafeInteger(issuedAt) || issuedAt <= 0) throw new PriorSealError('INVALID_RECEIPT_TIMELINE', 'Receipt issuedAt must be a positive Unix timestamp');
   const observedAt = execution?.observedAt ?? execution?.executedAt;
   if (observedAt != null && (!Number.isSafeInteger(observedAt) || issuedAt < observedAt)) throw new PriorSealError('INVALID_RECEIPT_TIMELINE', 'Receipt cannot be issued before the execution observation');
@@ -253,6 +255,7 @@ export function validateAuthorizedReceiptClaims(receiptValue: unknown) {
     if (legacy && (receipt.executionStatus !== undefined || receipt.compliance !== undefined)) return invalid('INVALID_RECEIPT');
     if (receipt.domain !== (legacy ? 'priorseal/execution-receipt/v2' : 'priorseal/execution-receipt/v3')) return invalid('INVALID_DOMAIN');
     const authorization = buildAuthorization(receipt.authorizationEvidence?.authorization);
+    if (!validateTemporalEvidence(authorization.intent, receipt.execution)) return invalid('INVALID_TEMPORAL_EVIDENCE');
     const acceptance = receipt.authorizationEvidence?.acceptance;
     if (!acceptance || acceptance.authorizationId !== authorization.authorizationId) return invalid('AUTHORIZATION_RECEIPT_MISMATCH');
     if (receipt.authorizationHash !== hashJson(authorization) || acceptance.authorizationHash !== receipt.authorizationHash) return invalid('AUTHORIZATION_HASH_MISMATCH');

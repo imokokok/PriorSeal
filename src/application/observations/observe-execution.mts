@@ -4,6 +4,7 @@ import { buildReceipt, signReceipt } from '../../domain/receipt.mjs';
 import { buildAuthorizedReceipt, verifyAuthorizedReceipt } from '../../domain/authorization.mjs';
 import { verifyReceipt } from '../../domain/receipt-verifier.mjs';
 import { detectReorg } from '../../domain/execution.mjs';
+import { validateTemporalEvidence } from '../../domain/temporal-evidence.mjs';
 import { verifyWitnessEvidence } from '../../domain/witness.mjs';
 import { canonicalize, hashJson } from '../../domain/hashing.mjs';
 import { verifyTimestampEvidence } from '../../domain/rfc3161.mjs';
@@ -41,7 +42,7 @@ type ObservationStore = IdempotencyStore<ObservationResponse> & {
   saveObservation: (observation: Observation) => Promise<unknown>;
   saveReceipt: (receipt: SignedReceipt) => Promise<unknown>;
 };
-type Observer = (input: { chainId: number; txHash: string; confirmations: number; signal?: AbortSignal }) => Promise<ExecutionInput>;
+type Observer = (input: { chainId: number; txHash: string; confirmations: number; finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'; maxToleratedReorgDepth: number | null; signal?: AbortSignal }) => Promise<ExecutionInput>;
 type ContractSignatureVerifier = NonNullable<NonNullable<Parameters<typeof verifyAuthorizedReceipt>[2]>['verifyContractSignature']>;
 
 /** Observes an execution, records evidence, and optionally issues a signed receipt. */
@@ -64,12 +65,17 @@ export async function observeExecution({ input: inputValue, store, observer, sig
 
   const requestedConfirmations = input.confirmations ?? 0;
   if (typeof requestedConfirmations !== 'number' || !Number.isSafeInteger(requestedConfirmations) || requestedConfirmations < 0 || requestedConfirmations > 10_000) throw new PriorSealError('INVALID_REQUEST', 'confirmations must be an integer between 0 and 10000');
-  const confirmations = Math.max(requestedConfirmations, Number((intent.constraints as { minConfirmations?: unknown } | undefined)?.minConfirmations ?? 0));
+  const constraints = intent.constraints as { minConfirmations?: number; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' } | undefined;
+  const maxToleratedReorgDepth = constraints?.maxToleratedReorgDepth ?? null;
+  const finalityRequirement = constraints?.finalityRequirement ?? 'CONFIRMATIONS';
+  const confirmations = Math.max(requestedConfirmations, Number(constraints?.minConfirmations ?? 0), maxToleratedReorgDepth == null ? 0 : maxToleratedReorgDepth + 1);
   const previous = store.getObservation ? await store.getObservation(intent.chainId, requestedTxHash) : null;
   const observed = await observer({
     chainId: intent.chainId,
     txHash: requestedTxHash,
     confirmations,
+    finalityRequirement,
+    maxToleratedReorgDepth,
     signal,
   });
   const observedTxHash = normalizeTxHash(observed?.txHash);
@@ -79,9 +85,11 @@ export async function observeExecution({ input: inputValue, store, observer, sig
   let observation = { ...observed, txHash: observedTxHash, intentHash: intent.intentHash } as Observation;
   const observedConfirmations = Number(observation.confirmations ?? 0);
   const claimsFinalExecution = ['CONFIRMED', 'REVERTED'].includes(observation.status);
-  const hasRequiredFinality = observation.finalityState === 'CONFIRMED' && Number.isSafeInteger(observedConfirmations) && observedConfirmations >= confirmations;
+  const finalityStateMatches = finalityRequirement === 'RPC_FINALIZED' ? observation.finalityState === 'FINALIZED' : ['CONFIRMED', 'FINALIZED'].includes(observation.finalityState ?? '');
+  const hasRequiredFinality = finalityStateMatches && Number.isSafeInteger(observedConfirmations) && observedConfirmations >= confirmations;
   if (claimsFinalExecution && !hasRequiredFinality) observation = { ...observation, status: 'PENDING', finalityState: 'INSUFFICIENT_FINALITY' };
   if (detectReorg(previous, observation)) observation = { ...observation, status: 'REORGED', finalityState: 'REORGED', previousBlockHash: previous?.blockHash };
+  if (!validateTemporalEvidence(intent, observation)) throw new PriorSealError('INVALID_TEMPORAL_EVIDENCE', 'Observer temporal evidence is inconsistent with the signed intent');
 
   const executionTime = observation.executedAt ?? observation.observedAt ?? undefined;
   const transparency = authorizationRecord && transparencyProvider ? await transparencyProvider(authorizationRecord.acceptance, { before: executionTime }) : null;
@@ -141,13 +149,14 @@ export function canClaimAuthorization(authorization: Authorization | null | unde
 
 export function classifyAuthorizationAssociation(authorization: Authorization | null | undefined, observation: CorrelatedObservation | null | undefined): 'FINAL' | 'CANDIDATE' | 'UNRELATED' {
   if (!authorization || !observation || observation.executionDataAvailable === false) return 'UNRELATED';
+  if (!validateTemporalEvidence(authorization.intent, observation)) return 'UNRELATED';
   const correlated = /^0x[0-9a-fA-F]{64}$/.test(observation.txHash ?? '')
     && observation.intentHash === authorization.intentHash
     && Number(observation.chainId) === Number(authorization.intent.chainId)
     && same(observation.sender, authorization.delegate.executor)
     && String(observation.nonce ?? '') === String(authorization.intent.nonce);
   if (!correlated) return 'UNRELATED';
-  if (['CONFIRMED', 'REVERTED'].includes(observation.status ?? '') && observation.finalityState === 'CONFIRMED') return 'FINAL';
+  if (['CONFIRMED', 'REVERTED'].includes(observation.status ?? '') && ['CONFIRMED', 'FINALIZED'].includes(observation.finalityState ?? '')) return 'FINAL';
   if (['CONFIRMED', 'REVERTED'].includes(observation.status ?? '')) return 'CANDIDATE';
   if (observation.status === 'PENDING') return 'CANDIDATE';
   return 'UNRELATED';
