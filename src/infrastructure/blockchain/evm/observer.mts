@@ -57,10 +57,11 @@ export async function observeEvm({ chainId, txHash, confirmations = 0, rpcUrls, 
     const confirmationsSeen = Number(BigInt(headNumber) - BigInt(receiptBlockNumber) + 1n);
     const logs = receipt.logs ?? [];
     if (!Array.isArray(logs)) throw new PriorSealError('RPC_INVALID_RESPONSE', 'RPC endpoint returned invalid receipt logs');
+    const transfers: Array<{ asset: string; sender: string | null; recipient: string | null; amount: string | null; logIndex: number }> = [];
     for (const log of logs) {
       if (!log || typeof log !== 'object' || log.removed === true || (log.transactionHash != null && clean(log.transactionHash) !== clean(txHash)) || (log.blockHash != null && clean(log.blockHash) !== clean(receipt.blockHash)) || (log.blockNumber != null && hexBig(log.blockNumber) !== receiptBlockNumber)) throw new PriorSealError('RPC_INVALID_RESPONSE', 'RPC endpoint returned a log outside the receipt');
+      if (isTransferLog(log)) transfers.push({ asset: log.address.toLowerCase(), sender: address(log.topics[1]), recipient: address(log.topics[2]), amount: hexBig(log.data), logIndex: Number(BigInt(log.logIndex)) });
     }
-    const transfers = logs.filter(isTransferLog).map((log) => ({ asset: log.address.toLowerCase(), sender: address(log.topics[1]), recipient: address(log.topics[2]), amount: hexBig(log.data), logIndex: Number(BigInt(log.logIndex)) }));
     const first = transfers[0];
     const gasPrice = receipt.effectiveGasPrice ?? tx.gasPrice;
     const finalityReached = confirmationsSeen >= confirmations;

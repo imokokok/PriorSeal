@@ -51,6 +51,26 @@ test('EVM observer does not treat malformed transfer logs as verified transfers'
   const observation = await observeEvm({ chainId: 8453, txHash, rpcUrls: ['https://secret.invalid/api-key'], rpcClient }); assert.equal(observation.transfers.length, 0); assert.equal(observation.asset, 'eip155:8453/native'); assert.equal(observation.action, 'CONTRACT_CALL'); assert.equal(JSON.stringify(observation).includes('api-key'), false);
 });
 
+test('EVM observer preserves verified transfer order while ignoring other logs', async () => {
+  const token = `0x${'d'.repeat(40)}`;
+  const transfer = (to: string, amount: string, index: string) => ({ transactionHash: txHash, blockHash, address: token, topics: [transferTopic, addressTopic(sender), addressTopic(to)], data: `0x${amount.padStart(64, '0')}`, logIndex: index });
+  const rpcClient = mockRpcClient(async (_url, method) => {
+    if (method === 'eth_chainId') return '0x2105';
+    if (method === 'eth_getTransactionByHash') return { hash: txHash, from: sender, to: recipient, nonce: '0x0', value: '0x0', input: '0xa9059cbb', blockNumber: '0xa', blockHash };
+    if (method === 'eth_getTransactionReceipt') return { transactionHash: txHash, status: '0x1', blockNumber: '0xa', blockHash, gasUsed: '0x1', logs: [transfer(recipient, '2', '0x0'), { transactionHash: txHash, blockHash, topics: [], address: token, data: '0x', logIndex: '0x1' }, transfer(sender, '3', '0x2')] };
+    if (method === 'eth_blockNumber') return '0xa';
+    if (method === 'eth_getBlockByHash') return { number: '0xa', hash: blockHash, timestamp: '0x64' };
+    throw new Error('unexpected method');
+  });
+  const observation = await observeEvm({ chainId: 8453, txHash, rpcUrls: ['rpc'], rpcClient });
+  assert.deepEqual(observation.transfers, [
+    { asset: token, sender, recipient, amount: '2', logIndex: 0 },
+    { asset: token, sender, recipient: sender, amount: '3', logIndex: 2 },
+  ]);
+  assert.equal(observation.asset, `eip155:8453/erc20:${token}`);
+  assert.equal(observation.recipient, recipient);
+});
+
 test('EVM observer prefers stronger fallback evidence and preserves pending nonce', async () => {
   const rpcClient = mockRpcClient(async (url, method) => {
     if (method === 'eth_chainId') return '0x2105';

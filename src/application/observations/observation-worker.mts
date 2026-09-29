@@ -19,6 +19,8 @@ type ObservationJobStore = {
 export function createObservationWorker({ observe, saveObservation, observerManagesEvidence = false, store = null, clock = () => Date.now(), retryDelayMs = 5000, maxAttempts = 8, jobLeaseMs = 15 * 60_000, jitter = () => 0.5 }: { observe: (input: ObservationWork) => Promise<unknown>; saveObservation: (observation: WorkerObservation) => Promise<unknown>; observerManagesEvidence?: boolean; store?: ObservationJobStore | null; clock?: () => number; retryDelayMs?: number; maxAttempts?: number; jobLeaseMs?: number; jitter?: () => number }) {
   if (typeof observe !== 'function' || typeof saveObservation !== 'function') throw new TypeError('observe and saveObservation are required');
   const jobs = new Map<string, ObservationJob>();
+  // Keep completed jobs indexed too: enqueue remains idempotent for the worker's lifetime.
+  const jobsByKey = new Map<string, ObservationJob>();
   async function enqueuePersistent(input: ObservationWorkInput) {
     if (!store?.enqueueJob) return enqueue(input);
     const { idempotencyKey, ...workInput } = input; const now = clock(); const job: ObservationJob = { jobId: randomUUID(), idempotencyKey: idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`, input: workInput, state: 'QUEUED', attempts: 0, createdAt: now, nextAttemptAt: now, observation: null, result: null, error: null };
@@ -26,10 +28,10 @@ export function createObservationWorker({ observe, saveObservation, observerMana
   }
   function enqueue(input: ObservationWorkInput) {
     const { idempotencyKey, ...workInput } = input; const key = idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`;
-    const existing = [...jobs.values()].find((job) => job.key === key);
+    const existing = jobsByKey.get(key);
     if (existing) return existing;
     const job: ObservationJob = { jobId: randomUUID(), key, input: workInput, state: 'QUEUED', attempts: 0, createdAt: clock(), nextAttemptAt: clock(), observation: null, result: null, error: null };
-    jobs.set(job.jobId, job); return job;
+    jobs.set(job.jobId, job); jobsByKey.set(key, job); return job;
   }
   async function runOnce() {
     const persistentClaims = Boolean(store?.claimDueJobs);

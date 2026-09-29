@@ -6,6 +6,7 @@ const retryable = /* @__PURE__ */ new Set(["PENDING", "NOT_FOUND", "RPC_ERROR", 
 function createObservationWorker({ observe, saveObservation, observerManagesEvidence = false, store = null, clock = () => Date.now(), retryDelayMs = 5e3, maxAttempts = 8, jobLeaseMs = 15 * 6e4, jitter = () => 0.5 }) {
   if (typeof observe !== "function" || typeof saveObservation !== "function") throw new TypeError("observe and saveObservation are required");
   const jobs = /* @__PURE__ */ new Map();
+  const jobsByKey = /* @__PURE__ */ new Map();
   async function enqueuePersistent(input) {
     if (!store?.enqueueJob) return enqueue(input);
     const { idempotencyKey, ...workInput } = input;
@@ -16,10 +17,11 @@ function createObservationWorker({ observe, saveObservation, observerManagesEvid
   function enqueue(input) {
     const { idempotencyKey, ...workInput } = input;
     const key = idempotencyKey || `${input.chainId}:${input.txHash}:${input.confirmations ?? 0}`;
-    const existing = [...jobs.values()].find((job2) => job2.key === key);
+    const existing = jobsByKey.get(key);
     if (existing) return existing;
     const job = { jobId: randomUUID(), key, input: workInput, state: "QUEUED", attempts: 0, createdAt: clock(), nextAttemptAt: clock(), observation: null, result: null, error: null };
     jobs.set(job.jobId, job);
+    jobsByKey.set(key, job);
     return job;
   }
   async function runOnce() {
