@@ -136,12 +136,39 @@ export class PriorSealClient {
     if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 10) throw new TypeError('pollIntervalMs must be an integer of at least 10')
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) throw new TypeError('timeoutMs must be a positive integer')
     const startedAt = Date.now()
-    while (true) {
-      const job = await this.observationJob(jobId, options)
-      if (['COMPLETED', 'UNDETERMINED', 'FAILED'].includes(job.state)) return job
-      if (Date.now() - startedAt >= timeoutMs) throw new PriorSealApiError(`Observation job did not finish within ${timeoutMs}ms; resume this job instead of submitting a new transaction`, { code: 'OBSERVATION_WAIT_TIMEOUT', details: { jobId, authorizationId: job.input?.authorizationId, txHash: job.input?.txHash, job, retryAfterMs: pollIntervalMs } })
-      const retryWaitMs = job.state === 'RETRY_WAIT' && Number.isFinite(job.nextAttemptAt) ? Math.max(0, job.nextAttemptAt - Date.now()) : 0
-      await abortableDelay(Math.min(Math.max(pollIntervalMs, retryWaitMs), Math.max(1, timeoutMs - (Date.now() - startedAt))), options.signal)
+    let lastJob: ObservationJob | undefined
+    const timedOut = () => new PriorSealApiError(`Observation job did not finish within ${timeoutMs}ms; resume this job instead of submitting a new transaction`, { code: 'OBSERVATION_WAIT_TIMEOUT', details: { jobId, authorizationId: lastJob?.input?.authorizationId, txHash: lastJob?.input?.txHash, job: lastJob, retryAfterMs: pollIntervalMs } })
+    const controller = new AbortController()
+    const onAbort = () => controller.abort(options.signal?.reason)
+    if (options.signal?.aborted) onAbort()
+    else options.signal?.addEventListener('abort', onAbort, { once: true })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let timeoutFailure: PriorSealApiError | undefined
+    const deadline = new Promise<never>((_resolve, reject) => {
+      const check = () => {
+        const remaining = timeoutMs - (Date.now() - startedAt)
+        if (remaining > 0) { timer = setTimeout(check, Math.min(remaining, 2_147_483_647)); return }
+        timeoutFailure = timedOut()
+        reject(timeoutFailure)
+        controller.abort(timeoutFailure)
+      }
+      check()
+    })
+    try {
+      while (true) {
+        lastJob = await Promise.race([this.observationJob(jobId, { ...options, signal: controller.signal }), deadline])
+        if (Date.now() - startedAt >= timeoutMs) throw timedOut()
+        if (['COMPLETED', 'UNDETERMINED', 'FAILED'].includes(lastJob.state)) return lastJob
+        const retryWaitMs = lastJob.state === 'RETRY_WAIT' && Number.isFinite(lastJob.nextAttemptAt) ? Math.max(0, lastJob.nextAttemptAt - Date.now()) : 0
+        await Promise.race([abortableDelay(Math.min(Math.max(pollIntervalMs, retryWaitMs), Math.max(1, timeoutMs - (Date.now() - startedAt))), controller.signal), deadline])
+      }
+    } catch (error) {
+      if (timeoutFailure) throw timeoutFailure
+      throw error
+    } finally {
+      if (timer) clearTimeout(timer)
+      options.signal?.removeEventListener('abort', onAbort)
+      controller.abort()
     }
   }
 

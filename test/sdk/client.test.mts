@@ -159,6 +159,23 @@ test('SDK waits until the retry is due without repeatedly fetching the same job'
   assert.ok((pollTimes.at(-1) ?? 0) >= nextAttemptAt);
 });
 
+test('SDK wait timeout interrupts an in-flight poll and preserves the last known job', async () => {
+  let polls = 0;
+  const stalled: { signal?: AbortSignal } = {};
+  const previous = { jobId: 'job-stalled', state: 'QUEUED', input: { authorizationId: 'auth-1', txHash: '0x1' } };
+  const client = createPriorSealClient({ timeoutMs: 250, fetch: async (_url, init) => {
+    if (++polls === 1) return response(previous);
+    stalled.signal = init?.signal as AbortSignal;
+    return new Promise<Response>(() => {});
+  } });
+  await assert.rejects(client.waitForObservationJob('job-stalled', { pollIntervalMs: 10, timeoutMs: 30 }), (error) =>
+    error instanceof PriorSealApiError && error.code === 'OBSERVATION_WAIT_TIMEOUT' && isRecord(error.details) &&
+    error.details.jobId === previous.jobId && error.details.authorizationId === previous.input.authorizationId &&
+    error.details.txHash === previous.input.txHash && isRecord(error.details.job) && error.details.job.state === 'QUEUED');
+  assert.equal(polls, 2);
+  assert.equal(stalled.signal?.aborted, true);
+});
+
 test('SDK polling remains abortable while waiting for a retry', async () => {
   const controller = new AbortController();
   const client = createPriorSealClient({ fetch: async () => response({ jobId: 'job-retry', state: 'RETRY_WAIT', nextAttemptAt: Date.now() + 60_000, input: {} }) });
