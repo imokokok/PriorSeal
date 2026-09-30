@@ -2,6 +2,8 @@
 
 Experimental offline example for [APS #163](https://github.com/aeoess/agent-passport-system/issues/163). It verifies APS producer inputs and correlates their `decision_ref` with a separately principal-signed PriorSeal exact-call authorization. It reports APS evidence validity, PriorSeal evidence validity and compliance, and composition separately.
 
+The [SDK 0.4.0 signing-byte profile](../../docs/architecture/aps-priorseal-signing-bytes-v0.4.0.md) gives the precise PriorSeal EIP-712, hash and Ed25519 inputs for an independent verifier of these fixed artifacts.
+
 The result is **execution correlated to the principal-signed authorization and the APS decision**. All execution observations here are synthetic. A successful run is neither a chain-observation proof nor evidence of production adoption or endorsement.
 
 ## Run
