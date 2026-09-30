@@ -192,3 +192,45 @@ export function assertV3SwapAuthorization(input: { approval: unknown; transactio
   }
   return swap
 }
+
+export type SwapReplanChange = { field: string; approved: string; proposed: string }
+export type SwapReplanComparison = { sameApprovedCall: boolean; changes: SwapReplanChange[] }
+
+/** Explain a proposed replan. The signer must still run assertV3SwapAuthorization. */
+export function compareV3SwapReplan(input: { approval: unknown; originalTransaction: unknown; proposedTransaction: unknown; intent: Intent }): SwapReplanComparison {
+  const approval = parseV3SwapApproval(input.approval)
+  const original = transaction(input.originalTransaction)
+  const proposed = transaction(input.proposedTransaction)
+  const originalSwap = assertV3SwapTransaction(approval, original, 1)
+  const commitment = swapApprovalCommitment(approval)
+  const matching = input.intent.contextCommitments?.filter((entry) => entry.namespace === commitment.namespace) ?? []
+  requireValid(matching.length === 1 && matching[0].algorithm === commitment.algorithm && matching[0].digest === commitment.digest, 'SWAP_REPLAN_APPROVAL_MISMATCH')
+  const expected = buildExactCallIntent({ transaction: original, intentId: input.intent.intentId, asset: `eip155:${originalSwap.chainId}/erc20:${originalSwap.inputToken}`, amount: originalSwap.inputAmount, validUntil: input.intent.validUntil, constraints: input.intent.constraints, contextCommitments: input.intent.contextCommitments })
+  for (const key of ['schema', 'executionProfile', 'intentId', 'chainId', 'action', 'asset', 'amount', 'sender', 'recipient', 'validUntil', 'nonce', 'callTarget', 'calldataHash', 'transactionValue'] as const) {
+    requireValid(input.intent[key] === expected[key], 'SWAP_REPLAN_ORIGINAL_MISMATCH')
+  }
+  const changes: SwapReplanChange[] = []
+  const add = (field: string, approved: unknown, proposedValue: unknown) => {
+    if (String(approved).toLowerCase() !== String(proposedValue).toLowerCase()) changes.push({ field, approved: String(approved), proposed: String(proposedValue) })
+  }
+  add('chain', original.chainId, proposed.chainId)
+  add('sender', original.from, proposed.from)
+  add('transaction nonce', original.nonce, proposed.nonce)
+  add('router', original.to, proposed.to)
+  add('native value', original.value ?? '0', proposed.value ?? '0')
+  let proposedSwap: V3SwapSemantics | null = null
+  try { proposedSwap = decodeV3SingleSwap(proposed) }
+  catch { changes.push({ field: 'supported swap call', approved: 'original Uniswap V3 exactInputSingle', proposed: 'unsupported or invalid call' }) }
+  if (proposedSwap) {
+    add('input token', approval.inputToken, proposedSwap.inputToken)
+    add('output token', approval.outputToken, proposedSwap.outputToken)
+    add('input amount', originalSwap.inputAmount, proposedSwap.inputAmount)
+    add('minimum output', originalSwap.minimumOutput, proposedSwap.minimumOutput)
+    add('recipient', approval.recipient, proposedSwap.recipient)
+    add('pool fee', approval.fee, proposedSwap.fee)
+    add('deadline', originalSwap.deadline, proposedSwap.deadline)
+  }
+  if (original.data.toLowerCase() !== proposed.data.toLowerCase() && changes.length === 0) changes.push({ field: 'calldata', approved: keccak256(original.data), proposed: keccak256(proposed.data) })
+  if (input.intent.calldataHash?.toLowerCase() !== keccak256(proposed.data).toLowerCase() && !changes.some((change) => change.field === 'calldata')) changes.push({ field: 'calldata hash', approved: input.intent.calldataHash ?? 'missing', proposed: keccak256(proposed.data) })
+  return { sameApprovedCall: changes.length === 0, changes }
+}

@@ -120,22 +120,23 @@ test('swap review decodes the call, checks router code, and signs the same appro
   const signer = privateKeyToAccount(`0x${'3'.repeat(64)}`)
   const sender = signer.address.toLowerCase() as `0x${string}`
   const router = `0x${'2'.repeat(40)}` as const
-  const inputToken = `0x${'4'.repeat(40)}` as const
-  const outputToken = `0x${'5'.repeat(40)}` as const
+  const inputToken = '0x4200000000000000000000000000000000000006' as const
+  const outputToken = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913' as const
   const recipient = `0x${'6'.repeat(40)}` as const
   const routerCode = '0x60006000'
   const transaction = { chainId: 8453, from: sender, to: router, nonce: '7', value: '0', data: encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: 'exactInputSingle', args: [{ tokenIn: inputToken, tokenOut: outputToken, fee: 3000, recipient, deadline: BigInt(now + 7200), amountIn: 1_000_000n, amountOutMinimum: 900_000n, sqrtPriceLimitX96: 0n }] }) }
   const approval = createV3SwapApproval(transaction, keccak256(routerCode))
   const walletCalls: string[] = []
   await page.exposeFunction('__signFixture', (data: unknown) => signer.signTypedData(data as Parameters<typeof signer.signTypedData>[0]))
-  await page.addInitScript(({ address, code }) => { window.ethereum = { request: async ({ method, params }) => {
+  await page.addInitScript(({ address, code, inputToken }) => { window.ethereum = { request: async ({ method, params }) => {
     window.__walletCalls ??= []; window.__walletCalls.push(method)
     if (method === 'eth_chainId') return '0x2105'
     if (method === 'eth_getCode') return code
+    if (method === 'eth_call') return (params?.[0] as { to?: string })?.to?.toLowerCase() === inputToken ? '0x12' : '0x6'
     if (method === 'eth_requestAccounts') return [address]
     if (method === 'eth_signTypedData_v4') return window.__signFixture(JSON.parse(String(params?.[1])))
     throw new Error(`Unexpected wallet method ${method}`)
-  } } }, { address: signer.address, code: routerCode })
+  } } }, { address: signer.address, code: routerCode, inputToken })
   await page.route('**/v1/authorizations/prepare', async (route) => {
     const input = route.request().postDataJSON()
     const expected = buildV3SwapIntent({ approval, transaction, intentId: input.intent.intentId, validUntil: input.intent.validUntil, constraints: { minConfirmations: 12 }, now })
@@ -157,6 +158,9 @@ test('swap review decodes the call, checks router code, and signs the same appro
   await expect(page.getByRole('heading', { name: 'Swap you are approving' })).toBeVisible()
   await expect(page.locator('.preview')).toContainText('1000000 atomic units')
   await expect(page.locator('.preview')).toContainText('900000 atomic units')
+  await expect(page.locator('.preview')).toContainText('contract decimals: 6')
+  await expect(page.locator('.preview')).toContainText('WETH')
+  await expect(page.locator('.preview')).toContainText('USDC')
   await page.getByRole('button', { name: 'Prepare canonical intent' }).click()
   await expect(page.getByRole('heading', { name: 'Review canonical authorization' })).toBeVisible()
   const checkpointDownload = page.waitForEvent('download')
@@ -177,6 +181,10 @@ test('swap review decodes the call, checks router code, and signs the same appro
   await page.getByLabel('Authorization checkpoint file').setInputFiles(signedCheckpointFile!)
   await page.getByRole('button', { name: 'Retry acceptance of the same signed bytes' }).click()
   await expect(page.getByRole('heading', { name: 'Authorization accepted' })).toBeVisible()
+  const replanned = { ...transaction, data: encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: 'exactInputSingle', args: [{ tokenIn: inputToken, tokenOut: outputToken, fee: 3000, recipient: sender, deadline: BigInt(now + 7200), amountIn: 1_000_000n, amountOutMinimum: 900_000n, sqrtPriceLimitX96: 0n }] }) }
+  await page.getByLabel('Proposed transaction JSON').fill(JSON.stringify(replanned))
+  await expect(page.getByText('New authorization required')).toBeVisible()
+  await expect(page.getByText('recipient', { exact: true })).toBeVisible()
   await expect(page.getByText('Authorization window is not active', { exact: true })).toBeVisible()
   expect(acceptanceCalls).toBe(2)
   expect(walletCalls).toContain('eth_getCode')
@@ -203,7 +211,8 @@ test('swap signing stops when wallet RPC router code differs from the reviewed h
   await page.getByLabel('Transaction JSON', { exact: true }).fill(JSON.stringify(transaction))
   await page.getByRole('button', { name: 'Prepare canonical intent' }).click()
   await expect(page.getByText('SWAP_ROUTER_CODE_MISMATCH')).toBeVisible()
-  expect(await page.evaluate(() => window.__walletCalls)).toEqual(['eth_chainId', 'eth_getCode'])
+  expect(await page.evaluate(() => window.__walletCalls)).toContain('eth_getCode')
+  expect(await page.evaluate(() => window.__walletCalls)).not.toContain('eth_signTypedData_v4')
 })
 
 async function nativeFixture() {

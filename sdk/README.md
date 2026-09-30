@@ -16,6 +16,8 @@ Import `createDefiExecutionGateway`, `createDefiViemSubmitter`, and the durable 
 
 The hosted PriorSeal Worker accepts authorizations and issues evidence. It does not hold funds or broadcast transactions. See [the complete gateway contract](https://github.com/imokokok/PriorSeal/blob/main/docs/product/defi-execution-gateway.md) and [swap authorization semantics](https://github.com/imokokok/PriorSeal/blob/main/docs/product/swap-authorization.md) before integrating a signer.
 
+The repository's unreleased source also exports `compareV3SwapReplan()` for field-level explanations. This addition is not part of the published 0.9.0 package.
+
 ## Start with a local receipt
 
 The repository has a runnable example that creates a synthetic receipt and checks it locally. With **Node.js 22+**, run from a [PriorSeal checkout](https://github.com/imokokok/PriorSeal):

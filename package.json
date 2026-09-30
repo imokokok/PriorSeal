@@ -17,6 +17,7 @@
     "example:aps-priorseal": "npm --prefix examples/aps-priorseal-decision-binding-v1 run verify",
     "test:aps-priorseal": "npm --prefix examples/aps-priorseal-decision-binding-v1 run verify:producer && npm --prefix examples/aps-priorseal-decision-binding-v1 test",
     "example:receipt": "node examples/create-signed-receipt.mjs",
+    "example:swap-replan": "npm run sdk:build && npm run core:build && node examples/swap-replan-demo/verify.mjs",
     "example:boundaryattest-paired": "npm run sdk:build && node examples/boundaryattest-paired-v0.2/verify.reference.mjs",
     "example:insight-boundaryattest-three-object": "npm run sdk:build && node examples/insight-boundaryattest-three-object-v0.2/verify.reference.mjs",
     "example:headless-market-state-pair": "npm run sdk:build && node examples/headless-market-state-pair-v1/verify.mjs",

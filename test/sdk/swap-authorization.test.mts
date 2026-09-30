@@ -4,7 +4,7 @@ import { encodeFunctionData, keccak256 } from 'viem'
 import {
   V3_SINGLE_SWAP_ABI, assertV3SwapAuthorization, assertV3SwapRouterCode,
   assertV3SwapTransaction, buildV3SwapIntent, createV3SwapApproval,
-  decodeV3SingleSwap, parseV3SwapApproval, swapApprovalCommitment,
+  compareV3SwapReplan, decodeV3SingleSwap, parseV3SwapApproval, swapApprovalCommitment,
 } from '../../sdk/dist/index.js'
 
 const sender = `0x${'1'.repeat(40)}` as const
@@ -78,4 +78,18 @@ test('strict approval and call parser reject unknown fields, unsafe calls and un
   assert.throws(() => decodeV3SingleSwap({ ...transaction, data: `${transaction.data}00` }), /SWAP_CALL_NON_CANONICAL/)
   assert.throws(() => decodeV3SingleSwap(fixture({ sqrtPriceLimitX96: 1n }).transaction), /SWAP_POOL_OR_PARTIAL_FILL_UNSUPPORTED/)
   assert.throws(() => buildV3SwapIntent({ approval, transaction, intentId: 'swap-1', validUntil: now + 121, now }), /SWAP_AUTHORIZATION_WINDOW_INVALID/)
+})
+
+test('a replan explains changed terms and requires a new authorization', () => {
+  const baseline = fixture()
+  const changed = fixture({ recipient: sender, amountOutMinimum: 800_000n })
+  const comparison = compareV3SwapReplan({ approval: baseline.approval, originalTransaction: baseline.transaction, proposedTransaction: changed.transaction, intent: baseline.intent })
+  assert.equal(comparison.sameApprovedCall, false)
+  assert.deepEqual(comparison.changes.map((change) => change.field), ['minimum output', 'recipient', 'calldata hash'])
+  assert.equal(compareV3SwapReplan({ approval: baseline.approval, originalTransaction: baseline.transaction, proposedTransaction: baseline.transaction, intent: baseline.intent }).sameApprovedCall, true)
+  assert.throws(() => compareV3SwapReplan({ approval: baseline.approval, originalTransaction: baseline.transaction, proposedTransaction: baseline.transaction, intent: { ...baseline.intent, amount: '1' } }), /SWAP_REPLAN_ORIGINAL_MISMATCH/)
+  assert.throws(() => assertV3SwapAuthorization({ approval: baseline.approval, transaction: changed.transaction, intent: baseline.intent, routerBytecode: code, now }))
+  const freshApproval = createV3SwapApproval(changed.transaction, keccak256(code))
+  const freshIntent = buildV3SwapIntent({ approval: freshApproval, transaction: changed.transaction, intentId: 'swap-2', validUntil: now + 90, now })
+  assertV3SwapAuthorization({ approval: freshApproval, transaction: changed.transaction, intent: freshIntent, routerBytecode: code, now })
 })

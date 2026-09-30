@@ -24,6 +24,7 @@ PriorSeal is for teams building EVM agents, treasury automation, wallets, and tr
 | Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
 | Review the assets, limits, recipient and router in one ERC-20 swap before authorization | [Reviewed swap authorization](docs/product/swap-authorization.md) |
+| See why an agent's replanned swap needs new approval | [Offline replan demo](examples/swap-replan-demo/README.md) |
 | Run a reviewed DeFi call through prepare, authorize, execute, query and recovery | [General DeFi execution gateway](docs/product/defi-execution-gateway.md) |
 | Keep assessment, authorization, and execution evidence together | [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) and [composite review manifests](sdk/README.md#composite-review-manifests) |
 

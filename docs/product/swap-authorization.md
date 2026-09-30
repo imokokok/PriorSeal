@@ -1,13 +1,13 @@
 # Reviewed single-pool ERC-20 swap authorization
 
-This opt-in workflow makes one supported swap's business fields visible before the principal signs a PriorSeal exact-call authorization. It preserves PriorSeal's evidence role: the customer's wallet or execution system signs and broadcasts the transaction, and PriorSeal later observes it. Insight may supply a separately verified oracle risk assessment; this adapter does not make one mandatory or reinterpret Insight's verdict.
+This opt-in workflow makes one supported swap's business fields visible before the principal signs a PriorSeal exact-call authorization. It preserves PriorSeal's evidence role: the customer's wallet or execution system signs and broadcasts the transaction, and PriorSeal later observes it. Insight may supply a separately verified oracle risk assessment; this adapter does not make one mandatory or reinterpret Insight's verdict. The console can compare a later proposed call with the approved call and explain changed fields; that display does not authorize or submit the proposal.
 
 ## Supported call
 
 - One EVM chain and one externally reviewed deployment of the **original Uniswap V3 SwapRouter** `exactInputSingle` selector with the deadline inside its tuple.
 - ERC-20 input and output, exact input, one pool fee, one output recipient, zero native value and `sqrtPriceLimitX96 = 0`.
 - A fixed transaction sender, nonce, router target and canonical calldata. Router runtime bytecode must match an independently pinned hash at authorization review and again at the signing or submission boundary.
-- The approved maximum input and minimum output are expressed in **atomic token units**. The concrete call may spend no more than the approved maximum and require no less than the approved minimum. The current console derives both limits exactly from the imported call.
+- The approved maximum input and minimum output are expressed in **atomic token units**. The concrete call may spend no more than the approved maximum and require no less than the approved minimum. The current console derives both limits exactly from the imported call. It may also display decimal amounts using `decimals()` read from the token contracts on the selected chain. A symbol appears only when the chain, address and observed decimals match the console's reviewed Base WETH/USDC metadata; other tokens show no symbol. The addresses and atomic values remain authoritative.
 
 SwapRouter02, Universal Router, multicall, split routes, native swaps, exact-output calls, fee-on-transfer tokens and arbitrary selectors require separate reviewed adapters. Supplying a code hash from the transaction proposer does not establish that the router is trusted. Review the deployment, its code and upgradeability, then provision the hash through a trusted configuration. For a proxy, pinning only the proxy runtime code does not pin its implementation.
 
@@ -41,7 +41,7 @@ assertV3SwapAuthorization({
 // The customer's wallet/executor now signs and sends the SAME exact tx.
 ```
 
-The helper rejects changed tokens, recipient, router, pool fee, spend, minimum output, deadline, nonce, calldata, native value, signed approval commitment and router runtime code. It also refuses an expired authorization window. The calling system must verify that the PriorSeal authorization was accepted and route **all** signing and broadcast paths through this guard; a code path that bypasses it is outside this protection. ERC-20 `approve` is a separate transaction with its own spender and allowance scope; review and authorize it independently when required.
+The helper rejects changed tokens, recipient, router, pool fee, spend, minimum output, deadline, nonce, calldata, native value, signed approval commitment and router runtime code. It also refuses an expired authorization window. `compareV3SwapReplan()` returns human-readable field differences for a proposed call; a matching comparison is not permission to reuse an expired or spent authorization. The calling system must verify that the PriorSeal authorization was accepted and route **all** signing and broadcast paths through this guard; a code path that bypasses it is outside this protection. ERC-20 `approve` is a separate transaction with its own spender and allowance scope; review and authorize it independently when required.
 
 The console's **Review as a single-pool ERC-20 swap** mode decodes these fields from an imported transaction, checks the wallet chain and router code, compares the server-prepared intent before signing, and exports the original approval and transaction with the accepted authorization. A swap recovery checkpoint packages the approval and transaction so importing it can recheck the signed intent. A signed checkpoint recovered after expiry may recover an existing acceptance; it does not grant permission to execute a new trade.
 
@@ -56,3 +56,5 @@ GANACHE_MODULE=/absolute/path/to/ganache/dist/node/core.js npm run swap:executio
 ```
 
 It accepts a user-signed authorization through the PriorSeal HTTP API, rejects a changed recipient, mines the guarded transaction, observes it through the API, independently verifies the signed receipt and checks the recipient's test-token balance. The simulated router is not a production Uniswap deployment.
+
+For an offline, no-RPC walkthrough of changed recipient, amount, minimum output and pool fee, run `npm run example:swap-replan` or read the [demo](../../examples/swap-replan-demo/README.md).

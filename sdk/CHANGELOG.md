@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a reviewed-swap replan comparison that identifies changed signed call fields without granting execution permission.
+
 ## 0.9.0 — 2026-09-29
 
 - Replay signed temporal evidence for EVM observations, including the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Reject inconsistent `FINALIZED` claims and enforce signed finality constraints and policy requirements offline.
