@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.1 — 2026-09-30
 
 - Add a reviewed-swap replan comparison that identifies changed signed call fields without granting execution permission.
 

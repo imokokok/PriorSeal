@@ -3,10 +3,10 @@
 Typed browser and Node.js client connecting explicit authorization to observed EVM execution and independently verifiable receipts. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.9.0
+npm install priorseal-sdk@0.9.1
 ```
 
-Version **0.9.0** adds signed temporal-finality constraints and offline replay checks for the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Version 0.8.0 added reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+Version **0.9.1** adds `compareV3SwapReplan()` to explain which approved swap fields a proposed call changes; the comparison does not authorize execution. Version 0.9.0 added signed temporal-finality constraints and offline replay checks for the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Version 0.8.0 added reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
 
 To require an RPC-finalized observation, set `intent.constraints.finalityRequirement` to `RPC_FINALIZED`. An optional `maxToleratedReorgDepth: N` requires at least `N + 1` confirmations. The offline verifier checks signed evidence consistency; an RPC finalized assertion remains an observation by the configured endpoint and issuer, not an embedded consensus proof. See [temporal evidence and finality](https://github.com/imokokok/PriorSeal/blob/main/docs/architecture/temporal-finality.md).
 
@@ -16,7 +16,7 @@ Import `createDefiExecutionGateway`, `createDefiViemSubmitter`, and the durable 
 
 The hosted PriorSeal Worker accepts authorizations and issues evidence. It does not hold funds or broadcast transactions. See [the complete gateway contract](https://github.com/imokokok/PriorSeal/blob/main/docs/product/defi-execution-gateway.md) and [swap authorization semantics](https://github.com/imokokok/PriorSeal/blob/main/docs/product/swap-authorization.md) before integrating a signer.
 
-The repository's unreleased source also exports `compareV3SwapReplan()` for field-level explanations. This addition is not part of the published 0.9.0 package.
+The SDK exports `compareV3SwapReplan()` for field-level explanations. A matching comparison does not replace the signing-time authorization guard or confirm that an authorization is still active and unused.
 
 ## Start with a local receipt
 
