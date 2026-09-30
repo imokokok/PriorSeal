@@ -43,6 +43,30 @@ test('SDK rejects malformed successful API responses before exposing typed value
   await assert.rejects(health.health(), { code: 'INVALID_RESPONSE' });
 });
 
+test('SDK rejects malformed capability claims instead of exposing them as typed deployment facts', async () => {
+  const valid = {
+    schema: 'priorseal.capabilities.v1', issuer: 'priorseal', audience: 'priorseal',
+    executionProfiles: ['priorseal.intent.v1'], chains: [8453], authorizers: ['eip712'],
+    proofMode: 'issuer', policyHash: `0x${'0'.repeat(64)}`, minConfirmations: 0,
+    maxToleratedReorgDepth: null, finalityRequirement: 'CONFIRMATIONS',
+    dependencies: { issuer: 'configured', timestamp: 'not_required', rpc: 'configured', storage: 'available' },
+    workflowReady: true, chainReadiness: [{ chainId: 8453, rpc: 'configured' }],
+    readinessScope: 'Configuration only', checkedAt: 1_800_000_000,
+    archive: { enabled: false, retention: 'operator_defined', scope: 'project_uploaded_evidence' },
+  };
+  const client = createPriorSealClient({ fetch: async () => response(valid) });
+  assert.deepEqual(await client.capabilities(), valid);
+  for (const malformed of [
+    { ...valid, executionProfiles: [42] },
+    { ...valid, chains: ['8453'] },
+    { ...valid, chains: [0] },
+    { ...valid, authorizers: [null] },
+  ]) {
+    const badClient = createPriorSealClient({ fetch: async () => response(malformed) });
+    await assert.rejects(badClient.capabilities(), { code: 'INVALID_RESPONSE' });
+  }
+});
+
 test('SDK binds the browser global fetch implementation', async () => {
   const originalFetch = globalThis.fetch;
   let receiver;

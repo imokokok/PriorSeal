@@ -12,6 +12,10 @@ function hasString(value: Record<string, unknown>, key: string): boolean {
   return typeof value[key] === 'string' && value[key] !== ''
 }
 
+function strings(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(entry => typeof entry === 'string' && entry !== '')
+}
+
 function safeJson(value: unknown, path: string, depth = 0): void {
   if (depth > 64) invalid(path)
   if (Array.isArray(value)) { for (const entry of value) safeJson(entry, path, depth + 1); return }
@@ -46,9 +50,9 @@ export function validatePriorSealResponse(path: string, value: unknown): void {
   if (route === '/health/live' || route === '/health/ready') {
     if (!hasString(value, 'status')) invalid(path)
   } else if (route === '/v1/version') {
-    if (!hasString(value, 'service') || !hasString(value, 'version') || !Array.isArray(value.protocol)) invalid(path)
+    if (!hasString(value, 'service') || !hasString(value, 'version') || !strings(value.protocol)) invalid(path)
   } else if (route === '/v1/capabilities') {
-    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !Array.isArray(value.executionProfiles) || !Array.isArray(value.chains) || !Array.isArray(value.authorizers) || typeof value.workflowReady !== 'boolean') invalid(path)
+    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry > 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean') invalid(path)
   } else if (route === '/v1/intents') {
     if (!record(value.intent) || !hasString(value, 'intentHash') || !record(value.policy)) invalid(path)
   } else if (route === '/v1/authorizations/prepare') {
