@@ -87,6 +87,11 @@
 @media (max-width: 390px) {
   .receipt-index-panel .header-actions .button { flex: 1 1 100%; }
   .page-receipts .relationship-assessments { grid-template-columns: 1fr; }
+  .page-receipts .receipt-compliance .panel-head { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .page-receipts .receipt-compliance .receipt-badges { flex-wrap: wrap; }
+  .page-receipts .proof dl { grid-template-columns: minmax(0,1fr); gap: 6px; }
+  .page-receipts .proof dt:not(:first-child) { margin-top: 12px; }
+  .page-receipts .proof .code-value { white-space: normal; overflow-wrap: anywhere; }
 }
 @media (prefers-reduced-motion: reduce) {
   .receipt-index-panel .receipt-row { transition: none; }

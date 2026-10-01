@@ -1,5 +1,6 @@
 import { CodeValue, Notice, Status } from './components'
 import type { Receipt } from './types'
+import './console-relationship.css'
 
 type VerificationSummary = { valid: boolean; code: string }
 type RelationshipValue = boolean | null
@@ -49,8 +50,9 @@ export function EvidenceRelationshipView({ receipt, verification, signerTrustCon
   const cryptographicStatus = verification ? verification.valid ? 'VERIFIED' : verification.code : 'NOT VERIFIED HERE'
   const crossEvidenceStatus = relationshipStatus(relations)
 
-  return <section className="panel evidence-relationship" aria-labelledby="evidence-relationship-title">
-    <div className="panel-head"><div><h2 id="evidence-relationship-title">Evidence relationship</h2><p>Each transition keeps its own scope. A matching digest, valid signature, observed execution and compliance result are related claims, not substitutes for one another.</p></div></div>
+  return <section className={`panel evidence-relationship ${verification?.valid ? 'evidence-relationship--verified' : 'evidence-relationship--claims'}`} aria-labelledby="evidence-relationship-title">
+    <div className="panel-head relationship-intro"><div><span className="relationship-kicker">EVIDENCE MAP / 01</span><h2 id="evidence-relationship-title">Evidence relationship</h2><p>Each transition keeps its own scope. A matching digest, valid signature, observed execution and compliance result are related claims, not substitutes for one another.</p></div><div className="relationship-intro__scope"><span>DISPLAY MODE</span><strong>{verification ? verification.valid ? 'Local review attached' : 'Local review did not pass' : 'Receipt claims only'}</strong><small>{verification ? 'Read each assessment within the verifier’s stated scope.' : 'Run local verification to check signatures and hashes.'}</small></div></div>
+    <div className="relationship-divider"><span>01 / RECORD PATH</span><h3>From authority to receipt</h3></div>
     <ol className="relationship-chain">
       {stages.map((stage, index) => <li key={`${stage.label}-${stage.title}`}>
         <div className="relationship-stage-heading"><small>{String(index + 1).padStart(2, '0')} · {stage.label}</small><Status value={stage.status} small /></div>
@@ -58,6 +60,7 @@ export function EvidenceRelationshipView({ receipt, verification, signerTrustCon
         {'hash' in stage && stage.hash ? <CodeValue value={stage.hash} /> : <span>{stage.value}</span>}
       </li>)}
     </ol>
+    <div className="relationship-divider relationship-divider--review"><span>02 / REVIEW BOUNDARY</span><h3>What has been established</h3></div>
     <dl className="relationship-assessments">
       <div><dt>Cryptographic evidence</dt><dd><Status value={cryptographicStatus} small /><p>{verification ? verification.valid ? 'The local verifier recomputed and checked the receipt within its stated scope.' : `Local verification stopped with ${verification.code}.` : 'This page is displaying receipt claims. Run local verification before relying on signatures or hashes.'}</p></dd></div>
       <div><dt>Signer trust</dt><dd><Status value={signerTrustConfirmed ? 'CONFIRMED' : 'NOT ESTABLISHED'} small /><p>{signerTrustConfirmed ? 'The reviewer confirmed the issuer configuration through an independent source.' : 'A key supplied by the receipt, bundle or discovery endpoint cannot establish its own authority.'}</p></dd></div>

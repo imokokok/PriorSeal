@@ -262,8 +262,10 @@ test('native bundle never self-trusts and custom audience is enforced after inde
   await page.locator('.verification-result').screenshot({ path: testInfo.outputPath('local-verdict-mobile.png'), animations: 'disabled' })
   await page.setViewportSize({ width: 1280, height: 800 })
   await expect(page.getByRole('heading', { name: 'Evidence relationship' })).toBeVisible()
+  await expect(page.locator('.evidence-relationship')).toContainText('Local review attached')
   await expect(page.locator('.evidence-relationship')).toContainText('External decision use')
   await expect(page.locator('.evidence-relationship')).toContainText('NOT ESTABLISHED')
+  await page.locator('.evidence-relationship').screenshot({ path: testInfo.outputPath('verified-evidence-relationship.png'), animations: 'disabled' })
   await page.getByLabel('Trust profile JSON', { exact: true }).fill(JSON.stringify({ ...profile, audience: 'wrong-deployment' }))
   await page.getByRole('button', { name: 'Import profile', exact: true }).click()
   await page.getByRole('button', { name: 'Verify locally' }).click()
@@ -293,15 +295,22 @@ test('a trust profile draft without confirmedAt stays untrusted until explicit c
   await expect(page.getByLabel('Saved trust profile').locator('option')).toHaveCount(1)
 })
 
-test('receipt detail presents unverified receipt fields as signed claims', async ({ page }) => {
+test('receipt detail presents unverified receipt fields as signed claims', async ({ page }, testInfo) => {
   const { bundle } = await nativeFixture()
   await page.route(`**/v1/receipts/${encodeURIComponent(bundle.receipt.receiptId)}`, route => route.fulfill({ json: bundle.receipt }))
   await page.goto(`/app/receipts/${encodeURIComponent(bundle.receipt.receiptId)}`)
   const relationship = page.locator('.evidence-relationship')
   await expect(relationship.getByRole('heading', { name: 'Evidence relationship' })).toBeVisible()
+  await expect(relationship).toContainText('Receipt claims only')
   await expect(relationship.locator('.relationship-chain li').filter({ hasText: 'Receipt identifier' })).toContainText('SIGNED CLAIM')
   await expect(relationship.locator('.relationship-assessments > div').filter({ hasText: 'Cryptographic evidence' })).toContainText('NOT VERIFIED HERE')
   await expect(relationship.locator('.relationship-assessments > div').filter({ hasText: 'External decision use' })).toContainText('NOT ESTABLISHED')
+  await relationship.screenshot({ path: testInfo.outputPath('receipt-evidence-relationship.png'), animations: 'disabled' })
+  await page.setViewportSize({ width: 320, height: 700 })
+  await expect(page.locator('.sidebar')).toHaveAttribute('aria-hidden', 'true')
+  await expect.poll(() => page.locator('#console-navigation').evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await relationship.screenshot({ path: testInfo.outputPath('receipt-evidence-relationship-mobile.png'), animations: 'disabled' })
 })
 
 test('archive reviewer access is scoped, excludes upload, and keeps token out of browser storage', async ({ page }) => {

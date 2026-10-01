@@ -1,0 +1,45 @@
+.evidence-relationship { overflow: hidden; }
+.evidence-relationship .relationship-intro { min-height: 252px; margin: -25px -25px 31px; padding: clamp(27px,3.5vw,43px); display: grid; grid-template-columns: minmax(0,1fr) minmax(190px,.32fr); align-items: end; gap: 28px; color: #faf0e8; background: radial-gradient(circle at 78% 17%, #69414e, #35232b 64%); border-bottom: 1px solid #9e6977; }
+.relationship-intro > div { min-width: 0; }
+.relationship-kicker, .relationship-intro__scope > span, .relationship-divider > span { color: #eeb5be; font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .12em; }
+.page-receipts .evidence-relationship .relationship-intro h2, .page-verify .evidence-relationship .relationship-intro h2 { margin: 18px 0 12px; color: #fff6ee; font: 400 clamp(43px,4.6vw,65px)/.99 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.06em; }
+.evidence-relationship .relationship-intro p { max-width: 690px; margin: 0; color: #e1ccca; font-size: 14px; line-height: 1.65; }
+.relationship-intro__scope { padding: 19px 0 3px 21px; border-left: 1px solid #ad7c89; }
+.relationship-intro__scope strong { margin: 13px 0 8px; display: block; font: 400 27px/1.05 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.relationship-intro__scope small { display: block; color: #dac6c5; font-size: 12px; line-height: 1.5; }
+.relationship-divider { margin-bottom: 15px; display: flex; align-items: end; justify-content: space-between; gap: 15px; }
+.relationship-divider > span { color: var(--wine); }
+.relationship-divider h3 { margin: 0; font: 400 clamp(25px,2.5vw,34px)/1.05 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.045em; }
+.relationship-divider--review { margin-top: 34px; }
+.evidence-relationship .relationship-chain { grid-template-columns: repeat(2,minmax(0,1fr)); border-top: 3px solid var(--wine); }
+.evidence-relationship .relationship-chain li, .page-receipts .evidence-relationship .relationship-chain li { min-height: 166px; padding: 21px 23px; position: relative; gap: 13px; background: #faf7f0; }
+.evidence-relationship .relationship-chain li:nth-child(4n + 2), .page-receipts .evidence-relationship .relationship-chain li:nth-child(4n + 2) { background: #f2eae3; }
+.evidence-relationship .relationship-chain li:last-child:nth-child(odd) { grid-column: 1 / -1; background: #e8d9d3; }
+.evidence-relationship .relationship-chain li > strong { font: 400 clamp(22px,2.3vw,30px)/1.1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.relationship-chain .relationship-stage-heading { min-height: 28px; align-items: start; }
+.relationship-chain .relationship-stage-heading small { padding-top: 4px; }
+.relationship-chain .status { max-width: 57%; white-space: normal; text-align: right; line-height: 1.25; }
+.evidence-relationship--claims .relationship-chain .status.success { color: #665d54; background: #eee8df; border-color: #a9a096; }
+.evidence-relationship .relationship-chain .code-value { min-width: 0; overflow-wrap: anywhere; }
+.evidence-relationship .relationship-assessments { margin: 0 0 24px; grid-template-columns: repeat(2,minmax(0,1fr)); border-top: 3px solid #35232b; counter-reset: assessment; }
+.evidence-relationship .relationship-assessments > div, .page-receipts .evidence-relationship .relationship-assessments > div { min-height: 174px; padding: 23px; background: #f8f3eb; }
+.evidence-relationship .relationship-assessments > div:first-child { background: #ede2dc; }
+.evidence-relationship .relationship-assessments > div:last-child { background: #ece8e1; }
+.evidence-relationship .relationship-assessments dt { color: var(--wine); font: 400 clamp(21px,2vw,28px)/1.1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; text-transform: none; }
+.evidence-relationship .relationship-assessments dt::before { counter-increment: assessment; content: '0' counter(assessment) ' / '; display: block; margin-bottom: 15px; font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .1em; }
+.evidence-relationship .relationship-assessments dd { margin-top: 17px; }
+.evidence-relationship .relationship-assessments p { max-width: 510px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.evidence-relationship > .notice { margin-top: 26px; }
+@media (max-width: 820px) {
+  .evidence-relationship .relationship-intro { grid-template-columns: 1fr; }
+  .relationship-intro__scope { padding: 16px 0 0; border-left: 0; border-top: 1px solid #ad7c89; }
+}
+@media (max-width: 650px) {
+  .evidence-relationship .relationship-intro { margin: -25px -25px 26px; padding: 26px; }
+  .page-receipts .evidence-relationship .relationship-intro h2, .page-verify .evidence-relationship .relationship-intro h2 { font-size: clamp(40px,11vw,54px); }
+  .relationship-divider { align-items: start; flex-direction: column; gap: 6px; }
+  .evidence-relationship .relationship-chain, .evidence-relationship .relationship-assessments { grid-template-columns: 1fr; }
+  .evidence-relationship .relationship-chain li:last-child:nth-child(odd) { grid-column: auto; }
+  .evidence-relationship .relationship-chain li, .page-receipts .evidence-relationship .relationship-chain li { min-height: 0; padding: 20px; }
+  .evidence-relationship .relationship-assessments > div, .page-receipts .evidence-relationship .relationship-assessments > div { min-height: 0; padding: 20px; }
+}
