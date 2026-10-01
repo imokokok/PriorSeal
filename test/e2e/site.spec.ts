@@ -40,6 +40,12 @@ test('asks for the real local-storage choice without setting cookies', async ({ 
   await page.getByRole('link', { name: 'Read privacy and storage details' }).click()
   await expect(page).toHaveURL(/\/privacy$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Privacy in plain language' })).toBeFocused()
+  await expect(page.locator('#your-controls')).toContainText('local saving allowed')
+  await page.getByRole('button', { name: 'Open privacy choices' }).click()
+  await page.getByRole('button', { name: 'Use without saving' }).click()
+  await expect(page.locator('#your-controls')).toContainText('use without saving')
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
 
 test('damaged saved activity cannot become a typed local receipt or authorization', async ({ page }) => {

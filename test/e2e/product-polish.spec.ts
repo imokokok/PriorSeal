@@ -299,8 +299,11 @@ test('archive reviewer access is scoped, excludes upload, and keeps token out of
   await page.getByLabel('Archive access token').fill('fixture-review-token')
   await page.getByRole('button', { name: 'Search project evidence' }).click()
   await expect(page.getByRole('heading', { name: 'project-a / test' })).toBeVisible()
+  await expect(page.locator('.archive-result-summary')).toContainText('project-a')
   await expect(page.getByRole('heading', { name: 'Upload evidence' })).toHaveCount(0)
   expect(await page.evaluate(() => JSON.stringify(localStorage) + JSON.stringify(sessionStorage))).not.toContain('fixture-review-token')
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
 
 test('missing timestamp configuration never appears ready and exact-call mobile preview stays within viewport', async ({ page }, testInfo) => {

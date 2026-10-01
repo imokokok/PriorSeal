@@ -1,0 +1,79 @@
+/* The project archive reads as a scoped search and export workbench. */
+.page-archive .page-header { min-height: 208px; padding: 24px 0 31px; align-items: end; border-bottom-color: var(--wine); }
+.page-archive .page-header h1 { font-size: clamp(58px,6.2vw,93px); line-height: .94; letter-spacing: -.065em; }
+.page-archive .lede { max-width: 790px; margin-top: 20px; font-size: 16px; line-height: 1.58; }
+.archive-flow { margin: 29px 0 23px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid var(--rule); }
+.archive-flow > div { min-width: 0; min-height: 132px; padding: 19px 23px; display: flex; flex-direction: column; justify-content: space-between; gap: 18px; background: var(--porcelain); border-right: 1px solid var(--rule); }
+.archive-flow > div:last-child { color: #faeee5; background: #37232b; border-right: 0; }
+.archive-flow span, .archive-index, .archive-result-summary span { color: var(--wine); font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .12em; }
+.archive-flow > div:last-child span { color: #e8acb9; }
+.archive-flow strong { font: 400 clamp(25px,2.65vw,36px)/1.07 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.04em; }
+.page-archive .archive-access, .page-archive .archive-results, .page-archive .archive-upload { padding: 31px; border-top: 4px solid var(--wine); }
+.page-archive .archive-access::before, .page-archive .archive-results::before, .page-archive .archive-upload::before { display: none; }
+.page-archive .archive-access { background: #fbf8f2; }
+.archive-access-heading { margin: 7px 0 26px; display: flex; justify-content: space-between; align-items: end; gap: 30px; }
+.archive-access-heading h2 { margin: 0 0 7px; font-size: clamp(35px,3.8vw,51px); line-height: 1.03; letter-spacing: -.05em; }
+.archive-access-heading p { max-width: 610px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.58; }
+.archive-access-heading > span { color: var(--wine); font: 600 12px "JetBrains Mono", monospace; white-space: nowrap; }
+.archive-access > .field { max-width: 780px; }
+.archive-access > .field input { background: #f0e9e1; border-color: var(--ink); }
+.archive-access form { margin-top: 32px; }
+.archive-filter-heading { margin-bottom: 21px; padding-top: 22px; display: grid; gap: 7px; border-top: 1px solid var(--ink); }
+.archive-filter-heading strong { font: 400 29px "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.archive-filter-grid { gap: 18px; }
+.archive-filter-grid .field input { background: #fff; }
+.archive-search-footer { margin-top: 27px; padding-top: 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid var(--rule); }
+.archive-search-footer > span { max-width: 300px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.archive-search-footer .button { min-height: 49px; gap: 26px; }
+.archive-search-footer .button span { font-size: 20px; line-height: .8; }
+.page-archive .archive-results { margin-top: 22px; background: #f9f5ee; }
+.archive-results .panel-head { margin: 9px 0 20px; align-items: end; gap: 20px; }
+.archive-results .panel-head h2 { font-size: clamp(33px,3.6vw,48px); letter-spacing: -.05em; overflow-wrap: anywhere; }
+.archive-results .panel-head p { max-width: 680px; line-height: 1.55; }
+.archive-results .panel-head .button { flex-shrink: 0; }
+.archive-export-actions { margin-bottom: 21px; justify-content: flex-start; }
+.archive-result-summary { margin-bottom: 22px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid var(--rule); }
+.archive-result-summary > div { min-width: 0; min-height: 94px; padding: 17px 19px; display: flex; flex-direction: column; justify-content: space-between; gap: 9px; border-right: 1px solid var(--rule); background: #fffdf8; }
+.archive-result-summary > div:last-child { border-right: 0; }
+.archive-result-summary strong { font: 400 24px "Iowan Old Style", Baskerville, Georgia, serif; overflow-wrap: anywhere; }
+.archive-table-scroll { border-top: 1px solid var(--ink); }
+.archive-table-scroll .evidence-table { min-width: 830px; }
+.archive-table-scroll .evidence-table th { background: #292522; }
+.archive-table-scroll .evidence-table td { min-width: 0; background: #fffdf8; }
+.archive-table-scroll .evidence-table td .code-value { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.archive-table-scroll .evidence-table td .button { min-height: 39px; font-size: 12px; }
+.archive-pagination { margin-top: 21px; padding-top: 20px; justify-content: flex-start; border-top: 1px solid var(--rule); }
+.archive-pagination > span { margin-left: auto; font-size: 12px; }
+.page-archive .archive-upload { margin-top: 22px; }
+.archive-upload h2 { margin: 9px 0 8px; font-size: clamp(33px,3.4vw,46px); letter-spacing: -.045em; }
+.archive-upload .panel-copy { max-width: 800px; line-height: 1.62; }
+.archive-upload form { max-width: 860px; margin-top: 24px; }
+.archive-upload .polish-fieldset { display: grid; gap: 18px; }
+.archive-upload textarea { font: 12px/1.65 "JetBrains Mono", monospace; }
+.archive-upload .button { justify-self: start; }
+
+@media (max-width: 980px) {
+  .archive-results .panel-head { align-items: start; flex-direction: column; }
+}
+@media (max-width: 720px) {
+  .page-archive .page-header { min-height: 0; padding: 8px 0 25px; }
+  .page-archive .page-header h1 { font-size: clamp(53px,12vw,73px); }
+  .archive-flow { margin-top: 22px; grid-template-columns: minmax(0,1fr); }
+  .archive-flow > div { min-height: 79px; padding: 15px 18px; gap: 9px; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .archive-flow strong { font-size: 27px; }
+  .page-archive .archive-access, .page-archive .archive-results, .page-archive .archive-upload { padding: 22px; }
+  .archive-access-heading { align-items: start; }
+  .archive-access-heading > span { display: none; }
+  .archive-filter-grid { grid-template-columns: minmax(0,1fr); }
+  .archive-search-footer { align-items: stretch; flex-direction: column; }
+  .archive-search-footer .button, .archive-export-actions .button { width: 100%; }
+  .archive-result-summary { grid-template-columns: minmax(0,1fr); }
+  .archive-result-summary > div { min-height: 67px; padding: 12px 16px; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .archive-result-summary strong { font-size: 22px; }
+  .archive-pagination .button { flex: 1; }
+  .archive-pagination > span { width: 100%; margin: 2px 0 0; }
+  .archive-upload .button { width: 100%; }
+}
+@media (max-width: 390px) {
+  .archive-pagination .button { flex: 1 1 100%; }
+}
