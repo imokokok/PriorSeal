@@ -68,7 +68,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .menu, .mobile-close { display: none; padding: 0; color: inherit; background: transparent; border: 0; }
 
 .shell > main { min-width: 0; grid-column: 2; }
-.app-topbar { height: 70px; position: sticky; top: 0; z-index: 25; padding: 0 clamp(24px, 3.6vw, 54px); display: flex; align-items: center; justify-content: space-between; background: rgba(251,250,246,.94); border-bottom: 1px solid var(--ink); backdrop-filter: blur(14px); }
+.app-topbar { height: 70px; position: sticky; top: 0; z-index: 25; padding: 0 clamp(24px, 3.6vw, 54px); display: flex; align-items: center; justify-content: space-between; background: var(--porcelain); border-bottom: 1px solid var(--ink); }
 .top-title { display: flex; align-items: center; gap: 13px; }
 .top-title span { color: var(--wine); font: 600 12px "JetBrains Mono", monospace; }
 .top-title strong { font: 600 13px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }

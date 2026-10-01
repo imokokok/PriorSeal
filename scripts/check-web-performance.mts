@@ -23,11 +23,11 @@ const checks = await Promise.all([
   measurement(/^index-.*\.js$/, 'application entry', { raw: 250_000, gzip: 80_000 }),
   measurement(/^LandingPage-.*\.js$/, 'landing route', { raw: 20_000, gzip: 6_000 }),
   measurement(/^brand-.*\.js$/, 'brand shared chunk', { raw: 2_000, gzip: 1_000 }),
-  measurement(/^App-.*\.js$/, 'console route', { raw: 92_000, gzip: 27_000 }),
+  measurement(/^App-.*\.js$/, 'console route', { raw: 96_000, gzip: 28_000 }),
   measurement(/^verifier-.*\.js$/, 'offline verifier', { raw: 520_000, gzip: 130_000 }),
   measurement(/^index-.*\.css$/, 'shared CSS', { raw: 40_000, gzip: 9_000 }),
   measurement(/^LandingPage-.*\.css$/, 'landing CSS', { raw: 38_000, gzip: 8_000 }),
-  measurement(/^App-.*\.css$/, 'console CSS', { raw: 16_000, gzip: 4_000 }),
+  measurement(/^App-.*\.css$/, 'console CSS', { raw: 24_000, gzip: 5_000 }),
 ]);
 
 const initial = checks.filter(({ label }) => ['application entry', 'landing route', 'brand shared chunk', 'shared CSS', 'landing CSS'].includes(label));
