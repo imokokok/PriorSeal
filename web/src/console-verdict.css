@@ -1,4 +1,6 @@
 .page-verify .verification-result { padding: 29px; scroll-margin-top: 30px; border-top: 0; }
+.page-verify .verification-error { margin-top: 22px; scroll-margin-top: 90px; outline: none; }
+.page-verify .verification-error:focus-visible .notice { outline: 2px solid var(--wine); outline-offset: 3px; }
 .verification-result > .status { position: absolute; top: 32px; right: 33px; z-index: 1; color: #f3d7cf; background: transparent; border-color: #b88891; }
 .verification-verdict { min-height: 302px; position: relative; overflow: hidden; margin: -29px -29px 0; padding: 34px 38px 38px; color: #f8efe8; background: radial-gradient(circle at 95% 95%, #65404a, #36232b 58%); }
 .verification-result--complete .verification-verdict { background: radial-gradient(circle at 95% 95%, #3c6b57, #223c32 58%); }

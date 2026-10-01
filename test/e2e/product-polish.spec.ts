@@ -24,6 +24,19 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/v1/capabilities', (route) => route.fulfill({ json: caps }))
 })
 
+test('verification errors move focus to the actionable feedback on narrow screens', async ({ page }, testInfo) => {
+  await page.goto('/app/verify')
+  await page.getByRole('textbox', { name: 'Evidence JSON', exact: true }).fill('{"incomplete":')
+  await page.getByRole('button', { name: 'Verify locally' }).click()
+  await expect(page.locator('.verification-error')).toBeFocused()
+  await expect(page.locator('.verification-error')).toContainText('Verification could not run')
+  await page.setViewportSize({ width: 320, height: 700 })
+  await expect.poll(() => page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().right)).toBeLessThanOrEqual(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await page.locator('.verification-error').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: testInfo.outputPath('verification-error-mobile.png') })
+})
+
 test('standard authorization reviews the canonical intent before the SDK signs or accepts it', async ({ page }, testInfo) => {
   const signer = privateKeyToAccount(`0x${'5'.repeat(64)}`)
   const sender = `0x${'a'.repeat(40)}`

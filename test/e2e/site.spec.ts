@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -103,6 +104,42 @@ test('receipt index opens a claim without implying local verification', async ({
   await page.setViewportSize({ width: 320, height: 700 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   await expect(page.getByRole('button', { name: 'Verify this receipt' })).toBeVisible()
+})
+
+test('audit keeps long local evidence navigable and exports every filtered match', async ({ page }, testInfo) => {
+  const receipts = Array.from({ length: 35 }, (_, index) => ({
+    schema: 'priorseal.execution-receipt.v2', domain: 'priorseal.execution-receipt', receiptId: `psr_audit_${String(index).padStart(3, '0')}`,
+    intentHash: `0x${index.toString(16).padStart(64, '0')}`, executionHash: `0x${'8'.repeat(64)}`,
+    execution: { chainId: 8453, txHash: `0x${'1'.repeat(64)}`, status: 'CONFIRMED', confirmations: 12, finalityState: 'CONFIRMED', observedAt: 1_700_000_000 },
+    issuer: 'priorseal.test', issuedAt: 1_700_000_100 + index, validUntil: 4_102_444_800, outcome: 'COMPLETED', reasonCodes: [],
+    binding: { bound: true, reasonCodes: [] }, algorithm: 'Ed25519', keyId: 'test-1', verifierVersion: 'test', signature: 'test',
+  }))
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Allow local saving' }).click()
+  await page.evaluate((items) => localStorage.setItem('priorseal.local-session.v4', JSON.stringify({ intents: [], authorizations: [], receipts: items, observations: [], observationJobs: [] })), receipts)
+  await page.goto('/app/audit')
+  await expect(page.locator('.audit-panel .receipt-row')).toHaveCount(12)
+  await expect(page.locator('.audit-results-footer')).toContainText('Showing 12 of 35 matching local receipts')
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export evidence bundle' }).click()
+  const download = await downloadPromise
+  const bundle = JSON.parse(await readFile(await download.path(), 'utf8')) as { summary: { receipts: number }, receipts: unknown[] }
+  expect(bundle.summary.receipts).toBe(35)
+  expect(bundle.receipts).toHaveLength(35)
+  await page.getByRole('button', { name: 'Show more receipts' }).click()
+  await expect(page.locator('.audit-panel .receipt-row')).toHaveCount(24)
+  await page.getByRole('textbox', { name: 'Search evidence' }).fill('psr_audit_024')
+  await expect(page.locator('.audit-panel .receipt-row')).toHaveCount(1)
+  await expect(page.locator('.audit-panel .receipt-row')).toContainText('psr_audit_024')
+  await page.getByRole('textbox', { name: 'Search evidence' }).fill('no-such-receipt')
+  await expect(page.getByRole('heading', { name: 'No evidence matches these filters' })).toBeVisible()
+  await page.getByRole('button', { name: 'Clear filters' }).click()
+  await expect(page.locator('.audit-panel .receipt-row')).toHaveCount(12)
+  await page.setViewportSize({ width: 320, height: 700 })
+  await expect.poll(() => page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().right)).toBeLessThanOrEqual(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await page.locator('.audit-panel .receipt-row').first().scrollIntoViewIfNeeded()
+  await page.screenshot({ path: testInfo.outputPath('audit-long-list-mobile.png') })
 })
 
 test('developer routes load the key registry, rotation diagnostics and API reference', async ({ page }) => {

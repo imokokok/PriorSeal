@@ -1,0 +1,8 @@
+.page-audit .audit-results-footer { margin-top: 7px; padding: 23px 0 2px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--rule); }
+.audit-results-footer p { margin: 0; max-width: 510px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.audit-results-footer .button { flex: 0 0 auto; }
+.page-audit .audit-panel .empty .button { min-height: 45px; }
+@media (max-width: 640px) {
+  .page-audit .audit-results-footer { align-items: stretch; flex-direction: column; }
+  .audit-results-footer .button { width: 100%; }
+}

@@ -6,8 +6,10 @@ import { chains } from '../lib/format'
 import { verifyTimestampProofOffline, type TimestampProofResult } from '../lib/offline-verify'
 import { getActivity } from '../lib/storage'
 import type { Receipt } from '../types'
+import '../console-audit-review.css'
 
 const timestampProofCache = new Map<string, Promise<TimestampProofResult>>()
+const auditPageSize = 12
 
 async function timestampProofKey(receipt: Receipt) {
   const evidence = receipt.authorizationEvidence
@@ -41,6 +43,7 @@ export function AuditPage() {
   const [outcome, setOutcome] = useState('ALL')
   const [chain, setChain] = useState('ALL')
   const [timestampFilter, setTimestampFilter] = useState('ALL')
+  const [visibleCount, setVisibleCount] = useState(auditPageSize)
   const [timestampResults, setTimestampResults] = useState<Record<string, TimestampProofResult>>({})
   const outcomes = useMemo(() => [...new Set(activity.receipts.map(receiptPrimaryStatus))].sort(), [activity.receipts])
   const timestampStatus = useCallback((receipt: Receipt) => timestampResults[receipt.receiptId]?.status ?? (receipt.authorizationEvidence?.policy?.document?.timestampPolicy ? receipt.authorizationEvidence.timestamp ? 'CHECKING' : 'MISSING' : receipt.authorizationEvidence?.timestamp ? 'INVALID' : 'NOT_REQUIRED'), [timestampResults])
@@ -48,6 +51,7 @@ export function AuditPage() {
     const searchable = [receipt.receiptId, receipt.intentHash, receipt.execution.txHash, receipt.issuer, receipt.authorizationEvidence?.timestamp?.serialNumber, receipt.authorizationEvidence?.timestamp?.profile, ...receipt.reasonCodes].join(' ').toLowerCase()
     return (outcome === 'ALL' || receiptPrimaryStatus(receipt) === outcome) && (chain === 'ALL' || String(receipt.execution.chainId) === chain) && (timestampFilter === 'ALL' || timestampStatus(receipt) === timestampFilter) && searchable.includes(query.trim().toLowerCase())
   }), [activity.receipts, chain, outcome, query, timestampFilter, timestampStatus])
+  const hasActiveFilters = Boolean(query.trim() || outcome !== 'ALL' || chain !== 'ALL' || timestampFilter !== 'ALL')
   const { attention, validTimestamps } = useMemo(() => ({
     attention: activity.receipts.filter((receipt) => receiptPrimaryStatus(receipt) !== (receipt.compliance ? 'COMPLIANT' : 'COMPLETED') || ['INVALID', 'MISSING'].includes(timestampStatus(receipt))).length,
     validTimestamps: activity.receipts.filter((receipt) => timestampStatus(receipt) === 'VALID').length,
@@ -68,6 +72,10 @@ export function AuditPage() {
     return () => { active = false }
   }, [activity.receipts])
 
+  useEffect(() => { setVisibleCount(auditPageSize) }, [query, outcome, chain, timestampFilter])
+
+  function clearFilters() { setQuery(''); setOutcome('ALL'); setChain('ALL'); setTimestampFilter('ALL') }
+
   function exportBundle() {
     const intentHashes = new Set(filtered.map((receipt) => receipt.intentHash))
     const txHashes = new Set(filtered.map((receipt) => receipt.execution.txHash).filter(Boolean))
@@ -81,7 +89,7 @@ export function AuditPage() {
     <section className="panel audit-panel">
       <div className="audit-panel-heading"><div><span>RECEIPT WORKTABLE</span><h2>Find the evidence</h2></div><p>Search identifiers or narrow the records by outcome, chain and timestamp state.</p></div>
       <div className="audit-filters" aria-label="Receipt filters"><label><span>Search evidence</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Receipt, intent, tx hash, timestamp serial or reason code" /></label><label><span>Compliance / legacy outcome</span><select value={outcome} onChange={(event) => setOutcome(event.target.value)}><option value="ALL">All results</option>{outcomes.map((value) => <option key={value}>{value}</option>)}</select></label><label><span>Chain</span><select value={chain} onChange={(event) => setChain(event.target.value)}><option value="ALL">All chains</option>{Object.entries(chains).map(([id, name]) => <option value={id} key={id}>{name}</option>)}</select></label><label><span>Timestamp proof</span><select value={timestampFilter} onChange={(event) => setTimestampFilter(event.target.value)}><option value="ALL">All timestamp states</option><option value="VALID">Valid</option><option value="INVALID">Invalid</option><option value="MISSING">Missing</option><option value="NOT_REQUIRED">Not required</option></select></label></div>
-      {filtered.length ? filtered.map((receipt) => <ReceiptSummary key={receipt.receiptId} receipt={receipt} timestampStatus={timestampStatus(receipt)} />) : <Empty title={activity.receipts.length ? 'No evidence matches these filters' : 'No local evidence yet'} action={<Link className="button primary" to="/app/quickstart">Open quickstart →</Link>}>{activity.receipts.length ? 'Adjust the search, outcome, chain or timestamp filters.' : 'Complete the quickstart to create your first local evidence record.'}</Empty>}
+      {filtered.length ? <>{filtered.slice(0, visibleCount).map((receipt) => <ReceiptSummary key={receipt.receiptId} receipt={receipt} timestampStatus={timestampStatus(receipt)} />)}<div className="audit-results-footer"><p role="status">Showing {Math.min(visibleCount, filtered.length)} of {filtered.length} matching local receipts. The export includes every match.</p>{visibleCount < filtered.length && <button type="button" className="button secondary" onClick={() => setVisibleCount((count) => count + auditPageSize)}>Show more receipts →</button>}</div></> : <Empty title={activity.receipts.length ? 'No evidence matches these filters' : 'No local evidence yet'} action={hasActiveFilters ? <button type="button" className="button primary" onClick={clearFilters}>Clear filters</button> : <Link className="button primary" to="/app/quickstart">Open quickstart →</Link>}>{activity.receipts.length ? 'Adjust the search, outcome, chain or timestamp filters.' : 'Complete the quickstart to create your first local evidence record.'}</Empty>}
     </section>
   </AppShell>
 }
