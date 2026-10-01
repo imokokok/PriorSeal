@@ -238,7 +238,7 @@ async function nativeFixture() {
   return { bundle, profile }
 }
 
-test('native bundle never self-trusts and custom audience is enforced after independent profile import', async ({ page }) => {
+test('native bundle never self-trusts and custom audience is enforced after independent profile import', async ({ page }, testInfo) => {
   const { bundle, profile } = await nativeFixture()
   await page.route('**/.well-known/priorseal-keys.json', (route) => route.fulfill({ json: { schema: 'priorseal.keys.v1', issuer: 'fixture', keys: [] } }))
   await page.goto('/app/verify')
@@ -253,7 +253,14 @@ test('native bundle never self-trusts and custom audience is enforced after inde
   await page.getByLabel('I confirmed this issuer, audience and public key configuration through an independent trusted channel.').check()
   await page.getByRole('button', { name: 'Verify locally' }).click()
   await expect(page.locator('.verification-result > .status')).toHaveText(/VALID/)
+  await expect(page.getByRole('heading', { name: 'Verified within scope.' })).toBeFocused()
   await expect(page.locator('.verification-result')).toContainText('Independently confirmed configuration')
+  await page.locator('.verification-result').screenshot({ path: testInfo.outputPath('local-verdict-desktop.png') })
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await expect(page.locator('.sidebar')).toHaveAttribute('aria-hidden', 'true')
+  await page.locator('.verification-result').screenshot({ path: testInfo.outputPath('local-verdict-mobile.png'), animations: 'disabled' })
+  await page.setViewportSize({ width: 1280, height: 800 })
   await expect(page.getByRole('heading', { name: 'Evidence relationship' })).toBeVisible()
   await expect(page.locator('.evidence-relationship')).toContainText('External decision use')
   await expect(page.locator('.evidence-relationship')).toContainText('NOT ESTABLISHED')
@@ -315,6 +322,12 @@ test('missing timestamp configuration never appears ready and exact-call mobile 
   await page.goto('/app/quickstart')
   await expect(page.getByText('Required configuration is missing', { exact: true })).toBeVisible()
   await expect(page.locator('.status').filter({ hasText: 'NEEDS CONFIGURATION' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Configuration needs attention.' })).toBeVisible()
+  await page.locator('.quickstart-readiness').screenshot({ path: testInfo.outputPath('quickstart-readiness-desktop.png') })
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await expect(page.locator('.sidebar')).toHaveAttribute('aria-hidden', 'true')
+  await page.locator('.quickstart-readiness').screenshot({ path: testInfo.outputPath('quickstart-readiness-mobile.png'), animations: 'disabled' })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/app/intents/exact-call')
   await page.getByLabel('Transaction JSON', { exact: true }).fill(JSON.stringify({ chainId: 8453, from: `0x${'a'.repeat(40)}`, to: `0x${'b'.repeat(40)}`, nonce: '7', value: '0', data: `0x${'ab'.repeat(500)}` }))

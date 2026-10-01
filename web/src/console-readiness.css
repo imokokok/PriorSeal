@@ -1,0 +1,22 @@
+.quickstart-configuration .quickstart-readiness { min-height: 190px; margin: 5px 0 27px; padding: 29px 32px; display: flex; justify-content: space-between; gap: 25px; color: #f6eee7; background: #39242c; border-left: 5px solid #ae7884; }
+.quickstart-readiness > div { min-width: 0; max-width: 710px; }
+.quickstart-readiness span { color: #edb2be; font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .13em; }
+.quickstart-readiness h3 { margin: 15px 0 9px; font: 400 clamp(32px,3.3vw,46px)/1.03 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.045em; }
+.quickstart-readiness p { margin: 0; color: #dfcbc8; font-size: 14px; line-height: 1.6; }
+.quickstart-readiness strong { align-self: center; color: #e9b8bd; font: 400 clamp(90px,11vw,145px)/.7 "Iowan Old Style", Baskerville, Georgia, serif; }
+.quickstart-readiness .text-link { margin-top: 20px; display: inline-flex; color: #f9e4df; border-bottom-color: #e8aab5; }
+.quickstart-configuration .quickstart-readiness--ready { color: #1d3d31; background: #e4ece4; border-left-color: #4e8569; }
+.quickstart-readiness--ready span, .quickstart-readiness--ready strong { color: #397253; }
+.quickstart-readiness--ready p { color: #4a6251; }
+.quickstart-configuration .quickstart-readiness--checking { background: #e9e1d7; color: #43302d; border-left-color: #b28b7f; }
+.quickstart-readiness--checking span, .quickstart-readiness--checking strong { color: #865262; }
+.quickstart-readiness--checking p { color: #675953; }
+.quickstart-configuration > .form-grid { padding-top: 4px; }
+@media (max-width: 720px) {
+  .quickstart-configuration .quickstart-readiness { min-height: 0; padding: 23px; }
+  .quickstart-readiness h3 { font-size: 32px; }
+  .quickstart-readiness strong { align-self: start; font-size: 75px; }
+}
+@media (max-width: 420px) {
+  .quickstart-readiness strong { font-size: 56px; }
+}

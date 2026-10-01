@@ -1,0 +1,30 @@
+.page-verify .verification-result { padding: 29px; scroll-margin-top: 30px; border-top: 0; }
+.verification-result > .status { position: absolute; top: 32px; right: 33px; z-index: 1; color: #f3d7cf; background: transparent; border-color: #b88891; }
+.verification-verdict { min-height: 302px; position: relative; overflow: hidden; margin: -29px -29px 0; padding: 34px 38px 38px; color: #f8efe8; background: radial-gradient(circle at 95% 95%, #65404a, #36232b 58%); }
+.verification-result--complete .verification-verdict { background: radial-gradient(circle at 95% 95%, #3c6b57, #223c32 58%); }
+.verification-result--invalid .verification-verdict { background: radial-gradient(circle at 95% 95%, #894854, #48232a 58%); }
+.verification-verdict > div { max-width: 750px; position: relative; z-index: 1; }
+.verification-verdict .section-index { color: #e7b4bf !important; }
+.verification-verdict h2 { max-width: 790px; margin: 42px 0 10px !important; color: #fff7ef; font-size: clamp(43px,5vw,68px) !important; line-height: .98; letter-spacing: -.065em; }
+.verification-verdict__code { margin: 17px 0 0; color: #e6adb9; font: 600 11px/1.5 "JetBrains Mono", monospace; letter-spacing: .07em; overflow-wrap: anywhere; }
+.verification-verdict__reason { max-width: 680px; margin: 12px 0 0; color: #f0ded8; font-size: 15px; line-height: 1.6; }
+.verification-verdict__next { max-width: 680px; margin: 18px 0 0; padding-left: 15px; color: #d9c8c2; border-left: 2px solid #bc8a93; font-size: 13px; line-height: 1.55; }
+.verification-verdict__mark { position: absolute; right: 26px; bottom: -44px; color: rgba(255,255,255,.07); font: 400 210px/1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.12em; pointer-events: none; }
+.verification-scope { margin: 0 -29px 26px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid var(--rule); border-top: 0; }
+.verification-scope > div { min-width: 0; min-height: 105px; padding: 17px 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 11px; border-right: 1px solid var(--rule); background: #f4eee6; }
+.verification-scope > div:last-child { border-right: 0; }
+.verification-scope span { color: var(--wine); font: 600 10px/1.4 "JetBrains Mono", monospace; letter-spacing: .1em; }
+.verification-scope strong { font: 400 clamp(20px,2vw,27px)/1.05 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.verification-result > h3 { margin-top: 34px; padding-top: 22px; border-top: 1px solid var(--rule); }
+.verification-result > .header-actions { margin-top: 29px; padding-top: 20px; border-top: 1px solid var(--rule); }
+@media (max-width: 720px) {
+  .page-verify .verification-result { padding: 22px; }
+  .verification-result > .status { top: 25px; right: 25px; }
+  .verification-verdict { min-height: 0; margin: -22px -22px 0; padding: 26px 25px 32px; }
+  .verification-verdict h2 { margin-top: 58px !important; font-size: clamp(40px,10vw,55px) !important; }
+  .verification-verdict__mark { font-size: 145px; right: 20px; bottom: -30px; }
+  .verification-scope { margin: 0 -22px 24px; grid-template-columns: 1fr; }
+  .verification-scope > div { min-height: 76px; padding: 13px 22px; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .verification-scope > div:last-child { border-bottom: 0; }
+  .verification-scope strong { font-size: 24px; }
+}

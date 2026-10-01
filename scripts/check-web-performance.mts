@@ -35,6 +35,8 @@ const checks = await Promise.all([
   measurement(/^ArchivePage-.*\.css$/, 'archive page CSS', { raw: 6_500, gzip: 1_900 }),
   measurement(/^PrivacyPage-.*\.css$/, 'privacy page CSS', { raw: 5_200, gzip: 1_700 }),
   measurement(/^OutcomePages-.*\.css$/, 'outcome page CSS', { raw: 8_500, gzip: 2_300 }),
+  measurement(/^OnboardingPage-.*\.css$/, 'readiness page CSS', { raw: 2_300, gzip: 900 }),
+  measurement(/^VerifyPage-.*\.css$/, 'verdict page CSS', { raw: 3_800, gzip: 1_400 }),
 ]);
 
 const initial = checks.filter(({ label }) => ['application entry', 'landing route', 'brand shared chunk', 'shared CSS', 'landing CSS'].includes(label));
