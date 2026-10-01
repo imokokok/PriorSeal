@@ -106,7 +106,8 @@
 .page-verify .verify-import .header-actions { margin-top: 18px; justify-content: flex-start; }
 .page-verify .verify-layout .polish-details { margin-top: 27px; }
 .page-verify .verify-layout .polish-details summary { color: var(--wine); }
-.page-verify .verify-layout .check-row { margin-top: 23px; padding: 16px; background: #f1e9e1; border: 1px solid var(--rule); line-height: 1.5; }
+.page-verify .verify-layout .check-row { margin-top: 23px; padding: 16px; display: flex; align-items: flex-start; gap: 11px; background: #f1e9e1; border: 1px solid var(--rule); line-height: 1.5; cursor: pointer; }
+.page-verify .verify-layout .check-row input { width: 20px; height: 20px; margin: 1px 0 0; flex: 0 0 20px; accent-color: var(--wine); cursor: pointer; }
 .page-verify .lookup { margin-top: 20px; padding: 26px 28px 29px; background: #e7dcd2; border: 1px solid var(--rule); border-left: 0; border-top: 4px solid #3b2027; }
 .page-verify .lookup::before { display: none; }
 .page-verify .lookup h2 { font-size: 31px; }

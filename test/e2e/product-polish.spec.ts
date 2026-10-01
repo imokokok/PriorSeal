@@ -313,6 +313,8 @@ test('missing timestamp configuration never appears ready and exact-call mobile 
   await page.getByLabel('Transaction JSON', { exact: true }).fill(JSON.stringify({ chainId: 8453, from: `0x${'a'.repeat(40)}`, to: `0x${'b'.repeat(40)}`, nonce: '7', value: '0', data: `0x${'ab'.repeat(500)}` }))
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('priorseal-exact-call-mobile.png'), fullPage: true })
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
 
 

@@ -1,0 +1,45 @@
+/* A compact reference arranged in the order an integration uses the API. */
+.page-api .page-header { min-height: 214px; padding: 24px 0 31px; align-items: end; }
+.page-api .page-header h1 { font-size: clamp(57px,6vw,91px); line-height: .94; letter-spacing: -.065em; }
+.page-api .lede { max-width: 750px; margin-top: 20px; font-size: 16px; line-height: 1.6; }
+.reference-path { margin: 29px 0 23px; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); border: 1px solid var(--rule); }
+.reference-path > div { min-width: 0; min-height: 127px; padding: 19px 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 15px; background: var(--porcelain); border-right: 1px solid var(--rule); }
+.reference-path > div:last-child { color: #f9ede3; background: #38242b; border-right: 0; }
+.reference-path span, .reference-heading span, .endpoint-index, .endpoint-example > span { color: var(--wine); font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .12em; }
+.reference-path > div:last-child span { color: #e4aab5; }
+.reference-path strong { font: 400 clamp(22px,2vw,29px)/1.08 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.page-api > .notice { margin-top: 0; }
+.reference-heading { margin: 37px 0 16px; display: flex; align-items: end; justify-content: space-between; gap: 30px; }
+.reference-heading h2 { margin: 8px 0 0; font: 400 clamp(35px,3.5vw,50px)/1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.05em; }
+.reference-heading p { max-width: 335px; margin: 0 0 3px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.page-api .endpoint-list { margin-top: 0; gap: 16px; }
+.page-api .endpoint { padding: 0; border-top: 4px solid var(--wine); background: #fbf9f4; }
+.page-api .endpoint:nth-child(3n)::before, .page-api .endpoint::before { display: none; }
+.page-api .endpoint-index { min-height: 42px; padding: 11px 22px; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--rule); }
+.page-api .endpoint-index > span:last-child { color: var(--muted); }
+.page-api .endpoint-route { min-height: 70px; padding: 17px 22px 4px; display: flex; align-items: start; gap: 13px; border: 0; }
+.page-api .endpoint-route code { padding-top: 5px; color: var(--ink); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.page-api .method { flex-shrink: 0; }
+.page-api .endpoint h2 { margin: 6px 22px 9px; font-size: clamp(27px,2.3vw,34px); letter-spacing: -.04em; }
+.page-api .endpoint > p { min-height: 0; margin: 0 22px 24px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.endpoint-example { margin-top: auto; background: #272624; }
+.page-api .endpoint-example > span { padding: 11px 22px; display: block; color: #c6a0a5; border-bottom: 1px solid #4c4646; }
+.page-api .endpoint-example pre { min-height: 86px; max-height: none; margin: 0; padding: 17px 22px 21px; color: #eee9e1; border: 0; background: transparent; font-size: 11px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reference-errors { margin: 18px 0 27px; padding: 18px 21px; color: var(--muted); border-left: 4px solid var(--wine); background: #eee9e1; font: 500 11px/1.7 "JetBrains Mono", monospace; overflow-wrap: anywhere; }
+.reference-errors strong { margin-right: 18px; color: var(--ink); text-transform: uppercase; }
+
+@media (max-width: 1100px) {
+  .reference-path { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .reference-path > div:nth-child(2) { border-right: 0; }
+  .reference-path > div:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+}
+@media (max-width: 720px) {
+  .page-api .page-header { min-height: 0; padding: 8px 0 25px; }
+  .page-api .page-header h1 { font-size: clamp(53px,12vw,70px); }
+  .reference-path { margin-top: 22px; grid-template-columns: 1fr; }
+  .reference-path > div { min-height: 76px; padding: 15px 19px; gap: 8px; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .reference-path strong { font-size: 25px; }
+  .reference-heading { margin-top: 31px; align-items: start; flex-direction: column; gap: 10px; }
+  .page-api .endpoint-route { min-height: 63px; }
+  .reference-errors strong { display: block; margin-bottom: 7px; }
+}

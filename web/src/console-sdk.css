@@ -1,0 +1,69 @@
+/* A guided integration surface, with the code remaining the primary artifact. */
+.page-sdk .page-header { min-height: 225px; padding: 25px 0 32px; align-items: end; }
+.page-sdk .page-header h1 { max-width: 890px; font-size: clamp(53px,5.4vw,83px); line-height: .96; letter-spacing: -.063em; }
+.page-sdk .lede { max-width: 810px; margin-top: 21px; font-size: 16px; line-height: 1.58; }
+.page-sdk .page-header .copy-button { min-height: 44px; padding-inline: 15px; border-color: var(--wine); }
+.sdk-path { margin: 29px 0 23px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid var(--rule); }
+.sdk-path > div { min-width: 0; min-height: 126px; padding: 20px 23px; display: flex; flex-direction: column; justify-content: space-between; gap: 18px; background: var(--porcelain); border-right: 1px solid var(--rule); }
+.sdk-path > div:last-child { color: #fff0e8; background: #3b252d; border-right: 0; }
+.sdk-path span, .sdk-section-index { color: var(--wine); font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .12em; }
+.sdk-path > div:last-child span { color: #e6abb8; }
+.sdk-path strong { font: 400 clamp(23px,2.35vw,33px)/1.08 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.page-sdk .sdk-hero { min-height: 280px; border-top: 4px solid var(--wine); }
+.page-sdk .sdk-hero::before { display: none; }
+.sdk-package { padding: 38px; }
+.sdk-package h2 { letter-spacing: -.05em; }
+.sdk-package > p:not(.eyebrow) { max-width: 600px; line-height: 1.55; }
+.sdk-install { width: 100%; margin-top: 24px; }
+.sdk-runtime { background: #35252b; }
+.sdk-runtime dd { text-align: right; }
+.page-sdk .sdk-code, .page-sdk .sdk-methods { border-top: 4px solid var(--wine); }
+.page-sdk .sdk-code::before, .page-sdk .sdk-methods::before { display: none; }
+.page-sdk .panel-head { gap: 20px; }
+.page-sdk .panel-head h2 { margin-top: 8px; font-size: clamp(31px,3vw,43px); letter-spacing: -.045em; }
+.page-sdk .sdk-code .panel-head { min-height: 141px; align-items: end; }
+.sdk-tabs { flex-shrink: 0; }
+.sdk-tabs button { min-height: 42px; padding-inline: 15px; cursor: pointer; transition: color .18s ease, background .18s ease; }
+.sdk-tabs button:hover:not(.active) { color: var(--wine); background: #eee7e1; }
+.sdk-code > pre { min-height: 455px; }
+.sdk-sequence article { border-top: 3px solid var(--ink); transition: background .18s ease, transform .18s ease; }
+.sdk-sequence article::before { display: none; }
+.sdk-sequence article:hover { background: #f1eae2; transform: translateY(-2px); }
+.page-sdk .sdk-methods { padding-top: 29px; }
+.sdk-method-grid { margin-top: 21px; }
+.sdk-method-grid > div { min-width: 0; }
+.page-sdk .sdk-verify { margin-top: 25px; border-top: 4px solid var(--wine); }
+.page-sdk .sdk-verify::before { display: none; }
+.sdk-verify h2 { line-height: 1.03; letter-spacing: -.045em; }
+
+@media (max-width: 980px) {
+  .page-sdk .sdk-code .panel-head { align-items: start; flex-direction: column; }
+  .page-sdk .sdk-workbench { grid-template-columns: minmax(0,1fr); }
+  .page-sdk .sdk-sequence { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 720px) {
+  .page-sdk .page-header { min-height: 0; padding: 8px 0 26px; }
+  .page-sdk .page-header h1 { font-size: clamp(51px,11vw,70px); }
+  .sdk-path { margin-top: 22px; grid-template-columns: 1fr; }
+  .sdk-path > div { min-height: 76px; padding: 15px 19px; gap: 8px; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .sdk-path strong { font-size: 26px; }
+  .sdk-package, .sdk-runtime { padding: 26px; }
+  .sdk-package h2 { font-size: 43px; }
+  .page-sdk .sdk-sequence { grid-template-columns: 1fr; }
+  .page-sdk .sdk-code .panel-head { min-height: 0; }
+  .sdk-tabs { width: 100%; }
+  .sdk-tabs button { flex: 1; }
+  .page-sdk .sdk-methods .panel-head { align-items: start; flex-direction: column; }
+  .sdk-method-grid > div { grid-template-columns: 1fr; gap: 5px; }
+  .sdk-method-grid code { font-size: 13px; }
+  .sdk-verify > div:first-child { padding: 0; }
+  .sdk-links .button { flex: 1 1 100%; }
+}
+@media (max-width: 390px) {
+  .sdk-runtime dl > div { grid-template-columns: minmax(0,.7fr) minmax(0,1.3fr); }
+  .sdk-install { gap: 4px; }
+  .sdk-install code { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sdk-tabs button, .sdk-sequence article { transition: none; }
+}

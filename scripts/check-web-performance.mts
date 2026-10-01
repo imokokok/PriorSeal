@@ -29,6 +29,9 @@ const checks = await Promise.all([
   measurement(/^LandingPage-.*\.css$/, 'landing CSS', { raw: 38_000, gzip: 8_000 }),
   measurement(/^App-.*\.css$/, 'console CSS', { raw: 30_000, gzip: 6_000 }),
   measurement(/^KeysPage-.*\.css$/, 'key registry CSS', { raw: 5_000, gzip: 1_500 }),
+  measurement(/^SdkPage-.*\.css$/, 'SDK page CSS', { raw: 4_500, gzip: 1_500 }),
+  measurement(/^ApiReferencePage-.*\.css$/, 'API page CSS', { raw: 4_500, gzip: 1_500 }),
+  measurement(/^ExactCallPage-.*\.css$/, 'exact-call CSS', { raw: 5_500, gzip: 1_700 }),
 ]);
 
 const initial = checks.filter(({ label }) => ['application entry', 'landing route', 'brand shared chunk', 'shared CSS', 'landing CSS'].includes(label));

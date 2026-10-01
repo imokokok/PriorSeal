@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppShell, CopyButton, Notice, PageHeader, Status } from '../components'
 import { api } from '../lib/api'
+import '../console-sdk.css'
 
 const install = `npm install priorseal-sdk@${__PRIORSEAL_SDK_VERSION__}`
 
@@ -88,6 +89,8 @@ export function SdkPage() {
   return <AppShell>
     <PageHeader eyebrow="TYPESCRIPT SDK" title="Connect authorization to execution." actions={<CopyButton value={install} label="Copy install command" />}>One typed client prepares explicit authorization, collects the wallet signature, observes EVM execution and retrieves independently verifiable receipts. It never submits a transaction or receives a transaction-signing key.</PageHeader>
 
+    <div className="sdk-path" aria-label="Integration path"><div><span>01 / INSTALL</span><strong>Add the typed client</strong></div><div><span>02 / INTEGRATE</span><strong>Bind authority to execution</strong></div><div><span>03 / VERIFY</span><strong>Check evidence locally</strong></div></div>
+
     <section className="sdk-hero panel">
       <div className="sdk-package">
         <p className="eyebrow">PACKAGE / {__PRIORSEAL_SDK_VERSION__}</p>
@@ -97,15 +100,15 @@ export function SdkPage() {
         <div className="sdk-install"><code>{install}</code><CopyButton value={install} /></div>
       </div>
       <div className="sdk-runtime">
-        <span>Connected environment</span>
-        <Status value={runtime.state === 'ready' ? 'READY' : runtime.state === 'checking' ? 'CHECKING' : 'OFFLINE'} />
+        <span>Version endpoint response</span>
+        <Status value={runtime.state === 'ready' ? 'RESPONDING' : runtime.state === 'checking' ? 'CHECKING' : 'OFFLINE'} />
         <dl><div><dt>API version</dt><dd>{runtime.version ?? '—'}</dd></div><div><dt>Protocol schemas</dt><dd>{runtime.protocols ?? '—'}</dd></div><div><dt>API base</dt><dd>{api.baseUrl || window.location.origin}</dd></div></dl>
       </div>
     </section>
 
     <section className="sdk-workbench">
       <div className="sdk-code panel">
-        <div className="panel-head"><div><h2>Complete integration</h2><p>Choose the environment that owns your signing interaction.</p></div><div className="sdk-tabs" role="tablist" aria-label="SDK environment"><button className={target === 'browser' ? 'active' : ''} onClick={() => setTarget('browser')}>Browser wallet</button><button className={target === 'node' ? 'active' : ''} onClick={() => setTarget('node')}>Node service</button></div></div>
+        <div className="panel-head"><div><span className="sdk-section-index">INTEGRATION / 02</span><h2>Complete integration</h2><p>Choose the environment that owns your signing interaction.</p></div><div className="sdk-tabs" role="group" aria-label="SDK environment"><button type="button" aria-pressed={target === 'browser'} className={target === 'browser' ? 'active' : ''} onClick={() => setTarget('browser')}>Browser wallet</button><button type="button" aria-pressed={target === 'node'} className={target === 'node' ? 'active' : ''} onClick={() => setTarget('node')}>Node service</button></div></div>
         <div className="sdk-code-head"><span>{target === 'browser' ? 'browser.ts' : 'agent-service.ts'}</span><CopyButton value={example} /></div>
         <pre>{example}</pre>
       </div>
@@ -121,7 +124,7 @@ export function SdkPage() {
     </section>
 
     <section className="sdk-methods panel">
-      <div className="panel-head"><div><h2>Typed surface</h2><p>Explicit methods mirror the stable `/v1` API without exposing transport details.</p></div><Link className="text-link" to="/app/api">Compare raw API →</Link></div>
+      <div className="panel-head"><div><span className="sdk-section-index">METHOD DIRECTORY / 11</span><h2>Typed surface</h2><p>Explicit methods mirror the stable `/v1` API without exposing transport details.</p></div><Link className="text-link" to="/app/api">Compare raw API →</Link></div>
       <div className="sdk-method-grid">
         {[
           ['prepareAuthorization', 'Build authorization v2 typed data'],
