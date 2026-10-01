@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/v1/capabilities', (route) => route.fulfill({ json: caps }))
 })
 
-test('standard authorization reviews the canonical intent before the SDK signs or accepts it', async ({ page }) => {
+test('standard authorization reviews the canonical intent before the SDK signs or accepts it', async ({ page }, testInfo) => {
   const signer = privateKeyToAccount(`0x${'5'.repeat(64)}`)
   const sender = `0x${'a'.repeat(40)}`
   let approve = false
@@ -62,6 +62,10 @@ test('standard authorization reviews the canonical intent before the SDK signs o
   approve = true
   await page.getByRole('button', { name: 'Review canonical intent' }).click()
   await expect(page.getByRole('heading', { name: 'Authorization accepted' })).toBeVisible()
+  await expect(page.locator('.outcome-path')).toContainText('Observe separately')
+  await page.screenshot({ path: testInfo.outputPath('authorization-accepted-desktop.png'), fullPage: true })
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   expect(await page.evaluate(() => window.__walletCalls)).toEqual(['eth_requestAccounts', 'eth_requestAccounts', 'eth_signTypedData_v4'])
   expect(acceptRequests).toBe(1)
 })

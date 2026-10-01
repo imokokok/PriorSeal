@@ -57,7 +57,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   const menuButton = useRef<HTMLButtonElement>(null)
   const sidebar = useRef<HTMLElement>(null)
   const restoreFocus = useRef<HTMLElement | null>(null)
-  const current = location.pathname === '/app/intents/exact-call' ? nav[1] : location.pathname === '/app/archive' ? { ...nav[4], key: 'archive', label: 'Project archive' } : [...nav].reverse().find((item) => item.to === '/app' ? location.pathname === '/app' : location.pathname.startsWith(item.to)) ?? nav[0]
+  const current = location.pathname === '/app/intents/exact-call' ? nav[1] : location.pathname === '/app/archive' ? { ...nav[4], key: 'archive', label: 'Project archive' } : [...nav].reverse().find((item) => item.to === '/app' ? location.pathname === '/app' : location.pathname === item.to || location.pathname.startsWith(item.to + '/')) ?? { ...nav[0], key: 'missing', index: '—', label: 'Page not found' }
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 980px)')

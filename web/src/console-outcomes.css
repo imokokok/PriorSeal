@@ -1,0 +1,86 @@
+/* Outcome pages distinguish recorded authority, pending observation and recovery. */
+.outcome-index, .outcome-path span, .outcome-identifiers > div > span, .outcome-unavailable__marker span, .outcome-requested-id span { font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .12em; }
+.outcome-index { color: var(--wine); }
+.outcome-path { margin: 29px 0 22px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid var(--rule); }
+.outcome-path > div { min-width: 0; min-height: 126px; padding: 19px 23px; display: flex; flex-direction: column; justify-content: space-between; gap: 15px; background: var(--porcelain); border-right: 1px solid var(--rule); }
+.outcome-path > div:last-child { color: #fff1e7; background: #37232b; border-right: 0; }
+.outcome-path span { color: var(--wine); }
+.outcome-path > div:last-child span { color: #e8a9b7; }
+.outcome-path strong { font: 400 clamp(25px,2.5vw,35px)/1.06 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.04em; }
+.page-intent .outcome-authorization { max-width: none; padding: clamp(26px,3.5vw,46px); border-top: 5px solid #bd7784; background: #302128; }
+.outcome-result-heading { display: flex; align-items: start; justify-content: space-between; gap: 30px; }
+.outcome-result-heading .outcome-index { color: #e6aab7; }
+.outcome-result-heading h2 { margin: 11px 0 9px !important; font-size: clamp(37px,4.4vw,59px) !important; line-height: 1.02; letter-spacing: -.055em; }
+.outcome-result-heading p { max-width: 640px; margin: 0; color: #d5c0be; font-size: 14px; line-height: 1.6; }
+.outcome-result-heading .status { margin-top: 2px; flex-shrink: 0; color: #e8baaa; border-color: #ad7c87; }
+.outcome-authorization > .notice { margin-top: 30px; }
+.outcome-identifiers { margin-top: 31px; display: grid; gap: 19px; }
+.outcome-identifiers > div > span { margin-bottom: 9px; display: block; color: #d9a4ae; }
+.outcome-identifiers .hash-result { min-width: 0; min-height: 65px; background: #f2ede5; }
+.outcome-identifiers .hash-result code { min-width: 0; overflow-wrap: anywhere; }
+.outcome-identifiers .copy-button { flex-shrink: 0; }
+.outcome-authorization .timestamp-summary { margin-top: 30px; }
+.outcome-authorization .timestamp-summary strong, .outcome-authorization .timestamp-summary .code-value { color: #f5e9e0; overflow-wrap: anywhere; }
+.outcome-authorization .result-actions { margin-top: 31px; padding-top: 23px; border-top: 1px solid rgba(255,255,255,.25); }
+.outcome-authorization .result-actions .button.secondary { color: #f6ece4; background: transparent; border-color: #ae8a90; }
+.outcome-authorization .result-actions .button.secondary:hover { background: #51333c; }
+.outcome-authorization .result-actions .button.primary { color: #2d2026; background: #f3dfd7; border-color: #f3dfd7; }
+.outcome-authorization .result-actions .button.primary:hover { background: #fff3ea; }
+.page-observe .outcome-observation { padding: 31px; border-top: 5px solid var(--wine); background: #fbf8f2; }
+.outcome-observation .panel-head { align-items: end; gap: 20px; }
+.outcome-observation .panel-head h2 { margin-top: 9px; font-size: clamp(35px,3.5vw,49px) !important; letter-spacing: -.05em; }
+.outcome-observation .panel-head p { max-width: 650px; line-height: 1.55; }
+.outcome-observation .data-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.outcome-observation .data-grid dd { overflow-wrap: anywhere; }
+.outcome-observation .result-banner { padding-top: 25px; }
+.outcome-observation .result-banner strong { font-size: 14px; line-height: 1.45; }
+.page-receipts .page-header:has(+ .outcome-unavailable), .page-missing .page-header { min-height: 210px; padding: 24px 0 31px; align-items: end; border-bottom-color: var(--wine); }
+.page-receipts .page-header:has(+ .outcome-unavailable) h1, .page-missing .page-header h1 { font-size: clamp(52px,5.8vw,87px); line-height: .95; letter-spacing: -.065em; }
+.outcome-unavailable { min-height: 390px; margin-top: 27px; display: grid; grid-template-columns: minmax(220px,.38fr) minmax(0,.62fr); border: 1px solid var(--rule); }
+.outcome-unavailable__marker { min-width: 0; padding: 28px; display: flex; flex-direction: column; justify-content: space-between; gap: 20px; color: #f9eee5; background: #3a252d; }
+.outcome-unavailable__marker span { color: #e9acb9; }
+.outcome-unavailable__marker strong { font: 400 clamp(120px,15vw,210px)/.75 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.11em; }
+.outcome-unavailable__content { min-width: 0; padding: clamp(28px,4vw,51px); background: #fbf8f2; }
+.outcome-unavailable__content h2 { max-width: 620px; margin: 13px 0 12px; font: 400 clamp(37px,4vw,54px)/1.03 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.05em; }
+.outcome-unavailable__content > p { max-width: 590px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+.outcome-requested-id { margin-top: 24px; padding: 13px 16px; display: grid; gap: 5px; background: #eee7df; border-left: 3px solid var(--wine); }
+.outcome-requested-id span { color: var(--wine); }
+.outcome-requested-id code { font-size: 12px; overflow-wrap: anywhere; }
+.outcome-unavailable .notice { margin-top: 22px; }
+.outcome-actions { margin-top: 27px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.outcome-actions .button { min-height: 46px; }
+.outcome-actions .text-link { margin-left: 7px; }
+.outcome-missing .outcome-unavailable__marker strong { font-size: clamp(105px,13vw,170px); }
+.public-missing { --porcelain: #faf7ef; --ink: #211d1a; --muted: #625d56; --rule: #cfc7b9; --wine: #842f3f; background: #f3eee6; }
+.public-missing > article { width: min(1180px,calc(100% - 60px)); min-height: calc(100vh - 87px); padding: clamp(90px,12vw,160px) 0 40px; display: flex; flex-direction: column; }
+.public-missing h1 { max-width: 950px; margin-top: 19px; font-size: clamp(63px,9vw,125px); letter-spacing: -.07em; }
+.public-missing .public-document__lede { max-width: 710px; margin: 27px 0 0; }
+.public-missing .outcome-actions { margin-top: 36px; }
+.public-missing__footer { margin-top: auto; padding-top: 70px; display: flex; justify-content: space-between; gap: 15px; color: var(--wine); border-bottom: 1px solid var(--wine); font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .1em; }
+
+@media (max-width: 980px) {
+  .outcome-observation .data-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 720px) {
+  .outcome-path { margin-top: 22px; grid-template-columns: minmax(0,1fr); }
+  .outcome-path > div { min-height: 77px; padding: 14px 18px; gap: 7px; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .outcome-path strong { font-size: 26px; }
+  .outcome-result-heading, .outcome-observation .panel-head { align-items: start; flex-direction: column; gap: 13px; }
+  .outcome-authorization .result-actions { flex-direction: column; }
+  .outcome-authorization .result-actions .button { width: 100%; }
+  .page-observe .outcome-observation { padding: 22px; }
+  .outcome-observation .data-grid { grid-template-columns: minmax(0,1fr); }
+  .outcome-observation .result-banner { align-items: stretch; flex-direction: column; }
+  .outcome-observation .result-banner .button { width: 100%; }
+  .page-receipts .page-header:has(+ .outcome-unavailable), .page-missing .page-header { min-height: 0; padding: 8px 0 25px; }
+  .page-receipts .page-header:has(+ .outcome-unavailable) h1, .page-missing .page-header h1 { font-size: clamp(52px,11vw,69px); }
+  .outcome-unavailable { grid-template-columns: minmax(0,1fr); }
+  .outcome-unavailable__marker { min-height: 123px; padding: 18px 21px; flex-direction: row; align-items: end; }
+  .outcome-unavailable__marker strong, .outcome-missing .outcome-unavailable__marker strong { font-size: 99px; }
+  .outcome-unavailable__content { padding: 25px 22px 29px; }
+  .outcome-actions .button, .outcome-actions .text-link { width: 100%; margin-left: 0; }
+  .public-missing > article { width: calc(100% - 36px); min-height: calc(100vh - 72px); padding-top: 91px; }
+  .public-missing h1 { font-size: clamp(55px,14vw,85px); }
+  .public-missing .public-document__lede { font-size: 17px; }
+  .public-missing__footer { flex-direction: column; }
+}

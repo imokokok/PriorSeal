@@ -48,6 +48,29 @@ test('asks for the real local-storage choice without setting cookies', async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
 
+test('unknown paths and unavailable receipts offer a route back to evidence', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Use without saving' }).click()
+  await page.goto('/missing-public-page')
+  await expect(page.getByRole('heading', { level: 1, name: 'This page is not in the collection.' })).toBeVisible()
+  await page.getByRole('link', { name: 'Open console', exact: true }).last().click()
+  await expect(page).toHaveURL(/\/app$/)
+  await page.goto('/app/unknown-workspace')
+  await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Browse receipts' })).toBeVisible()
+  await page.goto('/app/sdk-unknown')
+  await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible()
+  await page.route('**/v1/receipts/missing', (route) => route.fulfill({ status: 404, json: { error: { code: 'RECEIPT_NOT_FOUND', message: 'Receipt not found' } } }))
+  await page.goto('/app/receipts/missing')
+  await expect(page.getByRole('heading', { level: 1, name: 'Receipt not available' })).toBeVisible()
+  await expect(page.locator('.outcome-requested-id')).toContainText('missing')
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await page.getByRole('link', { name: 'Browse local receipts' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Receipts' })).toBeVisible()
+})
+
 test('damaged saved activity cannot become a typed local receipt or authorization', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Allow local saving' }).click()
@@ -166,7 +189,7 @@ test('public proof scope separates established claims from external decision use
   await expect(scope).toContainText('does not prove that another application read a decision')
 })
 
-test('persists and resumes a pending observation until a receipt is issued', async ({ page }) => {
+test('persists and resumes a pending observation until a receipt is issued', async ({ page }, testInfo) => {
   const authorizationId = 'auth_pending_test'
   const txHash = `0x${'1'.repeat(64)}`
   const execution = { chainId: 8453, txHash, status: 'PENDING', confirmations: 0, finalityState: 'PENDING', observedAt: 1_700_000_000 }
@@ -193,6 +216,11 @@ test('persists and resumes a pending observation until a receipt is issued', asy
   await page.getByLabel('Transaction hash').fill(txHash)
   await page.getByRole('button', { name: 'Observe authorized execution' }).click()
   await expect(page.getByText('Observation continues in the background', { exact: true })).toBeVisible()
+  await expect(page.locator('.outcome-observation')).toContainText('Observation result')
+  await page.screenshot({ path: testInfo.outputPath('observation-pending-desktop.png'), fullPage: true })
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await page.setViewportSize({ width: 1280, height: 800 })
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('priorseal.local-session.v4') ?? '{}').observationJobs?.[0]?.jobId)).toBe('job-pending-test')
 
   complete = true
