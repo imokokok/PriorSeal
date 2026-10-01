@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PriorSealMark } from '../brand'
 import { openStoragePreferences } from '../lib/storage'
@@ -6,9 +6,6 @@ import { loadConsole } from '../route-loaders'
 import archive800 from '../assets/images/priorseal-archive-800.jpg'
 import archive1200 from '../assets/images/priorseal-archive-1200.jpg'
 import archive1600 from '../assets/images/priorseal-archive-1600.jpg'
-import museum800 from '../assets/images/priorseal-museum-800.jpg'
-import museum1200 from '../assets/images/priorseal-museum-1200.jpg'
-import museum1600 from '../assets/images/priorseal-museum-1600.jpg'
 import { audiences, boundaries, proofSequence, receiptLines, sectionLinks } from './content'
 import './landing.css'
 
@@ -47,7 +44,35 @@ function ReceiptRecord() {
   )
 }
 
+function EvidenceIllustration() {
+  return (
+    <div className="evidence-illustration" role="img" aria-label="Illustration of signed authority connected to an observed execution and a portable receipt">
+      <div className="evidence-illustration__top"><span>FIG. 01 / AUTHORITY → EXECUTION</span><span>ILLUSTRATIVE MODEL</span></div>
+      <div className="evidence-illustration__orbit" aria-hidden="true"><span /><span /><span /></div>
+      <div className="evidence-illustration__path" aria-hidden="true" />
+      <article className="evidence-card evidence-card--authority">
+        <div className="evidence-card__meta"><span>01 / BEFORE</span><span className="evidence-card__dot" /></div>
+        <p className="evidence-card__eyebrow">SIGNED AUTHORITY</p>
+        <strong>What was<br /><i>permitted.</i></strong>
+        <div className="evidence-card__line"><span>Principal</span><b>EIP-712 / ERC-1271</b></div>
+        <div className="evidence-card__line"><span>Scope</span><b>Exact intent</b></div>
+      </article>
+      <div className="evidence-illustration__seal" aria-hidden="true"><span>BOUND</span><PriorSealMark /></div>
+      <article className="evidence-card evidence-card--execution">
+        <div className="evidence-card__meta"><span>02 / AFTER</span><span className="evidence-card__dot" /></div>
+        <p className="evidence-card__eyebrow">OBSERVED EXECUTION</p>
+        <strong>What actually<br /><i>happened.</i></strong>
+        <div className="evidence-card__line"><span>Network</span><b>EVM / observed</b></div>
+        <div className="evidence-card__line"><span>Result</span><b>Checked against scope</b></div>
+      </article>
+      <div className="evidence-illustration__bottom"><span><b>03</b> / PORTABLE RECEIPT</span><span>VERIFY BEYOND PRIORSEAL <span aria-hidden="true">↗</span></span></div>
+    </div>
+  )
+}
+
 export function LandingPage() {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [activeStep, setActiveStep] = useState(0)
   useEffect(() => {
     document.documentElement.classList.add('motion-ready')
     const observer = new IntersectionObserver(
@@ -65,35 +90,28 @@ export function LandingPage() {
     <div className="priorseal-museum">
       <header className="museum-nav">
         <InstitutionMark />
-        <nav aria-label="Homepage navigation">
-          {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}
+        <nav className={menuOpen ? 'is-open' : ''} aria-label="Homepage navigation" id="homepage-navigation">
+          {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id} onClick={() => setMenuOpen(false)}>{label}</a>)}
           <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/sdk">SDK</Link>
           <a href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
+        <button className="museum-nav__menu" type="button" aria-controls="homepage-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? 'Close' : 'Menu'} <span aria-hidden="true">{menuOpen ? '×' : '+'}</span></button>
         <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-nav__entry" to="/app">Open console <span>↗</span></Link>
       </header>
 
       <main id="main-content">
         <section className="museum-hero">
           <div className="museum-hero__copy">
-            <p className="museum-kicker"><span>PRIORSEAL</span> / AUTHORIZATION &amp; EXECUTION</p>
+            <div className="museum-hero__eyebrow"><p className="museum-kicker"><span>PRIORSEAL</span> / EVIDENCE INFRASTRUCTURE</p><span className="museum-hero__edition">EDITION 001 — EVM AGENTS</span></div>
             <h1 data-route-heading tabIndex={-1}>Authority,<br /><em>before action.</em></h1>
             <p className="museum-hero__statement">Connect what a person or organization explicitly authorized before action to an agent’s observed EVM execution. Retain a signed receipt others can verify independently.</p>
             <div className="museum-actions">
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Authorize an intent <span>→</span></Link>
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
             </div>
-            <p className="museum-hero__note">Portable evidence for EVM agents. No custody. No transaction-signing keys.</p>
+            <div className="museum-hero__foot"><span>01 / 06</span><p>Portable evidence for EVM agents.<br />No custody. No transaction-signing keys.</p><a href="#system" aria-label="Explore the PriorSeal system">↓</a></div>
           </div>
-
-          <figure className="museum-hero__visual">
-            <img src={museum1200} srcSet={`${museum800} 800w, ${museum1200} 1200w, ${museum1600} 1600w`} sizes="(max-width: 720px) 100vw, 55vw" width="1200" height="1600" loading="eager" decoding="async" fetchPriority="high" alt="Visitors viewing works inside a real contemporary museum gallery" />
-            <figcaption>
-              <span>FIELD REFERENCE / 01</span>
-              <p>A record should remain legible beyond the system that produced it.</p>
-              <PhotoCredit href="https://unsplash.com/photos/people-observe-exhibits-in-a-modern-museum-interior-e11OulaSBzo">MONA, Tasmania · Neon Wang</PhotoCredit>
-            </figcaption>
-          </figure>
+          <EvidenceIllustration />
         </section>
 
         <div className="accession-strip" aria-label="PriorSeal evidence qualities">
@@ -124,11 +142,18 @@ export function LandingPage() {
             <div><p className="museum-kicker">SIX ENTRIES / ONE VERIFIABLE HISTORY</p><h2>From proposal<br />to proof.</h2></div>
             <p>Each transition is explicit. Uncertainty remains visible. Signatures and supported compliance rules can be checked independently.</p>
           </header>
-          <ol data-reveal>
-            {proofSequence.map((step) => (
-              <li key={step.number}><span>{step.number}</span><h3>{step.title}</h3><p>{step.body}</p></li>
-            ))}
-          </ol>
+          <div className="museum-chain__interactive" data-reveal>
+            <ol>
+              {proofSequence.map((step, index) => (
+                <li key={step.number}><button type="button" className={index === activeStep ? 'is-active' : ''} aria-pressed={index === activeStep} onClick={() => setActiveStep(index)}><span>{step.number}</span><strong>{step.title}</strong><span aria-hidden="true">↗</span></button></li>
+              ))}
+            </ol>
+            <div className="museum-chain__detail" key={activeStep} aria-live="polite">
+              <span className="museum-chain__detail-number">{proofSequence[activeStep].number} / 06</span>
+              <div className="museum-chain__detail-orbit" aria-hidden="true"><PriorSealMark /></div>
+              <div><p>THE EVIDENCE CHAIN</p><h3>{proofSequence[activeStep].title}<span>.</span></h3><p>{proofSequence[activeStep].body}</p></div>
+            </div>
+          </div>
         </section>
 
         <section className="archive-room" id="archive">
@@ -139,7 +164,7 @@ export function LandingPage() {
           <div className="archive-room__copy" data-reveal>
             <div className="museum-section-id"><span>03</span><p>The archive</p></div>
             <p className="museum-kicker">RETAINED OUTSIDE THE SERVICE</p>
-            <h2>Evidence that<br />leaves with you.</h2>
+            <h2>Evidence<br />that leaves<br />with you.</h2>
             <p>A PriorSeal receipt is not a dashboard state or a promise held inside one database. It is a portable, signed record of authority, time, execution and binding.</p>
             <ul>
               <li><span>A</span>Canonical, inspectable fields</li>
