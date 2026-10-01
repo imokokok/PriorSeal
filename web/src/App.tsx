@@ -7,6 +7,7 @@ import { downloadJson } from './lib/download'
 import { chains, dateTime, fromUnix, reasonText, short, toUnix } from './lib/format'
 import { activityChangeEvent, getActivity, getStoragePreference, session, storagePreferenceEvent } from './lib/storage'
 import type { ApiError, AuthorizationRecord, Eip1193Provider, Execution, Intent, ObservationJob, ObservationResult, Receipt } from './types'
+import './console-collection.css'
 
 const AuditPage = lazy(() => import('./pages/AuditPage').then((module) => ({ default: module.AuditPage })))
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage })))
@@ -61,13 +62,25 @@ function Overview() {
   ].sort((left, right) => right.timestamp - left.timestamp).slice(0, 8)
 
   return <AppShell>
-    <PageHeader eyebrow="WORKSPACE OVERVIEW" title="Overview" actions={<div className="overview-actions"><Link className="button secondary" to="/app/verify">Verify receipt</Link><Link className="button primary" to="/app/intents/new">New authorization</Link></div>}>Monitor signed authority, observed execution and portable evidence on this device.</PageHeader>
+    <header className="console-feature">
+      <div className="console-feature__copy">
+        <p className="console-feature__index">PRIORSEAL / LOCAL COLLECTION <span>001 — WORKSPACE</span></p>
+        <h1 data-route-heading tabIndex={-1}>Evidence,<br /><em>in view.</em></h1>
+        <p>Monitor signed authority, observed execution and portable evidence on this device.</p>
+        <div className="console-feature__actions"><Link className="button primary" to="/app/intents/new">New authorization <span aria-hidden="true">→</span></Link><Link className="button secondary" to="/app/verify">Verify receipt <span aria-hidden="true">↗</span></Link></div>
+      </div>
+      <div className="console-feature__visual" aria-hidden="true">
+        <div className="console-feature__visual-top"><span>THE EVIDENCE PATH</span><span>FIG. 01 / 03</span></div>
+        <div className="console-feature__flow"><div><span>01</span><strong>Authorize</strong><small>Before action</small></div><div><span>02</span><strong>Observe</strong><small>On chain</small></div><div><span>03</span><strong>Verify</strong><small>Beyond the service</small></div></div>
+        <p>What was permitted <span>↗</span> what happened</p>
+      </div>
+    </header>
 
     <section className="metric-grid" aria-label="Workspace metrics">
-      <Link to="/app/observe" className="metric-card"><span>Active authorizations</span><strong>{activeAuthorizations.length}</strong><small>Accepted and available to bind</small></Link>
-      <Link to="/app/audit" className="metric-card"><span>Pending observations</span><strong>{pendingObservations}</strong><small>Awaiting execution finality</small></Link>
-      <Link to="/app/receipts" className="metric-card"><span>Signed receipts</span><strong>{activity.receipts.length}</strong><small>Portable evidence on this device</small></Link>
-      <Link to="/app/audit" className={`metric-card ${attentionCount ? 'attention' : ''}`}><span>Needs attention</span><strong>{attentionCount}</strong><small>{attentionCount ? 'Review failed or unbound evidence' : 'No local evidence exceptions'}</small></Link>
+      <Link to="/app/observe" className="metric-card"><span className="metric-card__index">01 / AUTHORITY <b aria-hidden="true">↗</b></span><span>Active authorizations</span><strong>{activeAuthorizations.length}</strong><small>Accepted and available to bind</small></Link>
+      <Link to="/app/audit" className="metric-card"><span className="metric-card__index">02 / EXECUTION <b aria-hidden="true">↗</b></span><span>Pending observations</span><strong>{pendingObservations}</strong><small>Awaiting execution finality</small></Link>
+      <Link to="/app/receipts" className="metric-card"><span className="metric-card__index">03 / EVIDENCE <b aria-hidden="true">↗</b></span><span>Signed receipts</span><strong>{activity.receipts.length}</strong><small>Portable evidence on this device</small></Link>
+      <Link to="/app/audit" className={`metric-card ${attentionCount ? 'attention' : ''}`}><span className="metric-card__index">04 / REVIEW <b aria-hidden="true">↗</b></span><span>Needs attention</span><strong>{attentionCount}</strong><small>{attentionCount ? 'Review failed or unbound evidence' : 'No local evidence exceptions'}</small></Link>
     </section>
 
     <div className="overview-grid">

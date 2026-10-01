@@ -160,7 +160,7 @@ test('does not mark a pending observation as a completed quickstart step', async
   await page.evaluate(() => localStorage.setItem('priorseal.local-session.v4', JSON.stringify({ intents: [], authorizations: [], receipts: [], observations: [{ chainId: 8453, txHash: `0x${'1'.repeat(64)}`, status: 'PENDING' }], observationJobs: [] })))
   await page.goto('/app/quickstart')
   const observeStep = page.locator('.onboarding-steps li').filter({ hasText: 'Observe one transaction' })
-  await expect(observeStep.locator('.step-number')).toHaveText('2')
+  await expect(observeStep.locator('.step-number')).toHaveText('02')
 })
 
 test('key product views match reviewed visual baselines', async ({ page }) => {

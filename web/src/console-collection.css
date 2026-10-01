@@ -1,0 +1,191 @@
+/* The collection pages carry the public site's editorial language into task-focused UI. */
+.page-overview, .page-quickstart, .page-verify {
+  --porcelain: #faf7ef;
+  --ink: #211d1a;
+  --muted: #625d56;
+  --rule: #cfc7b9;
+  --rule-soft: #e0d8cd;
+  --wine: #842f3f;
+  --wine-dark: #3b2027;
+  background: #f5f0e8;
+}
+
+.page-overview .button, .page-quickstart .button, .page-verify .button { border-radius: 2px; transition: transform .2s ease, color .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.page-overview .button:hover, .page-quickstart .button:hover, .page-verify .button:hover { transform: translateY(-2px); box-shadow: 0 9px 18px -12px rgba(38,25,22,.45); }
+.page-overview .panel, .page-quickstart .panel, .page-verify .panel { background: var(--porcelain); }
+.page-overview .panel::before, .page-quickstart .panel::before, .page-verify .panel::before { width: 0; }
+.page-overview .panel-head, .page-quickstart .panel-head, .page-verify .panel-head { border-color: var(--rule); }
+.section-index { margin: 0 0 11px !important; color: var(--wine) !important; font: 600 10px/1.5 "JetBrains Mono", monospace !important; letter-spacing: .13em; text-transform: uppercase; }
+
+/* Overview */
+.page-overview { padding-top: 0; }
+.console-feature { min-height: 390px; margin-bottom: 26px; display: grid; grid-template-columns: minmax(0,1.14fr) minmax(280px,.86fr); border: 1px solid var(--rule); }
+.console-feature__copy { min-width: 0; padding: clamp(32px, 4vw, 61px); display: flex; flex-direction: column; align-items: flex-start; background: var(--porcelain); }
+.console-feature__index { width: 100%; margin: 0; display: flex; justify-content: space-between; gap: 15px; color: var(--wine); font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .08em; }
+.console-feature__index span { color: var(--muted); }
+.console-feature h1 { margin: auto 0 15px; font: 400 clamp(66px, 6.5vw, 112px)/.88 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.075em; }
+.console-feature h1 em { color: var(--wine); font-weight: 400; }
+.console-feature__copy > p:not(.console-feature__index) { max-width: 530px; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.55; }
+.console-feature__actions { margin-top: 26px; display: flex; gap: 10px; flex-wrap: wrap; }
+.console-feature__actions .button { min-height: 46px; gap: 22px; }
+.console-feature__actions .button span { font-size: 18px; line-height: .7; }
+.console-feature__visual { min-width: 0; position: relative; overflow: hidden; padding: 28px clamp(24px, 3vw, 44px); display: flex; flex-direction: column; color: #f9f1e7; background: radial-gradient(circle at 67% 42%, #693a45, #3c232c 60%, #291d22); }
+.console-feature__visual::before { content: ''; width: 440px; height: 440px; position: absolute; top: 50%; right: -160px; transform: translateY(-50%); border: 1px solid rgba(250,240,226,.13); border-radius: 50%; box-shadow: 0 0 0 66px rgba(250,240,226,.04), 0 0 0 132px rgba(250,240,226,.025); pointer-events: none; }
+.console-feature__visual-top { z-index: 1; padding-bottom: 15px; display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.3); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .09em; }
+.console-feature__flow { z-index: 1; margin: auto 0; display: grid; }
+.console-feature__flow div { min-height: 79px; position: relative; padding: 12px 0 12px 42px; display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 3px 12px; border-bottom: 1px solid rgba(255,255,255,.23); }
+.console-feature__flow div::before { content: ''; width: 10px; height: 10px; position: absolute; top: 34px; left: 6px; border: 1px solid #dfb9af; border-radius: 50%; background: var(--wine); box-shadow: 0 0 0 5px rgba(255,255,255,.08); }
+.console-feature__flow div:not(:last-child)::after { content: ''; width: 1px; height: 68px; position: absolute; top: 44px; left: 11px; background: rgba(255,255,255,.33); }
+.console-feature__flow div > span { grid-column: 1 / -1; color: #e2aab1; font: 600 10px "JetBrains Mono", monospace; }
+.console-feature__flow strong { font: 400 32px "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.04em; }
+.console-feature__flow small { color: #c5b6b1; font: 500 10px "JetBrains Mono", monospace; text-align: right; }
+.console-feature__visual > p { z-index: 1; margin: 0; padding-top: 15px; display: flex; justify-content: space-between; gap: 10px; color: #dfc7c0; border-top: 1px solid rgba(255,255,255,.3); font: 500 10px "JetBrains Mono", monospace; letter-spacing: .04em; text-transform: uppercase; }
+
+.page-overview .metric-grid { margin-bottom: 26px; border-color: var(--rule); background: var(--rule); }
+.page-overview .metric-card { min-height: 190px; padding: 18px 21px 20px; grid-template-rows: auto auto 1fr auto; gap: 9px; background: var(--porcelain); transition: color .25s ease, background .25s ease, padding .25s ease; }
+.page-overview .metric-card:hover { padding-top: 14px; color: var(--porcelain); background: var(--wine-dark); }
+.page-overview .metric-card__index { padding-bottom: 15px; display: flex; justify-content: space-between; gap: 8px; color: var(--wine); border-bottom: 1px solid var(--rule); font-size: 10px; }
+.page-overview .metric-card__index b { font-size: 15px; font-weight: 400; opacity: 0; transform: translate(-3px,3px); transition: opacity .2s ease, transform .2s ease; }
+.page-overview .metric-card:hover .metric-card__index b { opacity: 1; transform: none; }
+.page-overview .metric-card:hover .metric-card__index { color: #e8adb4; border-color: rgba(255,255,255,.25); }
+.page-overview .metric-card > span:nth-child(2) { color: var(--muted); font-size: 10px; }
+.page-overview .metric-card:hover > span:nth-child(2) { color: #d5c0bf; }
+.page-overview .metric-card strong { align-self: end; font-size: 65px; line-height: .82; }
+.page-overview .metric-card small { font-size: 12px; }
+.page-overview .overview-grid { gap: 26px; }
+.page-overview .overview-grid > *, .page-overview .overview-side > * { min-width: 0; }
+.page-overview .recent-activity, .page-overview .attention-panel, .page-overview .infrastructure-panel { border-top: 3px solid var(--wine); }
+.page-overview .panel h2 { font-size: 32px; }
+.page-overview .scope-note { padding: 19px 22px; color: var(--muted); background: #e8dfd5; border-left-color: var(--wine); }
+
+/* Quickstart */
+.page-quickstart .page-header, .page-verify .page-header { min-height: 210px; padding: 25px 0 34px; align-items: end; border-color: var(--rule); }
+.page-quickstart .page-header h1, .page-verify .page-header h1 { max-width: 900px; font-size: clamp(54px, 5.5vw, 82px); line-height: .94; letter-spacing: -.065em; }
+.page-quickstart .lede, .page-verify .lede { max-width: 790px; margin-top: 20px; font-size: 16px; line-height: 1.6; }
+.quickstart-progress { min-height: 140px; margin: 28px 0 0; padding: 22px 28px; display: grid; grid-template-columns: minmax(245px,.7fr) minmax(250px,1.3fr); align-items: center; gap: 10px 30px; color: #f5ece4; background: #3b2027; }
+.quickstart-progress > div { display: grid; gap: 8px; }
+.quickstart-progress > div span { color: #dda5aa; font: 600 10px "JetBrains Mono", monospace; letter-spacing: .12em; }
+.quickstart-progress strong { font: 400 51px/.9 "Iowan Old Style", Baskerville, Georgia, serif; }
+.quickstart-progress strong small { color: #d6c5c1; font: 500 11px "JetBrains Mono", monospace; }
+.quickstart-progress__availability { color: #e4b7b3 !important; font: 500 10px "JetBrains Mono", monospace !important; letter-spacing: .03em !important; }
+.quickstart-progress progress { width: 100%; height: 12px; accent-color: #d4a09d; appearance: none; border: 1px solid #8f6b70; background: rgba(255,255,255,.13); }
+.quickstart-progress progress::-webkit-progress-bar { background: rgba(255,255,255,.13); }
+.quickstart-progress progress::-webkit-progress-value { background: #d4a09d; }
+.quickstart-progress progress::-moz-progress-bar { background: #d4a09d; }
+.quickstart-progress > p { grid-column: 2; margin: -10px 0 0; color: #cbb9b6; font-size: 12px; line-height: 1.55; }
+.page-quickstart .onboarding-steps { margin: 0 0 27px; border-top: 0; }
+.page-quickstart .onboarding-steps li { min-height: 175px; padding: 25px 29px; grid-template-columns: 63px minmax(0,1fr) auto; gap: 20px; background: var(--porcelain); border: 1px solid var(--rule); border-top: 0; transition: background .25s ease, padding-left .25s ease; }
+.page-quickstart .onboarding-steps li:hover { padding-left: 35px; background: #fffdf8; }
+.page-quickstart .onboarding-steps .step-number { width: 54px; height: 54px; align-self: start; color: var(--wine); background: #f1e4df; border: 1px solid #d4b8af; border-radius: 50%; font-size: 11px; }
+.page-quickstart .onboarding-steps .step-number.done { color: #246146; background: #e5efe8; border-color: #8bad99; }
+.quickstart-step-label { margin: 0 0 11px !important; color: var(--wine); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .11em; }
+.page-quickstart .onboarding-steps h2 { margin: 0 0 12px; font-size: clamp(30px, 3vw, 42px); letter-spacing: -.045em; }
+.page-quickstart .onboarding-steps li p:last-child { color: var(--muted); font-size: 14px; }
+.page-quickstart .onboarding-steps li .button { min-width: 160px; justify-content: space-between; gap: 15px; }
+.quickstart-configuration { padding: 30px; border-top: 4px solid var(--wine) !important; }
+.quickstart-configuration .panel-head h2 { font-size: 36px; }
+.quickstart-configuration .form-grid { margin-bottom: 21px; }
+.quickstart-configuration > .button { margin-top: 20px; }
+.quickstart-configuration .data-grid { margin: 15px 0 0; }
+.quickstart-configuration .data-grid dd { overflow-wrap: anywhere; }
+
+/* Local verification */
+.verify-sequence { margin: 28px 0 20px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid var(--rule); }
+.verify-sequence > div { min-height: 97px; padding: 18px 21px; display: flex; flex-direction: column; justify-content: space-between; gap: 9px; background: var(--porcelain); border-right: 1px solid var(--rule); }
+.verify-sequence > div:last-child { border: 0; }
+.verify-sequence > div span { color: var(--wine); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .1em; }
+.verify-sequence > div strong { font: 400 clamp(24px,2.4vw,34px) "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.045em; }
+.page-verify .verify-layout { grid-template-columns: minmax(0,1.08fr) minmax(0,.92fr); gap: 20px; }
+.page-verify .verify-import, .page-verify .verify-trust { min-width: 0; padding: 28px; border-top: 4px solid var(--wine); }
+.page-verify .verify-trust { border-top-color: #3b2027; }
+.page-verify .verify-layout h2 { font-size: 38px; letter-spacing: -.045em; }
+.page-verify .verify-panel-intro { max-width: 530px; margin: 11px 0 24px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.page-verify .verify-layout textarea { margin: 0; padding: 14px; color: var(--ink); background: #f0ebe3; border-color: var(--rule); }
+.page-verify .verify-layout .field { margin-top: 16px; }
+.page-verify .verify-layout .field:first-of-type { margin-top: 0; }
+.page-verify .verify-import .header-actions { margin-top: 18px; justify-content: flex-start; }
+.page-verify .verify-layout .polish-details { margin-top: 27px; }
+.page-verify .verify-layout .polish-details summary { color: var(--wine); }
+.page-verify .verify-layout .check-row { margin-top: 23px; padding: 16px; background: #f1e9e1; border: 1px solid var(--rule); line-height: 1.5; }
+.page-verify .lookup { margin-top: 20px; padding: 26px 28px 29px; background: #e7dcd2; border: 1px solid var(--rule); border-left: 0; border-top: 4px solid #3b2027; }
+.page-verify .lookup::before { display: none; }
+.page-verify .lookup h2 { font-size: 31px; }
+.page-verify .lookup .verify-panel-intro { margin-bottom: 17px; }
+.page-verify .lookup form { margin-top: 0; }
+.page-verify .verification-result { max-width: none; margin-top: 20px; border-top: 4px solid var(--wine); }
+.page-verify .verification-result h2 { font-size: clamp(34px,3.4vw,52px); letter-spacing: -.05em; overflow-wrap: anywhere; }
+
+@media (max-width: 1220px) {
+  .console-feature { grid-template-columns: minmax(0,1.1fr) minmax(260px,.9fr); }
+  .console-feature__copy { padding: 34px; }
+  .console-feature h1 { font-size: clamp(65px, 7vw, 94px); }
+}
+
+@media (max-width: 1100px) {
+  .page-overview .overview-grid { grid-template-columns: minmax(0,1fr); }
+  .page-overview .overview-side { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .page-overview .metric-grid { grid-template-columns: repeat(2,1fr); }
+  .page-overview .metric-card { min-height: 180px; }
+  .page-quickstart .onboarding-steps li { grid-template-columns: 55px minmax(0,1fr); }
+  .page-quickstart .onboarding-steps li .button { grid-column: 2; width: max-content; }
+}
+
+@media (max-width: 980px) {
+  .page-verify .verify-layout { grid-template-columns: 1fr; }
+  .console-feature { grid-template-columns: 1.1fr .9fr; }
+}
+
+@media (max-width: 720px) {
+  .page-overview, .page-quickstart, .page-verify { padding-top: 25px; }
+  .console-feature { min-height: 0; grid-template-columns: 1fr; }
+  .console-feature__copy { min-height: 380px; padding: 26px; }
+  .console-feature__index span { display: none; }
+  .console-feature h1 { font-size: clamp(66px, 15vw, 91px); }
+  .console-feature__visual { min-height: 310px; padding: 22px 26px; }
+  .console-feature__flow { width: 100%; grid-template-columns: repeat(3,1fr); gap: 12px; }
+  .console-feature__flow div { min-height: 120px; padding: 32px 0 10px; grid-template-columns: 1fr; align-content: start; gap: 7px; }
+  .console-feature__flow div::before { top: 8px; left: 0; }
+  .console-feature__flow div:not(:last-child)::after { width: calc(100% + 12px); height: 1px; top: 13px; left: 10px; }
+  .console-feature__flow strong { font-size: 25px; }
+  .console-feature__flow small { text-align: left; }
+  .page-overview .metric-grid { grid-template-columns: repeat(2,1fr); }
+  .page-overview .overview-side { grid-template-columns: minmax(0,1fr); }
+  .page-overview .panel-head { flex-wrap: wrap; }
+  .page-overview .metric-card { min-height: 175px; padding: 15px; }
+  .page-overview .metric-card strong { font-size: 58px; }
+  .page-overview .metric-card__index { padding-bottom: 11px; }
+  .page-overview .metric-card > span:nth-child(2) { font-size: 9px; }
+  .page-quickstart .page-header, .page-verify .page-header { min-height: 0; padding-top: 4px; padding-bottom: 25px; }
+  .page-quickstart .page-header h1, .page-verify .page-header h1 { font-size: clamp(50px, 11vw, 67px); }
+  .quickstart-progress { padding: 24px; grid-template-columns: 1fr; }
+  .quickstart-progress > p { grid-column: 1; margin: 0; }
+  .page-quickstart .onboarding-steps li { min-height: 0; padding: 23px; grid-template-columns: 46px 1fr; gap: 14px; }
+  .page-quickstart .onboarding-steps li:hover { padding-left: 23px; }
+  .page-quickstart .onboarding-steps .step-number { width: 43px; height: 43px; }
+  .page-quickstart .onboarding-steps h2 { font-size: 31px; }
+  .page-quickstart .onboarding-steps li .button { grid-column: 2; min-width: 0; }
+  .quickstart-configuration { padding: 23px; }
+  .quickstart-configuration .panel-head { flex-direction: column; }
+  .verify-sequence { grid-template-columns: 1fr; }
+  .verify-sequence > div { min-height: 62px; padding: 13px 18px; flex-direction: row; align-items: center; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .verify-sequence > div strong { font-size: 24px; }
+  .page-verify .verify-import, .page-verify .verify-trust { padding: 22px; }
+  .page-verify .verify-layout h2 { font-size: 34px; }
+  .page-verify .verify-import .header-actions { align-items: stretch; flex-direction: column; }
+  .page-verify .verify-import .header-actions .button { width: 100%; }
+  .page-verify .lookup { padding: 22px; }
+}
+
+@media (max-width: 390px) {
+  .console-feature__actions { width: 100%; }
+  .console-feature__actions .button { width: 100%; justify-content: space-between; }
+  .console-feature__flow { gap: 6px; }
+  .console-feature__flow strong { font-size: 18px; }
+  .page-overview .metric-card { min-height: 166px; padding: 12px; }
+  .page-overview .metric-card small { font-size: 11px; }
+  .verify-sequence > div strong { font-size: 21px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-overview .metric-card, .page-quickstart .onboarding-steps li, .page-overview .button, .page-quickstart .button, .page-verify .button { transition: none; }
+}
