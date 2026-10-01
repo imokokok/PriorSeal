@@ -1,0 +1,93 @@
+/* Receipt index and detail are reading surfaces for claims that still require verification. */
+.page-receipts .page-header { min-height: 203px; padding: 24px 0 31px; align-items: end; border-color: var(--rule); }
+.page-receipts .page-header h1 { font-size: clamp(53px,5.6vw,85px); line-height: .95; letter-spacing: -.065em; }
+.page-receipts .lede { max-width: 790px; margin-top: 19px; font-size: 16px; line-height: 1.58; }
+.receipt-detail-meta { display: grid; gap: 11px; }
+.receipt-detail-meta > code { color: var(--wine); font-size: 13px; overflow-wrap: anywhere; }
+.page-receipts .header-actions .button { min-height: 46px; }
+.receipt-index-hero { min-height: 264px; margin: 29px 0 23px; display: grid; grid-template-columns: minmax(250px,.72fr) minmax(0,1.28fr); color: #f8eee4; background: #322128; }
+.receipt-index-hero > div:first-child { min-width: 0; padding: 26px 31px 28px; display: flex; flex-direction: column; border-right: 1px solid rgba(255,255,255,.25); }
+.receipt-index-hero span, .receipt-section-index, .receipt-reading-guide span { color: #dca3ad; font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .12em; }
+.receipt-index-hero strong { margin: auto 0 0; font: 400 clamp(78px,9vw,134px)/.76 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.09em; }
+.receipt-index-hero > div:first-child p { margin: 16px 0 0; color: #d8c2c0; font-size: 13px; }
+.receipt-index-hero__path { min-width: 0; padding: 27px 32px; display: flex; flex-direction: column; }
+.receipt-index-hero__path p { max-width: 550px; margin: auto 0 22px; font: 400 clamp(26px,2.6vw,38px)/1.12 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.receipt-index-hero__path > div { display: flex; gap: 9px; flex-wrap: wrap; }
+.receipt-index-hero__path .button { color: #fff4e9; border-color: rgba(255,255,255,.48); background: transparent; }
+.receipt-index-hero__path .button:hover { color: var(--ink); background: #fff4e9; }
+.receipt-index-panel { padding: 29px; border-top: 4px solid var(--wine); }
+.receipt-index-panel::before { display: none; }
+.receipt-index-panel .panel-head { align-items: end; }
+.receipt-index-panel .panel-head h2 { margin-top: 10px; font-size: 39px; letter-spacing: -.05em; }
+.receipt-index-panel .receipt-section-index { color: var(--wine); }
+.receipt-index-panel .header-actions { max-width: 490px; }
+.receipt-index-panel .header-actions .button { min-height: 40px; font-size: 12px; }
+.receipt-index-panel .empty { min-height: 315px; padding-top: 74px; }
+.receipt-index-panel .empty h3 { font-size: 37px; letter-spacing: -.045em; }
+.receipt-index-panel .receipt-row { min-height: 108px; padding: 18px 6px; transition: background .18s ease, padding .18s ease; }
+.receipt-index-panel .receipt-row:hover { padding-left: 15px; padding-right: 15px; background: #f0e8df; }
+.receipt-index-panel .receipt-row strong { font-size: 14px; }
+.receipt-index-panel .receipt-row-actions .text-link { white-space: nowrap; }
+.receipt-reading-guide { margin: 28px 0 22px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid var(--rule); }
+.receipt-reading-guide > div { min-width: 0; min-height: 153px; padding: 19px 23px; display: flex; flex-direction: column; gap: 9px; background: var(--porcelain); border-right: 1px solid var(--rule); }
+.receipt-reading-guide > div:last-child { color: #fbefe8; background: #3d252d; border: 0; }
+.receipt-reading-guide > div:last-child span { color: #e5aeb9; }
+.receipt-reading-guide span { color: var(--wine); }
+.receipt-reading-guide strong { margin-top: auto; font: 400 clamp(25px,2.4vw,34px)/1.06 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.receipt-reading-guide small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.receipt-reading-guide > div:last-child small { color: #d5bebe; }
+.page-receipts .evidence-relationship, .page-receipts .receipt-authority, .page-receipts .receipt-compliance, .page-receipts .receipt-comparison, .page-receipts .raw { border-top: 4px solid var(--wine); }
+.page-receipts .evidence-relationship::before, .page-receipts .receipt-authority::before, .page-receipts .receipt-compliance::before, .page-receipts .receipt-comparison::before, .page-receipts .raw::before { display: none; }
+.page-receipts .evidence-relationship h2, .page-receipts .receipt-authority h2, .page-receipts .receipt-compliance h2, .page-receipts .receipt-comparison h2, .page-receipts .raw h2 { font-size: clamp(32px,3vw,43px); letter-spacing: -.045em; }
+.page-receipts .relationship-chain li { min-height: 164px; padding: 19px; background: #f8f4ed; }
+.page-receipts .relationship-assessments > div { min-height: 112px; padding: 19px; }
+.page-receipts .receipt-authority { margin-top: 22px; }
+.page-receipts .receipt-layout { grid-template-columns: minmax(0,1.4fr) minmax(290px,.6fr); }
+.page-receipts .receipt-layout > div, .page-receipts .receipt-layout aside { min-width: 0; grid-template-columns: minmax(0,1fr); }
+.page-receipts .receipt-layout .panel { min-width: 0; }
+.page-receipts .receipt-layout .panel { padding: 28px; }
+.page-receipts .receipt-compliance .notice { margin-top: 17px; }
+.page-receipts .receipt-comparison .comparison { margin-top: 23px; }
+.page-receipts .proof { background: #30232a; border-top: 4px solid #bb7785; }
+.page-receipts .proof::before { display: none; }
+.page-receipts .proof h2 { color: #fff4e8; font-size: 31px; }
+.page-receipts .proof dt { color: #d1a6ad; }
+.page-receipts .raw { padding: 29px; }
+.page-receipts .raw .panel-head { gap: 18px; }
+
+@media (max-width: 1150px) {
+  .page-receipts .receipt-layout { grid-template-columns: minmax(0,1fr); }
+  .page-receipts .receipt-layout aside { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .page-receipts .receipt-index-panel .panel-head { align-items: start; flex-direction: column; }
+  .page-receipts .receipt-index-panel .header-actions { max-width: none; justify-content: start; }
+}
+@media (max-width: 720px) {
+  .page-receipts { padding-top: 25px; }
+  .page-receipts .page-header { min-height: 0; padding: 4px 0 25px; }
+  .page-receipts .page-header h1 { font-size: clamp(51px,11vw,68px); }
+  .receipt-index-hero { grid-template-columns: 1fr; }
+  .receipt-index-hero > div:first-child { min-height: 160px; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.25); }
+  .receipt-index-hero strong { font-size: 81px; }
+  .receipt-index-hero__path { min-height: 230px; padding: 25px; }
+  .receipt-index-hero__path p { font-size: 29px; }
+  .receipt-index-hero__path .button { width: 100%; }
+  .receipt-index-panel, .page-receipts .raw { padding: 23px; }
+  .receipt-index-panel .header-actions { width: 100%; }
+  .receipt-index-panel .header-actions .button { flex: 1 1 auto; }
+  .receipt-index-panel .receipt-row { padding: 19px 0; }
+  .receipt-index-panel .receipt-row:hover { padding-left: 0; padding-right: 0; }
+  .receipt-reading-guide { grid-template-columns: 1fr; }
+  .receipt-reading-guide > div { min-height: 86px; padding: 14px 18px; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .receipt-reading-guide strong { margin-top: 0; font-size: 26px; }
+  .page-receipts .receipt-layout aside { grid-template-columns: 1fr; }
+  .page-receipts .relationship-assessments { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .page-receipts .receipt-layout .panel { padding: 23px; }
+  .page-receipts .raw .panel-head { align-items: start; flex-direction: column; }
+}
+@media (max-width: 390px) {
+  .receipt-index-panel .header-actions .button { flex: 1 1 100%; }
+  .page-receipts .relationship-assessments { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .receipt-index-panel .receipt-row { transition: none; }
+}

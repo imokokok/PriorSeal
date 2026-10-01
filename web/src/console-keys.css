@@ -1,0 +1,60 @@
+.page-keys .page-header { min-height: 211px; padding: 24px 0 32px; align-items: end; border-color: var(--rule); }
+.page-keys .page-header h1 { font-size: clamp(54px,5.7vw,86px); line-height: .94; letter-spacing: -.065em; }
+.page-keys .lede { max-width: 740px; margin-top: 19px; font-size: 16px; line-height: 1.58; }
+.key-directory-intro { margin: 30px 0 20px; display: flex; justify-content: space-between; align-items: baseline; gap: 24px; }
+.key-directory-intro span, .key-section-index, .key-registry-summary span { color: var(--wine); font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .11em; }
+.key-directory-intro p { max-width: 610px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.key-unavailable { min-height: 340px; padding: 31px; display: flex; flex-direction: column; align-items: flex-start; background: #f8f4ef; border-top: 4px solid var(--wine); }
+.key-unavailable::before { display: none; }
+.key-unavailable h2 { margin: 24px 0 19px; font-size: clamp(37px,3.7vw,52px); letter-spacing: -.05em; }
+.key-unavailable .notice { width: 100%; max-width: 750px; margin: 0; }
+.key-unavailable__actions { margin-top: auto; padding-top: 23px; display: flex; gap: 9px; flex-wrap: wrap; }
+.key-unavailable__actions .button { min-height: 47px; }
+.key-unavailable .empty { width: 100%; }
+.key-registry-summary { margin-bottom: 22px; display: grid; grid-template-columns: minmax(0,1.3fr) repeat(2,minmax(0,.85fr)); border: 1px solid var(--rule); }
+.key-registry-summary > div { min-width: 0; min-height: 176px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; background: var(--porcelain); border-right: 1px solid var(--rule); }
+.key-registry-summary > div:last-child { color: #f9eee4; background: #3d252d; border: 0; }
+.key-registry-summary > div:last-child span { color: #e5aeb9; }
+.key-registry-summary > div:last-child small { color: #d7c1bd; }
+.key-registry-summary strong { margin-top: auto; font: 400 clamp(31px,3vw,48px)/1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.05em; overflow-wrap: anywhere; }
+.key-registry-summary small { color: var(--muted); font-size: 12px; }
+.key-directory-table, .rotation-panel { padding: 29px; border-top: 4px solid var(--wine); }
+.key-directory-table::before, .rotation-panel::before { display: none; }
+.key-directory-table .panel-head, .rotation-panel .panel-head { align-items: end; }
+.key-directory-table .panel-head h2, .rotation-panel .panel-head h2 { margin-top: 11px; font-size: clamp(33px,3.2vw,45px); letter-spacing: -.05em; }
+.key-directory-table .panel-head p, .rotation-panel .panel-head p { max-width: 700px; }
+.key-directory-table .table-scroll { margin-top: 21px; }
+.key-directory-table table { min-width: 780px; }
+.key-directory-table th { background: #3d252d; }
+.key-directory-table td { background: #f9f5ef; }
+.key-directory-table tbody tr:hover td { background: #eee1dc; }
+.key-directory-table td:first-child strong { color: var(--wine); }
+.rotation-panel { margin-top: 22px; border-top-color: #3d252d; }
+.rotation-panel .data-grid { margin-top: 19px; }
+.rotation-panel .data-grid > div { min-height: 110px; background: #f6f0e9; }
+.rotation-panel .data-grid > div:nth-child(2) { background: #eadfd9; }
+.rotation-panel .data-grid dd { font: 400 25px "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.rotation-panel .notice { margin-top: 23px; }
+.rotation-panel .table-scroll { margin-top: 20px; }
+.rotation-panel > .button { margin-top: 18px; }
+@media (max-width: 720px) {
+  .page-keys { padding-top: 25px; }
+  .page-keys .page-header { min-height: 0; padding: 4px 0 25px; }
+  .page-keys .page-header h1 { font-size: clamp(50px,11vw,69px); }
+  .key-directory-intro { align-items: start; flex-direction: column; gap: 9px; }
+  .key-registry-summary { grid-template-columns: 1fr 1fr; }
+  .key-registry-summary > div { min-height: 145px; padding: 16px; }
+  .key-registry-summary > div:first-child { grid-column: 1 / -1; min-height: 122px; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .key-registry-summary strong { font-size: 32px; }
+  .key-unavailable, .key-directory-table, .rotation-panel { padding: 23px; }
+  .key-unavailable__actions { width: 100%; }
+  .key-unavailable__actions .button { width: 100%; }
+  .key-directory-table .panel-head, .rotation-panel .panel-head { align-items: start; flex-direction: column; }
+  .rotation-panel .data-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 390px) {
+  .key-registry-summary { grid-template-columns: 1fr; }
+  .key-registry-summary > div:first-child { grid-column: 1; }
+  .key-registry-summary > div { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .rotation-panel .data-grid { grid-template-columns: 1fr; }
+}

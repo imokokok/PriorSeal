@@ -51,6 +51,31 @@ test('damaged saved activity cannot become a typed local receipt or authorizatio
   await expect(page.getByText('0 saved on this device')).toBeVisible()
 })
 
+test('receipt index opens a claim without implying local verification', async ({ page }) => {
+  const receipt = {
+    schema: 'priorseal.execution-receipt.v2', domain: 'priorseal.execution-receipt', receiptId: 'psr_design_review',
+    intentHash: `0x${'4'.repeat(64)}`, executionHash: `0x${'8'.repeat(64)}`,
+    execution: { chainId: 8453, txHash: `0x${'1'.repeat(64)}`, status: 'CONFIRMED', confirmations: 12, finalityState: 'CONFIRMED', observedAt: 1_700_000_000 },
+    issuer: 'priorseal.test', issuedAt: 1_700_000_100, validUntil: 4_102_444_800, outcome: 'COMPLETED', reasonCodes: [],
+    binding: { bound: true, reasonCodes: [] }, algorithm: 'Ed25519', keyId: 'test-1', verifierVersion: 'test', signature: 'test',
+  }
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Allow local saving' }).click()
+  await page.evaluate((value) => localStorage.setItem('priorseal.local-session.v4', JSON.stringify({ intents: [], authorizations: [], receipts: [value], observations: [], observationJobs: [] })), receipt)
+  await page.goto('/app/receipts')
+  await expect(page.getByRole('heading', { name: 'Local receipts' })).toBeVisible()
+  await expect(page.getByText('psr_design_review')).toBeVisible()
+  await page.getByRole('button', { name: 'View' }).click()
+  await expect(page.getByRole('heading', { name: 'Evidence relationship' })).toBeVisible()
+  await expect(page.getByText('This page is displaying receipt claims. Run local verification before relying on signatures or hashes.')).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect.poll(() => page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().right)).toBeLessThanOrEqual(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await expect(page.getByRole('button', { name: 'Verify this receipt' })).toBeVisible()
+})
+
 test('developer routes load the key registry, rotation diagnostics and API reference', async ({ page }) => {
   await page.route('**/.well-known/priorseal-keys.json', async (route) => route.fulfill({ json: {
     schema: 'priorseal.keys.v1', issuer: 'priorseal.test', keys: [{ issuer: 'priorseal.test', keyId: 'key-1', algorithm: 'Ed25519', publicKey: 'test-public-key', status: 'active', validFrom: null, validUntil: null }],
@@ -61,6 +86,9 @@ test('developer routes load the key registry, rotation diagnostics and API refer
   await expect(page.getByRole('heading', { level: 1, name: 'Key registry' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'In-flight authorization and key rotation' })).toBeVisible()
   await expect(page.getByText('key-1', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Published keys' })).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   await page.goto('/app/api')
   await expect(page.getByRole('heading', { level: 1, name: 'API reference' })).toBeVisible()
 })
