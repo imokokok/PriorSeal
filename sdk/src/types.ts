@@ -3,7 +3,7 @@ export type ChainId = 1 | 8453 | 84532 | 42161
 export type ContextCommitment = { namespace: string; algorithm: 'keccak256' | 'sha256'; digest: string }
 export type ContextCommitmentMatch = {
   matched: boolean
-  code: 'OK' | 'CONTEXT_COMMITMENT_MISSING' | 'CONTEXT_COMMITMENT_AMBIGUOUS' | 'CONTEXT_COMMITMENT_ALGORITHM_MISMATCH' | 'CONTEXT_COMMITMENT_DIGEST_MISMATCH'
+  code: 'OK' | 'CONTEXT_COMMITMENT_MISSING' | 'CONTEXT_COMMITMENT_AMBIGUOUS' | 'CONTEXT_COMMITMENT_ALGORITHM_MISMATCH' | 'CONTEXT_COMMITMENT_DIGEST_MISMATCH' | 'CONTEXT_COMMITMENT_INVALID'
   commitment: ContextCommitment | null
 }
 
@@ -16,7 +16,8 @@ export type HeadlessMarketStateReceipt = {
   status: string
   source: string
   halt_detection: string
-  coverage: string
+  coverage?: string
+  reason?: string
   receipt_mode: string
   schema_version: string
   public_key_id: string
@@ -33,6 +34,7 @@ export type HeadlessMarketStatePolicy = {
   expectedMic: string
   allowedStatuses: string[]
   allowedReceiptModes?: string[]
+  /** Omit only when historical receipts without signed coverage are in scope. */
   requiredFeedState?: string
   expectedIssuer?: string
   expectedSchemaVersion?: string

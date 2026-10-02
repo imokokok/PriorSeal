@@ -45,5 +45,38 @@
     "schema_version": "v5.0",
     "public_key_id": "key_2026_v1",
     "signature": "aefd5a2ebc3c7327f9e6a64bccbac32c7a5f6d4fefa4a63ac871a3a7a596b95d2d4f177dab3a3aee4108db5ad28935fd86237f7a97ebfcb7fd7c536a1051940d"
-  }
+  },
+  "negative_vectors": [
+    {
+      "id": "execution_receipt_precedes_authority",
+      "authority_receipt_ref": "execution_receipt",
+      "execution_receipt_ref": "authority_receipt",
+      "authority_time": "2026-09-17T09:44:12.000Z",
+      "execution_time": "2026-09-17T09:44:20.000Z",
+      "expected_reason_code": "EXECUTION_RECEIPT_PRECEDES_AUTHORITY"
+    },
+    {
+      "id": "unknown_even_when_allowed",
+      "resign_authority_status": "UNKNOWN",
+      "expected_reason_code": "STATUS_NOT_ALLOWED"
+    },
+    {
+      "id": "halted_override_with_signed_reason",
+      "resign_authority_status": "HALTED",
+      "resign_authority_source": "OVERRIDE",
+      "resign_authority_reason": "circuit breaker",
+      "expected_reason_code": "STATUS_NOT_ALLOWED"
+    },
+    {
+      "id": "failed_feed_without_requirement",
+      "resign_authority_feed_state": "failed",
+      "expected_reason_code": "FEED_STATE_NOT_ALLOWED"
+    },
+    {
+      "id": "legacy_without_coverage_requires_feed",
+      "remove_authority_coverage": true,
+      "required_feed_state": "live",
+      "expected_reason_code": "FEED_STATE_UNAVAILABLE"
+    }
+  ]
 }

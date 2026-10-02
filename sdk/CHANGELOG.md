@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fail closed with structured results for malformed Headless market-state pair inputs; require the execution receipt to be issued no earlier than authority time.
+- Reject `UNKNOWN`, `HALTED`, and failed feed states regardless of caller status policy. Verify identified historical no-coverage and signed override-reason receipt layouts without treating them as malformed. Add signed negative vectors for receipt ordering, status, feed state, and field-set handling.
+- Clarify that `receipt_mode=live` does not establish authentication or payment. These beta verifier changes do not activate a production profile.
+
 ## 0.9.1 — 2026-09-30
 
 - Add a reviewed-swap replan comparison that identifies changed signed call fields without granting execution permission.

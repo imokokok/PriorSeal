@@ -5,11 +5,12 @@ import { readFile } from 'node:fs/promises'
 
 import {
   HEADLESS_MARKET_STATE_NAMESPACE,
+  canonicalHeadlessMarketStateReceiptBytes,
   headlessMarketStateCommitment,
   verifyHeadlessMarketStateReceipt,
   verifyHeadlessMarketStateReceiptPair,
 } from '../../sdk/dist/index.js'
-import type { Intent } from '../../sdk/dist/index.js'
+import type { HeadlessMarketStateReceipt, Intent } from '../../sdk/dist/index.js'
 
 const fixture = JSON.parse(await readFile(
   new URL('../../examples/headless-market-state-pair-v1/vectors.json', import.meta.url),
@@ -23,6 +24,31 @@ function intent(digest = fixture.authorization_context_commitment): Pick<Intent,
       algorithm: 'sha256',
       digest,
     }],
+  }
+}
+
+async function signedReceipt(changes: Record<string, unknown>): Promise<{
+  receipt: HeadlessMarketStateReceipt
+  key: { key_id: string; algorithm: 'Ed25519'; public_key: string }
+}> {
+  const pair = await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify'])
+  const publicBytes = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey))
+  const receipt = {
+    ...structuredClone(fixture.authority_receipt),
+    ...changes,
+    public_key_id: 'test_key',
+    signature: '0'.repeat(128),
+  } as HeadlessMarketStateReceipt
+  if (changes.coverage === undefined && Object.hasOwn(changes, 'coverage')) delete receipt.coverage
+  const signature = new Uint8Array(await crypto.subtle.sign(
+    'Ed25519',
+    pair.privateKey,
+    new Uint8Array(canonicalHeadlessMarketStateReceiptBytes(receipt)).buffer,
+  ))
+  receipt.signature = Buffer.from(signature).toString('hex')
+  return {
+    receipt,
+    key: { key_id: 'test_key', algorithm: 'Ed25519', public_key: Buffer.from(publicBytes).toString('hex') },
   }
 }
 
@@ -102,4 +128,108 @@ test('rejects tampering, stale evidence, wrong venues, reuse, and reversed pair 
     policy: fixture.policy,
   })
   assert.ok(reversed.reasonCodes.includes('INVALID_PAIR_TIMELINE'))
+})
+
+test('returns structured rejection for malformed pair inputs', async () => {
+  const base = {
+    intent: intent(),
+    authorityReceipt: fixture.authority_receipt,
+    executionReceipt: fixture.execution_receipt,
+    key: fixture.issuer_key,
+    authorityTime: fixture.authority_time,
+    executionTime: fixture.execution_time,
+    policy: fixture.policy,
+  }
+  const malformed = [
+    { ...base, authorityReceipt: null },
+    { ...base, intent: intent('not-a-digest') },
+    { ...base, intent: { contextCommitments: [
+      ...intent().contextCommitments!,
+      { namespace: 'unrelated.namespace', algorithm: 'sha256', digest: 'not-a-digest' },
+    ] } },
+  ]
+  for (const candidate of malformed) {
+    const result = await verifyHeadlessMarketStateReceiptPair(candidate as typeof base)
+    assert.equal(result.valid, false)
+    assert.ok(result.reasonCodes.length > 0)
+  }
+  const nullReceipt = await verifyHeadlessMarketStateReceiptPair(malformed[0] as typeof base)
+  assert.ok(nullReceipt.reasonCodes.includes('AUTHORITY_INVALID_RECEIPT_SHAPE'))
+  const nullPair = await verifyHeadlessMarketStateReceiptPair(null as unknown as typeof base)
+  assert.deepEqual(nullPair.reasonCodes, ['INVALID_PAIR_INPUT'])
+  for (const candidate of malformed.slice(1)) {
+    const result = await verifyHeadlessMarketStateReceiptPair(candidate as typeof base)
+    assert.ok(result.reasonCodes.includes('CONTEXT_COMMITMENT_INVALID'))
+  }
+
+  const mismatch = await verifyHeadlessMarketStateReceiptPair({ ...base, intent: intent(`0x${'0'.repeat(64)}`) })
+  assert.ok(mismatch.reasonCodes.includes('CONTEXT_COMMITMENT_DIGEST_MISMATCH'))
+  assert.equal(mismatch.authority.valid, true)
+
+  const invalidPolicy = await verifyHeadlessMarketStateReceipt(
+    fixture.authority_receipt,
+    fixture.issuer_key,
+    fixture.authority_time,
+    null as unknown as typeof fixture.policy,
+  )
+  assert.deepEqual(invalidPolicy.reasonCodes, ['INVALID_POLICY'])
+})
+
+test('rejects a receipt issued before authority time despite valid individual windows', async () => {
+  const vector = fixture.negative_vectors.find((item: { id: string }) => item.id === 'execution_receipt_precedes_authority')
+  const authorityReceipt = fixture[vector.authority_receipt_ref]
+  const executionReceipt = fixture[vector.execution_receipt_ref]
+  const authorityCommitment = await headlessMarketStateCommitment(authorityReceipt)
+  const result = await verifyHeadlessMarketStateReceiptPair({
+    intent: intent(authorityCommitment.digest),
+    authorityReceipt,
+    executionReceipt,
+    key: fixture.issuer_key,
+    authorityTime: vector.authority_time,
+    executionTime: vector.execution_time,
+    policy: fixture.policy,
+  })
+  assert.equal(result.authority.valid, true)
+  assert.equal(result.execution.valid, true)
+  assert.equal(result.authorizationBinding.matched, true)
+  assert.equal(result.valid, false)
+  assert.ok(result.reasonCodes.includes(vector.expected_reason_code))
+})
+
+test('classifies signed unsafe states, failed feed, override and legacy shapes', async () => {
+  for (const vector of fixture.negative_vectors.filter((item: { id: string }) => item.id !== 'execution_receipt_precedes_authority')) {
+    const changes: Record<string, unknown> = {}
+    if (vector.resign_authority_status) changes.status = vector.resign_authority_status
+    if (vector.resign_authority_source) changes.source = vector.resign_authority_source
+    if (vector.resign_authority_reason) changes.reason = vector.resign_authority_reason
+    if (vector.resign_authority_feed_state) {
+      changes.coverage = JSON.stringify({
+        ...JSON.parse(fixture.authority_receipt.coverage),
+        feed_state: vector.resign_authority_feed_state,
+      })
+    }
+    if (vector.remove_authority_coverage) changes.coverage = undefined
+    const { receipt, key } = await signedReceipt(changes)
+    const policy = {
+      ...fixture.policy,
+      allowedStatuses: vector.resign_authority_status ? [vector.resign_authority_status] : fixture.policy.allowedStatuses,
+      ...(vector.id === 'failed_feed_without_requirement' ? { requiredFeedState: undefined } : {}),
+      ...(vector.required_feed_state ? { requiredFeedState: vector.required_feed_state } : {}),
+    }
+    const result = await verifyHeadlessMarketStateReceipt(receipt, key, fixture.authority_time, policy)
+    assert.equal(result.valid, false, vector.id)
+    assert.ok(result.reasonCodes.includes(vector.expected_reason_code), vector.id)
+    assert.ok(!result.reasonCodes.includes('INVALID_RECEIPT_SHAPE'), vector.id)
+    assert.ok(!result.reasonCodes.includes('INVALID_SIGNATURE'), vector.id)
+  }
+})
+
+test('verifies a signed historical receipt without coverage when no feed requirement is set', async () => {
+  const { receipt, key } = await signedReceipt({ coverage: undefined })
+  const result = await verifyHeadlessMarketStateReceipt(receipt, key, fixture.authority_time, {
+    ...fixture.policy,
+    requiredFeedState: undefined,
+  })
+  assert.equal(result.valid, true)
+  assert.equal(result.coverage, null)
 })
