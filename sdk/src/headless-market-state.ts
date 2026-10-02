@@ -97,7 +97,7 @@ export async function verifyHeadlessMarketStateReceipt(
   }
 
   if (receipt.mic !== policy.expectedMic) reasonCodes.push('VENUE_MISMATCH')
-  if (receipt.status === 'UNKNOWN' || receipt.status === 'HALTED' || !policy.allowedStatuses.includes(receipt.status)) {
+  if ((receipt.status !== 'OPEN' && receipt.status !== 'CLOSED') || !policy.allowedStatuses.includes(receipt.status)) {
     reasonCodes.push('STATUS_NOT_ALLOWED')
   }
   if (!(policy.allowedReceiptModes ?? ['live']).includes(receipt.receipt_mode)) {

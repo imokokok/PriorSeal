@@ -61,6 +61,11 @@
       "expected_reason_code": "STATUS_NOT_ALLOWED"
     },
     {
+      "id": "unrecognized_status_even_when_allowed",
+      "resign_authority_status": "PAUSED",
+      "expected_reason_code": "STATUS_NOT_ALLOWED"
+    },
+    {
       "id": "halted_override_with_signed_reason",
       "resign_authority_status": "HALTED",
       "resign_authority_source": "OVERRIDE",
