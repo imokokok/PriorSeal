@@ -2,8 +2,8 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 're
 import { BrowserRouter, Route, Routes, useLocation, useNavigationType } from 'react-router-dom'
 import { PrivacyPreferences } from './PrivacyPreferences'
 import { loadConsole } from './route-loaders'
+import { LandingPage } from './landing/LandingPage'
 
-const LandingPage = lazy(() => import('./landing/LandingPage').then((module) => ({ default: module.LandingPage })))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((module) => ({ default: module.PrivacyPage })))
 const PublicNotFoundPage = lazy(() => import('./pages/OutcomePages').then((module) => ({ default: module.PublicNotFoundPage })))
 const Console = lazy(loadConsole)

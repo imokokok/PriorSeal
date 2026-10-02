@@ -20,13 +20,10 @@ async function measurement(pattern: RegExp, label: string, limits: BudgetLimits)
 }
 
 const checks = await Promise.all([
-  measurement(/^index-.*\.js$/, 'application entry', { raw: 250_000, gzip: 80_000 }),
-  measurement(/^LandingPage-.*\.js$/, 'landing route', { raw: 20_000, gzip: 6_000 }),
-  measurement(/^brand-.*\.js$/, 'brand shared chunk', { raw: 2_000, gzip: 1_000 }),
+  measurement(/^index-.*\.js$/, 'application entry', { raw: 270_000, gzip: 85_000 }),
   measurement(/^App-.*\.js$/, 'console route', { raw: 96_000, gzip: 28_000 }),
   measurement(/^verifier-.*\.js$/, 'offline verifier', { raw: 520_000, gzip: 130_000 }),
-  measurement(/^index-.*\.css$/, 'shared CSS', { raw: 40_000, gzip: 9_000 }),
-  measurement(/^LandingPage-.*\.css$/, 'landing CSS', { raw: 38_000, gzip: 8_000 }),
+  measurement(/^index-.*\.css$/, 'entry CSS', { raw: 78_000, gzip: 16_000 }),
   measurement(/^App-.*\.css$/, 'console CSS', { raw: 30_000, gzip: 6_000 }),
   measurement(/^KeysPage-.*\.css$/, 'key registry CSS', { raw: 5_000, gzip: 1_500 }),
   measurement(/^SdkPage-.*\.css$/, 'SDK page CSS', { raw: 4_500, gzip: 1_500 }),
@@ -41,7 +38,7 @@ const checks = await Promise.all([
   measurement(/^EvidenceRelationshipView-.*\.css$/, 'evidence relationship CSS', { raw: 5_500, gzip: 1_600 }),
 ]);
 
-const initial = checks.filter(({ label }) => ['application entry', 'landing route', 'brand shared chunk', 'shared CSS', 'landing CSS'].includes(label));
+const initial = checks.filter(({ label }) => ['application entry', 'entry CSS'].includes(label));
 const fontFiles = files.filter((file) => file.endsWith('.woff2'));
 const fontBytes = (await Promise.all(fontFiles.map((file) => stat(new URL(`assets/${file}`, root))))).reduce((total, item) => total + item.size, 0);
 const mobileInitialBytes = initial.reduce((total, item) => total + item.gzip, 0) + fontBytes;
