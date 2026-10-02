@@ -5,28 +5,18 @@ import { retryDelaySeconds } from './cloudflare-retry.mjs';
 import { processObservationQueue } from './cloudflare-observations.mjs';
 import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter } from './cloudflare-bindings.mjs';
 import { errorMessage } from '../shared/error-code.mjs';
+import { createSchemaGuard } from './cloudflare-schema.mjs';
 import type { ObservationJob } from '../application/observations/observation-worker.mjs';
 
 type Runtime = Awaited<ReturnType<typeof createPriorSealRuntime>>;
-
-async function assertSchemaCached(database: D1Database, config: ReturnType<typeof loadRuntimeConfig>, context: ExecutionContext) {
-  const cache = (caches as CacheStorage & { default: Cache }).default;
-  const cacheKey = new Request(`https://priorseal.internal/schema/d1-0001/${config.preExecutionProofMode}/${config.archiveCredentials ? 'archive' : 'public'}`);
-  if (await cache.match(cacheKey)) return;
-  const required = ['authorization_log', 'authorization_log_merkle_nodes', 'authorizations', 'observation_jobs', 'receipts'];
-  if (config.archiveCredentials) required.push('project_evidence_archive');
-  if (config.preExecutionProofMode === 'witness-quorum') required.push('witness_attestations');
-  const rows = await database.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${required.map(() => '?').join(',')})`).bind(...required).all<{ name: string }>();
-  if (rows.results.length !== required.length) throw new TypeError('Required D1 production tables are missing');
-  context.waitUntil(cache.put(cacheKey, new Response('ready', { headers: { 'cache-control': 'public, max-age=300' } })));
-}
+const assertSchemaCached = createSchemaGuard();
 
 async function withRuntime<T, R extends { server?: Runtime['server'] }>(environment: Env, context: ExecutionContext, createRuntime: (options: Parameters<typeof createPriorSealRuntime>[0]) => Promise<R>, operation: (runtime: R) => Promise<T>): Promise<T> {
   const runtimeEnvironment = cloudflareRuntimeEnvironment(environment);
   const config = loadRuntimeConfig(runtimeEnvironment);
   let runtime: R | undefined;
   try {
-    await assertSchemaCached(environment.DB, config, context);
+    await assertSchemaCached(environment.DB, config, context, (caches as CacheStorage & { default: Cache }).default);
     runtime = await createRuntime({
       config,
       environment: runtimeEnvironment,
