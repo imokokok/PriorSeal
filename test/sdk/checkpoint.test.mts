@@ -93,13 +93,31 @@ test('checkpoint recovery accepts a valid string chain ID and omitted optional n
   assert.equal(f.stats().signs, 1);
 });
 
-test('expired prepare never opens wallet signing and observation timeout preserves a resumable job', async () => {
+test('expired prepare never opens wallet signing', async () => {
   const f = setup({ expire: true });
   await assert.rejects(f.client.authorizeWithWallet(f.input, f.provider), { code: 'AUTHORIZATION_EXPIRED' });
   assert.equal(f.stats().signs, 0);
+});
+
+test('observation timeout before the first response preserves the resumable job ID', async () => {
+  const client = createPriorSealClient({ fetch: (_url, init) => new Promise<Response>((_resolve, reject) => {
+    const signal = init?.signal;
+    if (!signal) throw new TypeError('Expected an abort signal');
+    if (signal.aborted) { reject(signal.reason); return; }
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  }) });
+  await assert.rejects(client.waitForObservationJob('job-1', { timeoutMs: 1, pollIntervalMs: 10 }), error => hasDetails(error, 'OBSERVATION_WAIT_TIMEOUT', details => details.jobId === 'job-1' && details.authorizationId === undefined));
+});
+
+test('observation timeout after a response preserves the last known authorization and transaction', async t => {
+  let now = 1_000;
+  t.mock.method(Date, 'now', () => now);
   const job = { jobId: 'job-1', input: { authorizationId: 'auth-1', txHash: `0x${'1'.repeat(64)}` }, state: 'RETRY_WAIT', nextAttemptAt: Date.now() + 60_000 };
-  const client = createPriorSealClient({ fetch: async () => Response.json(job) });
-  await assert.rejects(client.waitForObservationJob('job-1', { timeoutMs: 1, pollIntervalMs: 10 }), error => hasDetails(error, 'OBSERVATION_WAIT_TIMEOUT', details => details.jobId === 'job-1' && details.authorizationId === 'auth-1'));
+  const client = createPriorSealClient({ fetch: async () => {
+    now = 2_001;
+    return Response.json(job);
+  } });
+  await assert.rejects(client.waitForObservationJob('job-1', { timeoutMs: 1_000, pollIntervalMs: 10 }), error => hasDetails(error, 'OBSERVATION_WAIT_TIMEOUT', details => details.jobId === 'job-1' && details.authorizationId === 'auth-1' && details.txHash === job.input.txHash));
 });
 
 const checkpointMutations: Array<[string, (state: AuthorizationCheckpoint) => void]> = [
