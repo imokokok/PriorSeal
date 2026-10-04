@@ -43,7 +43,8 @@ const onDemandToolSources = [
   "scripts/compile-contracts.mts",
   "scripts/deploy-worker.mts",
   "scripts/preview-web.mts",
-  "scripts/verify-rwa-execution-profiles.mts"
+  "scripts/verify-rwa-execution-profiles.mts",
+  "scripts/verify-wak-base-sepolia-router.mts"
 ].map((path) => join(projectRoot, path));
 const onDemandOperationSources = [
   "scripts/prepare-transparency-anchor.mts",
