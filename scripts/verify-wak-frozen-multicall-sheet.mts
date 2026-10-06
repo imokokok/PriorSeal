@@ -14,11 +14,19 @@
  *   4. policyCommitmentDigest：同算法按 policyDecision 字段重算；
  *   5. QuoterV2 报价：struct 参数（tokenIn,tokenOut,amountIn,fee,sqrtPriceLimitX96）
  *      两个独立 RPC 重读，核对 quotedAmountOut／amountOutMinimum／sqrtPriceX96After／
- *      quoteGasEstimate，并按 maxSlippageBps 复核下限取整方向（floor 允许的滑点
- *      会略超 500bps，ceil 才严格落在上限内）；
+ *      quoteGasEstimate；amountOutMinimum 必须 == ceil(quote×(10000−bps)/10000)
+ *      （2026-10-06 IN-07 采纳的 ceil 约定，floor 会允许滑点略超 500bps）；
  *   6. routerBytecode.keccak256 与我方实测常量比对 + 双 RPC 现场重读；
  *   7. deadline 算术（routerCall.deadline = generatedAt + 600）与
  *      explicitLiveWindowNotes（同链、异 token）。
+ *
+ * 2026-10-06 v2（IN-07 五项修正强制化，不再宽容陈旧字段）：
+ *   - wak.envelope.nonce 必须 == transaction.nonce（one source, one value）；
+ *   - priorSeal.expected 必须绑定实际调用：asset 为完整 40 hex 的 WETH erc20
+ *     CAIP-19、amount == approvedTest.amountInWei、transactionValue == tx.value == 0、
+ *     expected.nonce == transaction.nonce、expected.calldataHash == tx.calldataHash；
+ *   - constraints.maxGasUsed 必须 == transaction.gas（冻结 gas limit）；
+ *   - network.rpcSnapshotBlock 必须存在、不得是旧硬编码 47668136、不得超前 live head。
  *
  * 全程只读（eth_call / eth_getCode / eth_blockNumber），不签名、不广播、不消耗 nonce。
  *
@@ -89,6 +97,16 @@ async function main(): Promise<void> {
   console.log('status:', sheet.status, '| authorization:', sheet.authorization);
   console.log('wakCommit:', sheet.wakCommit);
   console.log('generatedAt:', sheet.generatedAt);
+
+  section('1b] rpcSnapshotBlock (live-read, not the old hardcoded value)');
+  const network = (sheet.network ?? {}) as Record<string, string>;
+  const snap = network.rpcSnapshotBlock;
+  if (!snap) throw new Error('sheet.network.rpcSnapshotBlock missing');
+  if (snap === '47668136') throw new Error('rpcSnapshotBlock is the old hardcoded 47668136; five-correction round requires the live-read head');
+  const headNow = await clients[0].client.getBlockNumber();
+  const snapNum = BigInt(snap);
+  if (snapNum > headNow) throw new Error(`rpcSnapshotBlock ${snap} is ahead of live head ${headNow}`);
+  console.log(`rpcSnapshotBlock=${snap} vs live head=${headNow} (lag ${headNow - snapNum} blocks; sheet is re-frozen at the live window)`);
 
   section('2] call shape (decode -> re-encode round-trip)');
   const data = tx.data;
@@ -165,9 +183,10 @@ async function main(): Promise<void> {
     if (match) envelopeMatched = nonce;
   }
   if (envelopeMatched === null) throw new Error('envelopeDigest does not match any nonce candidate');
-  if (envelopeMatched !== envelope.nonce) {
-    console.log(`  NOTE: sheet field wak.envelope.nonce=${envelope.nonce} is STALE; digest binds nonce=${envelopeMatched} (transaction nonce).`);
+  if (envelope.nonce !== tx.nonce) {
+    throw new Error(`wak.envelope.nonce=${envelope.nonce} != transaction.nonce=${tx.nonce}: five-correction round requires one source, one value (287)`);
   }
+  console.log(`envelope.nonce == transaction.nonce == ${tx.nonce}: OK (single source)`);
 
   section('5] policyCommitmentDigest (same algorithm)');
   const policyPayload = {
@@ -183,6 +202,28 @@ async function main(): Promise<void> {
   const policyMatch = policyDigest.toLowerCase() === (wak.policyCommitmentDigest as string).toLowerCase();
   console.log('recomputed:', policyDigest, policyMatch ? '=> MATCHES SHEET' : '=> MISMATCH');
   if (!policyMatch) throw new Error('policyCommitmentDigest mismatch');
+
+  section('5b] priorSeal.expected binding (five-correction round, binds the ACTUAL call)');
+  const ps = sheet.priorSeal as Record<string, unknown> | undefined;
+  if (!ps || typeof ps !== 'object') throw new Error('sheet.priorSeal missing');
+  const expected = ps.expected as Record<string, string> | undefined;
+  if (!expected) throw new Error('sheet.priorSeal.expected missing');
+  const constraints = ((expected.constraints as unknown) ?? {}) as Record<string, string>;
+  const assetStr = String(expected.asset ?? '');
+  const assetFullHex = /^eip155:84532\/erc20:0x[0-9a-fA-F]{40}$/.test(assetStr);
+  const assetIsWeth = assetStr.toLowerCase() === `eip155:84532/erc20:${String(contracts.weth).toLowerCase()}`;
+  const approved = sheet.approvedTest as Record<string, string>;
+  const psChecks: Array<[string, boolean]> = [
+    ['asset is full 40-hex erc20 CAIP-19 (not truncated)', assetFullHex],
+    ['asset == WETH (the spent token)', assetIsWeth],
+    ['amount == approvedTest.amountInWei', String(expected.amount) === String(approved.amountInWei)],
+    ['transactionValue == tx.value == 0', String(expected.transactionValue) === String(tx.value) && BigInt(tx.value) === 0n],
+    ['expected.nonce == transaction.nonce', String(expected.nonce) === String(tx.nonce)],
+    ['expected.calldataHash == tx.calldataHash', String(expected.calldataHash).toLowerCase() === tx.calldataHash.toLowerCase()],
+    ['constraints.maxGasUsed == transaction.gas (frozen gas limit)', String(constraints.maxGasUsed) === String(tx.gas)],
+  ];
+  for (const [name, ok] of psChecks) console.log(`  ${ok ? 'OK  ' : 'FAIL'} ${name}`);
+  if (psChecks.some(([, ok]) => !ok)) throw new Error('priorSeal.expected binding check failed');
 
   section('6] QuoterV2 re-read (struct params, two RPCs) + slippage rounding');
   const quoterAbi = parseAbi([
@@ -217,11 +258,10 @@ async function main(): Promise<void> {
     const ceilMin = (quoteNum * BigInt(10000 - maxSlippageBps) + 9999n) / 10000n;
     const declaredMin = BigInt(quote.amountOutMinimum);
     console.log(`  min=${declaredMin} | floor(quote*(1-${maxSlippageBps}bps))=${floorMin} | ceil=${ceilMin}`);
-    if (declaredMin === floorMin && floorMin !== ceilMin) {
-      console.log(`  NOTE: floor() min permits slippage slightly above ${maxSlippageBps}bps (grain effect); ceil() is the strict convention.`);
-    } else if (declaredMin < floorMin) {
-      console.log(`  FAIL: min below floor(quote*(1-bps)) — exceeds declared max slippage.`);
+    if (declaredMin !== ceilMin) {
+      throw new Error(`amountOutMinimum ${declaredMin} != ceil(quote*(1-${maxSlippageBps}bps))=${ceilMin}: agreed ceil convention (five-correction round)`);
     }
+    console.log(`  amountOutMinimum == ceil(quote*(1-${maxSlippageBps}bps)): OK (strict ${maxSlippageBps}bps cap)`);
   }
 
   section('7] routerBytecode keccak256 (constant + live double-RPC re-read)');
