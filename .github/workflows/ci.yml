@@ -35,6 +35,47 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Require repository owner commit identity
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_PATH: ${{ github.event_path }}
+        run: |
+          set -euo pipefail
+
+          expected='imokokok <145034722+imokokok@users.noreply.github.com>'
+          case "$EVENT_NAME" in
+            pull_request)
+              commits_output="$(git rev-list --reverse "$PR_BASE_SHA..$PR_HEAD_SHA")"
+              if [[ -n "$commits_output" ]]; then mapfile -t commits <<< "$commits_output"; else commits=(); fi
+              ;;
+            push)
+              if [[ "$EVENT_BEFORE" == '0000000000000000000000000000000000000000' ]]; then
+                commits_output="$(jq -r '.[].id' "$EVENT_PATH")"
+              else
+                commits_output="$(git rev-list --reverse "$EVENT_BEFORE..$HEAD_SHA")"
+              fi
+              if [[ -n "$commits_output" ]]; then mapfile -t commits <<< "$commits_output"; else commits=(); fi
+              ;;
+            *)
+              commits=("$HEAD_SHA")
+              ;;
+          esac
+
+          for commit in "${commits[@]}"; do
+            identity="$(git show -s --format='%an <%ae>%n%cn <%ce>' "$commit")"
+            if [[ "$identity" != "$expected"$'\n'"$expected" ]]; then
+              echo "::error::Commit $commit must use $expected for both author and committer."
+              exit 1
+            fi
+          done
+
+          echo "Validated ${#commits[@]} commit(s) with the required author and committer identity."
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
