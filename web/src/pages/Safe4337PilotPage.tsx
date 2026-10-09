@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { GenericFeeEstimator, Safe4337Pack } from '@safe-global/relay-kit'
-import { formatEther } from 'viem'
-import { buildERC4337UserOperationIntent, generateAuthorizationNonce } from 'priorseal-sdk'
+import { formatEther, keccak256 } from 'viem'
+import { buildERC4337UserOperationIntent, decodeSafe4337CallData, generateAuthorizationNonce } from 'priorseal-sdk'
 import { CodeValue, Notice, PageHeader, Status } from '../components'
 import { api, getCapabilities, type Capabilities } from '../lib/api'
 import { downloadJson } from '../lib/download'
@@ -78,6 +78,48 @@ async function pilotRpcResult(method: string, params: unknown[]) {
   if (!response.ok || !isRecord(envelope) || envelope.jsonrpc !== '2.0' || envelope.id !== id || ('error' in envelope) === ('result' in envelope)) throw new Error('Base Sepolia RPC lookup failed')
   if ('error' in envelope) throw new Error('Base Sepolia RPC lookup failed')
   return envelope.result
+}
+
+async function pilotBundlerResult(method: string, params: unknown[]) {
+  const id = crypto.randomUUID()
+  const response = await fetch(BUNDLER_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
+    signal: AbortSignal.timeout(18_000),
+  })
+  const envelope: unknown = await response.json()
+  if (!response.ok || !isRecord(envelope) || envelope.jsonrpc !== '2.0' || envelope.id !== id || ('error' in envelope) === ('result' in envelope)) throw new Error('Base Sepolia bundler request failed')
+  if ('error' in envelope) throw new Error('Base Sepolia bundler request failed')
+  return envelope.result
+}
+
+function recoveryGas(record: PilotRecoveryRecord, balance: bigint): GasSummary {
+  const operation = record.userOperation
+  const quantity = (field: string) => {
+    const value = operation[field]
+    if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) throw new Error(`Saved UserOperation ${field} is invalid`)
+    return BigInt(value)
+  }
+  const callGasLimit = quantity('callGasLimit')
+  const verificationGasLimit = quantity('verificationGasLimit')
+  const preVerificationGas = quantity('preVerificationGas')
+  const maxFeePerGas = quantity('maxFeePerGas')
+  const maxCost = (callGasLimit + verificationGasLimit + preVerificationGas) * maxFeePerGas
+  return { callGasLimit, verificationGasLimit, preVerificationGas, maxFeePerGas, maxCost, balance, nonce: quantity('nonce').toString() }
+}
+
+function bundlerUserOperation(operation: Record<string, unknown>) {
+  const quantities = ['nonce', 'callGasLimit', 'verificationGasLimit', 'preVerificationGas', 'maxFeePerGas', 'maxPriorityFeePerGas', 'paymasterVerificationGasLimit', 'paymasterPostOpGasLimit'] as const
+  const result = { ...operation }
+  for (const field of quantities) {
+    const value = operation[field]
+    if (value !== undefined && value !== null) {
+      if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) throw new Error(`Saved UserOperation ${field} is invalid`)
+      result[field] = `0x${BigInt(value).toString(16)}`
+    }
+  }
+  return result
 }
 
 async function findUserOperationEventTransactionHash(userOperationHash: string) {
@@ -187,7 +229,7 @@ export function Safe4337PilotPage() {
   const authorizationRef = useRef<AuthorizationRecord | null>(null)
   const completedRunRef = useRef<PilotRecoveryRecord | null>(null)
   const [recoveryState, setRecoveryState] = useState(() => readPilotRecoveryRecord())
-  const [phase, setPhase] = useState<PilotPhase>(() => recoveryState.record ? 'submitted' : 'idle')
+  const [phase, setPhase] = useState<PilotPhase>(() => recoveryState.record ? recoveryState.record.stage === 'AUTHORIZED' && !recoveryState.record.transactionHash ? 'authorized' : 'submitted' : 'idle')
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [account, setAccount] = useState('')
   const [gas, setGas] = useState<GasSummary | null>(null)
@@ -198,7 +240,7 @@ export function Safe4337PilotPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [lookupStatus, setLookupStatus] = useState(() => recoveryState.record?.stage === 'SUBMITTING'
-    ? 'Submission status is uncertain. Use receipt lookup only; do not submit this operation again.'
+    ? 'Submission status is uncertain. Reconcile the saved hash first; any retry requires a fresh authorization and a separate review.'
     : recoveryState.record?.transactionHash ? 'The transaction hash is saved. Resume PriorSeal observation without relying on the bundler.'
       : recoveryState.record ? 'A saved operation is ready for read-only receipt lookup.' : '')
 
@@ -215,6 +257,67 @@ export function Safe4337PilotPage() {
   function clearRecovery() {
     try { clearPilotRecoveryRecord() } catch { /* The final evidence remains available in this page session. */ }
     setRecoveryState({ record: null, error: null })
+  }
+
+  async function checkRecoveryPreflight(recovery: PilotRecoveryRecord) {
+    const provider = wallet()
+    const accounts = await provider.request({ method: 'eth_accounts' })
+    const account = Array.isArray(accounts) && typeof accounts[0] === 'string' ? accounts[0].toLowerCase() : ''
+    if (account !== PILOT_OWNER.toLowerCase()) throw new Error('Connect the configured owner wallet before recovery.')
+    const chain = await provider.request({ method: 'eth_chainId' })
+    if (typeof chain !== 'string' || Number(BigInt(chain)) !== PILOT_CHAIN_ID) throw new Error('Switch MetaMask to Base Sepolia before recovery.')
+    const operation = recovery.userOperation
+    if (typeof operation.sender !== 'string' || operation.sender.toLowerCase() !== PILOT_SAFE.toLowerCase()) throw new Error('Saved UserOperation sender does not match the pilot Safe.')
+    const accountCall = decodeSafe4337CallData(operation.callData)
+    if (accountCall.target.toLowerCase() !== PILOT_OWNER.toLowerCase() || accountCall.value !== '0' || accountCall.dataHash.toLowerCase() !== keccak256('0x').toLowerCase()) throw new Error('Saved UserOperation is not the reviewed zero-value owner CALL.')
+    if ((operation.factory !== undefined && operation.factory !== null && operation.factory !== '0x') || (operation.paymaster !== undefined && operation.paymaster !== null && operation.paymaster !== '0x')) throw new Error('Saved UserOperation has an unsupported factory or paymaster.')
+    if (typeof operation.signature !== 'string' || !/^0x[0-9a-f]+$/i.test(operation.signature) || operation.signature.length < 26) throw new Error('Saved Safe operation signature is invalid.')
+    const now = BigInt(Math.floor(Date.now() / 1000))
+    const validAfter = BigInt(`0x${operation.signature.slice(2, 14)}`)
+    const validUntil = BigInt(`0x${operation.signature.slice(14, 26)}`)
+    if (validAfter > now || (validUntil !== 0n && now >= validUntil)) throw new Error('Saved Safe operation signature is outside its validity window; a fresh Safe signature is required.')
+
+    const pack = await Safe4337Pack.init({
+      provider: provider as never,
+      signer: PILOT_OWNER,
+      bundlerUrl: BUNDLER_URL,
+      safeModulesVersion: '0.3.0',
+      customContracts: { entryPointAddress: PILOT_ENTRY_POINT, safe4337ModuleAddress: PILOT_MODULE },
+      options: { safeAddress: PILOT_SAFE },
+    })
+    if (Number(await pack.getChainId()) !== PILOT_CHAIN_ID) throw new Error('The configured bundler is not connected to Base Sepolia.')
+    if (!(await pack.getSupportedEntryPoints()).some((address) => address.toLowerCase() === PILOT_ENTRY_POINT.toLowerCase())) throw new Error('The configured bundler does not support the pinned EntryPoint v0.7.')
+
+    const [receipt, knownOperation, eventTransactionHash] = await Promise.all([
+      pack.getUserOperationReceipt(recovery.userOperationHash),
+      pack.getUserOperationByHash(recovery.userOperationHash),
+      findUserOperationEventTransactionHash(recovery.userOperationHash),
+    ])
+    if (receipt) {
+      if (receipt.userOpHash.toLowerCase() !== recovery.userOperationHash.toLowerCase() || receipt.sender.toLowerCase() !== PILOT_SAFE.toLowerCase() || !userOperationHashPattern.test(receipt.receipt.transactionHash)) throw new Error('Bundler returned a receipt that does not match this saved UserOperation.')
+      return { pack, provider, account, transactionHash: receipt.receipt.transactionHash, gas: null }
+    }
+    if (eventTransactionHash) return { pack, provider, account, transactionHash: eventTransactionHash, gas: null }
+    if (knownOperation) {
+      const transactionHash = isRecord(knownOperation) ? knownOperation.transactionHash : null
+      if (typeof transactionHash === 'string' && userOperationHashPattern.test(transactionHash)) return { pack, provider, account, transactionHash, gas: null }
+      throw new Error('The bundler still knows this UserOperation. Keep using read-only lookup; do not resubmit while it may be pending.')
+    }
+
+    const nonce = BigInt(String(operation.nonce))
+    const nonceKey = nonce >> 64n
+    const nonceCallData = `0x35567e1a${PILOT_SAFE.slice(2).toLowerCase().padStart(64, '0')}${nonceKey.toString(16).padStart(64, '0')}`
+    const [rpcChainId, nonceResult, balanceResult] = await Promise.all([
+      pilotRpcResult('eth_chainId', []),
+      pilotRpcResult('eth_call', [{ to: PILOT_ENTRY_POINT, data: nonceCallData }, 'latest']),
+      pilotRpcResult('eth_getBalance', [PILOT_SAFE, 'latest']),
+    ])
+    if (typeof rpcChainId !== 'string' || Number(BigInt(rpcChainId)) !== PILOT_CHAIN_ID) throw new Error('The read-only RPC is not connected to Base Sepolia.')
+    if (typeof nonceResult !== 'string' || !/^0x[0-9a-f]+$/i.test(nonceResult) || BigInt(nonceResult) !== nonce) throw new Error('The Safe nonce changed; the saved UserOperation must not be resubmitted.')
+    if (typeof balanceResult !== 'string' || !/^0x[0-9a-f]+$/i.test(balanceResult)) throw new Error('Base Sepolia RPC returned an invalid Safe balance.')
+    const gas = recoveryGas(recovery, BigInt(balanceResult))
+    if (gas.maxCost >= gas.balance) throw new Error('The Safe balance is below the saved UserOperation maximum fee.')
+    return { pack, provider, account, transactionHash: null, gas }
   }
 
   function wallet() {
@@ -332,6 +435,81 @@ export function Safe4337PilotPage() {
     } catch (caught) { if (caught !== reviewDeclined) setError(cleanError(caught)) } finally { setBusy(false) }
   }
 
+  async function refreshRecoveryAuthorization() {
+    const recovery = recoveryState.record
+    if (!recovery || recovery.transactionHash) { setError('There is no unobserved saved UserOperation to reauthorize.'); return }
+    if (!capabilities?.workflowReady || !capabilities.chains.includes(PILOT_CHAIN_ID) || !capabilities.executionProfiles.includes('priorseal.execution-profile.erc4337-user-operation.v1') || !capabilities.authorizers.includes('eip712')) { setError('The local PriorSeal API is not ready for a fresh Base Sepolia authorization.'); return }
+    setBusy(true); setError('')
+    const reviewDeclined = new Error('Canonical PriorSeal authorization review declined')
+    try {
+      const preflight = await checkRecoveryPreflight(recovery)
+      packRef.current = preflight.pack
+      if (preflight.transactionHash) {
+        await finishObservation(recovery.authorizationId, recovery, preflight.transactionHash)
+        return
+      }
+      if (!preflight.gas) throw new Error('Recovery preflight did not return a gas summary.')
+      setAccount(preflight.account)
+      setGas(preflight.gas)
+      const now = Math.floor(Date.now() / 1000)
+      const intent = buildERC4337UserOperationIntent({
+        chainId: PILOT_CHAIN_ID,
+        entryPoint: PILOT_ENTRY_POINT,
+        entryPointCodeHash: PILOT_ENTRY_POINT_CODE_HASH,
+        entryPointVersion: '0.7',
+        accountCallProfile: 'safe-4337.v1',
+        userOperation: recovery.userOperation,
+        intentId: 'safe4337-recovery-' + crypto.randomUUID().replaceAll('-', '').slice(0, 16),
+        validUntil: now + 3600,
+        constraints: {
+          minConfirmations: capabilities.minConfirmations ?? 0,
+          ...(capabilities.maxToleratedReorgDepth == null ? {} : { maxToleratedReorgDepth: capabilities.maxToleratedReorgDepth }),
+          ...(capabilities.finalityRequirement === 'RPC_FINALIZED' ? { finalityRequirement: 'RPC_FINALIZED' as const } : {}),
+        },
+      })
+      if (intent.userOperationHash?.toLowerCase() !== recovery.userOperationHash.toLowerCase()) throw new Error('The refreshed authorization would not bind the exact saved UserOperation.')
+      const review = [
+        'Review a fresh PriorSeal authorization for the existing signed Safe operation. This signs authorization data; it does not broadcast the UserOperation.',
+        '',
+        'Safe: ' + PILOT_SAFE,
+        'Target: ' + PILOT_OWNER,
+        'Value: 0 ETH',
+        'Calldata: empty',
+        'Current maximum fee: ' + formatEth(preflight.gas.maxCost),
+        'Current Safe balance: ' + formatEth(preflight.gas.balance),
+        'UserOperation hash: ' + recovery.userOperationHash,
+        'Authorization valid until: ' + new Date(intent.validUntil * 1000).toISOString(),
+      ].join('\n')
+      if (!window.confirm(review)) return
+
+      const { accepted } = await api.authorizeWithWallet({
+        intent,
+        principal: { type: 'user', id: 'wallet:' + preflight.account.slice(2) },
+        delegate: { agentId: 'agent:' + PILOT_SAFE.slice(2), executor: PILOT_SAFE },
+        account: preflight.account,
+        issuedAt: now,
+        notBefore: now,
+        expiresAt: intent.validUntil,
+        authorizationNonce: generateAuthorizationNonce(),
+        maxUses: '1',
+        audience: capabilities.audience,
+      }, preflight.provider, {
+        onCheckpoint(checkpoint) {
+          if (checkpoint.stage === 'PREPARED' && !window.confirm('Review the new canonical PriorSeal authorization before MetaMask opens:\n\n' + JSON.stringify({ ...checkpoint.prepared.authorization.intent, intentHash: checkpoint.prepared.authorization.intentHash }, null, 2))) throw reviewDeclined
+        },
+      })
+      const record: AuthorizationRecord = { authorization: accepted.authorization, acceptance: accepted.acceptance, policyEvidence: accepted.policyEvidence, timestampEvidence: accepted.timestampEvidence, witnessEvidence: accepted.witnessEvidence, status: 'ACCEPTED', boundTxHash: null, uses: 0 }
+      authorizationRef.current = record
+      intentRef.current = intent
+      session.saveIntent(accepted.authorization.intent)
+      session.saveAuthorization(record)
+      setAuthorizationId(accepted.authorization.authorizationId)
+      setLookupStatus('Fresh PriorSeal authorization accepted for the saved operation. Review the exact hash and fee before submission.')
+      saveRecovery(createPilotRecoveryRecord({ userOperation: recovery.userOperation, authorizationId: accepted.authorization.authorizationId, stage: 'AUTHORIZED' }))
+      setPhase('authorized')
+    } catch (caught) { if (caught !== reviewDeclined) setError(cleanError(caught)) } finally { setBusy(false) }
+  }
+
   async function submitAndObserve() {
     const pack = packRef.current
     const operation = signedOperationRef.current
@@ -348,9 +526,58 @@ export function Safe4337PilotPage() {
       setPhase('submitted')
       const lookup = await waitForUserOperationInclusion(pack, submittedHash, setLookupStatus)
       if (!lookup.transactionHash) throw new Error(lookup.providerUnavailable
-        ? `Receipt and chain-event lookup is currently unavailable for ${submittedHash}. The recovery checkpoint is retained; retry later and do not submit again.`
+        ? `Receipt and chain-event lookup is currently unavailable for ${submittedHash}. The recovery checkpoint is retained; use read-only reconciliation and only consider a reviewed retry after refreshing authorization.`
         : `No receipt or matching EntryPoint event is available yet for ${submittedHash}. The recovery checkpoint is retained; retry later and do not submit again.`)
       await finishObservation(authorization.authorization.authorizationId, recovery, lookup.transactionHash)
+    } catch (caught) { setError(cleanError(caught)) } finally { setBusy(false) }
+  }
+
+  async function submitSavedRecovery() {
+    const recovery = recoveryState.record
+    if (!recovery || recovery.stage !== 'AUTHORIZED' || recovery.transactionHash) { setError('Refresh authorization for the saved operation before submitting it.'); return }
+    setBusy(true); setError('')
+    try {
+      const accepted = authorizationRef.current ?? await api.getAuthorization(recovery.authorizationId)
+      if (accepted.acceptance.status !== 'ACCEPTED'
+        || accepted.acceptance.authorizationId !== recovery.authorizationId
+        || accepted.authorization.intent.userOperationHash?.toLowerCase() !== recovery.userOperationHash.toLowerCase()) throw new Error('The saved authorization does not accept this exact UserOperation.')
+      if (Date.now() / 1000 >= accepted.authorization.intent.validUntil) throw new Error('The PriorSeal authorization expired. Refresh it before submitting this saved operation.')
+      const preflight = await checkRecoveryPreflight(recovery)
+      packRef.current = preflight.pack
+      if (preflight.transactionHash) {
+        await finishObservation(recovery.authorizationId, recovery, preflight.transactionHash)
+        return
+      }
+      if (!preflight.gas) throw new Error('Recovery preflight did not return a gas summary.')
+      setGas(preflight.gas)
+      const review = [
+        'Submit the exact saved UserOperation to the configured Base Sepolia bundler?',
+        '',
+        'This is the same signed operation and hash previously attempted; no new Safe operation will be created.',
+        'An unknown bundler could still hold the earlier attempt. Duplicate inclusion attempts can waste test gas.',
+        '',
+        'Safe: ' + PILOT_SAFE,
+        'Target: ' + PILOT_OWNER,
+        'Value: 0 ETH',
+        'Calldata: empty',
+        'Maximum fee: ' + formatEth(preflight.gas.maxCost),
+        'Current Safe balance: ' + formatEth(preflight.gas.balance),
+        'UserOperation hash: ' + recovery.userOperationHash,
+        'PriorSeal authorization: ' + recovery.authorizationId,
+      ].join('\n')
+      if (!window.confirm(review)) return
+
+      saveRecovery({ ...recovery, stage: 'SUBMITTING' })
+      setPhase('submitted')
+      const submittedHash = await pilotBundlerResult('eth_sendUserOperation', [bundlerUserOperation(recovery.userOperation), PILOT_ENTRY_POINT])
+      if (typeof submittedHash !== 'string' || !userOperationHashPattern.test(submittedHash) || submittedHash.toLowerCase() !== recovery.userOperationHash.toLowerCase()) throw new Error('Bundler did not return the exact saved UserOperation hash; keep the checkpoint and reconcile by hash.')
+      saveRecovery({ ...recovery, stage: 'SUBMITTED' })
+      const pack = preflight.pack
+      const lookup = await waitForUserOperationInclusion(pack, submittedHash, setLookupStatus)
+      if (!lookup.transactionHash) throw new Error(lookup.providerUnavailable
+        ? 'Receipt and chain-event lookup is unavailable. The checkpoint is retained; retry read-only lookup later.'
+        : 'No receipt or matching EntryPoint event is available yet. The checkpoint is retained for read-only recovery.')
+      await finishObservation(recovery.authorizationId, recovery, lookup.transactionHash)
     } catch (caught) { setError(cleanError(caught)) } finally { setBusy(false) }
   }
 
@@ -430,7 +657,7 @@ export function Safe4337PilotPage() {
     <div className="operation-sequence" aria-label="Safe ERC-4337 pilot workflow"><div><span>01 / ESTIMATE</span><strong>Review call and fee</strong></div><div><span>02 / AUTHORIZE</span><strong>Sign Safe and PriorSeal data</strong></div><div><span>03 / EXECUTE</span><strong>Submit and observe</strong></div></div>
     {error && <Notice tone="danger" title="Pilot paused">{error}</Notice>}
     {recoveryState.error && <Notice tone="danger" title="Saved recovery data could not be verified">{recoveryState.error} The pilot is paused until the existing UserOperation is reconciled; do not start another operation from this tab.</Notice>}
-    {recoveryState.record && <Notice tone="warning" title={recoveryState.record.stage === 'SUBMITTING' ? 'Submission status needs verification' : 'Recoverable operation saved in this tab'}>{recoveryState.record.stage === 'SUBMITTING' ? 'The page saved this signed operation before the bundler confirmed its response. It may have reached the bundler. The button below only looks up the existing UserOperation hash; do not submit it again.' : 'The signed UserOperation and authorization ID are held in this tab’s session storage so receipt lookup can resume after a page reload. The session contains no private key. Export the evidence bundle after final observation to clear this recovery data.'}</Notice>}
+    {recoveryState.record && <Notice tone="warning" title={recoveryState.record.stage === 'SUBMITTING' ? 'Submission status needs verification' : 'Recoverable operation saved in this tab'}>{recoveryState.record.stage === 'SUBMITTING' ? 'The page saved this signed operation before the bundler confirmed its response. It may have reached the bundler. Reconcile the existing hash first; a retry uses this exact operation only after a fresh authorization, nonce and fee checks, and your separate confirmation.' : 'The signed UserOperation and authorization ID are held in this tab’s session storage so receipt lookup can resume after a page reload. The session contains no private key. Export the evidence bundle after final observation to clear this recovery data.'}</Notice>}
     {!capabilities && <Notice tone="warning" title="Checking the local PriorSeal API">The Safe operation can be estimated after the local API reports its supported chains and execution profiles.</Notice>}
     {capabilities && !canUse && <Notice tone="danger" title="PriorSeal ERC-4337 is not ready">The local API does not report a ready Base Sepolia ERC-4337 EIP-712 workflow. Start the configured local PriorSeal API and reload.</Notice>}
     <section className="panel intent-form" aria-busy={busy}>
@@ -462,9 +689,10 @@ export function Safe4337PilotPage() {
       {phase === 'idle' && <button className="button primary" type="button" disabled={busy || !canUse || Boolean(recoveryState.error)} onClick={() => void connectAndEstimate()}>{busy ? 'Checking wallet and estimating…' : 'Connect owner wallet and estimate'}</button>}
       {phase === 'estimated' && <button className="button primary" type="button" disabled={busy} onClick={() => void signSafeOperation()}>{busy ? 'Waiting for Safe signature…' : 'Review and sign Safe operation'}</button>}
       {phase === 'safe-signed' && <button className="button primary" type="button" disabled={busy} onClick={() => void authorizeWithPriorSeal()}>{busy ? 'Preparing PriorSeal authorization…' : 'Review and authorize with PriorSeal'}</button>}
-      {phase === 'authorized' && recoveryState.record && <button className="button primary" type="button" disabled={busy} onClick={() => void submitAndObserve()}>{busy ? 'Submitting and observing…' : 'Review and submit UserOperation'}</button>}
+      {phase === 'authorized' && recoveryState.record && <button className="button primary" type="button" disabled={busy} onClick={() => void (operationRef.current && signedOperationRef.current ? submitAndObserve() : submitSavedRecovery())}>{busy ? 'Checking recovery and preparing…' : 'Review and submit saved UserOperation'}</button>}
       {phase === 'authorized' && !recoveryState.record && <Notice tone="danger" title="Recovery could not be saved">The PriorSeal authorization was accepted, but this browser could not save its recovery checkpoint. Do not repeat authorization or submit from this pilot. Use the Observe execution page with the authorization ID shown above.</Notice>}
-      {phase === 'submitted' && <><p role="status">{lookupStatus || 'Recovery checks bundler receipt and recent EntryPoint events for the saved hash. It never resubmits the UserOperation.'}</p><button className="button primary" type="button" disabled={busy || !recoveryState.record} onClick={() => void resumeObservation()}>{busy ? 'Checking inclusion by hash…' : 'Resume receipt and chain-event lookup'}</button></>}
+      {phase === 'authorized' && recoveryState.record && <button className="button secondary" type="button" disabled={busy} onClick={() => void refreshRecoveryAuthorization()}>{busy ? 'Checking saved operation…' : 'Refresh PriorSeal authorization'}</button>}
+      {phase === 'submitted' && <><p role="status">{lookupStatus || 'Recovery checks the bundler and recent EntryPoint events for the saved hash. It does not automatically submit.'}</p><button className="button primary" type="button" disabled={busy || !recoveryState.record} onClick={() => void resumeObservation()}>{busy ? 'Checking inclusion by hash…' : 'Resume receipt and chain-event lookup'}</button>{recoveryState.record && !recoveryState.record.transactionHash && <button className="button secondary" type="button" disabled={busy} onClick={() => void refreshRecoveryAuthorization()}>{busy ? 'Checking saved operation…' : 'Reconcile and refresh authorization'}</button>}</>}
       {phase === 'complete' && observation && <><Notice tone={observation.observation.status === 'CONFIRMED' ? 'success' : 'warning'} title="PriorSeal observation received">The UserOperation was observed with status {observation.observation.status}; receipt {observation.receipt?.receiptId ?? 'is not yet available'}.</Notice><button className="button primary" type="button" disabled={busy} onClick={() => void downloadEvidence()}>{busy ? 'Preparing evidence…' : 'Download pilot evidence bundle'}</button></>}
     </section>
   </>
