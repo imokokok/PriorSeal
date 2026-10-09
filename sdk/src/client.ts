@@ -238,7 +238,7 @@ export class PriorSealClient {
     const expectedNotBefore = input.notBefore ?? issuedAt
     const expectedExpiresAt = input.expiresAt ?? input.intent.validUntil
     if (authorization.schema !== 'priorseal.authorization.v2' || authorization.authorizer.type !== 'eip712' || authorization.audience !== (input.audience ?? 'priorseal') || authorization.issuedAt !== issuedAt || authorization.notBefore !== expectedNotBefore || authorization.expiresAt !== expectedExpiresAt || authorization.maxUses !== (input.maxUses ?? '1') || (input.authorizationNonce !== undefined && authorization.authorizationNonce.toLowerCase() !== input.authorizationNonce.toLowerCase()) || (input.account && account !== input.account.toLowerCase()) || (checkpoint?.stage === 'PREPARED' && checkpoint.signature) || (checkpoint && checkpoint.stage !== 'PREPARED' && !checkpoint.signature)) throw new PriorSealApiError('Prepared authorization differs from requested audience, timing or permissions', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
-    const { hashTypedData, verifyTypedData } = await import('./authorization-signature.js')
+    const { hashTypedData, recoverTypedDataAddress } = await import('./authorization-signature.js')
     let signingData: Awaited<ReturnType<typeof import('./verifier.js')['authorizationSigningData']>>
     try {
       const { authorizationSigningData } = await import('./verifier.js')
@@ -247,12 +247,32 @@ export class PriorSealClient {
     } catch (error) {
       throw new PriorSealApiError('Prepared authorization or wallet typed data is inconsistent', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH', cause: error })
     }
+    const walletSigningData = {
+      ...signingData,
+      types: {
+        EIP712Domain: [
+          { name: 'name', type: 'string' },
+          { name: 'version', type: 'string' },
+          { name: 'chainId', type: 'uint256' },
+        ] as const,
+        ...signingData.types,
+      },
+    }
+    const walletSigningDataForHash = { ...walletSigningData, domain: { ...walletSigningData.domain, chainId: BigInt(walletSigningData.domain.chainId) } }
+    if (hashTypedData(walletSigningDataForHash) !== hashTypedData(signingData)) throw new PriorSealApiError('Wallet EIP-712 domain definition changes the authorization digest', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
     const state: AuthorizationCheckpoint = { schema: 'priorseal.authorization-checkpoint.v1', stage: checkpoint?.signature ? 'SIGNED' : 'PREPARED', account, request: structuredClone(input), prepared, ...(checkpoint?.signature ? { signature: checkpoint.signature } : {}), acceptIdempotencyKey: checkpoint?.acceptIdempotencyKey ?? options.idempotencyKey ?? this.makeIdempotencyKey() }
     await options.onCheckpoint?.(structuredClone(state))
     if (!state.signature && prepared.authorization.expiresAt <= Math.floor(Date.now() / 1000)) throw new PriorSealApiError('Authorization expired before wallet signing; refresh and authorize again', { code: 'AUTHORIZATION_EXPIRED', details: { checkpoint: state } })
-    const signature = state.signature ?? await provider.request({ method: 'eth_signTypedData_v4', params: [account, JSON.stringify(signingData, (_key, value) => typeof value === 'bigint' ? value.toString() : value)] })
+    const signature = state.signature ?? await provider.request({ method: 'eth_signTypedData_v4', params: [account, JSON.stringify(walletSigningData, (_key, value) => typeof value === 'bigint' ? value.toString() : value)] })
     if (typeof signature !== 'string' || !/^0x[0-9a-fA-F]{130}$/.test(signature)) throw new PriorSealApiError('The wallet did not return an EVM signature', { code: 'WALLET_SIGNATURE_UNAVAILABLE' })
-    if (!await verifyTypedData({ ...signingData, address: account as `0x${string}`, signature: signature as `0x${string}` }).catch(() => false)) throw new PriorSealApiError('Signature does not match the requested authorization and account', { code: 'AUTHORIZATION_SIGNATURE_MISMATCH' })
+    let recoveredSigner: string
+    try {
+      recoveredSigner = await recoverTypedDataAddress({ ...signingData, signature: signature as `0x${string}` })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Unknown signature recovery error'
+      throw new PriorSealApiError(`Wallet signature could not be recovered: ${reason}`, { code: 'AUTHORIZATION_SIGNATURE_MISMATCH', cause: error })
+    }
+    if (recoveredSigner.toLowerCase() !== account) throw new PriorSealApiError(`Wallet signed as ${recoveredSigner}, but the connected account is ${account}`, { code: 'AUTHORIZATION_SIGNATURE_MISMATCH', details: { expectedAccount: account, recoveredSigner } })
     state.signature = signature
     state.stage = 'SIGNED'
     await options.onCheckpoint?.(structuredClone(state))
