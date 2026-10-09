@@ -100,7 +100,10 @@
     "worker:check:prepared": "wrangler deploy --dry-run --outdir .wrangler/dist",
     "worker:dev": "npm run build && wrangler dev",
     "worker:deploy": "npm run build && npm run core:build:tools && node scripts/deploy-worker.mjs",
-    "integration:doctor": "node scripts/integration-doctor.mjs"
+    "integration:doctor": "node scripts/integration-doctor.mjs",
+    "erc4337:pilot:doctor": "npm run core:build:operations && node --env-file=.env.local scripts/erc4337-pilot-doctor.mjs",
+    "erc4337:pilot:api": "PRIORSEAL_LISTEN_HOST=127.0.0.1 PORT=3001 node --env-file=.env.local src/bootstrap/http-server.mjs",
+    "erc4337:pilot:ui": "PRIORSEAL_LOCAL_API_URL=http://127.0.0.1:3001 PRIORSEAL_ERC4337_HTTP_PROXY=http://127.0.0.1:7890 node --env-file=.env.local node_modules/vite/bin/vite.js web --config web/vite.config.ts --host 127.0.0.1 --port 8765 --strictPort"
   },
   "engines": {
     "node": ">=22"

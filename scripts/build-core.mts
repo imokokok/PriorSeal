@@ -52,6 +52,7 @@ const onDemandToolSources = [
   'scripts/verify-wak-frozen-multicall-sheet.mts',
 ].map((path) => join(projectRoot, path));
 const onDemandOperationSources = [
+  'scripts/erc4337-pilot-doctor.mts',
   'scripts/prepare-transparency-anchor.mts',
   'scripts/record-transparency-anchor.mts',
   'scripts/production-readiness.mts',

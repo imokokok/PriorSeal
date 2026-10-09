@@ -42,6 +42,7 @@ const nav = [
   { index: '08', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Developers' },
   { index: '09', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Developers' },
   { index: '10', key: 'api', label: 'API reference', to: '/app/api', group: 'Developers' },
+  ...(import.meta.env.DEV ? [{ index: '11', key: 'erc4337-pilot', label: 'Safe 4337 pilot', to: '/app/erc4337-pilot', group: 'Developers' }] : []),
 ]
 const AppShellContext = createContext(false)
 
