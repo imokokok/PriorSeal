@@ -49,6 +49,7 @@ const onDemandToolSources = [
 ].map((path) => join(projectRoot, path));
 const onDemandOperationSources = [
   "scripts/erc4337-pilot-doctor.mts",
+  "scripts/erc4337-eip7702-doctor.mts",
   "scripts/prepare-transparency-anchor.mts",
   "scripts/record-transparency-anchor.mts",
   "scripts/production-readiness.mts",
