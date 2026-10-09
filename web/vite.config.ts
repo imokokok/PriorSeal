@@ -4,12 +4,41 @@ import { fileURLToPath } from 'node:url'
 import { fetch as undiciFetch, ProxyAgent } from 'undici'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import { PILOT_ENTRY_POINT, PILOT_USER_OPERATION_EVENT_TOPIC } from './src/lib/erc4337-profile'
 
 const sdkPackage = JSON.parse(readFileSync(new URL('../sdk/package.json', import.meta.url), 'utf8')) as { version: string }
 const localApiTarget = process.env.PRIORSEAL_LOCAL_API_URL?.trim() || 'http://127.0.0.1:3000'
 
-const rpcMethods = new Set(['eth_chainId', 'eth_call', 'eth_getBalance', 'eth_getCode', 'eth_getStorageAt', 'eth_gasPrice', 'eth_maxPriorityFeePerGas', 'eth_getBlockByNumber'])
+const rpcMethods = new Set(['eth_chainId', 'eth_call', 'eth_getBalance', 'eth_getCode', 'eth_getStorageAt', 'eth_gasPrice', 'eth_maxPriorityFeePerGas', 'eth_getBlockByNumber', 'eth_getLogs'])
 const bundlerMethods = new Set(['eth_chainId', 'eth_supportedEntryPoints', 'eth_estimateUserOperationGas', 'eth_sendUserOperation', 'eth_getUserOperationByHash', 'eth_getUserOperationReceipt'])
+const hashPattern = /^0x[0-9a-f]{64}$/i
+const blockNumberPattern = /^0x[0-9a-f]+$/i
+
+function isPilotUserOperationEventQuery(params: unknown[]) {
+  if (params.length !== 1 || !params[0] || typeof params[0] !== 'object' || Array.isArray(params[0])) return false
+  const filter = params[0] as Record<string, unknown>
+  const allowedKeys = new Set(['address', 'topics', 'fromBlock', 'toBlock'])
+  if (Object.keys(filter).some((key) => !allowedKeys.has(key))
+    || typeof filter.address !== 'string'
+    || filter.address.toLowerCase() !== PILOT_ENTRY_POINT.toLowerCase()
+    || !Array.isArray(filter.topics)
+    || filter.topics.length !== 2
+    || typeof filter.topics[0] !== 'string'
+    || filter.topics[0].toLowerCase() !== PILOT_USER_OPERATION_EVENT_TOPIC.toLowerCase()
+    || typeof filter.topics[1] !== 'string'
+    || !hashPattern.test(filter.topics[1])
+    || typeof filter.fromBlock !== 'string'
+    || !blockNumberPattern.test(filter.fromBlock)
+    || typeof filter.toBlock !== 'string'
+    || !blockNumberPattern.test(filter.toBlock)) return false
+  try {
+    const fromBlock = BigInt(filter.fromBlock)
+    const toBlock = BigInt(filter.toBlock)
+    return toBlock >= fromBlock && toBlock - fromBlock < 10_000n
+  } catch {
+    return false
+  }
+}
 
 function writeRpcError(response: ServerResponse, id: unknown, status: number, code: number, message: string) {
   response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
@@ -55,6 +84,7 @@ function localSafe4337RpcProxy(): Plugin {
             id = typeof input.id === 'string' || typeof input.id === 'number' ? input.id : 1
             const params = input.params === undefined ? [] : input.params
             if ((input.jsonrpc !== undefined && input.jsonrpc !== '2.0') || typeof input.method !== 'string' || !route.methods.has(input.method) || !Array.isArray(params)) { writeRpcError(response, id, 400, -32600, 'Unsupported JSON-RPC request'); return }
+            if (input.method === 'eth_getLogs' && !isPilotUserOperationEventQuery(params)) { writeRpcError(response, id, 400, -32600, 'Unsupported JSON-RPC request'); return }
             const normalizedRequest = JSON.stringify({ jsonrpc: '2.0', id, method: input.method, params })
             const upstream = await undiciFetch(route.endpoint, {
               method: 'POST',

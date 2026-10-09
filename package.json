@@ -65,6 +65,7 @@
     "worker:types:check": "wrangler types worker-configuration.d.ts --check",
     "test": "npm run sdk:build && npm run test:prepared",
     "test:prepared": "npm run core:build:test-dependencies && node --test test/*.test.mjs test/**/*.test.mjs",
+    "test:erc4337": "npm run sdk:build && npm run core:build:test-dependencies && node --test test/infrastructure/erc4337-call-data.test.mjs && node --experimental-strip-types --test web/test/erc4337-pilot.test.mts",
     "test:e2e": "npm run build && npm run test:e2e:prepared",
     "test:e2e:prepared": "playwright test",
     "test:e2e:update": "npm run build && playwright test --update-snapshots",
