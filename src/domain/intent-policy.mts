@@ -82,12 +82,12 @@ export function evaluateAuthorizationPolicy(authorization: AuthorizationForPolic
 }
 
 /**
- * Exact-call receipts deliberately bind transaction bytes without interpreting
- * token/recipient/amount business semantics. Reject new authorizations whose
- * policy would otherwise appear to enforce those descriptive fields.
+ * Exact-call and ERC-4337 intents deliberately bind bytes/hashes without
+ * interpreting token/recipient/amount business semantics. Reject new
+ * authorizations whose policy would appear to enforce those descriptive fields.
  */
 export function evaluateNewIntentPolicyCompatibility(intent: { executionProfile?: string | null } | null | undefined, policy: RuntimePolicy = {}) {
-  const exactCall = intent?.executionProfile === 'priorseal.execution-profile.exact-call.v1';
+  const exactCall = ['priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1'].includes(String(intent?.executionProfile ?? ''));
   const semanticRestrictionsConfigured = policy.allowedAssets !== undefined || policy.allowedRecipients !== undefined || policy.maxAmount !== undefined;
   return exactCall && semanticRestrictionsConfigured
     ? { allowed: false, reasonCodes: [POLICY_CODES.EXACT_CALL_SEMANTICS_UNSUPPORTED] }

@@ -13,6 +13,10 @@ const BINDING_CODES = Object.freeze({
   AMBIGUOUS_TRANSFER: "AMBIGUOUS_TRANSFER",
   EXECUTION_UNAVAILABLE: "EXECUTION_UNAVAILABLE",
   EXECUTOR_MISMATCH: "EXECUTOR_MISMATCH",
+  USER_OPERATION_HASH_MISMATCH: "USER_OPERATION_HASH_MISMATCH",
+  ENTRY_POINT_MISMATCH: "ENTRY_POINT_MISMATCH",
+  ENTRY_POINT_VERSION_MISMATCH: "ENTRY_POINT_VERSION_MISMATCH",
+  ENTRY_POINT_CODE_HASH_MISMATCH: "ENTRY_POINT_CODE_HASH_MISMATCH",
   CALL_TARGET_MISMATCH: "CALL_TARGET_MISMATCH",
   CALLDATA_MISMATCH: "CALLDATA_MISMATCH",
   TRANSACTION_VALUE_MISMATCH: "TRANSACTION_VALUE_MISMATCH",
@@ -23,6 +27,7 @@ const same = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLower
 function bindIntentExecution(intent, execution, now = execution.observedAt ?? Math.floor(Date.now() / 1e3)) {
   const reasons = [];
   const exactCall = intent.executionProfile === "priorseal.execution-profile.exact-call.v1";
+  const erc4337 = intent.executionProfile === "priorseal.execution-profile.erc4337-user-operation.v1";
   if (execution?.executionDataAvailable === false) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
   if (execution.chainId !== intent.chainId) reasons.push(BINDING_CODES.CHAIN_MISMATCH);
   if (!same(execution.action, intent.action)) reasons.push(BINDING_CODES.ACTION_MISMATCH);
@@ -34,6 +39,11 @@ function bindIntentExecution(intent, execution, now = execution.observedAt ?? Ma
   if (intent.callTarget != null && !same(execution.target, intent.callTarget)) reasons.push(BINDING_CODES.CALL_TARGET_MISMATCH);
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
   if (intent.transactionValue != null && String(execution.nativeValue ?? "") !== String(intent.transactionValue)) reasons.push(BINDING_CODES.TRANSACTION_VALUE_MISMATCH);
+  if (erc4337 && !same(execution.userOperationHash, intent.userOperationHash)) reasons.push(BINDING_CODES.USER_OPERATION_HASH_MISMATCH);
+  if (erc4337 && !same(execution.entryPoint, intent.entryPoint)) reasons.push(BINDING_CODES.ENTRY_POINT_MISMATCH);
+  if (erc4337 && !same(execution.entryPointVersion, intent.entryPointVersion)) reasons.push(BINDING_CODES.ENTRY_POINT_VERSION_MISMATCH);
+  if (erc4337 && !same(execution.entryPointCodeHash, intent.entryPointCodeHash)) reasons.push(BINDING_CODES.ENTRY_POINT_CODE_HASH_MISMATCH);
+  if (intent.accountCallProfile != null && (!same(execution.accountCallProfile, intent.accountCallProfile) || !same(execution.accountCallTarget, intent.accountCallTarget) || String(execution.accountCallValue ?? "") !== String(intent.accountCallValue ?? "") || !same(execution.accountCallDataHash, intent.accountCallDataHash))) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
   const executedAt = execution.executedAt ?? execution.observedAt;
   if (executedAt != null && executedAt > intent.validUntil) reasons.push(BINDING_CODES.OUTSIDE_TIME_WINDOW);
   const constraints = intent.constraints ?? {};

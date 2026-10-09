@@ -180,6 +180,8 @@ The optional Headless verifier described below remains independently callable. A
 
 ## Exact contract calls
 
+For smart-account flows, the [ERC-4337 adapter](../docs/integrations/erc-4337.md) binds a canonical UserOperation hash, observes the bundler transaction through its matching EntryPoint event, and verifies the resulting signed execution evidence.
+
 The opt-in [RWA exact-call binding and combined receipt verification](https://github.com/imokokok/PriorSeal/tree/main/examples/rwa-v1) do not alter existing authorization or receipt semantics. RWA v2 adds linked same-second assessments, admitted calldata/receiver checks, and `inspectRwaReceiptBundle` for separate integrity, trust, time, policy, and execution results. For safe submission, use the Node application entry described in [RWA v2 hardening](https://github.com/imokokok/PriorSeal/blob/main/docs/rwa-hardening.md); SDK low-level callbacks alone do not enforce principal authorization or durable replay protection.
 
 Use intent v2 when an integration already constructs the exact transaction and another system owns its business semantics:

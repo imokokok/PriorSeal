@@ -2,6 +2,8 @@ export { PriorSealApiError, PriorSealClient, createPriorSealClient, generateAuth
 export { parseAuthorizationCheckpoint } from './checkpoint.js'
 export { validatePriorSealResponse } from './response-validation.js'
 export { buildExactCallIntent, parseExactCallTransaction, parseContextCommitments } from './exact-call.js'
+export { ERC4337_USER_OPERATION_NAMESPACE, ERC4337_EXECUTION_EVENT_NAMESPACE, ERC4337_EXECUTION_PROFILE, computeERC4337EntryPointCodeHash, decodeSafe4337CallData, parseERC4337UserOperationInput, bindERC4337UserOperation, buildERC4337UserOperationIntent, verifyERC4337ExecutionEvidence } from './erc4337.js'
+export type { ERC4337Version, ERC4337UserOperationInput, ERC4337AuthorizationIntentInput, ERC4337OperationBinding, ERC4337ExecutionEvidence } from './erc4337.js'
 export { V3_SINGLE_SWAP_ABI, SWAP_APPROVAL_NAMESPACE, createV3SwapApproval, parseV3SwapApproval, decodeV3SingleSwap, assertV3SwapRouterCode, swapApprovalCommitment, assertV3SwapTransaction, buildV3SwapIntent, assertV3SwapAuthorization, compareV3SwapReplan } from './swap-authorization.js'
 export type { V3SwapApproval, V3SwapSemantics, SwapReplanChange, SwapReplanComparison } from './swap-authorization.js'
 export * from './rwa-binding.js'

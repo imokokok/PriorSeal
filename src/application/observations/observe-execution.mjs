@@ -34,6 +34,7 @@ async function observeExecution({ input: inputValue, store, observer, signal, pr
   const maxToleratedReorgDepth = constraints?.maxToleratedReorgDepth ?? null;
   const finalityRequirement = constraints?.finalityRequirement ?? "CONFIRMATIONS";
   const confirmations = Math.max(requestedConfirmations, Number(constraints?.minConfirmations ?? 0), maxToleratedReorgDepth == null ? 0 : maxToleratedReorgDepth + 1);
+  const erc4337 = intent.executionProfile === "priorseal.execution-profile.erc4337-user-operation.v1" ? { entryPoint: String(intent.entryPoint), entryPointCodeHash: String(intent.entryPointCodeHash), entryPointVersion: intent.entryPointVersion, userOperationHash: String(intent.userOperationHash), ...intent.accountCallProfile ? { accountCallProfile: intent.accountCallProfile, accountCallTarget: String(intent.accountCallTarget), accountCallValue: String(intent.accountCallValue), accountCallDataHash: String(intent.accountCallDataHash) } : {} } : void 0;
   const previous = store.getObservation ? await store.getObservation(intent.chainId, requestedTxHash) : null;
   const observed = await observer({
     chainId: intent.chainId,
@@ -41,6 +42,7 @@ async function observeExecution({ input: inputValue, store, observer, signal, pr
     confirmations,
     finalityRequirement,
     maxToleratedReorgDepth,
+    ...erc4337 ? { erc4337 } : {},
     signal
   });
   const observedTxHash = normalizeTxHash(observed?.txHash);
@@ -108,7 +110,7 @@ function canClaimAuthorization(authorization, observation) {
 function classifyAuthorizationAssociation(authorization, observation) {
   if (!authorization || !observation || observation.executionDataAvailable === false) return "UNRELATED";
   if (!validateTemporalEvidence(authorization.intent, observation)) return "UNRELATED";
-  const correlated = /^0x[0-9a-fA-F]{64}$/.test(observation.txHash ?? "") && observation.intentHash === authorization.intentHash && Number(observation.chainId) === Number(authorization.intent.chainId) && same(observation.sender, authorization.delegate.executor) && String(observation.nonce ?? "") === String(authorization.intent.nonce);
+  const correlated = /^0x[0-9a-fA-F]{64}$/.test(observation.txHash ?? "") && observation.intentHash === authorization.intentHash && Number(observation.chainId) === Number(authorization.intent.chainId) && same(observation.sender, authorization.delegate.executor) && String(observation.nonce ?? "") === String(authorization.intent.nonce) && (authorization.intent.executionProfile !== "priorseal.execution-profile.erc4337-user-operation.v1" || same(observation.userOperationHash, authorization.intent.userOperationHash) && same(observation.entryPoint, authorization.intent.entryPoint) && same(observation.entryPointVersion, authorization.intent.entryPointVersion) && same(observation.entryPointCodeHash, authorization.intent.entryPointCodeHash) && (authorization.intent.accountCallProfile == null || same(observation.accountCallProfile, authorization.intent.accountCallProfile) && same(observation.accountCallTarget, authorization.intent.accountCallTarget) && same(observation.accountCallValue, authorization.intent.accountCallValue) && same(observation.accountCallDataHash, authorization.intent.accountCallDataHash)));
   if (!correlated) return "UNRELATED";
   if (["CONFIRMED", "REVERTED"].includes(observation.status ?? "") && ["CONFIRMED", "FINALIZED"].includes(observation.finalityState ?? "")) return "FINAL";
   if (["CONFIRMED", "REVERTED"].includes(observation.status ?? "")) return "CANDIDATE";
@@ -119,7 +121,8 @@ function classifyExecutionCorrelation(authorization, observation) {
   if (!authorization || !observation || observation.executionDataAvailable === false) return "INDETERMINATE";
   const intent = authorization.intent;
   const exactCall = intent.executionProfile === "priorseal.execution-profile.exact-call.v1";
-  const matches = /^0x[0-9a-fA-F]{64}$/.test(observation.txHash ?? "") && observation.intentHash === authorization.intentHash && Number(observation.chainId) === Number(intent.chainId) && same(observation.sender, authorization.delegate.executor) && same(observation.action, intent.action) && String(observation.nonce ?? "") === String(intent.nonce) && (exactCall ? same(observation.target, intent.callTarget) && same(observation.calldataHash, intent.calldataHash) && String(observation.nativeValue ?? "") === String(intent.transactionValue) : same(observation.recipient, intent.recipient) && same(observation.asset, intent.asset) && String(observation.amount ?? "") === String(intent.amount));
+  const erc4337 = intent.executionProfile === "priorseal.execution-profile.erc4337-user-operation.v1";
+  const matches = /^0x[0-9a-fA-F]{64}$/.test(observation.txHash ?? "") && observation.intentHash === authorization.intentHash && Number(observation.chainId) === Number(intent.chainId) && same(observation.sender, authorization.delegate.executor) && same(observation.action, intent.action) && String(observation.nonce ?? "") === String(intent.nonce) && (exactCall ? same(observation.target, intent.callTarget) && same(observation.calldataHash, intent.calldataHash) && String(observation.nativeValue ?? "") === String(intent.transactionValue) : same(observation.recipient, intent.recipient) && same(observation.asset, intent.asset) && String(observation.amount ?? "") === String(intent.amount)) && (!erc4337 || same(observation.userOperationHash, intent.userOperationHash) && same(observation.entryPoint, intent.entryPoint) && same(observation.entryPointVersion, intent.entryPointVersion) && same(observation.entryPointCodeHash, intent.entryPointCodeHash) && (intent.accountCallProfile == null || same(observation.accountCallProfile, intent.accountCallProfile) && same(observation.accountCallTarget, intent.accountCallTarget) && same(observation.accountCallValue, intent.accountCallValue) && same(observation.accountCallDataHash, intent.accountCallDataHash)));
   return matches ? "MATCH" : "MISMATCH";
 }
 function same(left, right) {

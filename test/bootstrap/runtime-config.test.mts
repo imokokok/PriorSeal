@@ -30,6 +30,8 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     transparencyAnchorFile: undefined,
     witnessEndpointsFile: undefined,
     preExecutionProofMode: 'issuer',
+    erc4337EntryPoints: [],
+    safe4337Trust: [],
     allowSelfAssertedPrincipals: false,
     requireExternalAnchor: false,
     anchorConfirmations: 12,
@@ -52,6 +54,11 @@ test('runtime configuration rejects ambiguous or invalid values before startup',
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_POLICY_FILE: '/policy.json', PRIORSEAL_POLICY_JSON: '{}' }), /file or inline JSON/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_KEY_REGISTRY_FILE: '/keys.json', PRIORSEAL_KEY_REGISTRY_JSON: '{"schema":"priorseal.keys.v1","keys":[]}' }), /file or inline JSON/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ENVIRONMENT: 'production' }), /Production requires/);
+  const entryPoint = '[{"chainId":8453,"version":"0.7","address":"0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","codeHash":"0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}]';
+  const safeTrust = '[{"chainId":8453,"version":"0.7","entryPointAddress":"0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","moduleAddress":"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","moduleCodeHash":"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","safeProxyCodeHash":"0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","safeSingletonCodeHash":"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}]';
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_SAFE_4337_TRUST_JSON: safeTrust }), /requires a matching configured EntryPoint/);
+  assert.deepEqual(loadRuntimeConfig({ PRIORSEAL_ERC4337_ENTRY_POINTS_JSON: entryPoint, PRIORSEAL_SAFE_4337_TRUST_JSON: safeTrust }).safe4337Trust, [{ chainId: 8453, version: '0.7', entryPointAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', moduleAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', moduleCodeHash: `0x${'b'.repeat(64)}`, safeProxyCodeHash: `0x${'d'.repeat(64)}`, safeSingletonCodeHash: `0x${'c'.repeat(64)}` }]);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ERC4337_ENTRY_POINTS_JSON: entryPoint, PRIORSEAL_SAFE_4337_TRUST_JSON: safeTrust.replace('moduleCodeHash', 'unknown') }), /invalid shape/);
 });
 
 test('production runtime fails closed unless security dependencies are explicit', () => {

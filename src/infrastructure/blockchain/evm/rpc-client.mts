@@ -17,6 +17,7 @@ const record = (value: unknown): value is Record<string, unknown> => value !== n
 const hex = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value);
 const hash = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value);
 const data = (value: unknown): value is string => typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2})*$/.test(value);
+const nonce = (value: unknown): boolean => hex(value) || typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const optional = (value: unknown, guard: (value: unknown) => boolean): boolean => value === undefined || value === null || guard(value);
 
 function rpcError(code: string, message: string): PriorSealError {
@@ -26,6 +27,9 @@ function rpcError(code: string, message: string): PriorSealError {
 function validResult(method: string, value: unknown): boolean {
   if (method === 'eth_chainId' || method === 'eth_blockNumber') return hex(value);
   if (method === 'eth_call') return data(value);
+  if (method === 'eth_getCode') return data(value);
+  if (method === 'eth_getStorageAt') return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value);
+  if (method === 'debug_traceTransaction') return record(value) && Object.entries(value).every(([account, state]) => /^0x[0-9a-fA-F]{40}$/.test(account) && record(state) && optional(state.code, data) && optional(state.balance, hex) && optional(state.nonce, nonce) && optional(state.storage, (storage) => record(storage) && Object.entries(storage).every(([slot, word]) => hash(slot) && typeof word === 'string' && /^0x[0-9a-fA-F]{64}$/.test(word))));
   if (method === 'eth_getTransactionByHash') return value === null || record(value) && hash(value.hash) && hex(value.nonce) && optional(value.from, (item) => typeof item === 'string' && /^0x[0-9a-fA-F]{40}$/.test(item)) && optional(value.to, (item) => typeof item === 'string' && /^0x[0-9a-fA-F]{40}$/.test(item)) && optional(value.input, data) && optional(value.value, hex) && optional(value.gasPrice, hex) && optional(value.blockNumber, hex) && optional(value.blockHash, hash);
   if (method === 'eth_getTransactionReceipt') return value === null || record(value) && hex(value.status) && hex(value.blockNumber) && hex(value.gasUsed) && hash(value.blockHash) && optional(value.transactionHash, hash) && optional(value.effectiveGasPrice, hex) && (value.logs === undefined || Array.isArray(value.logs) && value.logs.every((item: unknown) => record(item) && (item.topics === undefined || Array.isArray(item.topics) && item.topics.every((topic: unknown) => typeof topic === 'string'))));
   if (method === 'eth_getBlockByHash' || method === 'eth_getBlockByNumber') return value === null || record(value) && hex(value.timestamp) && optional(value.number, hex) && optional(value.hash, hash);

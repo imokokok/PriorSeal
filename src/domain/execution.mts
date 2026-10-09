@@ -23,6 +23,16 @@ export type ExecutionInput = {
   tokenValue?: string | null;
   gasUsed?: string | null;
   fee?: string | null;
+  userOperationHash?: string | null;
+  entryPoint?: string | null;
+  entryPointCodeHash?: string | null;
+  entryPointVersion?: '0.6' | '0.7' | '0.8' | '0.9' | null;
+  accountCallProfile?: 'safe-4337.v1' | null;
+  accountCallTarget?: string | null;
+  accountCallValue?: string | null;
+  accountCallDataHash?: string | null;
+  userOperationSuccess?: boolean | null;
+  actualGasCost?: string | null;
   executionDataAvailable?: boolean;
   observationSource?: string;
   finalityState?: string;
@@ -39,7 +49,7 @@ export type ExecutionInput = {
 };
 
 export function normalizeExecution(input: ExecutionInput) {
-  return { schema: EXECUTION_SCHEMA, chainId: input.chainId, txHash: input.txHash?.toLowerCase(), status: input.status, blockNumber: input.blockNumber ?? null, blockHash: input.blockHash ?? null, executedAt: input.executedAt ?? null, observedAt: input.observedAt ?? Math.floor(Date.now() / 1000), action: input.action ?? null, nonce: input.nonce ?? null, sender: input.sender?.toLowerCase() ?? null, recipient: input.recipient?.toLowerCase() ?? null, target: input.target?.toLowerCase() ?? null, calldataHash: input.calldataHash?.toLowerCase() ?? null, asset: input.asset ?? null, amount: input.amount ?? null, transfers: input.transfers ?? [], transferMatchUnique: input.transferMatchUnique ?? false, nativeValue: input.nativeValue ?? null, tokenValue: input.tokenValue ?? null, gasUsed: input.gasUsed ?? null, fee: input.fee ?? null, executionDataAvailable: input.executionDataAvailable ?? true, observationSource: input.observationSource ?? 'unknown', finalityState: input.finalityState ?? 'UNKNOWN', confirmations: input.confirmations ?? 0, ...(input.temporalEvidence ? { temporalEvidence: input.temporalEvidence } : {}) };
+  return { schema: EXECUTION_SCHEMA, chainId: input.chainId, txHash: input.txHash?.toLowerCase(), status: input.status, blockNumber: input.blockNumber ?? null, blockHash: input.blockHash ?? null, executedAt: input.executedAt ?? null, observedAt: input.observedAt ?? Math.floor(Date.now() / 1000), action: input.action ?? null, nonce: input.nonce ?? null, sender: input.sender?.toLowerCase() ?? null, recipient: input.recipient?.toLowerCase() ?? null, target: input.target?.toLowerCase() ?? null, calldataHash: input.calldataHash?.toLowerCase() ?? null, asset: input.asset ?? null, amount: input.amount ?? null, transfers: input.transfers ?? [], transferMatchUnique: input.transferMatchUnique ?? false, nativeValue: input.nativeValue ?? null, tokenValue: input.tokenValue ?? null, gasUsed: input.gasUsed ?? null, fee: input.fee ?? null, ...(input.userOperationHash ? { userOperationHash: input.userOperationHash.toLowerCase() } : {}), ...(input.entryPoint ? { entryPoint: input.entryPoint.toLowerCase() } : {}), ...(input.entryPointCodeHash ? { entryPointCodeHash: input.entryPointCodeHash.toLowerCase() } : {}), ...(input.entryPointVersion ? { entryPointVersion: input.entryPointVersion } : {}), ...(input.userOperationSuccess != null ? { userOperationSuccess: input.userOperationSuccess } : {}), ...(input.actualGasCost != null ? { actualGasCost: input.actualGasCost } : {}), ...(input.accountCallProfile ? { accountCallProfile: input.accountCallProfile } : {}), ...(input.accountCallTarget ? { accountCallTarget: input.accountCallTarget.toLowerCase() } : {}), ...(input.accountCallValue != null ? { accountCallValue: input.accountCallValue } : {}), ...(input.accountCallDataHash ? { accountCallDataHash: input.accountCallDataHash.toLowerCase() } : {}), executionDataAvailable: input.executionDataAvailable ?? true, observationSource: input.observationSource ?? 'unknown', finalityState: input.finalityState ?? 'UNKNOWN', confirmations: input.confirmations ?? 0, ...(input.temporalEvidence ? { temporalEvidence: input.temporalEvidence } : {}) };
 }
 
 type ReorgObservation = Pick<ExecutionInput, 'txHash' | 'blockHash' | 'status'>;

@@ -9,7 +9,7 @@ const hashPattern = /^[0-9a-f]{64}$/
 const authorizedReceiptFields = ['algorithm', 'authorizationEvidence', 'authorizationHash', 'binding', 'compliance', 'domain', 'execution', 'executionHash', 'executionStatus', 'intentHash', 'issuedAt', 'issuer', 'keyId', 'outcome', 'reasonCodes', 'receiptId', 'schema', 'signature', 'validUntil', 'verifierVersion']
 const legacyReceiptFields = ['algorithm', 'binding', 'domain', 'execution', 'executionHash', 'intentHash', 'issuedAt', 'issuer', 'keyId', 'outcome', 'reasonCodes', 'receiptId', 'schema', 'signature', 'validUntil', 'verifierVersion']
 const authorizationFields = ['audience', 'authorizationId', 'authorizationNonce', 'authorizer', 'delegate', 'domain', 'expiresAt', 'intent', 'intentHash', 'issuedAt', 'maxUses', 'notBefore', 'policyHash', 'principal', 'schema', 'signature']
-const intentFields = ['action', 'amount', 'asset', 'calldataHash', 'chainId', 'chainIds', 'constraints', 'contextCommitments', 'executionProfile', 'intentHash', 'intentId', 'nonce', 'recipient', 'schema', 'sender', 'transactionValue', 'validUntil', 'callTarget']
+const intentFields = ['action', 'amount', 'asset', 'calldataHash', 'chainId', 'chainIds', 'constraints', 'contextCommitments', 'entryPoint', 'entryPointCodeHash', 'entryPointVersion', 'executionProfile', 'intentHash', 'intentId', 'nonce', 'recipient', 'schema', 'sender', 'transactionValue', 'userOperationHash', 'validUntil', 'callTarget', 'accountCallProfile', 'accountCallTarget', 'accountCallValue', 'accountCallDataHash']
 
 function canonicalize(value: unknown): string {
   if (value === undefined) throw new TypeError('undefined is not valid canonical JSON')
@@ -182,8 +182,10 @@ function validIntentShape(value: Intent) {
   if (!hasOnlyFields(value, intentFields)) return false
   const record = value as unknown as Record<string, unknown>
   const exactCall = value.schema === 'priorseal.intent.v2'
+  const erc4337 = value.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1'
+  const exactCallProfile = value.executionProfile === 'priorseal.execution-profile.exact-call.v1'
   if (!exactCall && value.schema !== 'priorseal.intent.v1') return false
-  if (exactCall !== (value.executionProfile === 'priorseal.execution-profile.exact-call.v1') || (exactCall && value.action !== 'CONTRACT_CALL')) return false
+  if (exactCall !== (exactCallProfile || erc4337) || (exactCallProfile && value.action !== 'CONTRACT_CALL') || (erc4337 && value.action !== 'ERC4337_USER_OPERATION')) return false
   if (!identifierPattern.test(value.intentId) || !identifierPattern.test(value.action) || !positiveChainId(value.chainId) || !positiveUnixSeconds(value.validUntil)) return false
   if (!canonicalAddress(value.sender) || !canonicalAddress(value.recipient) || !uintPattern.test(value.amount) || !uintPattern.test(value.nonce ?? '0')) return false
   const asset = /^eip155:([1-9][0-9]*)\/(native|erc20:0x[0-9a-fA-F]{40})$/.exec(value.asset)
@@ -192,7 +194,9 @@ function validIntentShape(value: Intent) {
   if (value.callTarget !== undefined && !canonicalAddress(value.callTarget)) return false
   if (value.calldataHash !== undefined && !/^0x[0-9a-f]{64}$/.test(value.calldataHash)) return false
   if (value.transactionValue !== undefined && !uintPattern.test(value.transactionValue)) return false
-  if (exactCall && (value.nonce == null || value.callTarget == null || value.calldataHash == null || value.transactionValue == null || !validContextCommitments(value.contextCommitments))) return false
+  if (exactCallProfile && (value.nonce == null || value.callTarget == null || value.calldataHash == null || value.transactionValue == null || !validContextCommitments(value.contextCommitments))) return false
+  if (erc4337 && (value.nonce == null || !canonicalAddress(value.entryPoint ?? '') || !/^0x[0-9a-f]{64}$/.test(value.entryPointCodeHash ?? '') || !['0.6', '0.7', '0.8', '0.9'].includes(String(value.entryPointVersion)) || !/^0x[0-9a-f]{64}$/.test(value.userOperationHash ?? '') || !validContextCommitments(value.contextCommitments))) return false
+  if (value.accountCallProfile != null && (value.accountCallProfile !== 'safe-4337.v1' || !erc4337 || !canonicalAddress(value.accountCallTarget ?? '') || !uintPattern.test(value.accountCallValue ?? '') || !/^0x[0-9a-f]{64}$/.test(value.accountCallDataHash ?? ''))) return false
   if (!exactCall && (value.executionProfile != null || value.contextCommitments != null)) return false
   if (value.constraints !== undefined) {
     if (!hasOnlyFields(value.constraints, ['maxGasUsed', 'minConfirmations', 'maxToleratedReorgDepth', 'finalityRequirement'])) return false
@@ -289,6 +293,7 @@ function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
   const reasons: string[] = []
   const same = (left: unknown, right: unknown) => String(left ?? '').toLowerCase() === String(right ?? '').toLowerCase()
   const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1'
+  const erc4337 = intent.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1'
   if (execution.executionDataAvailable === false) reasons.push('EXECUTION_UNAVAILABLE')
   if (Number(execution.chainId) !== Number(intent.chainId)) reasons.push('CHAIN_MISMATCH')
   if (!same(execution.action, intent.action)) reasons.push('ACTION_MISMATCH')
@@ -300,6 +305,11 @@ function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
   if (intent.callTarget != null && !same(execution.target, intent.callTarget)) reasons.push('CALL_TARGET_MISMATCH')
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push('CALLDATA_MISMATCH')
   if (intent.transactionValue != null && String(execution.nativeValue ?? '') !== String(intent.transactionValue)) reasons.push('TRANSACTION_VALUE_MISMATCH')
+  if (erc4337 && !same(execution.userOperationHash, intent.userOperationHash)) reasons.push('USER_OPERATION_HASH_MISMATCH')
+  if (erc4337 && !same(execution.entryPoint, intent.entryPoint)) reasons.push('ENTRY_POINT_MISMATCH')
+  if (erc4337 && !same(execution.entryPointCodeHash, intent.entryPointCodeHash)) reasons.push('ENTRY_POINT_CODE_HASH_MISMATCH')
+  if (intent.accountCallProfile != null && (execution.accountCallProfile !== intent.accountCallProfile || !same(execution.accountCallTarget, intent.accountCallTarget) || !same(execution.accountCallValue, intent.accountCallValue) || !same(execution.accountCallDataHash, intent.accountCallDataHash))) reasons.push('CALLDATA_MISMATCH')
+  if (erc4337 && !same(execution.entryPointVersion, intent.entryPointVersion)) reasons.push('ENTRY_POINT_VERSION_MISMATCH')
   if ((execution.executedAt ?? execution.observedAt ?? 0) > intent.validUntil) reasons.push('OUTSIDE_TIME_WINDOW')
   if (intent.constraints?.minConfirmations != null && Number(execution.confirmations ?? 0) < intent.constraints.minConfirmations) reasons.push('INSUFFICIENT_FINALITY')
   if (intent.constraints?.maxToleratedReorgDepth != null && Number(execution.confirmations ?? 0) <= intent.constraints.maxToleratedReorgDepth) reasons.push('INSUFFICIENT_FINALITY')

@@ -39,6 +39,8 @@ Insight and PriorSeal work independently. Insight provides **oracle transparency
 
 For contract calls, the `priorseal.intent.v2` exact-call profile binds the transaction envelope: chain, executor, nonce, target, calldata hash, and native value. Optional context commitments bind digests of external decisions or assessments without claiming that PriorSeal made those decisions. See the [evidence relationship levels](docs/architecture/evidence-relationship-levels.md).
 
+For ERC-4337 smart accounts, a second `intent.v2` profile binds the canonical UserOperation hash and supports commitments from Insight's signed risk assessments. The SDK verifies its matching EntryPoint event. See the [ERC-4337 integration guide](docs/integrations/erc-4337.md) for supported scope and the distinction between UserOperation evidence and ordinary bundler transaction observation.
+
 **A valid receipt is evidence of signed claims, not a guarantee of economic safety or an infallible RPC view.** ERC-1271 authority and EVM anchors require additional chain-state checks for complete verification. A key included in a downloaded bundle is discovery data; the reviewer must establish trust in that key separately.
 
 ## Try it

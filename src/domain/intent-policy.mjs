@@ -52,7 +52,7 @@ function evaluateAuthorizationPolicy(authorization, policy = {}, now = Math.floo
   return { ...intentResult, allowed: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
 }
 function evaluateNewIntentPolicyCompatibility(intent, policy = {}) {
-  const exactCall = intent?.executionProfile === "priorseal.execution-profile.exact-call.v1";
+  const exactCall = ["priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1"].includes(String(intent?.executionProfile ?? ""));
   const semanticRestrictionsConfigured = policy.allowedAssets !== void 0 || policy.allowedRecipients !== void 0 || policy.maxAmount !== void 0;
   return exactCall && semanticRestrictionsConfigured ? { allowed: false, reasonCodes: [POLICY_CODES.EXACT_CALL_SEMANTICS_UNSUPPORTED] } : { allowed: true, reasonCodes: [] };
 }

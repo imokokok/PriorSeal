@@ -60,7 +60,7 @@ export type HeadlessMarketStatePairResult = {
 
 export type Intent = {
   schema?: 'priorseal.intent.v1' | 'priorseal.intent.v2'
-  executionProfile?: 'priorseal.execution-profile.exact-call.v1'
+  executionProfile?: 'priorseal.execution-profile.exact-call.v1' | 'priorseal.execution-profile.erc4337-user-operation.v1'
   intentId: string
   intentHash?: string
   chainId: number | string
@@ -74,6 +74,14 @@ export type Intent = {
   callTarget?: string
   calldataHash?: string
   transactionValue?: string
+  entryPoint?: string
+  entryPointCodeHash?: string
+  entryPointVersion?: '0.6' | '0.7' | '0.8' | '0.9'
+  userOperationHash?: string
+  accountCallProfile?: 'safe-4337.v1'
+  accountCallTarget?: string
+  accountCallValue?: string
+  accountCallDataHash?: string
   contextCommitments?: ContextCommitment[]
   constraints?: { minConfirmations?: number; maxGasUsed?: string; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' }
 }
@@ -103,6 +111,16 @@ export type Execution = {
   tokenValue?: string | null
   gasUsed?: string | null
   fee?: string | null
+  userOperationHash?: string
+  entryPoint?: string
+  entryPointCodeHash?: string
+  entryPointVersion?: '0.6' | '0.7' | '0.8' | '0.9'
+  userOperationSuccess?: boolean
+  actualGasCost?: string
+  accountCallProfile?: 'safe-4337.v1'
+  accountCallTarget?: string
+  accountCallValue?: string
+  accountCallDataHash?: string
   executionDataAvailable?: boolean
   observationSource?: string
   finalityState?: string

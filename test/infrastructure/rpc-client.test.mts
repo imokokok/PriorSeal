@@ -35,6 +35,9 @@ test('RPC client validates the transaction and receipt shapes before returning t
     ['eth_getTransactionReceipt', { status: '0x1', blockNumber: '0xa', gasUsed: '0x1', blockHash: null }],
     ['eth_getBlockByHash', { timestamp: { hex: '0x1' } }],
     ['eth_call', 'not-hex'],
+    ['eth_getStorageAt', '0x1'],
+    ['debug_traceTransaction', null],
+    ['debug_traceTransaction', { '0x1234': { code: '0x6000' } }],
   ] as const) {
     const client = createRpcClient({ retries: 0, fetchImpl: async () => Response.json({ jsonrpc: '2.0', id: 1, result }) });
     await assert.rejects(() => client.call('https://rpc.invalid', method, []), (error: unknown) => error instanceof Error && 'code' in error && error.code === 'RPC_INVALID_RESPONSE');

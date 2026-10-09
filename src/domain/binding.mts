@@ -4,6 +4,7 @@ export const BINDING_CODES = Object.freeze({
   NONCE_MISMATCH: 'NONCE_MISMATCH', OUTSIDE_TIME_WINDOW: 'OUTSIDE_TIME_WINDOW', INSUFFICIENT_FINALITY: 'INSUFFICIENT_FINALITY',
   GAS_LIMIT_EXCEEDED: 'GAS_LIMIT_EXCEEDED', AMBIGUOUS_TRANSFER: 'AMBIGUOUS_TRANSFER', EXECUTION_UNAVAILABLE: 'EXECUTION_UNAVAILABLE',
   EXECUTOR_MISMATCH: 'EXECUTOR_MISMATCH',
+  USER_OPERATION_HASH_MISMATCH: 'USER_OPERATION_HASH_MISMATCH', ENTRY_POINT_MISMATCH: 'ENTRY_POINT_MISMATCH', ENTRY_POINT_VERSION_MISMATCH: 'ENTRY_POINT_VERSION_MISMATCH', ENTRY_POINT_CODE_HASH_MISMATCH: 'ENTRY_POINT_CODE_HASH_MISMATCH',
   CALL_TARGET_MISMATCH: 'CALL_TARGET_MISMATCH', CALLDATA_MISMATCH: 'CALLDATA_MISMATCH', TRANSACTION_VALUE_MISMATCH: 'TRANSACTION_VALUE_MISMATCH',
   AUTHORIZATION_AFTER_EXECUTION: 'AUTHORIZATION_AFTER_EXECUTION',
   OUTSIDE_AUTHORIZATION_WINDOW: 'OUTSIDE_AUTHORIZATION_WINDOW',
@@ -24,6 +25,14 @@ export type BindingIntent = {
   callTarget?: string | null;
   calldataHash?: string | null;
   transactionValue?: string | null;
+  entryPoint?: string | null;
+  entryPointCodeHash?: string | null;
+  entryPointVersion?: string | null;
+  userOperationHash?: string | null;
+  accountCallProfile?: string | null;
+  accountCallTarget?: string | null;
+  accountCallValue?: string | null;
+  accountCallDataHash?: string | null;
   constraints?: { minConfirmations?: number | string | null; maxGasUsed?: number | string | null; maxToleratedReorgDepth?: number | null; finalityRequirement?: string | null } | null;
 };
 
@@ -45,6 +54,14 @@ export type BindingExecution = {
   confirmations?: number | string | null;
   gasUsed?: number | string | null;
   executionDataAvailable?: boolean;
+  entryPoint?: string | null;
+  entryPointCodeHash?: string | null;
+  entryPointVersion?: string | null;
+  userOperationHash?: string | null;
+  accountCallProfile?: string | null;
+  accountCallTarget?: string | null;
+  accountCallValue?: string | null;
+  accountCallDataHash?: string | null;
   transfers?: unknown[] | null;
   transferMatchUnique?: boolean;
 };
@@ -56,6 +73,7 @@ const same = (a: unknown, b: unknown): boolean => String(a ?? '').toLowerCase() 
 export function bindIntentExecution(intent: BindingIntent, execution: BindingExecution, now = execution.observedAt ?? Math.floor(Date.now() / 1000)): BindingResult {
   const reasons: BindingCode[] = [];
   const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1';
+  const erc4337 = intent.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1';
   if (execution?.executionDataAvailable === false) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
   if (execution.chainId !== intent.chainId) reasons.push(BINDING_CODES.CHAIN_MISMATCH);
   if (!same(execution.action, intent.action)) reasons.push(BINDING_CODES.ACTION_MISMATCH);
@@ -67,6 +85,11 @@ export function bindIntentExecution(intent: BindingIntent, execution: BindingExe
   if (intent.callTarget != null && !same(execution.target, intent.callTarget)) reasons.push(BINDING_CODES.CALL_TARGET_MISMATCH);
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
   if (intent.transactionValue != null && String(execution.nativeValue ?? '') !== String(intent.transactionValue)) reasons.push(BINDING_CODES.TRANSACTION_VALUE_MISMATCH);
+  if (erc4337 && !same(execution.userOperationHash, intent.userOperationHash)) reasons.push(BINDING_CODES.USER_OPERATION_HASH_MISMATCH);
+  if (erc4337 && !same(execution.entryPoint, intent.entryPoint)) reasons.push(BINDING_CODES.ENTRY_POINT_MISMATCH);
+  if (erc4337 && !same(execution.entryPointVersion, intent.entryPointVersion)) reasons.push(BINDING_CODES.ENTRY_POINT_VERSION_MISMATCH);
+  if (erc4337 && !same(execution.entryPointCodeHash, intent.entryPointCodeHash)) reasons.push(BINDING_CODES.ENTRY_POINT_CODE_HASH_MISMATCH);
+  if (intent.accountCallProfile != null && (!same(execution.accountCallProfile, intent.accountCallProfile) || !same(execution.accountCallTarget, intent.accountCallTarget) || String(execution.accountCallValue ?? '') !== String(intent.accountCallValue ?? '') || !same(execution.accountCallDataHash, intent.accountCallDataHash))) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
   // New observations carry the block timestamp. The fallback preserves
   // compatibility with already-issued v1 receipts that only had observedAt.
   const executedAt = execution.executedAt ?? execution.observedAt;

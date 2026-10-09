@@ -69,7 +69,7 @@ async function composeRuntime({ config, environment = process.env, database, d1,
       if (config.requireExternalAnchor && !evidence.checkpoint.anchor) throw new PriorSealError("TRANSPARENCY_ANCHOR_REQUIRED", "A verified external anchor covering this authorization is required before execution");
       return evidence;
     } : null;
-    const observer = (input) => observeEvm({ ...input, rpcUrls: rpcUrls(input.chainId), rpcClient });
+    const observer = (input) => observeEvm({ ...input, rpcUrls: rpcUrls(input.chainId), rpcClient, erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust });
     const baseObservationWorker = store ? createObservationWorker({ store, observerManagesEvidence: true, observe: async (input) => (await observeExecution({ input, store, observer, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response, saveObservation: (observation) => store.saveObservation(observation) }) : null;
     const observationWorker = baseObservationWorker && dispatchObservationJob ? {
       ...baseObservationWorker,
@@ -79,7 +79,7 @@ async function composeRuntime({ config, environment = process.env, database, d1,
         return job;
       }
     } : baseObservationWorker;
-    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter((id) => rpcUrls(id).length > 0), store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === "rfc3161", witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === "witness-quorum", transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter }) : void 0;
+    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter((id) => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === "rfc3161", witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === "witness-quorum", transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter }) : void 0;
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {

@@ -12,6 +12,8 @@ type RuntimeEnvironmentInput = Partial<Record<
   'PRIORSEAL_BUILD_VERSION' |
   'PRIORSEAL_CORS_ORIGINS' |
   'PRIORSEAL_ENVIRONMENT' |
+  'PRIORSEAL_ERC4337_ENTRY_POINTS_JSON' |
+  'PRIORSEAL_SAFE_4337_TRUST_JSON' |
   'PRIORSEAL_ISSUER' |
   'PRIORSEAL_KEY_ID' |
   'PRIORSEAL_KEY_REGISTRY_FILE' |
@@ -56,6 +58,11 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
   const witnessEndpointsFile = optionalValue(environment.PRIORSEAL_WITNESS_ENDPOINTS_FILE);
   const witnessEndpointsJson = optionalJson(environment.PRIORSEAL_WITNESS_ENDPOINTS_JSON, 'PRIORSEAL_WITNESS_ENDPOINTS_JSON');
   const archiveCredentials = optionalJson(environment.PRIORSEAL_ARCHIVE_CREDENTIALS_JSON, 'PRIORSEAL_ARCHIVE_CREDENTIALS_JSON');
+  const erc4337EntryPoints = parseErc4337EntryPoints(optionalJson(environment.PRIORSEAL_ERC4337_ENTRY_POINTS_JSON, 'PRIORSEAL_ERC4337_ENTRY_POINTS_JSON'));
+  const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, 'PRIORSEAL_SAFE_4337_TRUST_JSON'));
+  for (const profile of safe4337Trust) {
+    if (!erc4337EntryPoints.some(entry => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
+  }
   createArchiveAccess(archiveCredentials); // Readiness and startup share strict credential validation.
   const anchorConfirmations = confirmationValue(environment.PRIORSEAL_ANCHOR_CONFIRMATIONS);
   if (Boolean(privateKeyFile) !== Boolean(publicKeyFile)) {
@@ -75,6 +82,8 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
   const config = {
     environment: runtimeEnvironment,
     ...(archiveCredentials ? { archiveCredentials } : {}),
+    erc4337EntryPoints,
+    safe4337Trust,
     ...(runtime !== 'node' ? { runtime } : {}),
     port: portValue(environment.PORT),
     issuer: identifierValue(environment.PRIORSEAL_ISSUER, 'PRIORSEAL_ISSUER', 'priorseal-local'),
@@ -104,6 +113,45 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
   };
   if (runtimeEnvironment === 'production') validateProductionConfig(config);
   return config;
+}
+
+function parseSafe4337Trust(value: unknown): { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 64) throw new TypeError('PRIORSEAL_SAFE_4337_TRUST_JSON must be an array with at most 64 entries');
+  const seen = new Set<string>();
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || Object.keys(entry).sort().join(',') !== 'chainId,entryPointAddress,moduleAddress,moduleCodeHash,safeProxyCodeHash,safeSingletonCodeHash,version') throw new TypeError(`Safe ERC-4337 trust entry ${index} has an invalid shape`);
+    const candidate = entry as Record<string, unknown>;
+    if (!Number.isSafeInteger(candidate.chainId) || Number(candidate.chainId) < 1) throw new TypeError(`Safe ERC-4337 trust entry ${index} has an invalid chainId`);
+    if (!['0.6', '0.7', '0.8', '0.9'].includes(String(candidate.version))) throw new TypeError(`Safe ERC-4337 trust entry ${index} has an unsupported version`);
+    if (typeof candidate.moduleAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(candidate.moduleAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${index} has an invalid moduleAddress`);
+    if (typeof candidate.entryPointAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(candidate.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${index} has an invalid entryPointAddress`);
+    for (const field of ['moduleCodeHash', 'safeProxyCodeHash', 'safeSingletonCodeHash']) if (typeof candidate[field] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(candidate[field] as string)) throw new TypeError(`Safe ERC-4337 trust entry ${index} has an invalid ${field}`);
+    const normalized = { chainId: Number(candidate.chainId), version: candidate.version as '0.6' | '0.7' | '0.8' | '0.9', entryPointAddress: candidate.entryPointAddress.toLowerCase(), moduleAddress: candidate.moduleAddress.toLowerCase(), moduleCodeHash: (candidate.moduleCodeHash as string).toLowerCase(), safeProxyCodeHash: (candidate.safeProxyCodeHash as string).toLowerCase(), safeSingletonCodeHash: (candidate.safeSingletonCodeHash as string).toLowerCase() };
+    const key = `${normalized.chainId}:${normalized.version}`;
+    if (seen.has(key)) throw new TypeError(`Safe ERC-4337 trust entry ${index} duplicates a previous chain/version`);
+    seen.add(key);
+    return normalized;
+  });
+}
+
+function parseErc4337EntryPoints(value: unknown): { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 64) throw new TypeError('PRIORSEAL_ERC4337_ENTRY_POINTS_JSON must be an array with at most 64 entries');
+  const seen = new Set<string>();
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || Object.keys(entry).sort().join(',') !== 'address,chainId,codeHash,version') throw new TypeError(`ERC-4337 EntryPoint entry ${index} has an invalid shape`);
+    const candidate = entry as Record<string, unknown>;
+    if (!Number.isSafeInteger(candidate.chainId) || Number(candidate.chainId) < 1) throw new TypeError(`ERC-4337 EntryPoint entry ${index} has an invalid chainId`);
+    if (!['0.6', '0.7', '0.8', '0.9'].includes(String(candidate.version))) throw new TypeError(`ERC-4337 EntryPoint entry ${index} has an unsupported version`);
+    if (typeof candidate.address !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(candidate.address)) throw new TypeError(`ERC-4337 EntryPoint entry ${index} has an invalid address`);
+    if (typeof candidate.codeHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(candidate.codeHash)) throw new TypeError(`ERC-4337 EntryPoint entry ${index} has an invalid codeHash`);
+    const normalized = { chainId: Number(candidate.chainId), version: candidate.version as '0.6' | '0.7' | '0.8' | '0.9', address: candidate.address.toLowerCase(), codeHash: candidate.codeHash.toLowerCase() };
+    const key = `${normalized.chainId}:${normalized.version}:${normalized.address}`;
+    if (seen.has(key)) throw new TypeError(`ERC-4337 EntryPoint entry ${index} duplicates a previous entry`);
+    seen.add(key);
+    return normalized;
+  });
 }
 
 function databaseBackendValue(value: unknown): 'postgresql' | 'd1' {
