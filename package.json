@@ -129,5 +129,14 @@
     "solc": "0.8.36",
     "typescript": "^5.8.3",
     "wrangler": "^4.129.1"
+  },
+  "overrides": {
+    "@gelatonetwork/relay-sdk": {
+      "axios": "1.20.0",
+      "ethers": {
+        ".": "6.17.0",
+        "ws": "8.22.0"
+      }
+    }
   }
 }
