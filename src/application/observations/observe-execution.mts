@@ -18,7 +18,7 @@ import type { AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { WorkerObservation } from './observation-worker.mjs';
 import type { IdempotencyStore } from '../idempotency.mjs';
 
-type CorrelatedObservation = BindingExecution & { txHash?: string | null; intentHash?: string | null; executionDataAvailable?: boolean; userOperationHash?: string | null; entryPoint?: string | null; entryPointCodeHash?: string | null; entryPointVersion?: string | null };
+type CorrelatedObservation = BindingExecution & { txHash?: string | null; intentHash?: string | null; executionDataAvailable?: boolean; userOperationHash?: string | null; entryPoint?: string | null; entryPointCodeHash?: string | null; entryPointVersion?: string | null; eip7702Delegation?: BindingExecution['eip7702Delegation'] };
 type Observation = WorkerObservation & { chainId: number | string; intentHash?: string; executedAt?: number | null; observedAt?: number | null; confirmations?: number; sender?: string | null; nonce?: string | null; action?: string | null; recipient?: string | null; target?: string | null; calldataHash?: string | null; nativeValue?: string | null; asset?: string | null; amount?: string | null; status: string };
 type PolicyEvidence = NonNullable<Parameters<typeof buildAuthorizedReceipt>[0]['policyEvidence']>;
 type TimestampEvidence = NonNullable<Parameters<typeof buildAuthorizedReceipt>[0]['timestampEvidence']>;
@@ -42,7 +42,7 @@ type ObservationStore = IdempotencyStore<ObservationResponse> & {
   saveObservation: (observation: Observation) => Promise<unknown>;
   saveReceipt: (receipt: SignedReceipt) => Promise<unknown>;
 };
-type Observer = (input: { chainId: number; txHash: string; confirmations: number; finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'; maxToleratedReorgDepth: number | null; erc4337?: { entryPoint: string; entryPointCodeHash: string; entryPointVersion: '0.6' | '0.7' | '0.8' | '0.9'; userOperationHash: string; accountCallProfile?: 'safe-4337.v1'; accountCallTarget?: string; accountCallValue?: string; accountCallDataHash?: string }; signal?: AbortSignal }) => Promise<ExecutionInput>;
+type Observer = (input: { chainId: number; txHash: string; confirmations: number; finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'; maxToleratedReorgDepth: number | null; erc4337?: { entryPoint: string; entryPointCodeHash: string; entryPointVersion: '0.6' | '0.7' | '0.8' | '0.9'; userOperationHash: string; accountCallProfile?: 'safe-4337.v1'; accountCallTarget?: string; accountCallValue?: string; accountCallDataHash?: string; eip7702?: { delegateAddress: string; delegateCodeHash: string; authorizationTupleHash?: string } }; signal?: AbortSignal }) => Promise<ExecutionInput>;
 type ContractSignatureVerifier = NonNullable<NonNullable<Parameters<typeof verifyAuthorizedReceipt>[2]>['verifyContractSignature']>;
 
 /** Observes an execution, records evidence, and optionally issues a signed receipt. */
@@ -70,7 +70,7 @@ export async function observeExecution({ input: inputValue, store, observer, sig
   const finalityRequirement = constraints?.finalityRequirement ?? 'CONFIRMATIONS';
   const confirmations = Math.max(requestedConfirmations, Number(constraints?.minConfirmations ?? 0), maxToleratedReorgDepth == null ? 0 : maxToleratedReorgDepth + 1);
   const erc4337 = intent.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1'
-    ? { entryPoint: String(intent.entryPoint), entryPointCodeHash: String(intent.entryPointCodeHash), entryPointVersion: intent.entryPointVersion as '0.6' | '0.7' | '0.8' | '0.9', userOperationHash: String(intent.userOperationHash), ...(intent.accountCallProfile ? { accountCallProfile: intent.accountCallProfile as 'safe-4337.v1', accountCallTarget: String(intent.accountCallTarget), accountCallValue: String(intent.accountCallValue), accountCallDataHash: String(intent.accountCallDataHash) } : {}) }
+    ? { entryPoint: String(intent.entryPoint), entryPointCodeHash: String(intent.entryPointCodeHash), entryPointVersion: intent.entryPointVersion as '0.6' | '0.7' | '0.8' | '0.9', userOperationHash: String(intent.userOperationHash), ...(intent.accountCallProfile ? { accountCallProfile: intent.accountCallProfile as 'safe-4337.v1', accountCallTarget: String(intent.accountCallTarget), accountCallValue: String(intent.accountCallValue), accountCallDataHash: String(intent.accountCallDataHash) } : {}), ...(intent.eip7702 ? { eip7702: intent.eip7702 } : {}) }
     : undefined;
   const previous = store.getObservation ? await store.getObservation(intent.chainId, requestedTxHash) : null;
   const observed = await observer({
@@ -164,7 +164,8 @@ export function classifyAuthorizationAssociation(authorization: Authorization | 
         && same(observation.entryPoint, authorization.intent.entryPoint)
         && same(observation.entryPointVersion, authorization.intent.entryPointVersion)
         && same(observation.entryPointCodeHash, authorization.intent.entryPointCodeHash)
-        && (authorization.intent.accountCallProfile == null || same(observation.accountCallProfile, authorization.intent.accountCallProfile) && same(observation.accountCallTarget, authorization.intent.accountCallTarget) && same(observation.accountCallValue, authorization.intent.accountCallValue) && same(observation.accountCallDataHash, authorization.intent.accountCallDataHash)));
+        && (authorization.intent.accountCallProfile == null || same(observation.accountCallProfile, authorization.intent.accountCallProfile) && same(observation.accountCallTarget, authorization.intent.accountCallTarget) && same(observation.accountCallValue, authorization.intent.accountCallValue) && same(observation.accountCallDataHash, authorization.intent.accountCallDataHash))
+        && matchesEip7702(authorization.intent.eip7702, observation.eip7702Delegation));
   if (!correlated) return 'UNRELATED';
   if (['CONFIRMED', 'REVERTED'].includes(observation.status ?? '') && ['CONFIRMED', 'FINALIZED'].includes(observation.finalityState ?? '')) return 'FINAL';
   if (['CONFIRMED', 'REVERTED'].includes(observation.status ?? '')) return 'CANDIDATE';
@@ -194,10 +195,22 @@ export function classifyExecutionCorrelation(authorization: Authorization | null
       && same(observation.entryPoint, intent.entryPoint)
       && same(observation.entryPointVersion, intent.entryPointVersion)
       && same(observation.entryPointCodeHash, intent.entryPointCodeHash)
-      && (intent.accountCallProfile == null || same(observation.accountCallProfile, intent.accountCallProfile) && same(observation.accountCallTarget, intent.accountCallTarget) && same(observation.accountCallValue, intent.accountCallValue) && same(observation.accountCallDataHash, intent.accountCallDataHash)));
+      && (intent.accountCallProfile == null || same(observation.accountCallProfile, intent.accountCallProfile) && same(observation.accountCallTarget, intent.accountCallTarget) && same(observation.accountCallValue, intent.accountCallValue) && same(observation.accountCallDataHash, intent.accountCallDataHash))
+      && matchesEip7702(intent.eip7702, observation.eip7702Delegation));
   return matches ? 'MATCH' : 'MISMATCH';
 }
 
 function same(left: unknown, right: unknown) {
   return String(left ?? '').toLowerCase() === String(right ?? '').toLowerCase();
+}
+
+function matchesEip7702(expected: Authorization['intent']['eip7702'], evidence: CorrelatedObservation['eip7702Delegation']): boolean {
+  if (expected == null) return true;
+  if (!evidence || !same(evidence.delegateAddress, expected.delegateAddress) || !same(evidence.delegateCodeHash, expected.delegateCodeHash)
+    || !same(evidence.authorizationTupleHash, expected.authorizationTupleHash) || evidence.authorizationIncluded !== (expected.authorizationTupleHash != null)
+    || evidence.operationIncluded !== true) return false;
+  if (evidence.outerTransactionStatus === 'REVERTED' && evidence.operationSuccess === null) {
+    return evidence.stateAtTransactionEnd === 'ACTIVE' && same(evidence.delegateAfter, expected.delegateAddress);
+  }
+  return evidence.outerTransactionStatus === 'SUCCESS';
 }

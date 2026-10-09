@@ -17,6 +17,7 @@ const BINDING_CODES = Object.freeze({
   ENTRY_POINT_MISMATCH: "ENTRY_POINT_MISMATCH",
   ENTRY_POINT_VERSION_MISMATCH: "ENTRY_POINT_VERSION_MISMATCH",
   ENTRY_POINT_CODE_HASH_MISMATCH: "ENTRY_POINT_CODE_HASH_MISMATCH",
+  EIP7702_DELEGATION_MISMATCH: "EIP7702_DELEGATION_MISMATCH",
   CALL_TARGET_MISMATCH: "CALL_TARGET_MISMATCH",
   CALLDATA_MISMATCH: "CALLDATA_MISMATCH",
   TRANSACTION_VALUE_MISMATCH: "TRANSACTION_VALUE_MISMATCH",
@@ -44,6 +45,7 @@ function bindIntentExecution(intent, execution, now = execution.observedAt ?? Ma
   if (erc4337 && !same(execution.entryPointVersion, intent.entryPointVersion)) reasons.push(BINDING_CODES.ENTRY_POINT_VERSION_MISMATCH);
   if (erc4337 && !same(execution.entryPointCodeHash, intent.entryPointCodeHash)) reasons.push(BINDING_CODES.ENTRY_POINT_CODE_HASH_MISMATCH);
   if (intent.accountCallProfile != null && (!same(execution.accountCallProfile, intent.accountCallProfile) || !same(execution.accountCallTarget, intent.accountCallTarget) || String(execution.accountCallValue ?? "") !== String(intent.accountCallValue ?? "") || !same(execution.accountCallDataHash, intent.accountCallDataHash))) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
+  if (erc4337 && intent.eip7702 != null && !matchesEip7702(intent.eip7702, execution.eip7702Delegation)) reasons.push(BINDING_CODES.EIP7702_DELEGATION_MISMATCH);
   const executedAt = execution.executedAt ?? execution.observedAt;
   if (executedAt != null && executedAt > intent.validUntil) reasons.push(BINDING_CODES.OUTSIDE_TIME_WINDOW);
   const constraints = intent.constraints ?? {};
@@ -56,6 +58,13 @@ function bindIntentExecution(intent, execution, now = execution.observedAt ?? Ma
   }
   if (!exactCall && Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push(BINDING_CODES.AMBIGUOUS_TRANSFER);
   return { bound: reasons.length === 0, reasonCodes: [...new Set(reasons)] };
+}
+function matchesEip7702(expected, evidence) {
+  if (!evidence || !same(evidence.delegateAddress, expected.delegateAddress) || !same(evidence.delegateCodeHash, expected.delegateCodeHash) || !same(evidence.authorizationTupleHash, expected.authorizationTupleHash) || evidence.authorizationIncluded !== (expected.authorizationTupleHash != null) || evidence.operationIncluded !== true) return false;
+  if (evidence.outerTransactionStatus === "REVERTED" && evidence.operationSuccess === null) {
+    return evidence.stateAtTransactionEnd === "ACTIVE" && same(evidence.delegateAfter, expected.delegateAddress);
+  }
+  return evidence.outerTransactionStatus === "SUCCESS";
 }
 export {
   BINDING_CODES,
