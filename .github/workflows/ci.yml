@@ -2,14 +2,22 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  merge_group:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  # The event name is part of the group so that a `push` run and a
+  # `pull_request` run for the same branch never cancel each other. Previously
+  # both resolved to the same group (the branch name), so branch pushes
+  # cancelled the PR run and left a stale CANCELLED `release-check` that
+  # blocked the pull request. Same branch + same event still supersedes, which
+  # is the intended fast-feedback behaviour.
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -44,15 +52,30 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          MG_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MG_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           EVENT_PATH: ${{ github.event_path }}
         run: |
           set -euo pipefail
 
-          expected='imokokok <145034722+imokokok@users.noreply.github.com>'
+          owner='imokokok <145034722+imokokok@users.noreply.github.com>'
+          bot='dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>'
+          # GitHub web merges (squash/rebase/merge) always use this committer for
+          # the commit it writes onto main, regardless of the PR author.
+          github_committer='GitHub <noreply@github.com>'
+
+          allow_bot=0
           case "$EVENT_NAME" in
             pull_request)
               commits_output="$(git rev-list --reverse "$PR_BASE_SHA..$PR_HEAD_SHA")"
-              if [[ -n "$commits_output" ]]; then mapfile -t commits <<< "$commits_output"; else commits=(); fi
+              [[ "$PR_HEAD_REF" == dependabot/* ]] && allow_bot=1
+              ;;
+            merge_group)
+              # The merge-group tip is a synthetic merge commit authored by GitHub;
+              # only the candidate PR commits underneath it are gated.
+              commits_output="$(git rev-list --reverse --no-merges "$MG_BASE_SHA..$MG_HEAD_SHA")"
+              allow_bot=1
               ;;
             push)
               if [[ "$EVENT_BEFORE" == '0000000000000000000000000000000000000000' ]]; then
@@ -60,22 +83,37 @@ jobs:
               else
                 commits_output="$(git rev-list --reverse "$EVENT_BEFORE..$HEAD_SHA")"
               fi
-              if [[ -n "$commits_output" ]]; then mapfile -t commits <<< "$commits_output"; else commits=(); fi
+              # Commits landing on main may be squash-merged dependabot bumps.
+              allow_bot=1
               ;;
             *)
-              commits=("$HEAD_SHA")
+              commits_output="$HEAD_SHA"
+              allow_bot=1
               ;;
           esac
 
+          if [[ -n "$commits_output" ]]; then mapfile -t commits <<< "$commits_output"; else commits=(); fi
+
           for commit in "${commits[@]}"; do
-            identity="$(git show -s --format='%an <%ae>%n%cn <%ce>' "$commit")"
-            if [[ "$identity" != "$expected"$'\n'"$expected" ]]; then
-              echo "::error::Commit $commit must use $expected for both author and committer."
+            [[ -z "$commit" ]] && continue
+            identity="$(git show -s --format='%an <%ae>|%cn <%ce>' "$commit")"
+            author="${identity%%|*}"
+            committer="${identity##*|}"
+
+            author_ok=0
+            [[ "$author" == "$owner" ]] && author_ok=1
+            [[ $allow_bot -eq 1 && "$author" == "$bot" ]] && author_ok=1
+
+            committer_ok=0
+            [[ "$committer" == "$owner" || "$committer" == "$github_committer" ]] && committer_ok=1
+
+            if [[ $author_ok -ne 1 || $committer_ok -ne 1 ]]; then
+              echo "::error::Commit $commit has author '$author' / committer '$committer'; expected the repository owner${allow_bot:+ (or dependabot[bot])} as author and the owner or GitHub as committer."
               exit 1
             fi
           done
 
-          echo "Validated ${#commits[@]} commit(s) with the required author and committer identity."
+          echo "Validated ${#commits[@]} commit(s) against the repository identity policy."
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
