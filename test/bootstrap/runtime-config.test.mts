@@ -31,6 +31,7 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     witnessEndpointsFile: undefined,
     preExecutionProofMode: 'issuer',
     erc4337EntryPoints: [],
+    eip7702Delegates: [],
     safe4337Trust: [],
     allowSelfAssertedPrincipals: false,
     requireExternalAnchor: false,
@@ -59,6 +60,10 @@ test('runtime configuration rejects ambiguous or invalid values before startup',
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_SAFE_4337_TRUST_JSON: safeTrust }), /requires a matching configured EntryPoint/);
   assert.deepEqual(loadRuntimeConfig({ PRIORSEAL_ERC4337_ENTRY_POINTS_JSON: entryPoint, PRIORSEAL_SAFE_4337_TRUST_JSON: safeTrust }).safe4337Trust, [{ chainId: 8453, version: '0.7', entryPointAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', moduleAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', moduleCodeHash: `0x${'b'.repeat(64)}`, safeProxyCodeHash: `0x${'d'.repeat(64)}`, safeSingletonCodeHash: `0x${'c'.repeat(64)}` }]);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ERC4337_ENTRY_POINTS_JSON: entryPoint, PRIORSEAL_SAFE_4337_TRUST_JSON: safeTrust.replace('moduleCodeHash', 'unknown') }), /invalid shape/);
+  const delegateTrust = '[{"chainId":8453,"address":"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","codeHash":"0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}]';
+  assert.deepEqual(loadRuntimeConfig({ PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON: delegateTrust }).eip7702Delegates, [{ chainId: 8453, address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', codeHash: `0x${'d'.repeat(64)}` }]);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON: delegateTrust.replace('"address"', '"delegate"') }), /invalid shape/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON: delegateTrust.replace('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '0x0000000000000000000000000000000000000000') }), /invalid address/);
 });
 
 test('production runtime fails closed unless security dependencies are explicit', () => {

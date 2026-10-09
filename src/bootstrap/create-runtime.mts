@@ -84,7 +84,7 @@ async function composeRuntime({ config, environment = process.env, database, d1,
       if (config.requireExternalAnchor && !evidence.checkpoint.anchor) throw new PriorSealError('TRANSPARENCY_ANCHOR_REQUIRED', 'A verified external anchor covering this authorization is required before execution');
       return evidence;
     } : null;
-    const observer = (input: Parameters<typeof observeEvm>[0]) => observeEvm({ ...input, rpcUrls: rpcUrls(input.chainId), rpcClient, erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust });
+    const observer = (input: Parameters<typeof observeEvm>[0]) => observeEvm({ ...input, rpcUrls: rpcUrls(input.chainId), rpcClient, erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates });
     const baseObservationWorker = store ? createObservationWorker({ store, observerManagesEvidence: true, observe: async (input: ObservationWorkInput) => (await observeExecution({ input, store, observer, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response, saveObservation: (observation) => store.saveObservation(observation as Parameters<typeof store.saveObservation>[0]) }) : null;
     const observationWorker = baseObservationWorker && dispatchObservationJob ? {
       ...baseObservationWorker,
@@ -94,7 +94,7 @@ async function composeRuntime({ config, environment = process.env, database, d1,
         return job;
       },
     } : baseObservationWorker;
-    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter }) : undefined;
+    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter }) : undefined;
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {});

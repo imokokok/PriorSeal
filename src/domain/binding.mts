@@ -5,6 +5,7 @@ export const BINDING_CODES = Object.freeze({
   GAS_LIMIT_EXCEEDED: 'GAS_LIMIT_EXCEEDED', AMBIGUOUS_TRANSFER: 'AMBIGUOUS_TRANSFER', EXECUTION_UNAVAILABLE: 'EXECUTION_UNAVAILABLE',
   EXECUTOR_MISMATCH: 'EXECUTOR_MISMATCH',
   USER_OPERATION_HASH_MISMATCH: 'USER_OPERATION_HASH_MISMATCH', ENTRY_POINT_MISMATCH: 'ENTRY_POINT_MISMATCH', ENTRY_POINT_VERSION_MISMATCH: 'ENTRY_POINT_VERSION_MISMATCH', ENTRY_POINT_CODE_HASH_MISMATCH: 'ENTRY_POINT_CODE_HASH_MISMATCH',
+  EIP7702_DELEGATION_MISMATCH: 'EIP7702_DELEGATION_MISMATCH',
   CALL_TARGET_MISMATCH: 'CALL_TARGET_MISMATCH', CALLDATA_MISMATCH: 'CALLDATA_MISMATCH', TRANSACTION_VALUE_MISMATCH: 'TRANSACTION_VALUE_MISMATCH',
   AUTHORIZATION_AFTER_EXECUTION: 'AUTHORIZATION_AFTER_EXECUTION',
   OUTSIDE_AUTHORIZATION_WINDOW: 'OUTSIDE_AUTHORIZATION_WINDOW',
@@ -33,6 +34,7 @@ export type BindingIntent = {
   accountCallTarget?: string | null;
   accountCallValue?: string | null;
   accountCallDataHash?: string | null;
+  eip7702?: { delegateAddress: string; delegateCodeHash: string; authorizationTupleHash?: string } | null;
   constraints?: { minConfirmations?: number | string | null; maxGasUsed?: number | string | null; maxToleratedReorgDepth?: number | null; finalityRequirement?: string | null } | null;
 };
 
@@ -62,6 +64,17 @@ export type BindingExecution = {
   accountCallTarget?: string | null;
   accountCallValue?: string | null;
   accountCallDataHash?: string | null;
+  eip7702Delegation?: {
+    delegateAddress: string;
+    delegateCodeHash: string;
+    authorizationTupleHash: string | null;
+    authorizationIncluded: boolean;
+    operationIncluded: true;
+    operationSuccess: boolean | null;
+    outerTransactionStatus: 'SUCCESS' | 'REVERTED';
+    stateAtTransactionEnd: 'ACTIVE' | 'UNDELEGATED' | 'OTHER_DELEGATE' | 'NON_DELEGATED_CODE';
+    delegateAfter: string | null;
+  } | null;
   transfers?: unknown[] | null;
   transferMatchUnique?: boolean;
 };
@@ -90,6 +103,7 @@ export function bindIntentExecution(intent: BindingIntent, execution: BindingExe
   if (erc4337 && !same(execution.entryPointVersion, intent.entryPointVersion)) reasons.push(BINDING_CODES.ENTRY_POINT_VERSION_MISMATCH);
   if (erc4337 && !same(execution.entryPointCodeHash, intent.entryPointCodeHash)) reasons.push(BINDING_CODES.ENTRY_POINT_CODE_HASH_MISMATCH);
   if (intent.accountCallProfile != null && (!same(execution.accountCallProfile, intent.accountCallProfile) || !same(execution.accountCallTarget, intent.accountCallTarget) || String(execution.accountCallValue ?? '') !== String(intent.accountCallValue ?? '') || !same(execution.accountCallDataHash, intent.accountCallDataHash))) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
+  if (erc4337 && intent.eip7702 != null && !matchesEip7702(intent.eip7702, execution.eip7702Delegation)) reasons.push(BINDING_CODES.EIP7702_DELEGATION_MISMATCH);
   // New observations carry the block timestamp. The fallback preserves
   // compatibility with already-issued v1 receipts that only had observedAt.
   const executedAt = execution.executedAt ?? execution.observedAt;
@@ -104,4 +118,14 @@ export function bindIntentExecution(intent: BindingIntent, execution: BindingExe
   }
   if (!exactCall && Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push(BINDING_CODES.AMBIGUOUS_TRANSFER);
   return { bound: reasons.length === 0, reasonCodes: [...new Set(reasons)] };
+}
+
+function matchesEip7702(expected: NonNullable<BindingIntent['eip7702']>, evidence: BindingExecution['eip7702Delegation']): boolean {
+  if (!evidence || !same(evidence.delegateAddress, expected.delegateAddress) || !same(evidence.delegateCodeHash, expected.delegateCodeHash)
+    || !same(evidence.authorizationTupleHash, expected.authorizationTupleHash) || evidence.authorizationIncluded !== (expected.authorizationTupleHash != null)
+    || evidence.operationIncluded !== true) return false;
+  if (evidence.outerTransactionStatus === 'REVERTED' && evidence.operationSuccess === null) {
+    return evidence.stateAtTransactionEnd === 'ACTIVE' && same(evidence.delegateAfter, expected.delegateAddress);
+  }
+  return evidence.outerTransactionStatus === 'SUCCESS';
 }
