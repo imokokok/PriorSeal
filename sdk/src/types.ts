@@ -82,6 +82,7 @@ export type Intent = {
   accountCallTarget?: string
   accountCallValue?: string
   accountCallDataHash?: string
+  eip7702?: { delegateAddress: string; delegateCodeHash: string; authorizationTupleHash?: string }
   contextCommitments?: ContextCommitment[]
   constraints?: { minConfirmations?: number; maxGasUsed?: string; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' }
 }
@@ -115,12 +116,28 @@ export type Execution = {
   entryPoint?: string
   entryPointCodeHash?: string
   entryPointVersion?: '0.6' | '0.7' | '0.8' | '0.9'
-  userOperationSuccess?: boolean
+  userOperationSuccess?: boolean | null
   actualGasCost?: string
   accountCallProfile?: 'safe-4337.v1'
   accountCallTarget?: string
   accountCallValue?: string
   accountCallDataHash?: string
+  eip7702Delegation?: {
+    schema: 'priorseal.eip7702.delegation-evidence.v1'
+    delegateAddress: string
+    delegateCodeHash: string
+    authorizationTupleHash: string | null
+    authorizationIncluded: boolean
+    operationIncluded: true
+    operationSuccess: boolean | null
+    outerTransactionStatus: 'SUCCESS' | 'REVERTED'
+    outerTransactionGasUsed: string
+    outerTransactionFee: string | null
+    stateAtTransactionEnd: 'ACTIVE' | 'UNDELEGATED' | 'OTHER_DELEGATE' | 'NON_DELEGATED_CODE'
+    delegateObservedForExecution: string | null
+    delegateAfter: string | null
+    transition: 'SET' | 'REPLACED' | 'UNCHANGED' | 'REVOKED' | 'OTHER'
+  }
   executionDataAvailable?: boolean
   observationSource?: string
   finalityState?: string
@@ -307,6 +324,9 @@ export type DeploymentCapabilities = {
   maxToleratedReorgDepth: number | null
   finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'
   dependencies: { issuer: string; timestamp: string; rpc: string; storage: string }
+  erc4337EntryPoints: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]
+  safe4337Trust: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]
+  eip7702Delegates: { chainId: number; address: string; codeHash: string }[]
   workflowReady: boolean
   chainReadiness: { chainId: number; rpc: 'configured' | 'unknown' | 'unavailable' }[]
   readinessScope: string

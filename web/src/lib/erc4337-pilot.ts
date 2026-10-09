@@ -1,7 +1,7 @@
 import { bindERC4337UserOperation, decodeSafe4337CallData, type DeploymentCapabilities, type ObservationResult } from 'priorseal-sdk'
-import { PILOT_CHAIN_ID, PILOT_ENTRY_POINT, PILOT_ENTRY_POINT_CODE_HASH, PILOT_SAFE } from './erc4337-profile'
+import { PILOT_CHAIN_ID, PILOT_ENTRY_POINT, PILOT_ENTRY_POINT_CODE_HASH, PILOT_SAFE } from './erc4337-profile.ts'
 
-export { PILOT_CHAIN_ID, PILOT_ENTRY_POINT, PILOT_ENTRY_POINT_CODE_HASH, PILOT_MODULE, PILOT_OWNER, PILOT_SAFE, PILOT_USER_OPERATION_EVENT_TOPIC } from './erc4337-profile'
+export { PILOT_CHAIN_ID, PILOT_ENTRY_POINT, PILOT_ENTRY_POINT_CODE_HASH, PILOT_MODULE, PILOT_OWNER, PILOT_SAFE, PILOT_USER_OPERATION_EVENT_TOPIC } from './erc4337-profile.ts'
 
 const recoveryStorageKey = 'priorseal.erc4337-pilot-recovery.v1'
 const maxRecoveryBytes = 64_000
