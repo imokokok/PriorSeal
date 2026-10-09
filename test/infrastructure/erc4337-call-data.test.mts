@@ -136,3 +136,133 @@ test('EVM observer verifies EntryPoint code and Safe semantics from the included
 test('Safe ERC-4337 observer fails closed without an explicit chain/version trust profile', async () => {
   await assert.rejects(() => observeEvm({ chainId: 8453, txHash: `0x${'1'.repeat(64)}`, rpcUrls: ['rpc'], rpcClient: { async call() { return null; } } as never, erc4337: { entryPoint: ep, entryPointCodeHash: `0x${'d'.repeat(64)}`, entryPointVersion: '0.7', userOperationHash: `0x${'1'.repeat(64)}`, accountCallProfile: 'safe-4337.v1' }, erc4337EntryPoints: [{ chainId: 8453, version: '0.7', address: ep, codeHash: `0x${'d'.repeat(64)}` }] }), (error: unknown) => (error as { code?: string }).code === 'ERC4337_SAFE_ACCOUNT_UNTRUSTED');
 });
+
+test('ERC-4337 observer records a reverted UserOperation and its actual gas even when the outer transaction succeeded', async () => {
+  const code = '0x6000';
+  const codeHash = keccak256(code);
+  const txHash = `0x${'4'.repeat(64)}`;
+  const blockHash = `0x${'5'.repeat(64)}`;
+  const eventTopic = keccak256(toBytes('UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)'));
+  const addressTopic = (value: string) => `0x${'0'.repeat(24)}${value.slice(2)}`;
+  const binding = bindERC4337UserOperation({ chainId: 8453, entryPoint: ep, entryPointCodeHash: codeHash, entryPointVersion: '0.7', userOperation });
+  const logs = [{ address: ep, topics: [eventTopic, binding.userOpHash, addressTopic(account), addressTopic(`0x${'0'.repeat(40)}`)], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'bool' }, { type: 'uint256' }, { type: 'uint256' }], [7n, false, 900n, 700n]), transactionHash: txHash, blockHash, blockNumber: '0xa' }];
+  const rpcClient = {
+    async call<T>(_url: string, method: string, params: unknown[]): Promise<T> {
+      const result = method === 'eth_chainId' ? '0x2105'
+        : method === 'eth_getTransactionByHash' ? { hash: txHash, from: target, to: ep, nonce: '0x0', value: '0x0', input: '0x', blockNumber: '0xa', blockHash }
+          : method === 'eth_getTransactionReceipt' ? { transactionHash: txHash, status: '0x1', blockNumber: '0xa', blockHash, gasUsed: '0x5208', logs }
+            : method === 'eth_getCode' ? code
+              : method === 'eth_blockNumber' ? '0xb'
+                : method === 'eth_getBlockByHash' ? { hash: blockHash, number: '0xa', timestamp: '0x64' }
+                  : null;
+      return result as T;
+    },
+  };
+  const observation = await observeEvm({
+    chainId: 8453, txHash, confirmations: 2, rpcUrls: ['rpc'], rpcClient,
+    erc4337EntryPoints: [{ chainId: 8453, version: '0.7', address: ep, codeHash }],
+    erc4337: { entryPoint: ep, entryPointCodeHash: codeHash, entryPointVersion: '0.7', userOperationHash: binding.userOpHash },
+  });
+  assert.equal(observation.status, 'REVERTED');
+  assert.equal(observation.userOperationSuccess, false);
+  assert.equal(observation.actualGasCost, '900');
+  assert.equal(observation.gasUsed, '700');
+  assert.equal(observation.finalityState, 'CONFIRMED');
+});
+
+test('ERC-4337 observer rejects missing and ambiguous matching EntryPoint events', async () => {
+  const code = '0x6000';
+  const codeHash = keccak256(code);
+  const txHash = `0x${'6'.repeat(64)}`;
+  const blockHash = `0x${'7'.repeat(64)}`;
+  const eventTopic = keccak256(toBytes('UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)'));
+  const addressTopic = (value: string) => `0x${'0'.repeat(24)}${value.slice(2)}`;
+  const binding = bindERC4337UserOperation({ chainId: 8453, entryPoint: ep, entryPointCodeHash: codeHash, entryPointVersion: '0.7', userOperation });
+  const event = { address: ep, topics: [eventTopic, binding.userOpHash, addressTopic(account), addressTopic(`0x${'0'.repeat(40)}`)], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'bool' }, { type: 'uint256' }, { type: 'uint256' }], [7n, true, 900n, 700n]), transactionHash: txHash, blockHash, blockNumber: '0xa' };
+  for (const logs of [[], [event, event]]) {
+    const rpcClient = {
+      async call<T>(_url: string, method: string): Promise<T> {
+        const result = method === 'eth_chainId' ? '0x2105'
+          : method === 'eth_getTransactionByHash' ? { hash: txHash, from: target, to: ep, nonce: '0x0', value: '0x0', input: '0x', blockNumber: '0xa', blockHash }
+            : method === 'eth_getTransactionReceipt' ? { transactionHash: txHash, status: '0x1', blockNumber: '0xa', blockHash, gasUsed: '0x5208', logs }
+              : method === 'eth_getCode' ? code
+                : method === 'eth_blockNumber' ? '0xb'
+                  : method === 'eth_getBlockByHash' ? { hash: blockHash, number: '0xa', timestamp: '0x64' }
+                    : null;
+        return result as T;
+      },
+    };
+    await assert.rejects(() => observeEvm({
+      chainId: 8453, txHash, confirmations: 2, rpcUrls: ['rpc'], rpcClient,
+      erc4337EntryPoints: [{ chainId: 8453, version: '0.7', address: ep, codeHash }],
+      erc4337: { entryPoint: ep, entryPointCodeHash: codeHash, entryPointVersion: '0.7', userOperationHash: binding.userOpHash },
+    }), (error: unknown) => (error as { code?: string }).code === 'ERC4337_EVENT_MISMATCH');
+  }
+});
+
+test('Safe ERC-4337 observer fails closed when the RPC cannot provide a transaction prestate trace', async () => {
+  const code = '0x6000';
+  const codeHash = keccak256(code);
+  const txHash = `0x${'8'.repeat(64)}`;
+  const blockHash = `0x${'9'.repeat(64)}`;
+  const eventTopic = keccak256(toBytes('UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)'));
+  const addressTopic = (value: string) => `0x${'0'.repeat(24)}${value.slice(2)}`;
+  const safeInput = { chainId: 8453, entryPoint: ep, entryPointCodeHash: codeHash, entryPointVersion: '0.7' as const, accountCallProfile: 'safe-4337.v1' as const, userOperation };
+  const binding = bindERC4337UserOperation(safeInput);
+  const logs = [{ address: ep, topics: [eventTopic, binding.userOpHash, addressTopic(account), addressTopic(`0x${'0'.repeat(40)}`)], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'bool' }, { type: 'uint256' }, { type: 'uint256' }], [7n, true, 900n, 700n]), transactionHash: txHash, blockHash, blockNumber: '0xa' }];
+  const rpcClient = {
+    async call<T>(_url: string, method: string, params: unknown[]): Promise<T> {
+      if (method === 'debug_traceTransaction') throw new Error('trace method unavailable');
+      const result = method === 'eth_chainId' ? '0x2105'
+        : method === 'eth_getTransactionByHash' ? { hash: txHash, from: target, to: ep, nonce: '0x0', value: '0x0', input: bundlerData, blockNumber: '0xa', blockHash }
+          : method === 'eth_getTransactionReceipt' ? { transactionHash: txHash, status: '0x1', blockNumber: '0xa', blockHash, gasUsed: '0x5208', logs }
+            : method === 'eth_getCode' ? code
+              : method === 'eth_blockNumber' ? '0xb'
+                : method === 'eth_getBlockByHash' ? { hash: blockHash, number: '0xa', timestamp: '0x64' }
+                  : method === 'eth_call' ? params[0] && (params[0] as { data?: string }).data?.startsWith('0x35567e1a') ? `0x${'0'.repeat(63)}7` : `0x${'0'.repeat(24)}${ep.slice(2)}`
+                    : null;
+      return result as T;
+    },
+  };
+  await assert.rejects(() => observeEvm({
+    chainId: 8453, txHash, confirmations: 2, rpcUrls: ['rpc'], rpcClient,
+    erc4337EntryPoints: [{ chainId: 8453, version: '0.7', address: ep, codeHash }],
+    safe4337Trust: [{ chainId: 8453, version: '0.7', entryPointAddress: ep, moduleAddress, moduleCodeHash: keccak256('0x6001'), safeProxyCodeHash: keccak256('0x6003'), safeSingletonCodeHash: keccak256('0x6002') }],
+    erc4337: { entryPoint: ep, entryPointCodeHash: codeHash, entryPointVersion: '0.7', userOperationHash: binding.userOpHash, accountCallProfile: 'safe-4337.v1', accountCallTarget: binding.accountCall!.target, accountCallValue: binding.accountCall!.value, accountCallDataHash: binding.accountCall!.dataHash },
+  }), (error: unknown) => (error as { code?: string }).code === 'ERC4337_SAFE_ACCOUNT_UNTRUSTED');
+});
+
+test('ERC-4337 observer marks an inclusion as reorganized when the canonical block hash changes', async () => {
+  const code = '0x6000';
+  const codeHash = keccak256(code);
+  const txHash = `0x${'a'.repeat(64)}`;
+  const blockHash = `0x${'b'.repeat(64)}`;
+  const canonicalHash = `0x${'c'.repeat(64)}`;
+  const headHash = `0x${'d'.repeat(64)}`;
+  const eventTopic = keccak256(toBytes('UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)'));
+  const addressTopic = (value: string) => `0x${'0'.repeat(24)}${value.slice(2)}`;
+  const binding = bindERC4337UserOperation({ chainId: 8453, entryPoint: ep, entryPointCodeHash: codeHash, entryPointVersion: '0.7', userOperation });
+  const logs = [{ address: ep, topics: [eventTopic, binding.userOpHash, addressTopic(account), addressTopic(`0x${'0'.repeat(40)}`)], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'bool' }, { type: 'uint256' }, { type: 'uint256' }], [7n, true, 900n, 700n]), transactionHash: txHash, blockHash, blockNumber: '0xa' }];
+  const rpcClient = {
+    async call<T>(_url: string, method: string, params: unknown[]): Promise<T> {
+      const result = method === 'eth_chainId' ? '0x2105'
+        : method === 'eth_getTransactionByHash' ? { hash: txHash, from: target, to: ep, nonce: '0x0', value: '0x0', input: '0x', blockNumber: '0xa', blockHash }
+          : method === 'eth_getTransactionReceipt' ? { transactionHash: txHash, status: '0x1', blockNumber: '0xa', blockHash, gasUsed: '0x5208', logs }
+            : method === 'eth_getCode' ? code
+              : method === 'eth_blockNumber' ? '0xb'
+                : method === 'eth_getBlockByHash' ? { hash: blockHash, number: '0xa', timestamp: '0x64' }
+                  : method === 'eth_getBlockByNumber' && params[0] === 'finalized' ? { number: '0xa', hash: canonicalHash, timestamp: '0x64' }
+                    : method === 'eth_getBlockByNumber' && params[0] === '0xb' ? { number: '0xb', hash: headHash, timestamp: '0x65' }
+                      : method === 'eth_getBlockByNumber' && params[0] === '0xa' ? { number: '0xa', hash: canonicalHash, timestamp: '0x64' }
+                        : null;
+      return result as T;
+    },
+  };
+  const observation = await observeEvm({
+    chainId: 8453, txHash, confirmations: 2, finalityRequirement: 'RPC_FINALIZED', rpcUrls: ['rpc'], rpcClient,
+    erc4337EntryPoints: [{ chainId: 8453, version: '0.7', address: ep, codeHash }],
+    erc4337: { entryPoint: ep, entryPointCodeHash: codeHash, entryPointVersion: '0.7', userOperationHash: binding.userOpHash },
+  });
+  assert.equal(observation.status, 'REORGED');
+  assert.equal(observation.finalityState, 'REORGED');
+});
