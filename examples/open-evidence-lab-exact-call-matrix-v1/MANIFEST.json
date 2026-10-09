@@ -1,0 +1,134 @@
+{
+  "schema": "oel.matrix-manifest.v1",
+  "matrixId": "oel-exact-call-envelope-matrix-v1",
+  "title": "Did the approved request match what actually executed? Exact-call envelope matrix",
+  "issue": "https://github.com/probityai/agent-evidence-atlas/issues/49",
+  "profile": "priorseal.execution-profile.exact-call.v1",
+  "claim": "envelope-matching-only",
+  "evidenceClaim": "cross-implementation-agreement-on-synthetic-fixtures",
+  "producer": {
+    "name": "PriorSeal exact-call profile",
+    "repository": "https://github.com/imokokok/PriorSeal",
+    "path": "examples/open-evidence-lab-exact-call-matrix-v1",
+    "attribution": "reason codes, binding rules and the COMPLIANT/NON_COMPLIANT/NOT_ASSESSABLE vocabulary"
+  },
+  "reader": {
+    "name": "Open Evidence Lab reader",
+    "path": "reader.mjs",
+    "attribution": "the independent implementation in sections 4 and 5 of INPUT-CONTRACT.md",
+    "importsFromPriorSeal": false
+  },
+  "roles": {
+    "fixtureOperator": "synthetic-offline-fixture",
+    "independentOperation": "not-established",
+    "evidenceVantage": "artifact",
+    "witnessScope": "NOT_APPLICABLE",
+    "producerRunsItsOwnProfile": true,
+    "readerRunsWithoutProducerCode": true
+  },
+  "answerExposure": "Expected outcomes and the field map are published with the fixture; this is a conformance matrix, not an answer-blind replication.",
+  "comparisonOrder": "Expected values are declared in expected.json before the run; the recorded report compares both implementations against them in the same run.",
+  "reasonCodeComparison": "sorted-set-equality",
+  "limits": [
+    "Synthetic and offline: no chain observation, no RPC, no production key custody.",
+    "One signed authorization and five observed envelopes; not a corpus.",
+    "Moves one observed field at a time; does not measure combinations or adversarial encodings.",
+    "The reader is written by the same operator as the producer for this submission; it is not independent evidence about PriorSeal.",
+    "No third party has run this yet.",
+    "Does not establish the business meaning of the calldata, an economic outcome, or real-chain finality."
+  ],
+  "toolchain": {
+    "node": ">=22",
+    "viem": "2.56.3",
+    "networkRequiredAtRunTime": false
+  },
+  "license": "MIT (see ../../LICENSE)",
+  "testMaterialNotice": "All keys are public, deterministic TEST values. Not secrets. Never fund or deploy.",
+  "artifacts": [
+    {
+      "path": "INPUT-CONTRACT.md",
+      "sha256": "32f117336801323582aa3d0844de073fc24f602871450b5699888da3c031562c",
+      "bytes": 5999
+    },
+    {
+      "path": "README.md",
+      "sha256": "5aeee4d6da147a2c5306e3382f10b2e905ffc0fa25324b3900f409c842169baf",
+      "bytes": 4398
+    },
+    {
+      "path": "expected.json",
+      "sha256": "2fbb03fcfd4d8c7224a665eac3c32411d6a99e964f7917213a7dd4ecafefa044",
+      "bytes": 5131
+    },
+    {
+      "path": "report.json",
+      "sha256": "f0104a0bcbed503aa0c40940b1e4b51d0818eff708494945bada6812ec0e8c1e",
+      "bytes": 7163
+    },
+    {
+      "path": "fixture/signed-authorization.json",
+      "sha256": "38cebf301c47a63fd3f308b6b7e7e6b6bd0fd166c81857276059650f828fdccb",
+      "bytes": 2752
+    },
+    {
+      "path": "fixture/public-test-keys.json",
+      "sha256": "dfb6ab09050194eda9ef1acab11265dcb549040bad19a1228f86a9d84706a986",
+      "bytes": 1099
+    },
+    {
+      "path": "fixture/observed/case-00-exact-call-observed-match.json",
+      "sha256": "960ebbe8ea7a1c756732da379a93778f67d1d830fa56533de00e2d088e58ac19",
+      "bytes": 994
+    },
+    {
+      "path": "fixture/observed/case-01-call-target-mismatch.json",
+      "sha256": "bde22269d62f6a56c0284e17696f5b2521d55cce0d2e43a4c2ed86e12d87d711",
+      "bytes": 994
+    },
+    {
+      "path": "fixture/observed/case-02-calldata-mismatch.json",
+      "sha256": "d2b1f9cd27c9a0529360d8c30f2fa69be76ae8979d19608303c7e5f5fe70a7f7",
+      "bytes": 994
+    },
+    {
+      "path": "fixture/observed/case-03-transaction-value-mismatch.json",
+      "sha256": "773b3051f32c2bf85a4e02d6ba99a778128a71b6ac2f3198cef01f7e9e57492d",
+      "bytes": 994
+    },
+    {
+      "path": "fixture/observed/case-04-execution-evidence-unavailable.json",
+      "sha256": "c99fb1b10fc711b890a7eec5abddf00ab4a5675bff1944ba2f80bc42fe85f005",
+      "bytes": 992
+    },
+    {
+      "path": "reader.mts",
+      "sha256": "90f53c4640695e218d48ca38231f781c12e31b1376554420ec83d96b77905db1",
+      "bytes": 6075
+    },
+    {
+      "path": "reader.mjs",
+      "sha256": "bc0e874f94517793a8da3cb7d79ce21babe6c9cc037d593ac08a42564f5aa1ae",
+      "bytes": 3861
+    },
+    {
+      "path": "verify.mts",
+      "sha256": "741f609ae0ea193a7554e8612176ee0bf69a2121cd5182e7cadc16c52b0aefba",
+      "bytes": 6269
+    },
+    {
+      "path": "verify.mjs",
+      "sha256": "ccc07760a3950e0785bbe4598d1490f6f6c6560143d0eb0a17b977b1df664db4",
+      "bytes": 5020
+    },
+    {
+      "path": "generate-fixture.mts",
+      "sha256": "77babab87b6ea3443cbf4c1ea1a879189b62d5d79bcddadbda8b6678c1d3257c",
+      "bytes": 7895
+    },
+    {
+      "path": "generate-fixture.mjs",
+      "sha256": "c8865769a32943e5ed906b92c19e7138b75eab460b59b4633e1f05d6d870cecf",
+      "bytes": 6906
+    }
+  ]
+}
