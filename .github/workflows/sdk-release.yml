@@ -1,0 +1,71 @@
+name: SDK release
+
+on:
+  push:
+    tags: ['sdk-v*']
+
+concurrency:
+  group: sdk-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish with provenance and attest the artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      # npm >= 11.5.1 is required for Trusted Publishing (OIDC auth, no
+      # NODE_AUTH_TOKEN) and for --provenance. The runner's bundled npm is
+      # older, so upgrade first.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@^11
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify the tag matches the SDK package version and record versions
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#sdk-v}"
+          sdk_version="$(node -p "require('./sdk/package.json').version")"
+          if [ "$tag_version" != "$sdk_version" ]; then
+            echo "::error::tag is $GITHUB_REF_NAME but sdk/package.json is $sdk_version" >&2
+            exit 1
+          fi
+          echo "SDK_VERSION=$sdk_version" >> "$GITHUB_ENV"
+      - name: Pack the release tarball
+        run: |
+          mkdir -p .release-artifacts
+          npm --prefix sdk pack --pack-destination .release-artifacts
+      # Provenance requires the npm package.json `repository` field (already
+      # present in sdk/package.json) and the npm package settings to list this
+      # repo and workflow as a trusted publisher.
+      - name: Publish priorseal-sdk to npm with provenance
+        run: npm --prefix sdk publish --provenance
+      - name: Attest the release tarball
+        uses: actions/attest-build-provenance@v4.2.2
+        with:
+          subject-path: '.release-artifacts/*.tgz'
+      - name: Create the GitHub release with the npm tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd .release-artifacts
+          for f in *.tgz; do shasum -a 256 "$f" > "$f.sha256"; done
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "PriorSeal SDK $SDK_VERSION" \
+            --notes "PriorSeal SDK $SDK_VERSION is published to npm from GitHub Actions with provenance (Trusted Publishing via OIDC; no long-lived publish token exists). The attached tarball is the artifact built by this workflow run and carries a Sigstore build attestation: verify with \`gh attestation verify <file> -R imokokok/PriorSeal\`. The companion .sha256 asset records its checksum. Install: \`npm install priorseal-sdk@$SDK_VERSION\`." \
+            *.tgz *.sha256
