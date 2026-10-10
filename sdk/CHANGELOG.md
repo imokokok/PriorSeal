@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.2 — 2026-10-10
 
 - Fail closed with structured results for malformed Headless market-state pair inputs; require the execution receipt to be issued no earlier than authority time.
 - Reject `UNKNOWN`, `HALTED`, and failed feed states regardless of caller status policy. Verify identified historical no-coverage and signed override-reason receipt layouts without treating them as malformed. Add signed negative vectors for receipt ordering, status, feed state, and field-set handling.
