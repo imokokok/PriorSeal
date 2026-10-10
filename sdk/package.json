@@ -1,6 +1,6 @@
 {
   "name": "priorseal-sdk",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "TypeScript SDK linking explicit authorization to observed EVM execution and independently verifiable receipts.",
   "type": "module",
   "license": "MIT",
