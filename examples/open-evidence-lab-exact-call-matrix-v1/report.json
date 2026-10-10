@@ -1,0 +1,238 @@
+{
+  "schema": "oel.exact-call-matrix.report.v1",
+  "matrixId": "oel-exact-call-envelope-matrix-v1",
+  "profile": "priorseal.execution-profile.exact-call.v1",
+  "claim": "envelope-matching-only",
+  "inputs": {
+    "sourceRecord": "fixture/signed-authorization.json",
+    "testKeys": "fixture/public-test-keys.json",
+    "expected": "expected.json"
+  },
+  "signature": {
+    "authorizerScheme": "EIP-712 (secp256k1)",
+    "declaredAuthorizer": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+    "recoveredAuthorizer": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+    "authorizerMatches": true,
+    "eip712Digest": "0x9e404bfc63c56cda555b71c4e59237178edc7a428de7f50738804a1f092cf5b1",
+    "acceptanceIssuer": "oel-exact-call-fixture-issuer",
+    "acceptanceKeyId": "oel-exact-call-fixture-key-1",
+    "acceptanceSignatureValid": true,
+    "authorizationValidAtNotBefore": true,
+    "authorizationCode": "OK"
+  },
+  "cases": [
+    {
+      "id": "case-00-exact-call-observed-match",
+      "className": "envelope-binding",
+      "note": "Positive control: every bound envelope field matches.",
+      "observed": "fixture/observed/case-00-exact-call-observed-match.json",
+      "reader": {
+        "bound": true,
+        "reasonCodes": []
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "bound": true,
+        "reasonCodes": [],
+        "complianceStatus": "COMPLIANT",
+        "complianceReasonCodes": [],
+        "outcome": "COMPLETED"
+      },
+      "expected": {
+        "bound": true,
+        "reasonCodes": [],
+        "complianceStatus": "COMPLIANT",
+        "complianceReasonCodes": [],
+        "outcome": "COMPLETED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    },
+    {
+      "id": "case-01-call-target-mismatch",
+      "className": "envelope-binding",
+      "note": "Only the observed call target changes; the signature stays valid for the original authorization.",
+      "observed": "fixture/observed/case-01-call-target-mismatch.json",
+      "reader": {
+        "bound": false,
+        "reasonCodes": [
+          "CALL_TARGET_MISMATCH"
+        ]
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "bound": false,
+        "reasonCodes": [
+          "CALL_TARGET_MISMATCH"
+        ],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "CALL_TARGET_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "expected": {
+        "bound": false,
+        "reasonCodes": [
+          "CALL_TARGET_MISMATCH"
+        ],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "CALL_TARGET_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    },
+    {
+      "id": "case-02-calldata-mismatch",
+      "className": "envelope-binding",
+      "note": "Only the observed calldata hash changes.",
+      "observed": "fixture/observed/case-02-calldata-mismatch.json",
+      "reader": {
+        "bound": false,
+        "reasonCodes": [
+          "CALLDATA_MISMATCH"
+        ]
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "bound": false,
+        "reasonCodes": [
+          "CALLDATA_MISMATCH"
+        ],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "CALLDATA_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "expected": {
+        "bound": false,
+        "reasonCodes": [
+          "CALLDATA_MISMATCH"
+        ],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "CALLDATA_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    },
+    {
+      "id": "case-03-transaction-value-mismatch",
+      "className": "envelope-binding",
+      "note": "Only the observed native value changes.",
+      "observed": "fixture/observed/case-03-transaction-value-mismatch.json",
+      "reader": {
+        "bound": false,
+        "reasonCodes": [
+          "TRANSACTION_VALUE_MISMATCH"
+        ]
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "bound": false,
+        "reasonCodes": [
+          "TRANSACTION_VALUE_MISMATCH"
+        ],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "TRANSACTION_VALUE_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "expected": {
+        "bound": false,
+        "reasonCodes": [
+          "TRANSACTION_VALUE_MISMATCH"
+        ],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "TRANSACTION_VALUE_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    },
+    {
+      "id": "case-04-execution-evidence-unavailable",
+      "className": "evidence-availability",
+      "note": "Evidence availability, not envelope agreement. Kept separate so it can never be scored as a mismatch.",
+      "observed": "fixture/observed/case-04-execution-evidence-unavailable.json",
+      "reader": {
+        "bound": false,
+        "reasonCodes": [
+          "EXECUTION_UNAVAILABLE"
+        ]
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "bound": false,
+        "reasonCodes": [
+          "EXECUTION_UNAVAILABLE"
+        ],
+        "complianceStatus": "NOT_ASSESSABLE",
+        "complianceReasonCodes": [
+          "EXECUTION_UNAVAILABLE"
+        ],
+        "outcome": "UNDETERMINED"
+      },
+      "expected": {
+        "bound": false,
+        "reasonCodes": [
+          "EXECUTION_UNAVAILABLE"
+        ],
+        "complianceStatus": "NOT_ASSESSABLE",
+        "complianceReasonCodes": [
+          "EXECUTION_UNAVAILABLE"
+        ],
+        "outcome": "UNDETERMINED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    }
+  ],
+  "summary": {
+    "cases": 5,
+    "envelopeBindingCases": 4,
+    "evidenceAvailabilityCases": 1,
+    "result": "PASS"
+  },
+  "doesNotEstablish": [
+    "the business meaning of the calldata",
+    "any economic outcome",
+    "real-chain behaviour, finality or liveness",
+    "that the Lab reader or its checks are adopted anywhere",
+    "any endorsement between PriorSeal and the Open Evidence Lab"
+  ]
+}

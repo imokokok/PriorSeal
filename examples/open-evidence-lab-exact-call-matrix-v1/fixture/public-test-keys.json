@@ -1,0 +1,18 @@
+{
+  "schema": "oel.test-keys.v1",
+  "notice": "Public, deterministic TEST material. Not secrets. Never fund or deploy these identities.",
+  "authorizer": {
+    "scheme": "EIP-712 (secp256k1)",
+    "address": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+    "recoveryRule": "digest = hashTypedData(typedData rebuilt from the documented PriorSealAuthorization v2 field list and domain {name:\"PriorSeal\", version:\"2\", chainId}); recover signer from (digest, signature) and require equality with authorization.authorizer.address",
+    "testPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "issuer": {
+    "scheme": "Ed25519",
+    "keyId": "oel-exact-call-fixture-key-1",
+    "issuer": "oel-exact-call-fixture-issuer",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA4v4qObcyZkKCfW2C1JdiLNbCl/54Jw6qQ2sB8Ia288s=\n-----END PUBLIC KEY-----\n",
+    "signingInput": "base64url(Ed25519.sign(null, utf8(canonicalJson(acceptance without \"signature\"))))",
+    "testSeedHex": "7171717171717171717171717171717171717171717171717171717171717171"
+  }
+}
