@@ -30,9 +30,11 @@ jobs:
           cache: npm
       # npm >= 11.5.1 is required for Trusted Publishing (OIDC auth, no
       # NODE_AUTH_TOKEN) and for --provenance. The runner's bundled npm is
-      # older, so upgrade first.
+      # older, so upgrade first and record the version we ended up with.
       - name: Upgrade npm for trusted publishing
-        run: npm install -g npm@^11
+        run: |
+          npm install -g npm@^11
+          npm --version
       - name: Install dependencies
         run: npm ci
       - name: Verify the tag matches the SDK package version and record versions
@@ -45,15 +47,22 @@ jobs:
             exit 1
           fi
           echo "SDK_VERSION=$sdk_version" >> "$GITHUB_ENV"
+      # NOTE: run pack/publish from inside the package directory. `npm
+      # --prefix sdk pack|publish` resolves against the repository root in
+      # npm 11 (it packed and tried to publish the root Worker package) and
+      # breaks the OIDC context (ENEEDAUTH).
       - name: Pack the release tarball
         run: |
           mkdir -p .release-artifacts
-          npm --prefix sdk pack --pack-destination .release-artifacts
+          cd sdk
+          npm pack --pack-destination ../.release-artifacts
       # Provenance requires the npm package.json `repository` field (already
       # present in sdk/package.json) and the npm package settings to list this
       # repo and workflow as a trusted publisher.
       - name: Publish priorseal-sdk to npm with provenance
-        run: npm --prefix sdk publish --provenance
+        run: |
+          cd sdk
+          npm publish --provenance
       - name: Attest the release tarball
         uses: actions/attest-build-provenance@v4.2.2
         with:
