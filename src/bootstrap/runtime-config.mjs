@@ -18,6 +18,7 @@ function loadRuntimeConfig(environment = process.env) {
   const witnessEndpointsJson = optionalJson(environment.PRIORSEAL_WITNESS_ENDPOINTS_JSON, "PRIORSEAL_WITNESS_ENDPOINTS_JSON");
   const archiveCredentials = optionalJson(environment.PRIORSEAL_ARCHIVE_CREDENTIALS_JSON, "PRIORSEAL_ARCHIVE_CREDENTIALS_JSON");
   const erc4337EntryPoints = parseErc4337EntryPoints(optionalJson(environment.PRIORSEAL_ERC4337_ENTRY_POINTS_JSON, "PRIORSEAL_ERC4337_ENTRY_POINTS_JSON"));
+  const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, "PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON"));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, "PRIORSEAL_SAFE_4337_TRUST_JSON"));
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some((entry) => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
@@ -41,6 +42,7 @@ function loadRuntimeConfig(environment = process.env) {
     environment: runtimeEnvironment,
     ...archiveCredentials ? { archiveCredentials } : {},
     erc4337EntryPoints,
+    eip7702Delegates,
     safe4337Trust,
     ...runtime !== "node" ? { runtime } : {},
     port: portValue(environment.PORT),
@@ -105,6 +107,23 @@ function parseErc4337EntryPoints(value) {
     const normalized = { chainId: Number(candidate.chainId), version: candidate.version, address: candidate.address.toLowerCase(), codeHash: candidate.codeHash.toLowerCase() };
     const key = `${normalized.chainId}:${normalized.version}:${normalized.address}`;
     if (seen.has(key)) throw new TypeError(`ERC-4337 EntryPoint entry ${index} duplicates a previous entry`);
+    seen.add(key);
+    return normalized;
+  });
+}
+function parseEip7702DelegateTrust(value) {
+  if (value === void 0) return [];
+  if (!Array.isArray(value) || value.length > 64) throw new TypeError("PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON must be an array with at most 64 entries");
+  const seen = /* @__PURE__ */ new Set();
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).sort().join(",") !== "address,chainId,codeHash") throw new TypeError(`EIP-7702 delegate trust entry ${index} has an invalid shape`);
+    const candidate = entry;
+    if (!Number.isSafeInteger(candidate.chainId) || Number(candidate.chainId) < 1) throw new TypeError(`EIP-7702 delegate trust entry ${index} has an invalid chainId`);
+    if (typeof candidate.address !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(candidate.address) || /^0x0{40}$/i.test(candidate.address)) throw new TypeError(`EIP-7702 delegate trust entry ${index} has an invalid address`);
+    if (typeof candidate.codeHash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(candidate.codeHash)) throw new TypeError(`EIP-7702 delegate trust entry ${index} has an invalid codeHash`);
+    const normalized = { chainId: Number(candidate.chainId), address: candidate.address.toLowerCase(), codeHash: candidate.codeHash.toLowerCase() };
+    const key = `${normalized.chainId}:${normalized.address}`;
+    if (seen.has(key)) throw new TypeError(`EIP-7702 delegate trust entry ${index} duplicates a previous chain/address`);
     seen.add(key);
     return normalized;
   });

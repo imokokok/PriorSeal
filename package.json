@@ -129,7 +129,7 @@
     "esbuild": "0.25.12",
     "solc": "0.8.36",
     "typescript": "^5.8.3",
-    "wrangler": "^4.129.1"
+    "wrangler": "^4.149.0"
   },
   "overrides": {
     "@gelatonetwork/relay-sdk": {

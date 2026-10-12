@@ -32,4 +32,5 @@ coverage/
 /scripts/production-smoke.mjs
 /scripts/rotation-impact.mjs
 /scripts/erc4337-pilot-doctor.mjs
+/scripts/erc4337-eip7702-doctor.mjs
 .wrangler/

@@ -5,12 +5,14 @@ import { SUPPORTED_CHAINS, getRpcUrls } from "./chains.mjs";
 import { PriorSealError } from "../../../domain/errors.mjs";
 import { createRpcClient } from "./rpc-client.mjs";
 import { decodeSafe4337CallFromBundlerTransaction } from "./erc4337-call-data.mjs";
-import { encodeAbiParameters, keccak256, toBytes } from "viem";
+import { verifyEip7702Bundle } from "./eip7702-evidence.mjs";
+import { encodeAbiParameters, keccak256, toBytes, toFunctionSelector } from "viem";
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const TRANSFER_SELECTORS = ["0xa9059cbb", "0x23b872dd"];
 const BLOCK_HASH = /^0x[0-9a-fA-F]{64}$/;
 const ABI_WORD = /^0x[0-9a-fA-F]{64}$/;
 const USER_OPERATION_EVENT_TOPIC = keccak256(toBytes("UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)"));
+const DELEGATE_ENTRY_POINT_SELECTOR = toFunctionSelector("entryPoint()");
 const SAFE_FALLBACK_HANDLER_SLOT = "0x6c9a6c4a39284e37ed1cf53d337577d14212a4870fb976a4366c693b939918d5";
 const storageAddress = (value) => typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value) ? `0x${value.slice(-40)}`.toLowerCase() : null;
 const clean = (x) => x?.toLowerCase();
@@ -24,7 +26,7 @@ const actionFor = (tx) => {
 function isTransferLog(log) {
   return clean(log.topics?.[0]) === TRANSFER_TOPIC && log.topics?.length === 3 && /^0x[0-9a-fA-F]{40}$/.test(log.address ?? "") && Boolean(address(log.topics[1])) && Boolean(address(log.topics[2])) && ABI_WORD.test(log.data ?? "") && hexBig(log.logIndex) !== null;
 }
-async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirement = "CONFIRMATIONS", maxToleratedReorgDepth = null, erc4337, erc4337EntryPoints = [], safe4337Trust = [], rpcUrls, timeoutMs = 1e4, signal, rpcClient = createRpcClient({ timeoutMs }) }) {
+async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirement = "CONFIRMATIONS", maxToleratedReorgDepth = null, erc4337, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], rpcUrls, timeoutMs = 1e4, signal, rpcClient = createRpcClient({ timeoutMs }) }) {
   if (!Number.isSafeInteger(confirmations) || confirmations < 0 || confirmations > 1e4) throw new PriorSealError("INVALID_REQUEST", "confirmations must be an integer between 0 and 10000");
   if (!["CONFIRMATIONS", "RPC_FINALIZED"].includes(finalityRequirement)) throw new PriorSealError("INVALID_REQUEST", "Unsupported finality requirement");
   if (maxToleratedReorgDepth != null && (!Number.isSafeInteger(maxToleratedReorgDepth) || maxToleratedReorgDepth < 0 || maxToleratedReorgDepth > 9999)) throw new PriorSealError("INVALID_REQUEST", "Invalid reorg tolerance depth");
@@ -33,6 +35,9 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
   if (erc4337 && clean(trustedEntryPoint?.codeHash) !== clean(erc4337.entryPointCodeHash)) throw new PriorSealError("ERC4337_CODE_HASH_MISMATCH", "Authorized EntryPoint code hash does not match the deployment trust list");
   const trustedSafe = erc4337?.accountCallProfile === "safe-4337.v1" ? safe4337Trust.find((entry) => entry.chainId === Number(chainId) && entry.version === erc4337.entryPointVersion) : void 0;
   if (erc4337?.accountCallProfile === "safe-4337.v1" && !trustedSafe) throw new PriorSealError("ERC4337_SAFE_ACCOUNT_UNTRUSTED", "Safe ERC-4337 module and singleton trust profile is not configured");
+  const trustedEip7702Delegate = erc4337?.eip7702 ? eip7702Delegates.find((entry) => entry.chainId === Number(chainId) && clean(entry.address) === clean(erc4337.eip7702?.delegateAddress)) : void 0;
+  if (erc4337?.eip7702 && (!["0.7", "0.8", "0.9"].includes(erc4337.entryPointVersion) || !trustedEip7702Delegate || erc4337.entryPointVersion === "0.7" && erc4337.eip7702.authorizationTupleHash != null)) throw new PriorSealError("ERC4337_EIP7702_UNTRUSTED", "EIP-7702 delegate is not trusted for this EntryPoint profile or the v0.7 profile includes a fresh authorization");
+  if (erc4337?.eip7702 && clean(trustedEip7702Delegate?.codeHash) !== clean(erc4337.eip7702.delegateCodeHash)) throw new PriorSealError("ERC4337_EIP7702_UNTRUSTED", "Authorized EIP-7702 delegate code hash does not match the trust list");
   if (!SUPPORTED_CHAINS[Number(chainId)]) return normalizeExecution({ chainId, txHash, status: "UNSUPPORTED_CHAIN", executionDataAvailable: false, observationSource: "evm-json-rpc" });
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new PriorSealError("INVALID_TX_HASH", "txHash must be a 32-byte hex hash");
   const urls = rpcUrls ?? getRpcUrls(chainId);
@@ -108,6 +113,7 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
         if (isTransferLog(log)) transfers.push({ asset: log.address.toLowerCase(), sender: address(log.topics[1]), recipient: address(log.topics[2]), amount: hexBig(log.data), logIndex: Number(BigInt(log.logIndex)) });
       }
       let userOperationEvent = null;
+      let eip7702Bundle = null;
       let safeAccountCall = null;
       if (erc4337) {
         if (clean(tx.to) !== clean(erc4337.entryPoint)) throw new PriorSealError("ERC4337_ENTRY_POINT_MISMATCH", "Bundler transaction target does not match the authorized EntryPoint");
@@ -115,13 +121,44 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
         const deployedCode = await rpcClient.call(url, "eth_getCode", [erc4337.entryPoint, receipt.blockNumber], signal);
         if (deployedCode === "0x" || clean(keccak256(deployedCode)) !== clean(erc4337.entryPointCodeHash)) throw new PriorSealError("ERC4337_CODE_HASH_MISMATCH", "EntryPoint runtime code at the UserOperation block does not match the authorized code hash");
         const matches = logs.filter((log) => clean(log.address) === clean(erc4337.entryPoint) && clean(log.topics?.[0]) === USER_OPERATION_EVENT_TOPIC && clean(log.topics?.[1]) === clean(erc4337.userOperationHash));
-        if (matches.length !== 1) throw new PriorSealError("ERC4337_EVENT_MISMATCH", `Expected exactly one matching UserOperationEvent, found ${matches.length}`);
-        const event = matches[0];
-        const sender = address(event.topics?.[2]);
-        const words = typeof event.data === "string" && /^0x[0-9a-fA-F]{256}$/.test(event.data) ? event.data.slice(2).match(/.{64}/g) : null;
-        if (!sender || !words || words.length !== 4 || !/^0x[0-9a-fA-F]{64}$/.test(event.topics?.[3] ?? "") || !["0".repeat(64), `${"0".repeat(63)}1`].includes(words[1])) throw new PriorSealError("RPC_INVALID_RESPONSE", "EntryPoint returned an invalid UserOperationEvent");
-        userOperationEvent = { sender, nonce: BigInt(`0x${words[0]}`).toString(), success: BigInt(`0x${words[1]}`) === 1n, actualGasCost: BigInt(`0x${words[2]}`).toString(), actualGasUsed: BigInt(`0x${words[3]}`).toString() };
+        if (erc4337.eip7702) {
+          const gasPrice2 = receipt.effectiveGasPrice ?? tx.gasPrice;
+          eip7702Bundle = await verifyEip7702Bundle({
+            chainId: Number(chainId),
+            entryPoint: erc4337.entryPoint,
+            entryPointVersion: erc4337.entryPointVersion,
+            userOperationHash: erc4337.userOperationHash,
+            expected: erc4337.eip7702,
+            transactionType: tx.type,
+            transactionData: tx.input,
+            authorizationList: tx.authorizationList,
+            receiptStatus,
+            logs,
+            entryPointAddress: erc4337.entryPoint,
+            transactionHash: txHash,
+            outerTransactionGasUsed: gasUsed,
+            outerTransactionFee: gasPrice2 ? (BigInt(gasPrice2) * BigInt(gasUsed)).toString() : null,
+            readCode: (account, blockNumber) => rpcClient.call(url, "eth_getCode", [account, blockNumber], signal),
+            readDelegateEntryPoint: async (delegate, blockNumber) => {
+              const result = await rpcClient.call(url, "eth_call", [{ to: delegate, data: DELEGATE_ENTRY_POINT_SELECTOR }, blockNumber], signal);
+              if (typeof result !== "string" || !ABI_WORD.test(result)) throw new PriorSealError("ERC4337_EIP7702_UNTRUSTED", "EIP-7702 delegate returned an invalid EntryPoint getter result");
+              return `0x${result.slice(-40)}`;
+            },
+            traceTransaction: (hash, diffMode) => rpcClient.call(url, "debug_traceTransaction", [hash, { tracer: "prestateTracer", tracerConfig: { diffMode } }], signal),
+            blockNumber: receipt.blockNumber
+          });
+        }
+        if (!erc4337.eip7702 || receiptStatus === "0x1") {
+          if (matches.length !== 1) throw new PriorSealError(erc4337.eip7702 ? "ERC4337_EIP7702_OPERATION_MISMATCH" : "ERC4337_EVENT_MISMATCH", `Expected exactly one matching UserOperationEvent, found ${matches.length}`);
+          const event = matches[0];
+          const sender = address(event.topics?.[2]);
+          const words = typeof event.data === "string" && /^0x[0-9a-fA-F]{256}$/.test(event.data) ? event.data.slice(2).match(/.{64}/g) : null;
+          if (!sender || !words || words.length !== 4 || !/^0x[0-9a-fA-F]{64}$/.test(event.topics?.[3] ?? "") || !["0".repeat(64), `${"0".repeat(63)}1`].includes(words[1])) throw new PriorSealError("RPC_INVALID_RESPONSE", "EntryPoint returned an invalid UserOperationEvent");
+          userOperationEvent = { sender, nonce: BigInt(`0x${words[0]}`).toString(), success: BigInt(`0x${words[1]}`) === 1n, actualGasCost: BigInt(`0x${words[2]}`).toString(), actualGasUsed: BigInt(`0x${words[3]}`).toString() };
+          if (eip7702Bundle && (clean(eip7702Bundle.sender) !== clean(sender) || eip7702Bundle.nonce !== userOperationEvent.nonce || eip7702Bundle.userOperationSuccess !== userOperationEvent.success)) throw new PriorSealError("ERC4337_EIP7702_OPERATION_MISMATCH", "UserOperationEvent does not match the decoded EIP-7702 UserOperation");
+        }
         if (erc4337.accountCallProfile === "safe-4337.v1") {
+          if (!userOperationEvent) throw new PriorSealError("ERC4337_EVENT_MISMATCH", "Safe call evidence requires a matching UserOperationEvent");
           safeAccountCall = decodeSafe4337CallFromBundlerTransaction({ transactionData: tx.input, entryPointVersion: erc4337.entryPointVersion, sender: userOperationEvent.sender, nonce: userOperationEvent.nonce });
           if (clean(safeAccountCall.target) !== clean(erc4337.accountCallTarget) || safeAccountCall.value !== erc4337.accountCallValue || clean(safeAccountCall.dataHash) !== clean(erc4337.accountCallDataHash)) throw new PriorSealError("ERC4337_ACCOUNT_CALL_MISMATCH", "Decoded Safe call does not match the authorized account call");
           const safeTrust = trustedSafe;
@@ -164,12 +201,15 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
       const finalityReached = depthReached && (finalityRequirement === "CONFIRMATIONS" || finalized);
       const finalityState = !canonicalInclusion ? "REORGED" : finalityReached ? finalityRequirement === "RPC_FINALIZED" ? "FINALIZED" : "CONFIRMED" : "INSUFFICIENT_FINALITY";
       const status = !canonicalInclusion ? "REORGED" : !finalityReached ? "PENDING" : erc4337 ? userOperationEvent?.success ? "CONFIRMED" : "REVERTED" : receiptStatus === "0x0" ? "REVERTED" : "CONFIRMED";
-      return normalizeExecution({ chainId, txHash, status, executedAt: Number(BigInt(containingBlock.timestamp)), action: erc4337 ? "ERC4337_USER_OPERATION" : actionFor(tx), nonce: userOperationEvent?.nonce ?? transactionNonce, sender: userOperationEvent?.sender ?? tx.from, recipient: userOperationEvent?.sender ?? first?.recipient ?? tx.to, target: erc4337 ? erc4337.entryPoint : tx.to, calldataHash: erc4337 ? erc4337.userOperationHash : keccak256(tx.input ?? "0x"), asset: erc4337 ? `eip155:${chainId}/native` : first ? `eip155:${chainId}/erc20:${first.asset}` : `eip155:${chainId}/native`, amount: erc4337 ? "0" : first?.amount ?? hexBig(tx.value), transfers, nativeValue: erc4337 ? null : hexBig(tx.value), gasUsed: userOperationEvent?.actualGasUsed ?? gasUsed, fee: userOperationEvent?.actualGasCost ?? (gasPrice ? (BigInt(gasPrice) * BigInt(gasUsed)).toString() : null), executionDataAvailable: erc4337 ? Boolean(userOperationEvent) : true, observationSource: erc4337 ? `${observationSource}:erc4337-entrypoint-event` : observationSource, finalityState, confirmations: confirmationsSeen, ...erc4337 ? { userOperationHash: erc4337.userOperationHash, entryPoint: erc4337.entryPoint, entryPointCodeHash: erc4337.entryPointCodeHash, entryPointVersion: erc4337.entryPointVersion, userOperationSuccess: userOperationEvent?.success ?? null, actualGasCost: userOperationEvent?.actualGasCost ?? null, ...safeAccountCall ? { accountCallProfile: safeAccountCall.profile, accountCallTarget: safeAccountCall.target, accountCallValue: safeAccountCall.value, accountCallDataHash: safeAccountCall.dataHash } : {} } : {}, blockNumber: Number(BigInt(receiptBlockNumber)), blockHash: receipt.blockHash, temporalEvidence: { schema: "priorseal.temporal-evidence.v1", criterion: finalityRequirement, requiredConfirmations, maxToleratedReorgDepth, observedHeadNumber: Number(BigInt(headNumber)), observedHeadHash, finalizedBlock } });
+      const observedSender = userOperationEvent?.sender ?? eip7702Bundle?.sender ?? tx.from;
+      const observedNonce = userOperationEvent?.nonce ?? eip7702Bundle?.nonce ?? transactionNonce;
+      const isEip7702 = Boolean(eip7702Bundle);
+      return normalizeExecution({ chainId, txHash, status, executedAt: Number(BigInt(containingBlock.timestamp)), action: erc4337 ? "ERC4337_USER_OPERATION" : actionFor(tx), nonce: observedNonce, sender: observedSender, recipient: erc4337 ? observedSender : first?.recipient ?? tx.to, target: erc4337 ? erc4337.entryPoint : tx.to, calldataHash: erc4337 ? erc4337.userOperationHash : keccak256(tx.input ?? "0x"), asset: erc4337 ? `eip155:${chainId}/native` : first ? `eip155:${chainId}/erc20:${first.asset}` : `eip155:${chainId}/native`, amount: erc4337 ? "0" : first?.amount ?? hexBig(tx.value), transfers, nativeValue: erc4337 ? null : hexBig(tx.value), gasUsed: userOperationEvent?.actualGasUsed ?? (isEip7702 ? null : gasUsed), fee: userOperationEvent?.actualGasCost ?? (isEip7702 ? null : gasPrice ? (BigInt(gasPrice) * BigInt(gasUsed)).toString() : null), executionDataAvailable: erc4337 ? Boolean(userOperationEvent || eip7702Bundle) : true, observationSource: erc4337 ? `${observationSource}:${isEip7702 ? "erc4337-eip7702-trace" : "erc4337-entrypoint-event"}` : observationSource, finalityState, confirmations: confirmationsSeen, ...erc4337 ? { userOperationHash: erc4337.userOperationHash, entryPoint: erc4337.entryPoint, entryPointCodeHash: erc4337.entryPointCodeHash, entryPointVersion: erc4337.entryPointVersion, userOperationSuccess: userOperationEvent?.success ?? null, actualGasCost: userOperationEvent?.actualGasCost ?? null, ...safeAccountCall ? { accountCallProfile: safeAccountCall.profile, accountCallTarget: safeAccountCall.target, accountCallValue: safeAccountCall.value, accountCallDataHash: safeAccountCall.dataHash } : {}, ...eip7702Bundle ? { eip7702Delegation: eip7702Bundle.evidence } : {} } : {}, blockNumber: Number(BigInt(receiptBlockNumber)), blockHash: receipt.blockHash, temporalEvidence: { schema: "priorseal.temporal-evidence.v1", criterion: finalityRequirement, requiredConfirmations, maxToleratedReorgDepth, observedHeadNumber: Number(BigInt(headNumber)), observedHeadHash, finalizedBlock } });
     } catch (error) {
       lastError = error;
     }
   }
-  if (erc4337 && ["ERC4337_EVENT_MISMATCH", "ERC4337_ENTRY_POINT_MISMATCH", "ERC4337_CODE_HASH_MISMATCH", "ERC4337_ACCOUNT_CALL_UNSUPPORTED", "ERC4337_ACCOUNT_CALL_MISMATCH", "ERC4337_SAFE_ACCOUNT_UNTRUSTED"].includes(errorCode(lastError) ?? "")) throw lastError;
+  if (erc4337 && ["ERC4337_EVENT_MISMATCH", "ERC4337_ENTRY_POINT_MISMATCH", "ERC4337_CODE_HASH_MISMATCH", "ERC4337_ACCOUNT_CALL_UNSUPPORTED", "ERC4337_ACCOUNT_CALL_MISMATCH", "ERC4337_SAFE_ACCOUNT_UNTRUSTED", "ERC4337_EIP7702_UNTRUSTED", "ERC4337_EIP7702_AUTH_MISMATCH", "ERC4337_EIP7702_OPERATION_MISMATCH", "ERC4337_EIP7702_TRACE_UNAVAILABLE"].includes(errorCode(lastError) ?? "")) throw lastError;
   if (fallbackObservation) return fallbackObservation;
   throw new PriorSealError(signal?.aborted ? "REQUEST_ABORTED" : errorCode(lastError) === "RPC_TIMEOUT" ? "RPC_TIMEOUT" : "RPC_FAILURE", "All RPC endpoints failed");
 }

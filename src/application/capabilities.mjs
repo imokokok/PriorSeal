@@ -1,7 +1,7 @@
 // Generated from capabilities.mts by npm run core:build. Do not edit directly.
 import { hashJson } from "../domain/hashing.mjs";
 import { SUPPORTED_CHAINS } from "../infrastructure/blockchain/evm/chains.mjs";
-async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], store, archiveEnabled, contractSignatureConfigured = false, now }) {
+async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, now }) {
   let storage = "available";
   try {
     if (store.health) await store.health();
@@ -22,6 +22,7 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
     executionProfiles: [...transfer ? ["priorseal.intent.v1"] : [], ...exactCall ? ["priorseal.execution-profile.exact-call.v1"] : [], ...erc4337 ? ["priorseal.execution-profile.erc4337-user-operation.v1"] : []],
     erc4337EntryPoints: erc4337EntryPoints.filter((entry) => chains.includes(entry.chainId)),
     safe4337Trust: safe4337Trust.filter((entry) => chains.includes(entry.chainId)),
+    eip7702Delegates: eip7702Delegates.filter((entry) => chains.includes(entry.chainId)),
     chains,
     authorizers: ["eip712", ...contractSignatureConfigured ? ["eip1271"] : []],
     proofMode,

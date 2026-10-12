@@ -17,7 +17,7 @@
  *      quoteGasEstimate；amountOutMinimum 必须 == ceil(quote×(10000−bps)/10000)
  *      （2026-10-06 IN-07 采纳的 ceil 约定，floor 会允许滑点略超 500bps）；
  *   6. routerBytecode.keccak256 与我方实测常量比对 + 双 RPC 现场重读；
- *   7. deadline 算术（routerCall.deadline = generatedAt + 600）与
+ *   7. deadline 算术（routerCall.deadline = generatedAt + 3000，v3 硬性检查）与
  *      explicitLiveWindowNotes（同链、异 token）。
  *
  * 2026-10-06 v2（IN-07 五项修正强制化，不再宽容陈旧字段）：
@@ -27,6 +27,15 @@
  *     expected.nonce == transaction.nonce、expected.calldataHash == tx.calldataHash；
  *   - constraints.maxGasUsed 必须 == transaction.gas（冻结 gas limit）；
  *   - network.rpcSnapshotBlock 必须存在、不得是旧硬编码 47668136、不得超前 live head。
+ *
+ * 2026-10-13 v3（deadline 期望 600→3000，硬性检查）：
+ *   2026-10-12 IN-11 Maulana 提出、INT-11 双 RPC 只读复验成立（now-1 revert
+ *   `Transaction too old`、未来 deadline 无上界拒绝；该 router multicall deadline
+ *   为下界检查）、OUT-09 定稿写入 GO 条款：1800 秒一次性 GO 窗口下，
+ *   deadline=generatedAt+600 会在 review→GO→签名材料→广播超过冻结后 600 秒时
+ *   链上 revert `Transaction too old`；最终 re-frozen sheet 须冻结
+ *   deadline = generatedAt + 3000（覆盖 review + 1800 秒 GO 窗口 + margin）。
+ *   v3 将 deadline 期望从打印项升级为硬性检查，不匹配即 VERIFY FAILED。
  *
  * 全程只读（eth_call / eth_getCode / eth_blockNumber），不签名、不广播、不消耗 nonce。
  *
@@ -52,6 +61,9 @@ const SELECTOR_MULTICALL_DEADLINE = '0x5ae401dc';
 const SELECTOR_EXACT_INPUT_SINGLE_7W = '0x04e45aaf';
 const ENVELOPE_NAMESPACE = 'agent-call-envelope.v1';
 const POLICY_NAMESPACE = 'web3-agent-kit.policy-decision.v1';
+// v3（OUT-09 定稿 GO 条款）：multicall deadline = generatedAt + 3000（其生成时钟），
+// 与我方 1800 秒 GO 窗口（自我方签发起算）双时钟分写。
+const DEADLINE_OFFSET = 3000n;
 
 const sheetPath = process.argv[2];
 if (!sheetPath) {
@@ -127,7 +139,17 @@ async function main(): Promise<void> {
   const reEncoded = encodeFunctionData({ abi: multicallAbi, functionName: 'multicall', args: [deadline, [`0x${innerHex}`]] });
   console.log('re-encode round-trip byte-identical:', reEncoded === data ? 'YES' : 'NO');
   console.log('multicall deadline:', deadline.toString(), '| deadlineSource:', (sheet.routerCall as Record<string, unknown>).deadlineSource);
-  console.log('routerCall.deadline == generatedAt + 600:', BigInt((sheet.routerCall as Record<string, string>).deadline) === deadline && deadline === BigInt(sheet.generatedAt as string) + 600n ? 'YES' : 'NO');
+  // v3 硬性检查（OUT-09 定稿）：calldata 内 deadline 与 routerCall.deadline 必须
+  // 同值，且都等于 generatedAt + 3000。1800 秒 GO 窗口下 +600 会链上 revert
+  // `Transaction too old`（INT-11 双 RPC 实证该 deadline 为下界检查、无上界）。
+  const deadlineConsistent = BigInt((sheet.routerCall as Record<string, string>).deadline) === deadline;
+  const deadlineOffsetOk = deadline === BigInt(sheet.generatedAt as string) + DEADLINE_OFFSET;
+  console.log(`calldata deadline == routerCall.deadline: ${deadlineConsistent ? 'YES' : 'NO'}`);
+  console.log(`deadline == generatedAt + ${DEADLINE_OFFSET}: ${deadlineOffsetOk ? 'YES' : 'NO'} (GO clause, v3 hard check)`);
+  if (!deadlineConsistent) throw new Error('calldata deadline != routerCall.deadline');
+  if (!deadlineOffsetOk) {
+    throw new Error(`deadline ${deadline} != generatedAt(${sheet.generatedAt}) + ${DEADLINE_OFFSET}: OUT-09 locked deadline=generatedAt+3000 for the 1800s GO window (+600 would revert Transaction too old)`);
+  }
   console.log('inner selector:', innerSelector, '| inner words:', innerWords.length);
   if (innerSelector !== SELECTOR_EXACT_INPUT_SINGLE_7W) throw new Error('inner selector is not the 7-word exactInputSingle');
   if (innerWords.length !== 7) throw new Error(`inner tuple has ${innerWords.length} words, expected 7`);

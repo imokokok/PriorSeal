@@ -1,4 +1,5 @@
 import { decodeFunctionResult, encodeAbiParameters, encodeFunctionData, keccak256, parseAbi } from 'viem';
+import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { loadRuntimeConfig } from '../src/bootstrap/runtime-config.mjs';
 import { getRpcUrls } from '../src/infrastructure/blockchain/evm/chains.mjs';
 import { createRpcClient } from '../src/infrastructure/blockchain/evm/rpc-client.mjs';
@@ -20,6 +21,8 @@ const codeHash = (code: string) => code === '0x' ? null : keccak256(code as `0x$
 const storageAddress = (word: string) => /^0x[0-9a-fA-F]{64}$/.test(word) ? `0x${word.slice(-40)}`.toLowerCase() : null;
 
 const config = loadRuntimeConfig();
+const httpProxy = process.env.PRIORSEAL_ERC4337_HTTP_PROXY?.trim();
+if (httpProxy) setGlobalDispatcher(new ProxyAgent(httpProxy));
 const rpcUrls = getRpcUrls(CHAIN_ID) ?? [];
 const entryPointPin = config.erc4337EntryPoints.find((entry) => entry.chainId === CHAIN_ID && entry.version === '0.7' && equal(entry.address, ENTRY_POINT));
 const safePin = config.safe4337Trust.find((entry) => entry.chainId === CHAIN_ID && entry.version === '0.7' && equal(entry.entryPointAddress, ENTRY_POINT) && equal(entry.moduleAddress, MODULE));
