@@ -57,6 +57,11 @@ independent review above was run against v1.0.0, so **v1.0.1 still needs its
 own independent cold run**. The published v1.0.1 commit and any later external
 run should be linked here and in the collaboration thread.
 
+The external run packet pins v1.0.1 to repository commit
+`2ff89d86611257b4440232e5c2793926b3d52043` and provides a clean-checkout guide,
+result template, and draft invitation for OEL:
+[`docs/runs/priorseal-exact-call-matrix-v1.0.1-cold-run/`](../runs/priorseal-exact-call-matrix-v1.0.1-cold-run/README.md).
+
 ## Reproduce and scope
 
 From the repository root, with Node.js 22 or newer:
