@@ -207,8 +207,9 @@ flags would silently consume "unknown" as "no"; that is forbidden here.
 
 The binding rules, reason codes and the `COMPLIANT` / `NON_COMPLIANT` /
 `NOT_ASSESSABLE` vocabulary belong to the PriorSeal exact-call profile.
-`reader.mjs` is the Open Evidence Lab reader: a separate implementation of
-sections 4 and 5 of contract v1.0.1 that imports nothing from PriorSeal. A
-passing run shows that the two agree on these inputs. It is not a statement
-about either project by the other, and it is not an endorsement, integration or
-pilot.
+`reader.mjs` is the submission reader: a separate implementation of sections
+4 and 5 that imports nothing from PriorSeal and was authored by the fixture
+contributor. It is not the external reviewer's Python reader. The independent
+cold run preserved in the linked v1.0.0 record was written and run by another
+developer; v1.0.1 has not yet had an independent rerun. These results do not
+imply adoption, endorsement, integration or a pilot by either project.

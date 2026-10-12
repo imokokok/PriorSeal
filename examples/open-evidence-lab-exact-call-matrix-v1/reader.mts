@@ -1,6 +1,6 @@
-// Open Evidence Lab reader for the PriorSeal exact-call envelope matrix.
+// Submission reader for the Open Evidence Lab PriorSeal exact-call matrix.
 //
-// This file is an INDEPENDENT implementation of the documented comparison. It
+// This file is a separate implementation of the documented comparison. It
 // deliberately imports nothing from PriorSeal: it rebuilds the EIP-712 typed
 // data from the field list published in INPUT-CONTRACT.md and applies the
 // published field map by hand. Only `viem` (a general Ethereum library) and the

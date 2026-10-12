@@ -127,6 +127,7 @@ These examples have different evidence scopes. Read each example's README before
 | [Base Sepolia live evidence](examples/web3-agent-kit-base-sepolia-live-v1/README.md) | Verifies one real testnet transaction authorized before signing; it does not include a live Insight attestation. |
 | [RWA v2](examples/rwa-v2/README.md) | Links assessment evidence to exact calls and reports integrity, trust, time, policy, and execution separately. |
 | [APS decision binding](examples/aps-priorseal-decision-binding-v1/README.md) | Correlates an independently verified APS decision with authorization and synthetic execution evidence. |
+| [Open Evidence Lab exact-call matrix](examples/open-evidence-lab-exact-call-matrix-v1/README.md) | Synthetic, offline interoperability case; the independent cold run is pinned to v1.0.0, and v1.0.1 is awaiting a separate rerun. See the [case study](docs/case-studies/open-evidence-lab-priorseal-exact-call-reproduction-2026-10.md). |
 
 Other partner fixtures are under [`examples/`](examples/). Insight can be used independently for assessment evidence; PriorSeal can be used independently for authorization and execution evidence; a combined workflow can bind the two without merging their trust roots.
 

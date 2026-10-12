@@ -1,11 +1,10 @@
 // One-command runner for the Open Evidence Lab exact-call envelope matrix.
 //
-// It runs two independent paths over the same frozen inputs:
+// It runs two separately implemented paths over the same frozen inputs:
 //
-//   1. `reader.mjs`  — the Open Evidence Lab reader. An independent
-//                      implementation of the published field map. It imports
-//                      nothing from PriorSeal; only `viem` and the Node
-//                      standard library.
+//   1. `reader.mjs`  — the submission reader, authored by the fixture
+//                      contributor. It manually implements the published
+//                      field map and imports nothing from PriorSeal.
 //   2. `../../src`   — the PriorSeal exact-call profile itself. It produces the
 //                      signed authorization acceptance check, the envelope
 //                      binding and its own compliance/outcome vocabulary.
@@ -20,8 +19,9 @@
 // comparing, and records the raw binding beside the partitioned one.
 //
 // Attribution stays separate: the binding result belongs to the PriorSeal
-// profile, the comparison belongs to the reader, and neither result is
-// evidence about the other project.
+// profile, and the comparison belongs to the submission reader. An external
+// cold run of v1.0.0 is documented separately; this local v1.0.1 run is not an
+// independent reproduction.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

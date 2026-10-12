@@ -13,9 +13,9 @@
     "attribution": "reason codes, binding rules and the COMPLIANT/NON_COMPLIANT/NOT_ASSESSABLE vocabulary"
   },
   "reader": {
-    "name": "Open Evidence Lab reader",
+    "name": "Submission reader",
     "path": "reader.mjs",
-    "attribution": "the independent implementation in sections 4 and 5 of INPUT-CONTRACT.md",
+    "attribution": "a separate implementation of sections 4 and 5, authored by the fixture contributor; not the external reviewer's reader",
     "importsFromPriorSeal": false
   },
   "roles": {
@@ -33,8 +33,7 @@
     "Synthetic and offline: no chain observation, no RPC, no production key custody.",
     "One signed authorization and six observed envelopes; not a corpus.",
     "Moves one observed field at a time; does not measure combinations or adversarial encodings.",
-    "The reader is written by the same operator as the producer for this submission; it is not independent evidence about PriorSeal.",
-    "No third party has run this yet.",
+    "The submission reader is written by the same contributor as the fixture; the independent cold run recorded for v1.0.0 does not validate this v1.0.1 revision.",
     "Does not establish the business meaning of the calldata, an economic outcome, or real-chain finality.",
     "The shipped profile raw binding reads EXECUTION_UNAVAILABLE into its deciding set; contract v1.0.1 assigns it to a separate availability class, and the runner applies that published partition to both implementations and records the raw binding beside it."
   ],
@@ -48,23 +47,23 @@
   "artifacts": [
     {
       "path": "INPUT-CONTRACT.md",
-      "sha256": "03d989554e476adeb088fa1b6c3d64cbdb311de9386125efaef81db3d38ae33f",
-      "bytes": 11165
+      "sha256": "7454ab478cd8bac6108dbf6376acc8df30582102de4dfdbd00347165bc1861d8",
+      "bytes": 11309
     },
     {
       "path": "README.md",
-      "sha256": "1f3964d0190656ee584339c33e2f0be41276aa495e9eb24f77613244c4620939",
-      "bytes": 5046
+      "sha256": "fbb0ce992db55ef5a4887db9955f30ea879cfc47ad8b1c3b2ccbd307bf7f2b16",
+      "bytes": 5756
     },
     {
       "path": "expected.json",
-      "sha256": "d68d3f100519ec4ff02410db0af48539bb48cb9b0b3173eb02fc5a5913c77f37",
-      "bytes": 7085
+      "sha256": "34560ef158d94e2b2108ffdf15c70b1b78da1cc32c230ecb75f44e93cfbe9113",
+      "bytes": 7111
     },
     {
       "path": "report.json",
-      "sha256": "23747b4ffc23b6af068236e299a3e45a766bbb5de2eb83f64eccbffd56eb8854",
-      "bytes": 11485
+      "sha256": "223db1554639f242eae559b1f010dcabe3e9466e610cfa95aefe2e1ce564a363",
+      "bytes": 11511
     },
     {
       "path": "fixture/signed-authorization.json",
@@ -108,8 +107,8 @@
     },
     {
       "path": "reader.mts",
-      "sha256": "df98377061205afa2118f5a311c343aa7c7a5ef57ce7eb2c8bce5f92ee8164ff",
-      "bytes": 6663
+      "sha256": "12f03cdd493fc81418eb8906536b6e72c2fa761521410e9bb3222c3d736f6ac0",
+      "bytes": 6661
     },
     {
       "path": "reader.mjs",
@@ -118,8 +117,8 @@
     },
     {
       "path": "verify.mts",
-      "sha256": "a1abac0763c9613293bbf445f72826588f2d96dbc9c6ffc5e55373afa72b90a9",
-      "bytes": 7996
+      "sha256": "c9a84423a33bf0fc05910409569da1893ac992c8d3c9f761ac9e81a7f3bb518c",
+      "bytes": 8037
     },
     {
       "path": "verify.mjs",

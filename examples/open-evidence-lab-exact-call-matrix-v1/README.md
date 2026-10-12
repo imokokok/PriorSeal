@@ -6,15 +6,19 @@ Synthetic, offline matrix for the **first shared case** in
 
 The published interface is `INPUT-CONTRACT.md`, contract **version 1.0.1**
 (its changelog lists what changed against the pinned 1.0.0 delivery and why).
+The independent cold run recorded for this case is pinned to **v1.0.0**;
+v1.0.1 has not yet been independently rerun. See the
+[case-study record](../../docs/case-studies/open-evidence-lab-priorseal-exact-call-reproduction-2026-10.md)
+and the [public collaboration thread](https://github.com/probityai/agent-evidence-atlas/issues/49).
 
 Answering that for a signed transaction envelope is what
 `priorseal.execution-profile.exact-call.v1` does. This directory freezes one
-signed authorization and six observed envelopes so that **two independent
-implementations** can be run against the same bytes:
+signed authorization and six observed envelopes so two separately implemented
+paths can be run against the same bytes:
 
 | Path | Who it belongs to | What it is |
 | --- | --- | --- |
-| `reader.mjs` | Open Evidence Lab reader | A separate implementation of the published field map. Imports nothing from PriorSeal — only `viem` and the Node standard library. |
+| `reader.mjs` | Submission reader | A separate implementation of the published field map, authored by the fixture contributor. Imports nothing from PriorSeal — only `viem` and the Node standard library; it is not the external reviewer's reader. |
 | `../../src` | PriorSeal exact-call profile | The producer: EIP-712 authorization, acceptance, envelope binding, and its own `COMPLIANT` / `NON_COMPLIANT` / `NOT_ASSESSABLE` vocabulary. |
 
 `verify.mjs` runs both, compares them with each other and with `expected.json`,
@@ -77,10 +81,12 @@ node examples/open-evidence-lab-exact-call-matrix-v1/generate-fixture.mjs
 
 ## Trust and semantic limits
 
-A passing run establishes: both signature schemes verify under the published
-test keys, the Lab reader and the PriorSeal profile produce the same envelope
-binding on all six inputs, and the profile's compliance and outcome labels
-match the declared expectations.
+A passing local run establishes: both signature schemes verify under the
+published test keys, the submission reader and the PriorSeal profile agree on
+the v1.0.1-partitioned envelope binding for all six inputs, and the profile's
+compliance and outcome labels match the declared expectations. The independent
+third-party run applies to the pinned v1.0.0 delivery only; it does not validate
+this v1.0.1 revision.
 
 It does not establish the business meaning of the calldata, any economic
 outcome, real-chain behaviour or finality, that the reader or its checks are
@@ -93,9 +99,11 @@ synthetic: nothing in it is a chain observation.
 
 ## Attribution
 
-The profile, its reason codes and its compliance vocabulary are PriorSeal's. The
-reader and the comparison are the Lab side's. Neither result is evidence about
-the other party.
+The profile, its reason codes and its compliance vocabulary are PriorSeal's.
+The `reader.mts` submission reader was authored by the same contributor who
+prepared the fixture; the external reviewer's separately written Python
+reader is preserved in the linked v1.0.0 run record. This collaboration does
+not imply Lab adoption or endorsement.
 
 ## License
 
