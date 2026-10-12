@@ -1,0 +1,58 @@
+{
+  "schema": "priorseal.consumer-disposition.manifest.v1",
+  "exampleId": "priorseal-consumer-disposition-v1",
+  "claim": "example-downstream-record-disposition",
+  "source": {
+    "path": "../open-evidence-lab-exact-call-matrix-v1/report.json",
+    "sha256": "223db1554639f242eae559b1f010dcabe3e9466e610cfa95aefe2e1ce564a363",
+    "schema": "oel.exact-call-matrix.report.v1",
+    "contractVersion": "1.0.1",
+    "repositoryCommit": "7a74e78fe0fc9983d3ee21399d31f1bc92d6062a"
+  },
+  "toolchain": {
+    "node": ">=22",
+    "networkRequiredAtRuntime": false
+  },
+  "roles": {
+    "policyAuthor": "PriorSeal contributor",
+    "independentReproduction": "not-established-for-v1.0.1",
+    "thirdPartyIntegration": "not-established"
+  },
+  "limits": [
+    "The policy assigns a disposition to a synthetic evidence record; it does not authorize, block, reverse or settle a real action.",
+    "The source SHA-256 pins the checked-in report bytes; it is not an external signature or independent observation.",
+    "The source report and downstream policy are synthetic, offline artifacts and are not a security audit, adoption or endorsement."
+  ],
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "06e47bedaf2f8425bb6568c67587f5ff05adde32e2ceb0dee87d6b6aedc0f9f9",
+      "bytes": 1687
+    },
+    {
+      "path": "decide.mts",
+      "sha256": "c79b833b5694d00944c72c6e1a0ee76a358ab29ad38c68543e2ad08e71fd603e",
+      "bytes": 4470
+    },
+    {
+      "path": "decide.mjs",
+      "sha256": "5a60f807c3d898f6f016abb8ac713c2797c427dc919d3e77322af01317c6d930",
+      "bytes": 3579
+    },
+    {
+      "path": "verify.mts",
+      "sha256": "e0cdca5e9c15853e11d212aac7e013014db7ff7a67c231fea0f024e64cd3e259",
+      "bytes": 5620
+    },
+    {
+      "path": "verify.mjs",
+      "sha256": "ddffd2382edd8849cf7835eb79e9dd2a92231574c6f88792a325a91aaad95c70",
+      "bytes": 5490
+    },
+    {
+      "path": "report.json",
+      "sha256": "c90beddbb0a6fafd33a507fe0f11876b0fc69b53bcd966ffe72413c818bb0045",
+      "bytes": 1872
+    }
+  ]
+}

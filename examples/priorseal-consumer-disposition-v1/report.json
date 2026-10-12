@@ -1,0 +1,53 @@
+{
+  "schema": "priorseal.consumer-disposition.report.v1",
+  "sourceSchema": "oel.exact-call-matrix.report.v1",
+  "sourceContractVersion": "1.0.1",
+  "sourceSha256": "223db1554639f242eae559b1f010dcabe3e9466e610cfa95aefe2e1ce564a363",
+  "policy": "Accept only a valid, completed, fully bound COMPLIANT record; reject mismatches; hold unavailable or undetermined evidence for review.",
+  "decisions": [
+    {
+      "caseId": "case-00-exact-call-observed-match",
+      "disposition": "ACCEPT_RECORD",
+      "reasonCode": "EXACT_CALL_CONFIRMED"
+    },
+    {
+      "caseId": "case-01-call-target-mismatch",
+      "disposition": "REJECT_RECORD",
+      "reasonCode": "AUTHORIZED_ENVELOPE_MISMATCH"
+    },
+    {
+      "caseId": "case-02-calldata-mismatch",
+      "disposition": "REJECT_RECORD",
+      "reasonCode": "AUTHORIZED_ENVELOPE_MISMATCH"
+    },
+    {
+      "caseId": "case-03-transaction-value-mismatch",
+      "disposition": "REJECT_RECORD",
+      "reasonCode": "AUTHORIZED_ENVELOPE_MISMATCH"
+    },
+    {
+      "caseId": "case-04-execution-evidence-unavailable",
+      "disposition": "HOLD_FOR_REVIEW",
+      "reasonCode": "EVIDENCE_INCOMPLETE"
+    },
+    {
+      "caseId": "case-05-time-window-expired",
+      "disposition": "REJECT_RECORD",
+      "reasonCode": "AUTHORIZED_ENVELOPE_MISMATCH"
+    }
+  ],
+  "summary": {
+    "cases": 6,
+    "accepted": 1,
+    "rejected": 4,
+    "held": 1,
+    "result": "PASS"
+  },
+  "doesNotEstablish": [
+    "that the report is signed by an external observer; the source hash pins the checked-in synthetic report bytes only",
+    "that any real action was blocked, reversed, settled, or changed",
+    "that this example policy is suitable for any production consumer",
+    "that PriorSeal or this consumer adapter was adopted or endorsed by the Open Evidence Lab",
+    "any chain observation, economic outcome, or security audit"
+  ]
+}
