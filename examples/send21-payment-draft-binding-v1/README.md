@@ -52,11 +52,17 @@ authorization; this is observable behavior, not hidden state.
 
 RFC 8785 (JCS) over the include-lists; keys sort by UTF-16 code units, amounts
 are base-unit safe integers. **Timestamps are normalized to epoch seconds
-before hashing.** Two snapshots of the same demo response serialized identical
-instants with different sub-second precision (`…35.460551` vs `…35.4605510`);
-hashing raw timestamp bytes would make the commitment unstable across reads of
-the same draft. send21io acknowledged the serialization inconsistency on their
-side (comment 18867355).
+before hashing.** The normalization started as a workaround: two snapshots of
+the same demo response serialized identical instants with different sub-second
+precision (`…35.460551` vs `…35.4605510`), so hashing raw timestamp bytes would
+make the commitment unstable across reads of the same draft. send21io
+acknowledged the serialization inconsistency (comment 18867355) and has since
+fixed it (comment 18876329): every timestamp is now UTC with exactly three
+decimal places and stored truncated to milliseconds, so raw timestamp bytes are
+byte-stable across reads of the same draft. The epoch normalization is kept as
+belt-and-braces: the pinned v0.1 hashes are over epoch seconds and do not
+change, and hashing raw strings would be safe today but would change the
+canonical bytes, requiring new test vectors.
 
 ## Rules confirmed with send21io
 
@@ -83,3 +89,13 @@ Testnet (Base Sepolia) demo data only. This is an independent PriorSeal fixture
 against a public send21 demo draft — not a send21 product integration,
 endorsement, or production/custody claim. send21 did not run PriorSeal
 verifiers; all verdicts are PriorSeal-side results.
+
+send21 has since shipped server-side draft integrity (comment 18876329):
+authenticated draft responses now carry a `core` object with a `coreSha256`
+(JCS + SHA-256), and each rate lock is an immutable `quote` with its own hash.
+Their `core` field list differs from the v0.1 include-list above (`schema`,
+`paymentMethod` in; `paymentUri` out), so `coreSha256` and
+`draft_core_sha256` measure different claims and do not match by design: the
+v0.1 commitment is client-side (what the payer saw and acted on), the
+send21 `coreSha256` is server-authoritative. Binding to `coreSha256` instead
+would be a semantic upgrade for a v0.2, tracked separately.
