@@ -1,0 +1,140 @@
+{
+  "schema": "oel.matrix-manifest.v1",
+  "matrixId": "oel-exact-call-envelope-matrix-v1",
+  "title": "Did the approved request match what actually executed? Exact-call envelope matrix",
+  "issue": "https://github.com/probityai/agent-evidence-atlas/issues/49",
+  "profile": "priorseal.execution-profile.exact-call.v1",
+  "claim": "envelope-matching-only",
+  "evidenceClaim": "cross-implementation-agreement-on-synthetic-fixtures",
+  "producer": {
+    "name": "PriorSeal exact-call profile",
+    "repository": "https://github.com/imokokok/PriorSeal",
+    "path": "examples/open-evidence-lab-exact-call-matrix-v1",
+    "attribution": "reason codes, binding rules and the COMPLIANT/NON_COMPLIANT/NOT_ASSESSABLE vocabulary"
+  },
+  "reader": {
+    "name": "Submission reader",
+    "path": "reader.mjs",
+    "attribution": "a separate implementation of sections 4 and 5, authored by the fixture contributor; not the external reviewer's reader",
+    "importsFromPriorSeal": false
+  },
+  "roles": {
+    "fixtureOperator": "synthetic-offline-fixture",
+    "independentOperation": "not-established",
+    "evidenceVantage": "artifact",
+    "witnessScope": "NOT_APPLICABLE",
+    "producerRunsItsOwnProfile": true,
+    "readerRunsWithoutProducerCode": true
+  },
+  "answerExposure": "Expected outcomes and the field map are published with the fixture; this is a conformance matrix, not an answer-blind replication.",
+  "comparisonOrder": "Expected values are declared in expected.json before the run; the recorded report compares both implementations against them in the same run.",
+  "reasonCodeComparison": "sorted-set-equality",
+  "limits": [
+    "Synthetic and offline: no chain observation, no RPC, no production key custody.",
+    "One signed authorization and six observed envelopes; not a corpus.",
+    "Moves one observed field at a time; does not measure combinations or adversarial encodings.",
+    "The submission reader is written by the same contributor as the fixture; the independent cold run recorded for v1.0.0 does not validate this v1.0.1 revision.",
+    "Does not establish the business meaning of the calldata, an economic outcome, or real-chain finality.",
+    "The shipped profile raw binding reads EXECUTION_UNAVAILABLE into its deciding set; contract v1.0.1 assigns it to a separate availability class, and the runner applies that published partition to both implementations and records the raw binding beside it."
+  ],
+  "toolchain": {
+    "node": ">=22",
+    "viem": "2.56.3",
+    "networkRequiredAtRunTime": false
+  },
+  "license": "MIT (see ../../LICENSE)",
+  "testMaterialNotice": "All keys are public, deterministic TEST values. Not secrets. Never fund or deploy.",
+  "artifacts": [
+    {
+      "path": "INPUT-CONTRACT.md",
+      "sha256": "7454ab478cd8bac6108dbf6376acc8df30582102de4dfdbd00347165bc1861d8",
+      "bytes": 11309
+    },
+    {
+      "path": "README.md",
+      "sha256": "fbb0ce992db55ef5a4887db9955f30ea879cfc47ad8b1c3b2ccbd307bf7f2b16",
+      "bytes": 5756
+    },
+    {
+      "path": "expected.json",
+      "sha256": "34560ef158d94e2b2108ffdf15c70b1b78da1cc32c230ecb75f44e93cfbe9113",
+      "bytes": 7111
+    },
+    {
+      "path": "report.json",
+      "sha256": "223db1554639f242eae559b1f010dcabe3e9466e610cfa95aefe2e1ce564a363",
+      "bytes": 11511
+    },
+    {
+      "path": "fixture/signed-authorization.json",
+      "sha256": "38cebf301c47a63fd3f308b6b7e7e6b6bd0fd166c81857276059650f828fdccb",
+      "bytes": 2752
+    },
+    {
+      "path": "fixture/public-test-keys.json",
+      "sha256": "dfb6ab09050194eda9ef1acab11265dcb549040bad19a1228f86a9d84706a986",
+      "bytes": 1099
+    },
+    {
+      "path": "fixture/observed/case-00-exact-call-observed-match.json",
+      "sha256": "960ebbe8ea7a1c756732da379a93778f67d1d830fa56533de00e2d088e58ac19",
+      "bytes": 994
+    },
+    {
+      "path": "fixture/observed/case-01-call-target-mismatch.json",
+      "sha256": "bde22269d62f6a56c0284e17696f5b2521d55cce0d2e43a4c2ed86e12d87d711",
+      "bytes": 994
+    },
+    {
+      "path": "fixture/observed/case-02-calldata-mismatch.json",
+      "sha256": "d2b1f9cd27c9a0529360d8c30f2fa69be76ae8979d19608303c7e5f5fe70a7f7",
+      "bytes": 994
+    },
+    {
+      "path": "fixture/observed/case-03-transaction-value-mismatch.json",
+      "sha256": "773b3051f32c2bf85a4e02d6ba99a778128a71b6ac2f3198cef01f7e9e57492d",
+      "bytes": 994
+    },
+    {
+      "path": "fixture/observed/case-04-execution-evidence-unavailable.json",
+      "sha256": "c99fb1b10fc711b890a7eec5abddf00ab4a5675bff1944ba2f80bc42fe85f005",
+      "bytes": 992
+    },
+    {
+      "path": "fixture/observed/case-05-time-window-expired.json",
+      "sha256": "b94856739a21399ce26ee4b38d384a46c52b6249b7c45c5b2f39c0f4df78e377",
+      "bytes": 994
+    },
+    {
+      "path": "reader.mts",
+      "sha256": "12f03cdd493fc81418eb8906536b6e72c2fa761521410e9bb3222c3d736f6ac0",
+      "bytes": 6661
+    },
+    {
+      "path": "reader.mjs",
+      "sha256": "b741bae1f2e977a475e5387056ece77f283d754c1a32e128328ea9d80a8822bc",
+      "bytes": 4192
+    },
+    {
+      "path": "verify.mts",
+      "sha256": "c9a84423a33bf0fc05910409569da1893ac992c8d3c9f761ac9e81a7f3bb518c",
+      "bytes": 8037
+    },
+    {
+      "path": "verify.mjs",
+      "sha256": "f88c75c459e54c80a5a21865536e3ac86fb869c3b3fc339fdcff92e33d5fe62e",
+      "bytes": 6096
+    },
+    {
+      "path": "generate-fixture.mts",
+      "sha256": "64867f234f9c4b42185a051346aef9ef524fdd41b519461441eebd7812605507",
+      "bytes": 8307
+    },
+    {
+      "path": "generate-fixture.mjs",
+      "sha256": "f5ba11445aac296bde82ccbf0cf28c483bcbd08856b83a4a04055aa1dc84f06a",
+      "bytes": 7273
+    }
+  ],
+  "contractVersion": "1.0.1"
+}

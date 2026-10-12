@@ -1,0 +1,356 @@
+{
+  "schema": "oel.exact-call-matrix.report.v1",
+  "matrixId": "oel-exact-call-envelope-matrix-v1",
+  "contractVersion": "1.0.1",
+  "profile": "priorseal.execution-profile.exact-call.v1",
+  "claim": "envelope-matching-only",
+  "semantics": {
+    "boundRule": "bound is decided by the field-map mismatch set only; evidence-availability codes are reported in availabilityCodes and never enter the deciding set (pinned in contract v1.0.1).",
+    "stringComparison": "Values compare after String() coercion: JSON integers render as their canonical decimal strings, missing or null renders as the empty string, and string comparison is ASCII-case-insensitive (stated explicitly in contract v1.0.1).",
+    "profilePartition": "the shipped profile's raw binding reads EXECUTION_UNAVAILABLE into its deciding set; the comparison applies the published v1.0.1 partition to both implementations and records the raw binding beside it"
+  },
+  "inputs": {
+    "sourceRecord": "fixture/signed-authorization.json",
+    "testKeys": "fixture/public-test-keys.json",
+    "expected": "expected.json"
+  },
+  "signature": {
+    "authorizerScheme": "EIP-712 (secp256k1)",
+    "declaredAuthorizer": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+    "recoveredAuthorizer": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+    "authorizerMatches": true,
+    "eip712Digest": "0x9e404bfc63c56cda555b71c4e59237178edc7a428de7f50738804a1f092cf5b1",
+    "acceptanceIssuer": "oel-exact-call-fixture-issuer",
+    "acceptanceKeyId": "oel-exact-call-fixture-key-1",
+    "acceptanceSignatureValid": true,
+    "authorizationValidAtNotBefore": true,
+    "authorizationCode": "OK"
+  },
+  "cases": [
+    {
+      "id": "case-00-exact-call-observed-match",
+      "className": "envelope-binding",
+      "note": "Positive control: every bound envelope field matches.",
+      "observed": "fixture/observed/case-00-exact-call-observed-match.json",
+      "reader": {
+        "bound": true,
+        "mismatchCodes": [],
+        "availabilityCodes": []
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "rawBinding": {
+          "bound": true,
+          "reasonCodes": []
+        },
+        "partitionedBinding": {
+          "bound": true,
+          "mismatchCodes": [],
+          "availabilityCodes": []
+        },
+        "complianceStatus": "COMPLIANT",
+        "complianceReasonCodes": [],
+        "outcome": "COMPLETED"
+      },
+      "expected": {
+        "bound": true,
+        "reasonCodes": [],
+        "availabilityCodes": [],
+        "complianceStatus": "COMPLIANT",
+        "complianceReasonCodes": [],
+        "outcome": "COMPLETED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    },
+    {
+      "id": "case-01-call-target-mismatch",
+      "className": "envelope-binding",
+      "note": "Only the observed call target changes; the signature stays valid for the original authorization.",
+      "observed": "fixture/observed/case-01-call-target-mismatch.json",
+      "reader": {
+        "bound": false,
+        "mismatchCodes": [
+          "CALL_TARGET_MISMATCH"
+        ],
+        "availabilityCodes": []
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "rawBinding": {
+          "bound": false,
+          "reasonCodes": [
+            "CALL_TARGET_MISMATCH"
+          ]
+        },
+        "partitionedBinding": {
+          "bound": false,
+          "mismatchCodes": [
+            "CALL_TARGET_MISMATCH"
+          ],
+          "availabilityCodes": []
+        },
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "CALL_TARGET_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "expected": {
+        "bound": false,
+        "reasonCodes": [
+          "CALL_TARGET_MISMATCH"
+        ],
+        "availabilityCodes": [],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "CALL_TARGET_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    },
+    {
+      "id": "case-02-calldata-mismatch",
+      "className": "envelope-binding",
+      "note": "Only the observed calldata hash changes.",
+      "observed": "fixture/observed/case-02-calldata-mismatch.json",
+      "reader": {
+        "bound": false,
+        "mismatchCodes": [
+          "CALLDATA_MISMATCH"
+        ],
+        "availabilityCodes": []
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "rawBinding": {
+          "bound": false,
+          "reasonCodes": [
+            "CALLDATA_MISMATCH"
+          ]
+        },
+        "partitionedBinding": {
+          "bound": false,
+          "mismatchCodes": [
+            "CALLDATA_MISMATCH"
+          ],
+          "availabilityCodes": []
+        },
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "CALLDATA_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "expected": {
+        "bound": false,
+        "reasonCodes": [
+          "CALLDATA_MISMATCH"
+        ],
+        "availabilityCodes": [],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "CALLDATA_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    },
+    {
+      "id": "case-03-transaction-value-mismatch",
+      "className": "envelope-binding",
+      "note": "Only the observed native value changes.",
+      "observed": "fixture/observed/case-03-transaction-value-mismatch.json",
+      "reader": {
+        "bound": false,
+        "mismatchCodes": [
+          "TRANSACTION_VALUE_MISMATCH"
+        ],
+        "availabilityCodes": []
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "rawBinding": {
+          "bound": false,
+          "reasonCodes": [
+            "TRANSACTION_VALUE_MISMATCH"
+          ]
+        },
+        "partitionedBinding": {
+          "bound": false,
+          "mismatchCodes": [
+            "TRANSACTION_VALUE_MISMATCH"
+          ],
+          "availabilityCodes": []
+        },
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "TRANSACTION_VALUE_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "expected": {
+        "bound": false,
+        "reasonCodes": [
+          "TRANSACTION_VALUE_MISMATCH"
+        ],
+        "availabilityCodes": [],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "TRANSACTION_VALUE_MISMATCH"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    },
+    {
+      "id": "case-04-execution-evidence-unavailable",
+      "className": "evidence-availability",
+      "note": "Evidence availability, not envelope agreement. The envelope itself matches: v1.0.1 reports bound: true with the availability code beside it, and the outcome stays UNDETERMINED so unknown evidence can never be consumed as a pass. (v1.0.0 encoded this case as bound: false; the changelog in INPUT-CONTRACT.md explains the flip.)",
+      "observed": "fixture/observed/case-04-execution-evidence-unavailable.json",
+      "reader": {
+        "bound": true,
+        "mismatchCodes": [],
+        "availabilityCodes": [
+          "EXECUTION_UNAVAILABLE"
+        ]
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "rawBinding": {
+          "bound": false,
+          "reasonCodes": [
+            "EXECUTION_UNAVAILABLE"
+          ]
+        },
+        "partitionedBinding": {
+          "bound": true,
+          "mismatchCodes": [],
+          "availabilityCodes": [
+            "EXECUTION_UNAVAILABLE"
+          ]
+        },
+        "complianceStatus": "NOT_ASSESSABLE",
+        "complianceReasonCodes": [
+          "EXECUTION_UNAVAILABLE"
+        ],
+        "outcome": "UNDETERMINED"
+      },
+      "expected": {
+        "bound": true,
+        "reasonCodes": [],
+        "availabilityCodes": [
+          "EXECUTION_UNAVAILABLE"
+        ],
+        "complianceStatus": "NOT_ASSESSABLE",
+        "complianceReasonCodes": [
+          "EXECUTION_UNAVAILABLE"
+        ],
+        "outcome": "UNDETERMINED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    },
+    {
+      "id": "case-05-time-window-expired",
+      "className": "envelope-binding",
+      "note": "Only the observed execution time changes: executedAt 2001 is one second past both intent.validUntil and the authorization window (the fixture sets them equal), so both time paths fire at once. Added in contract v1.0.1 to close the coverage gap where the two time paths coincided by construction.",
+      "observed": "fixture/observed/case-05-time-window-expired.json",
+      "reader": {
+        "bound": false,
+        "mismatchCodes": [
+          "OUTSIDE_AUTHORIZATION_WINDOW",
+          "OUTSIDE_TIME_WINDOW"
+        ],
+        "availabilityCodes": []
+      },
+      "profile": {
+        "receiptClaimsValid": true,
+        "rawBinding": {
+          "bound": false,
+          "reasonCodes": [
+            "OUTSIDE_AUTHORIZATION_WINDOW",
+            "OUTSIDE_TIME_WINDOW"
+          ]
+        },
+        "partitionedBinding": {
+          "bound": false,
+          "mismatchCodes": [
+            "OUTSIDE_AUTHORIZATION_WINDOW",
+            "OUTSIDE_TIME_WINDOW"
+          ],
+          "availabilityCodes": []
+        },
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "OUTSIDE_AUTHORIZATION_WINDOW",
+          "OUTSIDE_TIME_WINDOW"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "expected": {
+        "bound": false,
+        "reasonCodes": [
+          "OUTSIDE_AUTHORIZATION_WINDOW",
+          "OUTSIDE_TIME_WINDOW"
+        ],
+        "availabilityCodes": [],
+        "complianceStatus": "NON_COMPLIANT",
+        "complianceReasonCodes": [
+          "OUTSIDE_AUTHORIZATION_WINDOW",
+          "OUTSIDE_TIME_WINDOW"
+        ],
+        "outcome": "COMPLETED"
+      },
+      "agreement": {
+        "readerMatchesProfileBinding": true,
+        "profileMatchesExpectedBinding": true,
+        "profileMatchesExpectedCompliance": true,
+        "profileMatchesExpectedOutcome": true
+      },
+      "pass": true
+    }
+  ],
+  "summary": {
+    "cases": 6,
+    "envelopeBindingCases": 5,
+    "evidenceAvailabilityCases": 1,
+    "result": "PASS"
+  },
+  "doesNotEstablish": [
+    "the business meaning of the calldata",
+    "any economic outcome",
+    "real-chain behaviour, finality or liveness",
+    "that this submission reader or any Open Evidence Lab checks are adopted anywhere",
+    "any endorsement between PriorSeal and the Open Evidence Lab"
+  ]
+}
