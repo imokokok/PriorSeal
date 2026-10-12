@@ -59,20 +59,24 @@ async function recoverAuthorizer(authorization) {
     matchesDeclaredAuthorizer: same(recovered, authorization.authorizer.address)
   };
 }
-function bindEnvelope(intent, observed) {
-  const reasons = [];
-  if (observed.executionDataAvailable === false) reasons.push("EXECUTION_UNAVAILABLE");
-  if (observed.chainId !== intent.chainId) reasons.push("CHAIN_MISMATCH");
-  if (!same(observed.action, intent.action)) reasons.push("ACTION_MISMATCH");
-  if (!same(observed.sender, intent.sender)) reasons.push("SENDER_MISMATCH");
-  if (String(observed.nonce ?? "") !== String(intent.nonce ?? "0")) reasons.push("NONCE_MISMATCH");
-  if (intent.callTarget != null && !same(observed.target, intent.callTarget)) reasons.push("CALL_TARGET_MISMATCH");
-  if (intent.calldataHash != null && !same(observed.calldataHash, intent.calldataHash)) reasons.push("CALLDATA_MISMATCH");
-  if (intent.transactionValue != null && String(observed.nativeValue ?? "") !== String(intent.transactionValue)) reasons.push("TRANSACTION_VALUE_MISMATCH");
+function bindEnvelope(authorization, observed) {
+  const intent = authorization.intent;
+  const mismatch = [];
+  if (observed.chainId !== intent.chainId) mismatch.push("CHAIN_MISMATCH");
+  if (!same(observed.action, intent.action)) mismatch.push("ACTION_MISMATCH");
+  if (!same(observed.sender, intent.sender)) mismatch.push("SENDER_MISMATCH");
+  if (String(observed.nonce ?? "") !== String(intent.nonce ?? "0")) mismatch.push("NONCE_MISMATCH");
+  if (intent.callTarget != null && !same(observed.target, intent.callTarget)) mismatch.push("CALL_TARGET_MISMATCH");
+  if (intent.calldataHash != null && !same(observed.calldataHash, intent.calldataHash)) mismatch.push("CALLDATA_MISMATCH");
+  if (intent.transactionValue != null && String(observed.nativeValue ?? "") !== String(intent.transactionValue)) mismatch.push("TRANSACTION_VALUE_MISMATCH");
   const executedAt = observed.executedAt ?? observed.observedAt;
-  if (executedAt != null && executedAt > intent.validUntil) reasons.push("OUTSIDE_TIME_WINDOW");
-  const reasonCodes = [...new Set(reasons)].sort();
-  return { bound: reasonCodes.length === 0, reasonCodes };
+  if (executedAt != null && executedAt > intent.validUntil) mismatch.push("OUTSIDE_TIME_WINDOW");
+  if (executedAt != null && (executedAt < authorization.notBefore || executedAt > authorization.expiresAt)) mismatch.push("OUTSIDE_AUTHORIZATION_WINDOW");
+  const availability = [];
+  if (observed.executionDataAvailable === false) availability.push("EXECUTION_UNAVAILABLE");
+  const mismatchCodes = [...new Set(mismatch)].sort();
+  const availabilityCodes = [...new Set(availability)].sort();
+  return { bound: mismatchCodes.length === 0, mismatchCodes, availabilityCodes };
 }
 export {
   EXACT_CALL_PROFILE,

@@ -31,11 +31,12 @@
   "reasonCodeComparison": "sorted-set-equality",
   "limits": [
     "Synthetic and offline: no chain observation, no RPC, no production key custody.",
-    "One signed authorization and five observed envelopes; not a corpus.",
+    "One signed authorization and six observed envelopes; not a corpus.",
     "Moves one observed field at a time; does not measure combinations or adversarial encodings.",
     "The reader is written by the same operator as the producer for this submission; it is not independent evidence about PriorSeal.",
     "No third party has run this yet.",
-    "Does not establish the business meaning of the calldata, an economic outcome, or real-chain finality."
+    "Does not establish the business meaning of the calldata, an economic outcome, or real-chain finality.",
+    "The shipped profile raw binding reads EXECUTION_UNAVAILABLE into its deciding set; contract v1.0.1 assigns it to a separate availability class, and the runner applies that published partition to both implementations and records the raw binding beside it."
   ],
   "toolchain": {
     "node": ">=22",
@@ -47,23 +48,23 @@
   "artifacts": [
     {
       "path": "INPUT-CONTRACT.md",
-      "sha256": "32f117336801323582aa3d0844de073fc24f602871450b5699888da3c031562c",
-      "bytes": 5999
+      "sha256": "03d989554e476adeb088fa1b6c3d64cbdb311de9386125efaef81db3d38ae33f",
+      "bytes": 11165
     },
     {
       "path": "README.md",
-      "sha256": "5aeee4d6da147a2c5306e3382f10b2e905ffc0fa25324b3900f409c842169baf",
-      "bytes": 4398
+      "sha256": "1f3964d0190656ee584339c33e2f0be41276aa495e9eb24f77613244c4620939",
+      "bytes": 5046
     },
     {
       "path": "expected.json",
-      "sha256": "2fbb03fcfd4d8c7224a665eac3c32411d6a99e964f7917213a7dd4ecafefa044",
-      "bytes": 5131
+      "sha256": "d68d3f100519ec4ff02410db0af48539bb48cb9b0b3173eb02fc5a5913c77f37",
+      "bytes": 7085
     },
     {
       "path": "report.json",
-      "sha256": "f0104a0bcbed503aa0c40940b1e4b51d0818eff708494945bada6812ec0e8c1e",
-      "bytes": 7163
+      "sha256": "23747b4ffc23b6af068236e299a3e45a766bbb5de2eb83f64eccbffd56eb8854",
+      "bytes": 11485
     },
     {
       "path": "fixture/signed-authorization.json",
@@ -101,34 +102,40 @@
       "bytes": 992
     },
     {
+      "path": "fixture/observed/case-05-time-window-expired.json",
+      "sha256": "b94856739a21399ce26ee4b38d384a46c52b6249b7c45c5b2f39c0f4df78e377",
+      "bytes": 994
+    },
+    {
       "path": "reader.mts",
-      "sha256": "90f53c4640695e218d48ca38231f781c12e31b1376554420ec83d96b77905db1",
-      "bytes": 6075
+      "sha256": "df98377061205afa2118f5a311c343aa7c7a5ef57ce7eb2c8bce5f92ee8164ff",
+      "bytes": 6663
     },
     {
       "path": "reader.mjs",
-      "sha256": "bc0e874f94517793a8da3cb7d79ce21babe6c9cc037d593ac08a42564f5aa1ae",
-      "bytes": 3861
+      "sha256": "b741bae1f2e977a475e5387056ece77f283d754c1a32e128328ea9d80a8822bc",
+      "bytes": 4192
     },
     {
       "path": "verify.mts",
-      "sha256": "741f609ae0ea193a7554e8612176ee0bf69a2121cd5182e7cadc16c52b0aefba",
-      "bytes": 6269
+      "sha256": "a1abac0763c9613293bbf445f72826588f2d96dbc9c6ffc5e55373afa72b90a9",
+      "bytes": 7996
     },
     {
       "path": "verify.mjs",
-      "sha256": "ccc07760a3950e0785bbe4598d1490f6f6c6560143d0eb0a17b977b1df664db4",
-      "bytes": 5020
+      "sha256": "f88c75c459e54c80a5a21865536e3ac86fb869c3b3fc339fdcff92e33d5fe62e",
+      "bytes": 6096
     },
     {
       "path": "generate-fixture.mts",
-      "sha256": "77babab87b6ea3443cbf4c1ea1a879189b62d5d79bcddadbda8b6678c1d3257c",
-      "bytes": 7895
+      "sha256": "64867f234f9c4b42185a051346aef9ef524fdd41b519461441eebd7812605507",
+      "bytes": 8307
     },
     {
       "path": "generate-fixture.mjs",
-      "sha256": "c8865769a32943e5ed906b92c19e7138b75eab460b59b4633e1f05d6d870cecf",
-      "bytes": 6906
+      "sha256": "f5ba11445aac296bde82ccbf0cf28c483bcbd08856b83a4a04055aa1dc84f06a",
+      "bytes": 7273
     }
-  ]
+  ],
+  "contractVersion": "1.0.1"
 }

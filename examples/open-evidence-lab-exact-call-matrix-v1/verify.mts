@@ -11,9 +11,17 @@
 //                      binding and its own compliance/outcome vocabulary.
 //
 // The two results are compared with each other and with `expected.json`. The
-// process exits non-zero if any of them disagree. Attribution stays separate:
-// the binding result belongs to the PriorSeal profile, the comparison belongs
-// to the reader, and neither result is evidence about the other project.
+// process exits non-zero if any of them disagree.
+//
+// Contract v1.0.1 pins `bound` to the §4 mismatch set only; §5 availability
+// codes are reported beside it. The shipped profile still reads
+// EXECUTION_UNAVAILABLE into its internal binding set, so the runner applies
+// the published v1.0.1 partition to the profile's raw reason codes before
+// comparing, and records the raw binding beside the partitioned one.
+//
+// Attribution stays separate: the binding result belongs to the PriorSeal
+// profile, the comparison belongs to the reader, and neither result is
+// evidence about the other project.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +35,10 @@ import { bindEnvelope, recoverAuthorizer } from './reader.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 
+// §5 availability class per contract v1.0.1: codes reported beside `bound`,
+// never inside the set that decides it.
+const AVAILABILITY_CLASS = new Set(['EXECUTION_UNAVAILABLE']);
+
 type ExpectedCase = {
   id: string;
   className: string;
@@ -35,6 +47,7 @@ type ExpectedCase = {
   expected: {
     bound: boolean;
     reasonCodes: string[];
+    availabilityCodes: string[];
     complianceStatus: string;
     complianceReasonCodes: string[];
     outcome: string;
@@ -59,7 +72,7 @@ export async function runMatrix() {
   const cases = [];
   for (const spec of expected.cases as ExpectedCase[]) {
     const observed = readJson(spec.observed);
-    const reader = bindEnvelope(authorization.intent, observed);
+    const reader = bindEnvelope(authorization, observed);
     const receipt = buildAuthorizedReceipt({
       authorization,
       acceptance: sourceRecord.acceptance,
@@ -69,19 +82,32 @@ export async function runMatrix() {
       issuedAt: observed.observedAt,
     });
     const claims = validateAuthorizedReceiptClaims(receipt);
+    // Apply the published v1.0.1 partition to the profile's raw binding codes.
+    const rawReasonCodes = sorted(receipt.binding.reasonCodes);
     const profile = {
       receiptClaimsValid: claims.valid,
-      bound: receipt.binding.bound,
-      reasonCodes: sorted(receipt.binding.reasonCodes),
+      rawBinding: { bound: receipt.binding.bound, reasonCodes: rawReasonCodes },
+      partitionedBinding: {
+        bound: !rawReasonCodes.some((code) => !AVAILABILITY_CLASS.has(code)),
+        mismatchCodes: rawReasonCodes.filter((code) => !AVAILABILITY_CLASS.has(code)),
+        availabilityCodes: rawReasonCodes.filter((code) => AVAILABILITY_CLASS.has(code)),
+      },
       complianceStatus: receipt.compliance?.status ?? null,
       complianceReasonCodes: sorted(receipt.compliance?.reasonCodes ?? []),
       outcome: receipt.outcome,
     };
     const expectedReasonCodes = sorted(spec.expected.reasonCodes);
+    const expectedAvailabilityCodes = sorted(spec.expected.availabilityCodes);
     const expectedComplianceReasonCodes = sorted(spec.expected.complianceReasonCodes);
     const agreement = {
-      readerMatchesProfileBinding: reader.bound === profile.bound && equalSets(reader.reasonCodes, profile.reasonCodes),
-      profileMatchesExpectedBinding: profile.bound === spec.expected.bound && equalSets(profile.reasonCodes, expectedReasonCodes),
+      readerMatchesProfileBinding:
+        reader.bound === profile.partitionedBinding.bound &&
+        equalSets(reader.mismatchCodes, profile.partitionedBinding.mismatchCodes) &&
+        equalSets(reader.availabilityCodes, profile.partitionedBinding.availabilityCodes),
+      profileMatchesExpectedBinding:
+        profile.partitionedBinding.bound === spec.expected.bound &&
+        equalSets(profile.partitionedBinding.mismatchCodes, expectedReasonCodes) &&
+        equalSets(profile.partitionedBinding.availabilityCodes, expectedAvailabilityCodes),
       profileMatchesExpectedCompliance:
         profile.complianceStatus === spec.expected.complianceStatus &&
         equalSets(profile.complianceReasonCodes, expectedComplianceReasonCodes),
@@ -92,7 +118,7 @@ export async function runMatrix() {
       className: spec.className,
       note: spec.note,
       observed: spec.observed,
-      reader: { bound: reader.bound, reasonCodes: reader.reasonCodes },
+      reader,
       profile,
       expected: spec.expected,
       agreement,
@@ -103,8 +129,15 @@ export async function runMatrix() {
   const report = {
     schema: 'oel.exact-call-matrix.report.v1',
     matrixId: expected.matrixId,
+    contractVersion: expected.contractVersion,
     profile: expected.profile,
     claim: expected.claim,
+    semantics: {
+      boundRule: expected.boundRule,
+      stringComparison: expected.stringComparison,
+      profilePartition:
+        "the shipped profile's raw binding reads EXECUTION_UNAVAILABLE into its deciding set; the comparison applies the published v1.0.1 partition to both implementations and records the raw binding beside it",
+    },
     inputs: {
       sourceRecord: 'fixture/signed-authorization.json',
       testKeys: 'fixture/public-test-keys.json',

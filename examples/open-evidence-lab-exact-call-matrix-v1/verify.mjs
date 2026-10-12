@@ -10,6 +10,7 @@ import {
 } from "../../src/index.mjs";
 import { bindEnvelope, recoverAuthorizer } from "./reader.mjs";
 const directory = dirname(fileURLToPath(import.meta.url));
+const AVAILABILITY_CLASS = /* @__PURE__ */ new Set(["EXECUTION_UNAVAILABLE"]);
 const readJson = (relativePath) => JSON.parse(readFileSync(join(directory, relativePath), "utf8"));
 const sorted = (values) => [...new Set(values)].sort();
 const equalSets = (left, right) => left.length === right.length && left.every((value, index) => value === right[index]);
@@ -24,7 +25,7 @@ async function runMatrix() {
   const cases = [];
   for (const spec of expected.cases) {
     const observed = readJson(spec.observed);
-    const reader = bindEnvelope(authorization.intent, observed);
+    const reader = bindEnvelope(authorization, observed);
     const receipt = buildAuthorizedReceipt({
       authorization,
       acceptance: sourceRecord.acceptance,
@@ -34,19 +35,25 @@ async function runMatrix() {
       issuedAt: observed.observedAt
     });
     const claims = validateAuthorizedReceiptClaims(receipt);
+    const rawReasonCodes = sorted(receipt.binding.reasonCodes);
     const profile = {
       receiptClaimsValid: claims.valid,
-      bound: receipt.binding.bound,
-      reasonCodes: sorted(receipt.binding.reasonCodes),
+      rawBinding: { bound: receipt.binding.bound, reasonCodes: rawReasonCodes },
+      partitionedBinding: {
+        bound: !rawReasonCodes.some((code) => !AVAILABILITY_CLASS.has(code)),
+        mismatchCodes: rawReasonCodes.filter((code) => !AVAILABILITY_CLASS.has(code)),
+        availabilityCodes: rawReasonCodes.filter((code) => AVAILABILITY_CLASS.has(code))
+      },
       complianceStatus: receipt.compliance?.status ?? null,
       complianceReasonCodes: sorted(receipt.compliance?.reasonCodes ?? []),
       outcome: receipt.outcome
     };
     const expectedReasonCodes = sorted(spec.expected.reasonCodes);
+    const expectedAvailabilityCodes = sorted(spec.expected.availabilityCodes);
     const expectedComplianceReasonCodes = sorted(spec.expected.complianceReasonCodes);
     const agreement = {
-      readerMatchesProfileBinding: reader.bound === profile.bound && equalSets(reader.reasonCodes, profile.reasonCodes),
-      profileMatchesExpectedBinding: profile.bound === spec.expected.bound && equalSets(profile.reasonCodes, expectedReasonCodes),
+      readerMatchesProfileBinding: reader.bound === profile.partitionedBinding.bound && equalSets(reader.mismatchCodes, profile.partitionedBinding.mismatchCodes) && equalSets(reader.availabilityCodes, profile.partitionedBinding.availabilityCodes),
+      profileMatchesExpectedBinding: profile.partitionedBinding.bound === spec.expected.bound && equalSets(profile.partitionedBinding.mismatchCodes, expectedReasonCodes) && equalSets(profile.partitionedBinding.availabilityCodes, expectedAvailabilityCodes),
       profileMatchesExpectedCompliance: profile.complianceStatus === spec.expected.complianceStatus && equalSets(profile.complianceReasonCodes, expectedComplianceReasonCodes),
       profileMatchesExpectedOutcome: profile.outcome === spec.expected.outcome
     };
@@ -55,7 +62,7 @@ async function runMatrix() {
       className: spec.className,
       note: spec.note,
       observed: spec.observed,
-      reader: { bound: reader.bound, reasonCodes: reader.reasonCodes },
+      reader,
       profile,
       expected: spec.expected,
       agreement,
@@ -65,8 +72,14 @@ async function runMatrix() {
   const report = {
     schema: "oel.exact-call-matrix.report.v1",
     matrixId: expected.matrixId,
+    contractVersion: expected.contractVersion,
     profile: expected.profile,
     claim: expected.claim,
+    semantics: {
+      boundRule: expected.boundRule,
+      stringComparison: expected.stringComparison,
+      profilePartition: "the shipped profile's raw binding reads EXECUTION_UNAVAILABLE into its deciding set; the comparison applies the published v1.0.1 partition to both implementations and records the raw binding beside it"
+    },
     inputs: {
       sourceRecord: "fixture/signed-authorization.json",
       testKeys: "fixture/public-test-keys.json",

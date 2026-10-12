@@ -117,6 +117,8 @@ type ExecutionEdits = Partial<{
   status: string;
   finalityState: string;
   confirmations: number;
+  executedAt: number;
+  observedAt: number;
 }>;
 
 function observedEnvelope(caseId: string, index: number, edits: ExecutionEdits = {}) {
@@ -156,6 +158,14 @@ export const CASES: ReadonlyArray<{ id: string; className: 'envelope-binding' | 
     id: 'case-04-execution-evidence-unavailable',
     className: 'evidence-availability',
     edits: { executionDataAvailable: false, status: 'NOT_FOUND', finalityState: 'UNKNOWN', confirmations: 0 },
+  },
+  {
+    // Contract v1.0.1: one second past both intent.validUntil (2000) and the
+    // authorization window (expiresAt 2000 — the fixture sets them equal), so
+    // the validUntil path and the notBefore/expiresAt path fire together.
+    id: 'case-05-time-window-expired',
+    className: 'envelope-binding',
+    edits: { executedAt: 2001, observedAt: 2002 },
   },
 ];
 
