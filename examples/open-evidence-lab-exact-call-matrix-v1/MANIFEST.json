@@ -52,8 +52,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "fbb0ce992db55ef5a4887db9955f30ea879cfc47ad8b1c3b2ccbd307bf7f2b16",
-      "bytes": 5756
+      "sha256": "3b673a529dbb2f25528d848ef789a26fb156179ee5dc15a9caddb807c62d4575",
+      "bytes": 6054
     },
     {
       "path": "expected.json",

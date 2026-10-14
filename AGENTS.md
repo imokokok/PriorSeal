@@ -17,7 +17,8 @@
 
 ## Git identity and publishing
 
-- For authorized GitHub work, reuse the existing GitHub CLI authentication with `gh` while `gh auth status` confirms it is valid. Do not ask the user to log in again while that stored session works. If it expires, start the standard `gh auth login --hostname github.com --web --git-protocol https` flow and let the user complete any browser/device authorization. Never ask the user to paste a token into chat, print credentials, or write GitHub tokens into repository files, project instructions, or Codex memory.
+- For authorized GitHub work, reuse the existing GitHub CLI authentication with `gh` while `gh auth status` confirms it is valid. Do not ask the user to log in again while that stored session works. If it expires, start the standard `gh auth login --hostname github.com --web --git-protocol https` flow and let the user complete any browser/device authorization. Never ask the user to paste a token into chat, print long-lived credentials, or write GitHub tokens into repository files, project instructions, or Codex memory.
+- During GitHub device authorization, show the user the current one-time device code and verification URL in the active conversation when needed for their approval. Never store the device code; if it expires, start a fresh device flow.
 - Before creating or rewriting a commit, verify that both author and committer use `imokokok <145034722+imokokok@users.noreply.github.com>`.
 - Never use a generated, agent, shared-machine, or other third-party identity for commits in this repository.
 - Before reporting a push as successful, verify `origin/main` (or the requested remote ref) by SHA.

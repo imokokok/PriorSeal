@@ -1,4 +1,9 @@
-# Draft invitation for Open Evidence Lab issue #49
+# Historical draft invitation for Open Evidence Lab issue #49
+
+The requested v1.0.1 runs have since been reported. Keep this as a record of
+the original invitation; it is not a pending request. See the
+[external-run summary](README.md#reported-external-runs) and
+[independent-review disposition](INDEPENDENT-REVIEW-DISPOSITION.md).
 
 This is a draft to post after the packet is available in the public PriorSeal
 repository. It requests an external run; it does not represent a completed run
