@@ -1,6 +1,6 @@
 import { hashTypedData, keccak256, toBytes } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import type { DecisionInputRequest, PreTradeRequest } from '../../insight/sdk/dist/types.js'
+import type { DecisionInputRequest, PreTradeRequest } from './insight-sdk-contracts.mjs'
 
 const fixtureSigner = privateKeyToAccount(`0x${'11'.repeat(32)}`)
 const oracleDomain = { name: 'Insight Oracle Safety', version: '3', chainId: 1 } as const
