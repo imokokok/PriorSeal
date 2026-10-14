@@ -10,20 +10,21 @@ type EvidenceRelationshipViewProps = {
   verification?: VerificationSummary
   signerTrustConfirmed?: boolean
   relations?: Record<string, RelationshipValue>
+  relationshipReviewComplete?: boolean
 }
 
 const ZERO_HASH = `0x${'0'.repeat(64)}`
 
-function relationshipStatus(relations?: Record<string, RelationshipValue>) {
+function relationshipStatus(relations?: Record<string, RelationshipValue>, complete = true) {
   if (!relations) return 'NOT REVIEWED'
   const values = Object.values(relations).filter((value) => value !== null)
-  if (values.length === 0) return 'NOT ESTABLISHED'
   if (values.some((value) => value === false)) return 'MISMATCH'
+  if (!complete || values.length === 0) return 'NOT ESTABLISHED'
   if (values.length && values.every((value) => value === true)) return 'MATCHED'
   return 'NOT ESTABLISHED'
 }
 
-export function EvidenceRelationshipView({ receipt, verification, signerTrustConfirmed = false, relations }: EvidenceRelationshipViewProps) {
+export function EvidenceRelationshipView({ receipt, verification, signerTrustConfirmed = false, relations, relationshipReviewComplete = true }: EvidenceRelationshipViewProps) {
   const authorization = receipt.authorizationEvidence?.authorization
   const commitments = authorization?.intent.contextCommitments ?? []
   const policyHash = authorization?.policyHash
@@ -49,7 +50,7 @@ export function EvidenceRelationshipView({ receipt, verification, signerTrustCon
     { label: 'Receipt', title: 'Receipt identifier', status: verification?.valid ? 'LOCALLY VERIFIED' : 'SIGNED CLAIM', value: receipt.receiptId },
   ]
   const cryptographicStatus = verification ? verification.valid ? 'VERIFIED' : verification.code : 'NOT VERIFIED HERE'
-  const crossEvidenceStatus = relationshipStatus(relations)
+  const crossEvidenceStatus = relationshipStatus(relations, relationshipReviewComplete)
 
   return <section className={`panel evidence-relationship ${verification?.valid ? 'evidence-relationship--verified' : 'evidence-relationship--claims'}`} aria-labelledby="evidence-relationship-title">
     <div className="panel-head relationship-intro"><div><span className="relationship-kicker">EVIDENCE MAP / 01</span><h2 id="evidence-relationship-title">Evidence relationship</h2><p>Each transition keeps its own scope. A matching digest, valid signature, observed execution and compliance result are related claims, not substitutes for one another.</p></div><div className="relationship-intro__scope"><span>DISPLAY MODE</span><strong>{verification ? verification.valid ? 'Local review attached' : 'Local review did not pass' : 'Receipt claims only'}</strong><small>{verification ? 'Read each assessment within the verifier’s stated scope.' : 'Run local verification to check signatures and hashes.'}</small></div></div>
