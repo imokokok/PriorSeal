@@ -17,8 +17,7 @@ import { observeEvm } from '../src/infrastructure/blockchain/evm/observer.mjs'
 import { assertV3SwapAuthorization, createPriorSealClient, createV3SwapApproval, generateAuthorizationNonce, swapApprovalCommitment, V3_SINGLE_SWAP_ABI } from '../sdk/dist/index.js'
 import { verifyReceiptLocally } from '../sdk/dist/verifier.js'
 import { createInsightLocalDecisionInputFixture } from './insight-local-decision-input-fixture.mjs'
-import type { GuardOptions, PriorSealAcceptedAuthorization, PriorSealGuardedSwapResult, PriorSealPreparedAuthorization, TrustedV3PriorSealGuardedSwapRequest } from '../../insight/sdk/dist/types.js'
-import type { createPriorSealDefiSubmitter as CreatePriorSealDefiSubmitter } from '../../insight/sdk/dist/priorseal-defi-gateway.js'
+import type { GuardOptions, PriorSealDrillClient, PriorSealGuardedSwapResult, TrustedV3PriorSealGuardedSwapRequest } from './insight-sdk-contracts.mjs'
 
 // Only an in-process EVM, generated accounts and valueless test tokens are used.
 // The optional Ganache dependency is installed outside the product workspace.
@@ -28,8 +27,14 @@ const now = Math.floor(Date.now() / 1000)
 let authorizationClockMs = now * 1000
 const insightModulePath = process.env.INSIGHT_SDK_MODULE ?? resolve(fileURLToPath(new URL('.', import.meta.url)), '../../insight/sdk/dist/index.js')
 const insightSdk = await import(pathToFileURL(insightModulePath).href) as {
-  InsightGuard: new (options: GuardOptions) => { executeTrustedV3SwapWithPriorSeal(request: TrustedV3PriorSealGuardedSwapRequest): Promise<PriorSealGuardedSwapResult> }
-  createPriorSealDefiSubmitter: typeof CreatePriorSealDefiSubmitter
+  InsightGuard: new (options: GuardOptions) => { executeTrustedV3SwapWithPriorSeal(request: TrustedV3PriorSealGuardedSwapRequest<PriorSealDrillClient>): Promise<PriorSealGuardedSwapResult> }
+  createPriorSealDefiSubmitter: (input: {
+    gateway: ReturnType<typeof createDefiExecutionGateway>
+    approval: unknown
+    routerAddress: `0x${string}`
+    routerCodeHash: `0x${string}`
+    acceptanceKey: { issuer: string; keyId: string; algorithm: string; publicKey: string; status: string; validFrom: number | null; validUntil: number | null }
+  }) => (...args: never[]) => Promise<unknown>
 }
 const provider = ganache.provider({ chain: { chainId: 8453, time: new Date(now * 1000), hardfork: 'shanghai' }, logging: { quiet: true }, wallet: { totalAccounts: 3 } })
 const db = new PGlite()
@@ -109,18 +114,18 @@ contract Router {
     routerCodeHash: keccak256(bytecode),
     acceptanceKey: { issuer, keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null },
   })
-  const insightPriorSealClient: TrustedV3PriorSealGuardedSwapRequest['priorSeal']['client'] = {
+  const insightPriorSealClient: PriorSealDrillClient = {
     prepareAuthorization: async (input, signal) => {
-      const result = await client.prepareAuthorization(input, { signal })
+      const result = await client.prepareAuthorization(input as Parameters<typeof client.prepareAuthorization>[0], { signal })
       if (result.authorization.schema !== 'priorseal.authorization.v2') throw new Error('PriorSeal returned an unsupported authorization schema')
-      return result as unknown as PriorSealPreparedAuthorization
+      return result
     },
     acceptAuthorization: async (authorization, signal) => {
-      const result = await client.acceptAuthorization(authorization, { signal })
+      const result = await client.acceptAuthorization(authorization as Parameters<typeof client.acceptAuthorization>[0], { signal })
       if (result.authorization.schema !== 'priorseal.authorization.v2') throw new Error('PriorSeal accepted an unsupported authorization schema')
-      return result as unknown as PriorSealAcceptedAuthorization
+      return result
     },
-    observeExecution: (input, signal) => client.observeExecution(input, { signal }),
+    observeExecution: (input, signal) => client.observeExecution(input as Parameters<typeof client.observeExecution>[0], { signal }),
     getObservationJob: (jobId, signal) => client.getObservationJob(jobId, { signal }),
     waitForObservationJob: (jobId, options) => client.waitForObservationJob(jobId, options),
   }
@@ -153,7 +158,7 @@ contract Router {
     prepareTransaction: async () => transaction,
     submitTransaction: submitThroughPriorSeal,
   })
-  assert.equal(joint.status, 'executed')
+  if (joint.status !== 'executed') throw new Error(`Strict V3 flow returned ${joint.status}`)
   if (!joint.transactionRisk) throw new Error('Strict V3 flow did not return transaction-risk evidence')
   assert.equal(joint.evidenceStatus, 'COMPLETE')
   assert.equal(joint.assuranceValid, true)
