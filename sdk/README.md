@@ -12,7 +12,7 @@ To require an RPC-finalized observation, set `intent.constraints.finalityRequire
 
 ## Node DeFi execution gateway
 
-Import `createDefiExecutionGateway`, `createDefiViemSubmitter`, and the durable attempt-store adapter from `priorseal-sdk/defi`. The gateway offers `prepare`, `authorize`, `execute`, `status`, and `recover`. Its first reviewed route is the original Uniswap V3 SwapRouter `exactInputSingle`; unknown routers and selectors fail closed. Keep the wallet and signer in your Node process, provide an independently reviewed router code hash, and use one shared primary PostgreSQL attempt table for every route using the same signer nonce. Apply the repository's migration 011 before using `createPostgresDefiAttemptStore`.
+Import `createDefiExecutionGateway`, `createDefiViemSubmitter`, and the durable attempt-store adapter from `priorseal-sdk/defi`. The gateway offers `prepare`, `authorize`, `execute`, `status`, and `recover`. Its reviewed single-pool ERC-20 route accepts the original Uniswap V3 SwapRouter `exactInputSingle` or one deadline-protected SwapRouter02 `multicall(deadline, [exactInputSingle])`; other routers and selectors fail closed. Keep the wallet and signer in your Node process, provide an independently reviewed router code hash, and use one shared primary PostgreSQL attempt table for every route using the same signer nonce. Apply the repository's migration 011 before using `createPostgresDefiAttemptStore`.
 
 The hosted PriorSeal Worker accepts authorizations and issues evidence. It does not hold funds or broadcast transactions. See [the complete gateway contract](https://github.com/imokokok/PriorSeal/blob/main/docs/product/defi-execution-gateway.md) and [swap authorization semantics](https://github.com/imokokok/PriorSeal/blob/main/docs/product/swap-authorization.md) before integrating a signer.
 
@@ -269,6 +269,71 @@ const review = await verifyReviewManifestLocally(manifest, {
 Trust profiles use `schema: 'priorseal.trust-profile.v1'`, issuer, audience, keys, source and `confirmedAt` in Unix seconds. Zero means unconfirmed. Optional Insight registries must also come from an independently established source. The browser asks for confirmation separately; a profile's self-declared timestamp does not confer trust.
 
 The manifest preserves raw attachment bytes and SHA-256 hashes. Supported native Insight roles are `insight.source`, `insight.destination` and `insight.execution`; profiles are `insight.pretrade.v2/v3` and `insight.execution.v2/v3/v4/v5`. A complete two-sided composition requires a destination-bound execution receipt (v3–v5), both pre-trade receipts, independently trusted production attester keys, and independently pinned Insight protocol evidence. A legacy v2 execution cannot establish a two-sided pair. Unknown versions and semantic profiles remain unverified.
+
+The strict Insight V3 swap workflow also exports `insight.decision-input.source`, `insight.decision-input.destination` (`insight.decision-input.v1`) and `insight.swap-transaction-risk` (`insight.swap-transaction-risk.v1`). Pass independently selected `insightDecisionInputPolicy` and `insightSwapRiskPolicy` values to `verifyReviewManifestLocally()`. The first pins policy ID/version, all three numeric limits and the caller's uppercase asset-label to CAIP-19 ERC-20 map. The risk policy pins approved chain/router/code-hash deployments, maximum block age and maximum trade-amount deviation. The verifier checks both EIP-712 signatures, key windows/revocations, the links to the signed v3 pre-trade UIDs, action/chain/amount/asset-pair scope, policy digest, authorization window and unique PriorSeal context commitment. It recomputes signed quote age/deviation, requires fresh quotes at authorization, and ensures authorization expires no later than the earliest quote-freshness deadline. It also checks that the signed Insight execution-receipt slippage ceiling is no looser than the decision-input policy. The unsigned transaction-risk report is marked `authority: 'unsigned_advisory'`; it includes the raw call bytes so the offline verifier can recompute the call hash, decode canonical V3 `exactInputSingle` calldata and check each reported field against the authorized call. It supports the original deadline-in-tuple router and a one-swap, deadline-protected SwapRouter02 multicall; other multicall contents fail closed. `insightTransactionRiskBinding` means those bytes are committed in the signed exact-call authorization and match the approved deployment, call and evidence pair. Offline binding alone does not establish that the report's RPC simulation matches chain state.
+
+For an independent read-only replay, pass the same manifest and independently obtained trust configuration to `verifyReviewManifestWithChain()`, plus a viem public client connected to an RPC independent from the report producer:
+
+```ts
+import { createPublicClient, http } from 'viem'
+import { baseSepolia } from 'viem/chains'
+import {
+  createInsightSwapRiskChainReader,
+  verifyReviewManifestWithChain,
+} from 'priorseal-sdk/verifier'
+
+const replay = await verifyReviewManifestWithChain(manifest, {
+  trustedKeys: { schema: 'priorseal.keys.v1', issuer: profile.issuer, keys: profile.keys },
+  expectedAudience: profile.audience,
+  insightKeyRegistry: profile.insightKeyRegistry,
+  insightProtocolTrust: profile.insightProtocolTrust,
+  insightDecisionInputPolicy,
+  insightSwapRiskPolicy,
+}, createInsightSwapRiskChainReader(createPublicClient({
+  chain: baseSepolia,
+  transport: http(independentRpcUrl),
+})))
+
+if (!replay.valid) throw new Error(`Review incomplete: ${replay.code}`)
+```
+
+The chain method first performs the complete local review, confirms the RPC chain ID, then fetches the report's exact block, compares its hash and timestamp, checks router bytecode, reads both token decimals and reruns the exact call with `eth_call` at that block. It recomputes the output amount, oracle reference, USD trade amount and slippage from the signed pre-trade evidence and compares all values with the advisory report. A changed block, different router code, unavailable historical state or mismatched calculation fails closed. It never broadcasts or signs. A successful replay means this RPC returned matching state and simulation results; RPC responses are observations, not consensus proofs, and the report remains unsigned advisory evidence. If there is no risk report, this method reports `OK_NO_SWAP_RISK_REPORT` and does not claim a chain replay.
+
+```ts
+const insightDecisionInputPolicy = {
+  policyId: 'treasury-uniswap-v3',
+  version: '1',
+  assetIds: {
+    WETH: 'eip155:1/erc20:0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+    USDC: 'eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  },
+  maxReferenceDeviationBps: 50,
+  maxSlippageBps: 50,
+  maxQuoteAgeSeconds: 30,
+}
+const insightSwapRiskPolicy = {
+  policyId: 'treasury-uniswap-v3-mainnet',
+  version: '1',
+  deployments: [{
+    chainId: 1,
+    routerAddress: approvedV3RouterAddress,
+    routerCodeHash: reviewedRouterCodeHash,
+  }],
+  maxBlockAgeSeconds: 30,
+  maxTradeAmountDeviationBps: 100,
+}
+const review = await verifyReviewManifestLocally(manifest, {
+  trustedKeys: { schema: 'priorseal.keys.v1', issuer: profile.issuer, keys: profile.keys },
+  expectedAudience: profile.audience,
+  insightKeyRegistry: profile.insightKeyRegistry,
+  insightProtocolTrust: profile.insightProtocolTrust,
+  insightDecisionInputPolicy,
+  insightSwapRiskPolicy,
+})
+// For the strict workflow, require these relations before treating the pair as complete:
+// insightDecisionInputPair, insightDecisionInputAuthorizationBinding,
+// insightTransactionRiskBinding, insightPair and transaction.
+```
 
 `insightProtocolTrust` is caller configuration, never a trust root taken from the manifest. V5 requires the signed supported `profileId`, the production environment, immutable release/profile bodies and a consumer policy admitting the release through its predecessor lineage. Every release up to an admitted floor must be supplied and content-addressed correctly; missing ancestry, mismatched content or unadmitted profiles fail closed. This proves the selected offline policy, not that a partner policy is currently active on the live service.
 

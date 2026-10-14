@@ -1,13 +1,17 @@
-import { decodeFunctionData, encodeFunctionData, keccak256, parseAbi, toBytes } from 'viem'
+import { decodeFunctionData, encodeFunctionData, keccak256, parseAbi, toBytes, toFunctionSelector } from 'viem'
 import { buildExactCallIntent, parseExactCallTransaction } from './exact-call.js'
 import type { ContextCommitment, ExactCallIntentInput, Intent } from './types.js'
 
-/** Original Uniswap V3 SwapRouter exactInputSingle, with a deadline in the tuple.
- * SwapRouter02, Universal Router, multicall, native swaps and arbitrary selectors
- * require separate reviewed adapters; they are deliberately rejected here.
- */
+/** Original Uniswap V3 SwapRouter exactInputSingle with its tuple deadline. */
 export const V3_SINGLE_SWAP_ABI = parseAbi([
   'function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 deadline,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)',
+])
+/** SwapRouter02 is accepted only through a single-swap, deadline-enforcing multicall. */
+export const V3_ROUTER02_SINGLE_SWAP_ABI = parseAbi([
+  'function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)',
+])
+export const V3_ROUTER02_MULTICALL_ABI = parseAbi([
+  'function multicall(uint256 deadline,bytes[] data) payable returns (bytes[] results)',
 ])
 export const SWAP_APPROVAL_NAMESPACE = 'priorseal.swap-approval.v1'
 
@@ -37,6 +41,7 @@ export type V3SwapSemantics = {
   recipient: string
   fee: number
   deadline: number
+  callProfile: 'UNISWAP_V3_SWAP_ROUTER' | 'UNISWAP_V3_SWAP_ROUTER02_DEADLINE_MULTICALL'
 }
 
 type Transaction = ExactCallIntentInput['transaction']
@@ -44,6 +49,9 @@ const addressPattern = /^0x[0-9a-fA-F]{40}$/
 const hashPattern = /^0x[0-9a-fA-F]{64}$/
 const uintPattern = /^(0|[1-9][0-9]*)$/
 const zeroAddress = `0x${'0'.repeat(40)}`
+const originalSwapSelector = toFunctionSelector('exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))')
+const router02MulticallSelector = toFunctionSelector('multicall(uint256,bytes[])')
+const router02SwapSelector = toFunctionSelector('exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))')
 
 function requireValid(condition: unknown, code: string): asserts condition {
   if (!condition) throw new TypeError(code)
@@ -71,13 +79,39 @@ export function decodeV3SingleSwap(value: unknown): V3SwapSemantics {
   const tx = transaction(value)
   requireValid(tx.value === undefined || BigInt(tx.value) === 0n, 'SWAP_NATIVE_VALUE_UNSUPPORTED')
   requireValid(tx.data.length > 10, 'SWAP_CALL_UNSUPPORTED')
-  let decoded: ReturnType<typeof decodeFunctionData<typeof V3_SINGLE_SWAP_ABI>>
-  try { decoded = decodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, data: tx.data }) }
-  catch { throw new TypeError('SWAP_CALL_UNSUPPORTED') }
-  requireValid(decoded.functionName === 'exactInputSingle', 'SWAP_CALL_UNSUPPORTED')
-  requireValid(encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: 'exactInputSingle', args: decoded.args }).toLowerCase() === tx.data.toLowerCase(), 'SWAP_CALL_NON_CANONICAL')
-  const p = decoded.args[0]
-  requireValid(p.deadline <= BigInt(Number.MAX_SAFE_INTEGER) && p.deadline > 0n, 'SWAP_DEADLINE_INVALID')
+  let p: { tokenIn: `0x${string}`; tokenOut: `0x${string}`; fee: number; recipient: `0x${string}`; amountIn: bigint; amountOutMinimum: bigint; sqrtPriceLimitX96: bigint; deadline?: bigint }
+  let deadline: bigint
+  let callProfile: V3SwapSemantics['callProfile']
+  const selector = tx.data.slice(0, 10).toLowerCase()
+  if (selector === originalSwapSelector.toLowerCase()) {
+    let decoded: ReturnType<typeof decodeFunctionData<typeof V3_SINGLE_SWAP_ABI>>
+    try { decoded = decodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, data: tx.data }) }
+    catch { throw new TypeError('SWAP_CALL_UNSUPPORTED') }
+    requireValid(decoded.functionName === 'exactInputSingle', 'SWAP_CALL_UNSUPPORTED')
+    requireValid(encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: 'exactInputSingle', args: decoded.args }).toLowerCase() === tx.data.toLowerCase(), 'SWAP_CALL_NON_CANONICAL')
+    p = decoded.args[0]
+    deadline = p.deadline!
+    callProfile = 'UNISWAP_V3_SWAP_ROUTER'
+  } else if (selector === router02MulticallSelector.toLowerCase()) {
+    let multicall: ReturnType<typeof decodeFunctionData<typeof V3_ROUTER02_MULTICALL_ABI>>
+    try { multicall = decodeFunctionData({ abi: V3_ROUTER02_MULTICALL_ABI, data: tx.data }) }
+    catch { throw new TypeError('SWAP_CALL_UNSUPPORTED') }
+    requireValid(multicall.functionName === 'multicall', 'SWAP_CALL_UNSUPPORTED')
+    requireValid(encodeFunctionData({ abi: V3_ROUTER02_MULTICALL_ABI, functionName: 'multicall', args: multicall.args }).toLowerCase() === tx.data.toLowerCase(), 'SWAP_CALL_NON_CANONICAL')
+    const [outerDeadline, calls] = multicall.args
+    requireValid(calls.length === 1, 'SWAP_ROUTER02_MULTICALL_SCOPE')
+    const inner = calls[0]
+    requireValid(inner.slice(0, 10).toLowerCase() === router02SwapSelector.toLowerCase(), 'SWAP_CALL_UNSUPPORTED')
+    let decoded: ReturnType<typeof decodeFunctionData<typeof V3_ROUTER02_SINGLE_SWAP_ABI>>
+    try { decoded = decodeFunctionData({ abi: V3_ROUTER02_SINGLE_SWAP_ABI, data: inner }) }
+    catch { throw new TypeError('SWAP_CALL_UNSUPPORTED') }
+    requireValid(decoded.functionName === 'exactInputSingle', 'SWAP_CALL_UNSUPPORTED')
+    requireValid(encodeFunctionData({ abi: V3_ROUTER02_SINGLE_SWAP_ABI, functionName: 'exactInputSingle', args: decoded.args }).toLowerCase() === inner.toLowerCase(), 'SWAP_CALL_NON_CANONICAL')
+    p = decoded.args[0]
+    deadline = outerDeadline
+    callProfile = 'UNISWAP_V3_SWAP_ROUTER02_DEADLINE_MULTICALL'
+  } else throw new TypeError('SWAP_CALL_UNSUPPORTED')
+  requireValid(deadline <= BigInt(Number.MAX_SAFE_INTEGER) && deadline > 0n, 'SWAP_DEADLINE_INVALID')
   requireValid(p.fee > 0 && p.fee < 1_000_000 && p.sqrtPriceLimitX96 === 0n, 'SWAP_POOL_OR_PARTIAL_FILL_UNSUPPORTED')
   requireValid(p.amountIn > 0n && p.amountOutMinimum > 0n, 'SWAP_AMOUNT_INVALID')
   const inputToken = address(p.tokenIn, 'tokenIn')
@@ -93,7 +127,8 @@ export function decodeV3SingleSwap(value: unknown): V3SwapSemantics {
     minimumOutput: p.amountOutMinimum.toString(),
     recipient: address(p.recipient, 'recipient'),
     fee: p.fee,
-    deadline: Number(p.deadline),
+    deadline: Number(deadline),
+    callProfile,
   }
 }
 
@@ -229,6 +264,7 @@ export function compareV3SwapReplan(input: { approval: unknown; originalTransact
     add('recipient', approval.recipient, proposedSwap.recipient)
     add('pool fee', approval.fee, proposedSwap.fee)
     add('deadline', originalSwap.deadline, proposedSwap.deadline)
+    add('call profile', originalSwap.callProfile, proposedSwap.callProfile)
   }
   if (original.data.toLowerCase() !== proposed.data.toLowerCase() && changes.length === 0) changes.push({ field: 'calldata', approved: keccak256(original.data), proposed: keccak256(proposed.data) })
   if (input.intent.calldataHash?.toLowerCase() !== keccak256(proposed.data).toLowerCase() && !changes.some((change) => change.field === 'calldata')) changes.push({ field: 'calldata hash', approved: input.intent.calldataHash ?? 'missing', proposed: keccak256(proposed.data) })

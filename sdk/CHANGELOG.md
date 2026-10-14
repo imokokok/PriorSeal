@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Bind Insight Decision Input v1 evidence into the review manifest so a trusted-decision swap authorization can carry an independently verifiable decision-input pair next to the exact-call authorization and receipt evidence.
 - Add the Jupiter Guarded Swap adapter for self-paying Solana `ExactIn` Router
   builds. It binds an independently simulated exact message to a PriorSeal
   authorization, supports deployment-owned mint/program/ALT/fee limits and

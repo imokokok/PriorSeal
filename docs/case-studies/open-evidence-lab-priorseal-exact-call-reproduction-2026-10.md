@@ -1,11 +1,11 @@
-# An Independent Cold Run of PriorSeal’s Exact-Call Fixture
+# Independent Reproductions and Reader Review of PriorSeal’s Exact-Call Fixture
 
 **YuTao Peng · PriorSeal · October 2026**
 
 This case records an independent, cold-start reproduction of PriorSeal’s
-synthetic exact-call fixture at v1.0.0, the issues found during that review,
-and the contract clarifications published in v1.0.1. It is an interoperability
-and reproducibility record, not a customer deployment or security audit.
+synthetic exact-call fixture at v1.0.0, followed by fresh-clone and independent
+reader checks of v1.0.1. It is an interoperability and reproducibility record,
+not a customer deployment or security audit.
 
 ## What was reproduced
 
@@ -29,6 +29,32 @@ The reviewer reported:
 These results concern the exact synthetic files at the v1.0.0 pin. They do not
 establish behavior outside those artifacts.
 
+## What v1.0.1 added
+
+Two distinct external activities were later reported against
+`2ff89d86611257b4440232e5c2793926b3d52043`:
+
+- A fresh-clone run of the published `verify.mjs` reported 6/6 PASS and
+  byte-identical output to `report.json` on Ubuntu 24.04 / Node 22. The expected
+  values were public before the run, so this establishes repeatability on that
+  environment, not independent implementation agreement.
+- A second fresh-clone replay reported the same output on Ubuntu 22.04.5 / Node
+  20.20.2. That Node version is below the run packet's requested Node 22.
+- HORIZON SHIELD / NENRIN wrote a separate Python reader from the public
+  contract, fixture and docs, without opening PriorSeal verifier or SDK source.
+  It reported **89 comparable fields equal, 0 different, 13 not comparable**;
+  it recovered the signer and recomputed the signatures and hash links. A
+  second operator reran that reader and reported the same comparison.
+
+These checks were answer-exposed. The independent reader found eight gaps
+(G1–G8), including missing hash definitions in the matrix contract, undefined
+scope for `authorizationCode` and `receiptClaimsValid`, ambiguous correlation
+and edge-case semantics, and a README table that mislabeled case 05's outcome.
+The full [disposition](../runs/priorseal-exact-call-matrix-v1.0.1-cold-run/INDEPENDENT-REVIEW-DISPOSITION.md)
+preserves each finding and what remains unresolved. The current matrix README
+corrects case 05 to `NON_COMPLIANT` / `COMPLETED`; the pinned v1.0.1 files remain
+unchanged.
+
 ## What the review found
 
 The useful result was the combination of reproduction and a precise boundary
@@ -41,7 +67,7 @@ report:
 | The EIP-712 field list did not map every struct field to its source JSON path, and some JSON number/string descriptions did not match the frozen fixture. | The contract now lists the JSON paths and corrects the fixture’s JSON types. |
 | The prose did not say that the implementations compare values after JavaScript `String()` coercion. | The contract now states those comparison semantics. Whether the producer should reject non-canonical forms remains an open question. |
 
-## What v1.0.1 means
+## What v1.0.1 establishes
 
 The current fixture and contract are in
 [`examples/open-evidence-lab-exact-call-matrix-v1/`](../../examples/open-evidence-lab-exact-call-matrix-v1/).
@@ -52,14 +78,16 @@ reports the envelope as `bound: true` with that availability code beside it.
 This revision clarifies the contract and comparison. It does not claim that
 the producer’s raw output was changed.
 
-The v1.0.1 local report records **6/6 PASS** for its six synthetic cases. The
-independent review above was run against v1.0.0, so **v1.0.1 still needs its
-own independent cold run**. The published v1.0.1 commit and any later external
-run should be linked here and in the collaboration thread.
+The committed v1.0.1 report records **6/6 PASS**. The external fresh-clone run
+reproduced its bytes, while the independent reader agreed on every comparable
+field; these are different kinds of evidence and remain separately attributed.
+The reader could not compare `authorizationCode`, `receiptClaimsValid`, or the
+internal `agreement` flags. It inferred some lifecycle mapping from published
+prose, so agreement does not settle gaps G2–G6 or G8.
 
 The external run packet pins v1.0.1 to repository commit
 `2ff89d86611257b4440232e5c2793926b3d52043` and provides a clean-checkout guide,
-result template, and draft invitation for OEL:
+result template, prior invitation for OEL, and reported external-run links:
 [`docs/runs/priorseal-exact-call-matrix-v1.0.1-cold-run/`](../runs/priorseal-exact-call-matrix-v1.0.1-cold-run/README.md).
 
 ## Reproduce and scope

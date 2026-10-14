@@ -1,8 +1,9 @@
 # PriorSeal exact-call matrix v1.0.1 — independent cold-run packet
 
-This packet lets an external operator reproduce the published synthetic matrix
-from a clean checkout and report the result in a consistent, reviewable form.
-It does not claim that an external v1.0.1 run has already happened.
+This packet records how to reproduce the published synthetic matrix from a clean
+checkout and gives a consistent, reviewable result format. External v1.0.1
+replays and a separately written reader have since been reported; their scopes
+are recorded below and in the [independent-review disposition](INDEPENDENT-REVIEW-DISPOSITION.md).
 
 ## Frozen inputs
 
@@ -71,6 +72,20 @@ artifact on the reported environment. Running the included reader is not a new
 independent implementation. If you also write or update a reader from
 `INPUT-CONTRACT.md`, describe that separately and identify which checks it
 independently implements.
+
+## Reported external runs
+
+The following records are separate evidence types and should not be combined
+into a broader claim:
+
+- [Fresh-clone runner report](https://github.com/probityai/agent-evidence-atlas/issues/64#issuecomment-6134006661): pinned v1.0.1, 6/6 PASS, byte-identical to the committed report. Expected results were public, and the published `verify.mjs` was used; this was not an independent reader. The operator also disclosed an npm audit result of one low and one high finding.
+- [Second fresh-clone replay](https://github.com/probityai/agent-evidence-atlas/issues/64#issuecomment-6140571875): pinned v1.0.1, 6/6 PASS and byte-identical output on Ubuntu 22.04.5 / Node 20.20.2. This is below the packet's requested Node 22, so it is recorded as an additional replay rather than a run meeting the stated environment requirement.
+- [Independent Python reader report](https://github.com/probityai/agent-evidence-atlas/issues/64#issuecomment-6144104923): 89 comparable fields equal, 0 different, 13 not comparable. It checked hashes, signatures, case comparisons and selected lifecycle behavior from published materials. Its eight specification/documentation findings and boundaries are listed in the disposition.
+- [Independent reader rerun](https://github.com/probityai/agent-evidence-atlas/issues/64#issuecomment-6155239434): a second operator reproduced the independent reader's comparison, with the reported output differing only in the recorded Python version.
+
+These are answer-exposed synthetic checks. They do not establish real-chain
+behavior, production use, a security audit, adoption, integration, a pilot, or
+endorsement.
 
 ## Scope
 
