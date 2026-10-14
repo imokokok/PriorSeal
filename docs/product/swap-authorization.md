@@ -4,12 +4,12 @@ This opt-in workflow makes one supported swap's business fields visible before t
 
 ## Supported call
 
-- One EVM chain and one externally reviewed deployment of the **original Uniswap V3 SwapRouter** `exactInputSingle` selector with the deadline inside its tuple.
+- One EVM chain and one externally reviewed deployment of either the **original Uniswap V3 SwapRouter** `exactInputSingle` selector with the deadline inside its tuple, or **SwapRouter02** with `multicall(deadline, [exactInputSingle])`.
 - ERC-20 input and output, exact input, one pool fee, one output recipient, zero native value and `sqrtPriceLimitX96 = 0`.
 - A fixed transaction sender, nonce, router target and canonical calldata. Router runtime bytecode must match an independently pinned hash at authorization review and again at the signing or submission boundary.
 - The approved maximum input and minimum output are expressed in **atomic token units**. The concrete call may spend no more than the approved maximum and require no less than the approved minimum. The current console derives both limits exactly from the imported call. It may also display decimal amounts using `decimals()` read from the token contracts on the selected chain. A symbol appears only when the chain, address and observed decimals match the console's reviewed Base WETH/USDC metadata; other tokens show no symbol. The addresses and atomic values remain authoritative.
 
-SwapRouter02, Universal Router, multicall, split routes, native swaps, exact-output calls, fee-on-transfer tokens and arbitrary selectors require separate reviewed adapters. Supplying a code hash from the transaction proposer does not establish that the router is trusted. Review the deployment, its code and upgradeability, then provision the hash through a trusted configuration. For a proxy, pinning only the proxy runtime code does not pin its implementation.
+SwapRouter02 is accepted only through one canonical `multicall(deadline, [exactInputSingle])`; bare deadline-free calls, multiple inner calls, arbitrary multicalls, Universal Router, split routes, native swaps, exact-output calls, fee-on-transfer tokens and arbitrary selectors remain unsupported. The deadline is enforced on chain by the outer multicall. Supplying a code hash from the transaction proposer does not establish that the router is trusted. Review the deployment, its code and upgradeability, then provision the hash through a trusted configuration. For a proxy, pinning only the proxy runtime code does not pin its implementation.
 
 ## SDK flow
 

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { encodeFunctionData, keccak256 } from 'viem'
 import {
-  V3_SINGLE_SWAP_ABI, assertV3SwapAuthorization, assertV3SwapRouterCode,
+  V3_SINGLE_SWAP_ABI, V3_ROUTER02_SINGLE_SWAP_ABI, V3_ROUTER02_MULTICALL_ABI, assertV3SwapAuthorization, assertV3SwapRouterCode,
   assertV3SwapTransaction, buildV3SwapIntent, createV3SwapApproval,
   compareV3SwapReplan, decodeV3SingleSwap, parseV3SwapApproval, swapApprovalCommitment,
 } from '../../sdk/dist/index.js'
@@ -40,6 +40,28 @@ test('one canonical ERC-20 swap is decoded, signed as an exact call and rechecke
   assert.deepEqual(intent.contextCommitments, [swapApprovalCommitment(approval)])
   assertV3SwapRouterCode(approval, code)
   assert.equal(assertV3SwapAuthorization({ approval, transaction, intent, routerBytecode: code, now }).minimumOutput, '900000')
+})
+
+test('SwapRouter02 is accepted only as one deadline-bounded exactInputSingle call', () => {
+  const base = fixture()
+  const inner = encodeFunctionData({
+    abi: V3_ROUTER02_SINGLE_SWAP_ABI,
+    functionName: 'exactInputSingle',
+    args: [{ tokenIn: inputToken, tokenOut: outputToken, fee: 3000, recipient, amountIn: 1_000_000n, amountOutMinimum: 900_000n, sqrtPriceLimitX96: 0n }],
+  })
+  const data = encodeFunctionData({ abi: V3_ROUTER02_MULTICALL_ABI, functionName: 'multicall', args: [BigInt(now + 120), [inner]] })
+  const transaction = { ...base.transaction, data }
+  const approval = createV3SwapApproval(transaction, keccak256(code))
+  const intent = buildV3SwapIntent({ approval, transaction, intentId: 'router02-swap', validUntil: now + 90, now })
+  const semantics = decodeV3SingleSwap(transaction)
+  assert.equal(semantics.callProfile, 'UNISWAP_V3_SWAP_ROUTER02_DEADLINE_MULTICALL')
+  assert.equal(semantics.deadline, now + 120)
+  assert.equal(assertV3SwapAuthorization({ approval, transaction, intent, routerBytecode: code, now }).minimumOutput, '900000')
+
+  const twoCalls = encodeFunctionData({ abi: V3_ROUTER02_MULTICALL_ABI, functionName: 'multicall', args: [BigInt(now + 120), [inner, inner]] })
+  assert.throws(() => decodeV3SingleSwap({ ...transaction, data: twoCalls }), /SWAP_ROUTER02_MULTICALL_SCOPE/)
+  const expired = encodeFunctionData({ abi: V3_ROUTER02_MULTICALL_ABI, functionName: 'multicall', args: [BigInt(now), [inner]] })
+  assert.throws(() => assertV3SwapTransaction(approval, { ...transaction, data: expired }, now + 1), /SWAP_DEADLINE_EXPIRED/)
 })
 
 test('a changed spend, minimum output, recipient, token, pool fee or deadline is denied', () => {

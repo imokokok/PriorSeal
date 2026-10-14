@@ -6,10 +6,10 @@ Synthetic, offline matrix for the **first shared case** in
 
 The published interface is `INPUT-CONTRACT.md`, contract **version 1.0.1**
 (its changelog lists what changed against the pinned 1.0.0 delivery and why).
-The independent cold run recorded for this case is pinned to **v1.0.0**;
-v1.0.1 has not yet been independently rerun. See the
+The v1.0.1 pin has a fresh-clone run and a separately written Python reader;
+see the [review disposition](../../docs/runs/priorseal-exact-call-matrix-v1.0.1-cold-run/INDEPENDENT-REVIEW-DISPOSITION.md),
 [case-study record](../../docs/case-studies/open-evidence-lab-priorseal-exact-call-reproduction-2026-10.md)
-and the [public collaboration thread](https://github.com/probityai/agent-evidence-atlas/issues/49).
+and the [public collaboration thread](https://github.com/probityai/agent-evidence-atlas/issues/64).
 
 Answering that for a signed transaction envelope is what
 `priorseal.execution-profile.exact-call.v1` does. This directory freezes one
@@ -33,7 +33,7 @@ and exits non-zero on any disagreement.
 | `case-02-calldata-mismatch` | envelope-binding | `CALLDATA_MISMATCH`, `NON_COMPLIANT`, `COMPLETED` |
 | `case-03-transaction-value-mismatch` | envelope-binding | `TRANSACTION_VALUE_MISMATCH`, `NON_COMPLIANT`, `COMPLETED` |
 | `case-04-execution-evidence-unavailable` | evidence-availability | `bound: true` with `EXECUTION_UNAVAILABLE` beside it, `NOT_ASSESSABLE`, `UNDETERMINED` |
-| `case-05-time-window-expired` | envelope-binding | `OUTSIDE_TIME_WINDOW` + `OUTSIDE_AUTHORIZATION_WINDOW`, `NON_COMPLIANT`, `UNDETERMINED` |
+| `case-05-time-window-expired` | envelope-binding | `OUTSIDE_TIME_WINDOW` + `OUTSIDE_AUTHORIZATION_WINDOW`, `NON_COMPLIANT`, `COMPLETED` |
 
 The five envelope-binding cases move exactly one observed field at a time while
 the signed authorization, its signature and its acceptance stay valid. Case 04
@@ -42,7 +42,9 @@ and under contract v1.0.1 the availability code is reported beside `bound`
 rather than inside the set that decides it — so it can never be scored as a
 mismatch, and its `UNDETERMINED` outcome overrides any boolean conjunction of
 `bound`. Case 05 (added in v1.0.1) sets `executedAt` one second past both time
-windows the profile checks, which the fixture deliberately makes equal.
+windows the profile checks, which the fixture deliberately makes equal. The
+outcome remains `COMPLETED` because execution is confirmed; compliance is
+`NON_COMPLIANT` because it occurred outside both windows.
 
 ## Run
 
@@ -84,9 +86,9 @@ node examples/open-evidence-lab-exact-call-matrix-v1/generate-fixture.mjs
 A passing local run establishes: both signature schemes verify under the
 published test keys, the submission reader and the PriorSeal profile agree on
 the v1.0.1-partitioned envelope binding for all six inputs, and the profile's
-compliance and outcome labels match the declared expectations. The independent
-third-party run applies to the pinned v1.0.0 delivery only; it does not validate
-this v1.0.1 revision.
+compliance and outcome labels match the declared expectations. The published-run
+and independent-reader evidence for v1.0.1, with its limits, is summarized in
+the [review disposition](../../docs/runs/priorseal-exact-call-matrix-v1.0.1-cold-run/INDEPENDENT-REVIEW-DISPOSITION.md).
 
 It does not establish the business meaning of the calldata, any economic
 outcome, real-chain behaviour or finality, that the reader or its checks are
@@ -102,8 +104,8 @@ synthetic: nothing in it is a chain observation.
 The profile, its reason codes and its compliance vocabulary are PriorSeal's.
 The `reader.mts` submission reader was authored by the same contributor who
 prepared the fixture; the external reviewer's separately written Python
-reader is preserved in the linked v1.0.0 run record. This collaboration does
-not imply Lab adoption or endorsement.
+reader is linked in the v1.0.1 disposition. This collaboration does not imply
+Lab adoption or endorsement.
 
 ## License
 

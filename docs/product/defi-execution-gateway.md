@@ -10,15 +10,17 @@ The Node package entry `priorseal-sdk/defi` exports `createDefiExecutionGateway(
 | Query | `status(authorizationId)` | Persisted attempt state, including `UNCERTAIN` |
 | Recover | `recover(authorizationId, observe)` | Finalized chain observation and authorization binding; no resubmission |
 
-The first reviewed adapter is `uniswap-v3-single`, for the original Uniswap V3
-SwapRouter `exactInputSingle` selector with a tuple deadline, one ERC-20 pool hop
-and zero native value. `prepare()` validates the exact swap and verifies the
+The reviewed adapter is `uniswap-v3-single`, for the original Uniswap V3
+SwapRouter `exactInputSingle` selector with a tuple deadline or one
+deadline-protected SwapRouter02 `multicall(deadline, [exactInputSingle])`, one
+ERC-20 pool hop and zero native value. `prepare()` validates the exact swap and verifies the
 router runtime code against an independently reviewed deployment hash before
 returning an intent. `execute()` rechecks the signed authorization, accepted
 issuer evidence, policy, chain, router code, approved token/amount/recipient,
 deadline and exact calldata before the claim and immediately before broadcast.
-Unknown adapters are rejected. SwapRouter02, Universal Router, multicall, native
-swaps and arbitrary selectors need separate reviewed adapters.
+Unknown adapters are rejected. Bare SwapRouter02 calls, multicalls with more
+than one inner call, Universal Router, native swaps and arbitrary selectors
+remain unsupported.
 
 The gateway reuses the **same** durable attempt store and signer-nonce key as
 `executeRwaAuthorized()`. The PostgreSQL implementation is exported as
