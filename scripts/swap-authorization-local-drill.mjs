@@ -158,7 +158,7 @@ contract Router {
     prepareTransaction: async () => transaction,
     submitTransaction: submitThroughPriorSeal
   });
-  assert.equal(joint.status, "executed");
+  if (joint.status !== "executed") throw new Error(`Strict V3 flow returned ${joint.status}`);
   if (!joint.transactionRisk) throw new Error("Strict V3 flow did not return transaction-risk evidence");
   assert.equal(joint.evidenceStatus, "COMPLETE");
   assert.equal(joint.assuranceValid, true);
