@@ -16,7 +16,8 @@ const ZERO_HASH = `0x${'0'.repeat(64)}`
 
 function relationshipStatus(relations?: Record<string, RelationshipValue>) {
   if (!relations) return 'NOT REVIEWED'
-  const values = Object.values(relations)
+  const values = Object.values(relations).filter((value) => value !== null)
+  if (values.length === 0) return 'NOT ESTABLISHED'
   if (values.some((value) => value === false)) return 'MISMATCH'
   if (values.length && values.every((value) => value === true)) return 'MATCHED'
   return 'NOT ESTABLISHED'
