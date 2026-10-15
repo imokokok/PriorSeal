@@ -13,7 +13,6 @@ import { createObservationWorker } from '../application/observations/observation
 import { observeExecution, type ExecutionObserver } from '../application/observations/observe-execution.mjs';
 import { observeEvm } from '../infrastructure/blockchain/evm/observer.mjs';
 import { observeSolana } from '../infrastructure/blockchain/solana/observer.mjs';
-import type { SolanaTransactionMessage } from '../domain/solana.mjs';
 import { parseTransparencyAnchor, readTransparencyAnchor, verifyTransparencyAnchor } from '../infrastructure/transparency/file-anchor-provider.mjs';
 import { buildMerkleTransparencyEvidence, buildTransparencyEvidence } from '../domain/transparency.mjs';
 import { createHttpWitnessProvider, parseWitnessEndpoints, readWitnessEndpoints } from '../infrastructure/witness/http-witness-client.mjs';
