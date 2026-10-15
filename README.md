@@ -23,6 +23,7 @@ PriorSeal is for teams building EVM agents, treasury automation, wallets, and tr
 | --- | --- |
 | Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
+| Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
 | Review the assets, limits, recipient and router in one ERC-20 swap before authorization | [Reviewed swap authorization](docs/product/swap-authorization.md) |
 | See why an agent's replanned swap needs new approval | [Offline replan demo](examples/swap-replan-demo/README.md) |
 | Run a reviewed DeFi call through prepare, authorize, execute, query and recovery | [General DeFi execution gateway](docs/product/defi-execution-gateway.md) |
@@ -37,7 +38,7 @@ Insight and PriorSeal work independently. Insight provides **oracle transparency
 3. **Execution.** PriorSeal observes a specified transaction through configured EVM RPC sources and compares the supported fields with the signed intent. Pending, unavailable, reverted, and reorged states remain explicit.
 4. **Review.** An Ed25519-signed v3 receipt separates evidence validity, execution state, and authorization compliance. A reviewer can download it and verify its hashes, signatures, policy result, and binding locally with an independently confirmed issuer key.
 
-For contract calls, the `priorseal.intent.v2` exact-call profile binds the transaction envelope: chain, executor, nonce, target, calldata hash, and native value. Optional context commitments bind digests of external decisions or assessments without claiming that PriorSeal made those decisions. See the [evidence relationship levels](docs/architecture/evidence-relationship-levels.md).
+For contract calls, the `priorseal.intent.v2` exact-call profile binds the transaction envelope: chain, executor, nonce, target, calldata hash, and native value. Optional context commitments bind digests of external decisions, assessments, or a block-pinned ERC-8004 identity snapshot without claiming that PriorSeal made those decisions. See the [evidence relationship levels](docs/architecture/evidence-relationship-levels.md) and the [ERC-8004 integration guide](docs/integrations/erc-8004.md).
 
 For ERC-4337 smart accounts, a second `intent.v2` profile binds the canonical UserOperation hash and supports commitments from Insight's signed risk assessments. EIP-7702 observation supports predelegated EntryPoint v0.7 accounts and marker-based v0.8/v0.9 flows, binding a signed authorization tuple when the operation requests a fresh delegation; all profiles pin delegate code and verify exact bundle calldata plus transaction-level delegation state. See the [ERC-4337 integration guide](docs/integrations/erc-4337.md) for supported scope and the distinction between UserOperation evidence and ordinary bundler transaction observation.
 
