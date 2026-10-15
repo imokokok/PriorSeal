@@ -1,5 +1,6 @@
 import { errorCode } from '../shared/error-code.mjs';
 import { encodeFunctionData, hashTypedData, verifyTypedData } from 'viem';
+import { createPublicKey, verify as verifyNodeSignature } from 'node:crypto';
 import { bindIntentExecution, type BindingExecution, type BindingResult } from './binding.mjs';
 import { PriorSealError } from './errors.mjs';
 import { hashJson, canonicalize } from './hashing.mjs';
@@ -13,6 +14,7 @@ import { verifyWitnessEvidence } from './witness.mjs';
 import { validateTimestampEvidenceClaims, verifyTimestampEvidence } from './rfc3161.mjs';
 import { assessCompliance, classifyExecutionOutcome } from './compliance.mjs';
 import { validateTemporalEvidence } from './temporal-evidence.mjs';
+import { decodeBase58, isSolanaPublicKey, solanaAuthorizationMessage, SOLANA_TRANSACTION_PROFILE } from './solana.mjs';
 import { signEd25519Statement, verifyEd25519Statement as verifyEd25519StatementStrict } from './ed25519.mjs';
 import type { KeyEntry } from './key-registry.mjs';
 import type { TimestampEvidence } from './rfc3161.mjs';
@@ -81,7 +83,9 @@ export function buildAuthorization(inputValue: unknown) {
   const intent = buildIntent(stripIntentMetadata(input.intent));
   if (input.intentHash && input.intentHash !== intent.intentHash) throw new PriorSealError('INVALID_AUTHORIZATION', 'intentHash does not match intent');
   const authorizerType = String(authorizer.type ?? '');
-  if (!['eip712', 'eip1271'].includes(authorizerType)) throw new PriorSealError('INVALID_AUTHORIZATION', 'authorizer.type must be eip712 or eip1271');
+  if (!['eip712', 'eip1271', 'solana-ed25519'].includes(authorizerType)) throw new PriorSealError('INVALID_AUTHORIZATION', 'authorizer.type is not supported');
+  const solana = authorizerType === 'solana-ed25519';
+  if (solana !== (intent.executionProfile === SOLANA_TRANSACTION_PROFILE)) throw new PriorSealError('INVALID_AUTHORIZATION', 'Solana Ed25519 authorizations require the Solana transaction execution profile');
   const principalType = String(principal.type ?? '');
   if (!['user', 'organization'].includes(principalType)) throw new PriorSealError('INVALID_AUTHORIZATION', 'principal.type must be user or organization');
   const issuedAt = unixSeconds(input.issuedAt, 'issuedAt');
@@ -96,16 +100,19 @@ export function buildAuthorization(inputValue: unknown) {
   if (maxUses !== '1') throw new PriorSealError('INVALID_AUTHORIZATION', 'authorizations are single-use and maxUses must be 1');
   const schema = input.schema ?? AUTHORIZATION_SCHEMA;
   if (schema !== AUTHORIZATION_SCHEMA && schema !== LEGACY_AUTHORIZATION_SCHEMA) throw new PriorSealError('INVALID_AUTHORIZATION', 'authorization schema is not supported');
-  const domain = schema === LEGACY_AUTHORIZATION_SCHEMA ? 'priorseal/authorization/v1' : AUTHORIZATION_DOMAIN;
+  const domain = solana ? 'priorseal/authorization/solana/v2' : schema === LEGACY_AUTHORIZATION_SCHEMA ? 'priorseal/authorization/v1' : AUTHORIZATION_DOMAIN;
   if (input.domain && input.domain !== domain) throw new PriorSealError('INVALID_AUTHORIZATION', 'authorization domain does not match schema');
+  const principalAccount = solana ? requireSolanaPublicKey(principal.account, 'principal.account') : evmAddress(principal.account, 'principal.account');
+  const authorizerAddress = solana ? requireSolanaPublicKey(authorizer.address, 'authorizer.address') : evmAddress(authorizer.address, 'authorizer.address');
+  const executor = solana ? requireSolanaPublicKey(delegate.executor, 'delegate.executor') : evmAddress(delegate.executor, 'delegate.executor');
   const authorization = {
     schema,
     domain,
     intent,
     intentHash: intent.intentHash,
-    principal: { type: principalType, id: protocolId(principal.id, 'principal.id'), account: evmAddress(principal.account, 'principal.account') },
-    authorizer: { type: authorizerType, address: evmAddress(authorizer.address, 'authorizer.address') },
-    delegate: { agentId: protocolId(delegate.agentId, 'delegate.agentId'), executor: evmAddress(delegate.executor, 'delegate.executor') },
+    principal: { type: principalType, id: protocolId(principal.id, 'principal.id'), account: principalAccount },
+    authorizer: { type: authorizerType, address: authorizerAddress },
+    delegate: { agentId: protocolId(delegate.agentId, 'delegate.agentId'), executor },
     issuedAt,
     notBefore,
     expiresAt,
@@ -124,6 +131,7 @@ export function buildAuthorization(inputValue: unknown) {
 
 export function authorizationTypedData(value: ReturnType<typeof buildAuthorization>) {
   const authorization = [AUTHORIZATION_SCHEMA, LEGACY_AUTHORIZATION_SCHEMA].includes(value.schema) ? value : buildAuthorization(value);
+  if (authorization.authorizer.type === 'solana-ed25519') throw new PriorSealError('UNSUPPORTED_SIGNATURE_PROFILE', 'Solana authorizations use the PriorSeal Solana message profile, not EIP-712');
   const legacy = authorization.schema === LEGACY_AUTHORIZATION_SCHEMA;
   return {
     domain: { name: 'PriorSeal', version: legacy ? '1' : '2', chainId: authorization.intent.chainId },
@@ -157,13 +165,31 @@ export async function verifyAuthorization(value: unknown, { now = Math.floor(Dat
   if (authorization.issuedAt > now) return invalid('AUTHORIZATION_ISSUED_IN_FUTURE');
   if (now < authorization.notBefore) return invalid('AUTHORIZATION_NOT_YET_VALID');
   if (now > authorization.expiresAt) return invalid('AUTHORIZATION_EXPIRED');
-  const typedData = authorizationTypedData(authorization);
   try {
-    const valid = authorization.authorizer.type === 'eip1271'
-      ? Boolean(verifyContractSignature && await verifyContractSignature({ authorization, digest: hashTypedData(typedData), signature: authorization.signature }))
-      : await verifyTypedData({ ...typedData, address: authorization.authorizer.address as `0x${string}`, signature: authorization.signature as `0x${string}` });
+    const valid = authorization.authorizer.type === 'solana-ed25519'
+      ? verifySolanaAuthorizationSignature(authorization)
+      : authorization.authorizer.type === 'eip1271'
+        ? Boolean(verifyContractSignature && await verifyContractSignature({ authorization, digest: hashTypedData(authorizationTypedData(authorization)), signature: authorization.signature }))
+        : await verifyTypedData({ ...authorizationTypedData(authorization), address: authorization.authorizer.address as `0x${string}`, signature: authorization.signature as `0x${string}` });
     return valid ? { valid: true, code: 'OK', authorization } : invalid(authorization.authorizer.type === 'eip1271' && !verifyContractSignature ? 'AUTHORIZATION_VERIFIER_UNAVAILABLE' : 'INVALID_AUTHORIZATION_SIGNATURE');
   } catch (error) { return invalid(errorCode(error) === 'AUTHORIZATION_VERIFIER_UNAVAILABLE' ? 'AUTHORIZATION_VERIFIER_UNAVAILABLE' : 'INVALID_AUTHORIZATION_SIGNATURE'); }
+}
+
+function requireSolanaPublicKey(value: unknown, field: string): string {
+  if (!isSolanaPublicKey(value)) throw new PriorSealError('INVALID_ADDRESS', `${field} must be a 32-byte Solana base58 public key`);
+  return value;
+}
+
+function verifySolanaAuthorizationSignature(authorization: ReturnType<typeof buildAuthorization>): boolean {
+  const signature = authorization.signature;
+  if (typeof signature !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(signature)) return false;
+  const signatureBytes = Buffer.from(signature, 'base64');
+  if (signatureBytes.length !== 64 || signatureBytes.toString('base64') !== signature) return false;
+  const rawPublicKey = Buffer.from(decodeBase58(authorization.authorizer.address));
+  if (rawPublicKey.length !== 32) return false;
+  const spkiPrefix = Buffer.from('302a300506032b6570032100', 'hex');
+  const publicKey = createPublicKey({ key: Buffer.concat([spkiPrefix, rawPublicKey]), format: 'der', type: 'spki' });
+  return verifyNodeSignature(null, Buffer.from(solanaAuthorizationMessage(authorization)), publicKey, signatureBytes);
 }
 
 /** New issuance rejects contradictory execution identities while historical
@@ -208,7 +234,8 @@ export function buildAuthorizedReceipt<E extends ReceiptExecution, W = unknown, 
   const evidencePolicy = policyEvidence ?? defaultPolicyEvidence(authorization, acceptance.acceptedAt);
   validatePolicyEvidence(authorization, evidencePolicy, acceptance.acceptedAt);
   const baseBinding = bindIntentExecution(intent, execution, issuedAt);
-  const executorMismatch = execution.sender?.toLowerCase() !== authorization.delegate.executor;
+  const solanaIdentity = authorization.authorizer.type === 'solana-ed25519';
+  const executorMismatch = solanaIdentity ? execution.sender !== authorization.delegate.executor : execution.sender?.toLowerCase() !== authorization.delegate.executor;
   const executedAt = execution.executedAt ?? execution.observedAt ?? 0;
   const anchoredAt = transparency?.checkpoint?.anchor?.anchoredAt;
   if (anchoredAt !== undefined && anchoredAt > executedAt) throw new PriorSealError('TRANSPARENCY_AFTER_EXECUTION', 'Transparency anchor must precede execution');
@@ -280,7 +307,8 @@ export function validateAuthorizedReceiptClaims(receiptValue: unknown) {
     if (receipt.executionHash !== hashJson(receipt.execution)) return invalid('EXECUTION_HASH_MISMATCH');
     if (receipt.receiptId !== authorizedReceiptId(receipt)) return invalid('RECEIPT_ID_MISMATCH');
     const baseBinding = bindIntentExecution(authorization.intent, receipt.execution, receipt.issuedAt);
-    const executorMismatch = receipt.execution.sender?.toLowerCase() !== authorization.delegate.executor;
+    const solanaIdentity = authorization.authorizer.type === 'solana-ed25519';
+    const executorMismatch = solanaIdentity ? receipt.execution.sender !== authorization.delegate.executor : receipt.execution.sender?.toLowerCase() !== authorization.delegate.executor;
     const executedAt = receipt.execution.executedAt ?? receipt.execution.observedAt ?? 0;
     const authorizationAfterExecution = acceptance.acceptedAt > executedAt;
     const outsideAuthorizationWindow = executedAt < authorization.notBefore || executedAt > authorization.expiresAt;

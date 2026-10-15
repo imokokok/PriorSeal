@@ -1,5 +1,6 @@
 // Generated from persisted-records.mts by npm run core:build. Do not edit directly.
 import { assertSafeJson } from "../../shared/safe-json.mjs";
+import { SOLANA_MAINNET_CAIP2 } from "../../domain/solana.mjs";
 function record(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`Invalid persisted ${label}`);
   return value;
@@ -22,13 +23,13 @@ function persistedJson(value, label) {
 function persistedIntent(value) {
   const item = record(persistedJson(value, "intent"), "intent");
   for (const field of ["intentId", "intentHash", "schema", "action", "sender", "recipient", "asset", "amount", "nonce"]) string(item[field], `intent.${field}`);
-  if (typeof item.chainId !== "number" && typeof item.chainId !== "string" || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1) throw new TypeError("Invalid persisted intent.chainId");
+  if (typeof item.chainId !== "number" && typeof item.chainId !== "string" || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1 && !(Number(item.chainId) === 0 && item.chainRef === SOLANA_MAINNET_CAIP2)) throw new TypeError("Invalid persisted intent.chainId");
   integer(item.validUntil, "intent.validUntil");
   return item;
 }
 function persistedObservation(value) {
   const item = record(persistedWorkerObservation(value), "observation");
-  if (typeof item.chainId !== "number" && typeof item.chainId !== "string" || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1) throw new TypeError("Invalid persisted observation.chainId");
+  if (typeof item.chainId !== "number" && typeof item.chainId !== "string" || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1 && !(Number(item.chainId) === 0 && item.chainRef === SOLANA_MAINNET_CAIP2)) throw new TypeError("Invalid persisted observation.chainId");
   return item;
 }
 function persistedWorkerObservation(value) {
@@ -74,7 +75,7 @@ function persistedArchiveEntry(value) {
 }
 function persistedJobInput(value) {
   const item = record(persistedJson(value, "job input"), "job input");
-  if (item.chainId !== void 0 && (typeof item.chainId !== "number" && typeof item.chainId !== "string" || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1)) throw new TypeError("Invalid persisted job input.chainId");
+  if (item.chainId !== void 0 && (typeof item.chainId !== "number" && typeof item.chainId !== "string" || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 0)) throw new TypeError("Invalid persisted job input.chainId");
   string(item.txHash, "job input.txHash");
   return item;
 }

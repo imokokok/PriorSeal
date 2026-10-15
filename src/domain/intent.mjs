@@ -3,10 +3,12 @@ import { hashJson } from "./hashing.mjs";
 import { PriorSealError } from "./errors.mjs";
 import { assertOnlyFields, assertSafeJson } from "../shared/safe-json.mjs";
 import { chainId, evmAddress, protocolId, uintString, unixSeconds } from "./values.mjs";
+import { normalizeSolanaTransactionMessage, SOLANA_TRANSACTION_PROFILE } from "./solana.mjs";
 const INTENT_SCHEMA = "priorseal.intent.v1";
 const EXACT_CALL_INTENT_SCHEMA = "priorseal.intent.v2";
 const EXACT_CALL_PROFILE = "priorseal.execution-profile.exact-call.v1";
 const ERC4337_USER_OPERATION_PROFILE = "priorseal.execution-profile.erc4337-user-operation.v1";
+const SOLANA_TRANSACTION_INTENT_PROFILE = SOLANA_TRANSACTION_PROFILE;
 const required = ["intentId", "chainId", "action", "asset", "amount", "sender", "recipient", "validUntil"];
 function assertIssuableIntentInput(input) {
   const candidate = input;
@@ -18,17 +20,20 @@ function assertIssuableIntentInput(input) {
 }
 function buildIntent(inputValue) {
   assertSafeJson(inputValue);
-  const input = assertOnlyFields(inputValue, ["schema", "executionProfile", "intentId", "chainId", "chainIds", "action", "asset", "amount", "sender", "recipient", "validUntil", "nonce", "callTarget", "calldataHash", "transactionValue", "entryPoint", "entryPointCodeHash", "entryPointVersion", "userOperationHash", "accountCallProfile", "accountCallTarget", "accountCallValue", "accountCallDataHash", "eip7702", "contextCommitments", "constraints"], "intent");
+  const input = assertOnlyFields(inputValue, ["schema", "executionProfile", "intentId", "chainId", "chainRef", "chainIds", "action", "asset", "amount", "sender", "recipient", "validUntil", "nonce", "callTarget", "calldataHash", "transactionValue", "entryPoint", "entryPointCodeHash", "entryPointVersion", "userOperationHash", "accountCallProfile", "accountCallTarget", "accountCallValue", "accountCallDataHash", "eip7702", "solanaTransaction", "contextCommitments", "constraints"], "intent");
   if (required.some((key) => input[key] === void 0 || input[key] === null)) throw new PriorSealError("INVALID_INTENT", `Missing intent field: ${required.find((key) => input[key] == null)}`);
   const schema = input.schema ?? (input.executionProfile ? EXACT_CALL_INTENT_SCHEMA : INTENT_SCHEMA);
   if (schema !== INTENT_SCHEMA && schema !== EXACT_CALL_INTENT_SCHEMA) throw new PriorSealError("INVALID_INTENT", "intent schema is not supported");
   const exactCall = schema === EXACT_CALL_INTENT_SCHEMA;
   const executionProfile = input.executionProfile;
   const erc4337 = executionProfile === ERC4337_USER_OPERATION_PROFILE;
-  if (exactCall && ![EXACT_CALL_PROFILE, ERC4337_USER_OPERATION_PROFILE].includes(String(executionProfile))) throw new PriorSealError("INVALID_INTENT", "intent v2 requires a supported executionProfile");
+  const solanaTransaction = executionProfile === SOLANA_TRANSACTION_INTENT_PROFILE;
+  if (exactCall && ![EXACT_CALL_PROFILE, ERC4337_USER_OPERATION_PROFILE, SOLANA_TRANSACTION_INTENT_PROFILE].includes(String(executionProfile))) throw new PriorSealError("INVALID_INTENT", "intent v2 requires a supported executionProfile");
   if (!exactCall && executionProfile != null) throw new PriorSealError("INVALID_INTENT", "executionProfile requires priorseal.intent.v2");
   if (executionProfile === EXACT_CALL_PROFILE && input.action !== "CONTRACT_CALL") throw new PriorSealError("INVALID_INTENT", "exact-call intents require action CONTRACT_CALL");
   if (erc4337 && input.action !== "ERC4337_USER_OPERATION") throw new PriorSealError("INVALID_INTENT", "ERC-4337 intents require action ERC4337_USER_OPERATION");
+  if (solanaTransaction && input.action !== "SOLANA_TRANSACTION") throw new PriorSealError("INVALID_INTENT", "Solana transaction intents require action SOLANA_TRANSACTION");
+  if (solanaTransaction) return buildSolanaIntent(input);
   if (exactCall && (typeof input.chainId !== "number" || !Number.isSafeInteger(input.chainId) || input.chainId < 1)) throw new PriorSealError("INVALID_CHAIN_ID", "exact-call intent chainId must be a positive JSON integer");
   if (erc4337 && (typeof input.chainId !== "number" || !Number.isSafeInteger(input.chainId) || input.chainId < 1)) throw new PriorSealError("INVALID_CHAIN_ID", "ERC-4337 intent chainId must be a positive JSON integer");
   if (executionProfile === EXACT_CALL_PROFILE && input.nonce == null) throw new PriorSealError("INVALID_INTENT", "exact-call intents require an explicit transaction nonce");
@@ -74,6 +79,46 @@ function buildIntent(inputValue) {
   if (Number(assetMatch[1]) !== intent.chainId) throw new PriorSealError("INVALID_ASSET", "asset chain must match intent.chainId");
   return { ...intent, intentHash: hashJson(intent) };
 }
+function buildSolanaIntent(input) {
+  if (input.chainId !== 0 || input.chainRef !== "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp") throw new PriorSealError("INVALID_CHAIN_ID", "Solana intents must identify the Solana mainnet-beta cluster");
+  if (input.solanaTransaction == null) throw new PriorSealError("INVALID_INTENT", "Solana transaction profile requires solanaTransaction");
+  const message = normalizeSolanaTransactionMessage(input.solanaTransaction);
+  if (input.sender !== message.feePayer || input.recipient !== message.feePayer) throw new PriorSealError("INVALID_INTENT", "sender and recipient must equal the transaction fee payer");
+  if (input.nonce !== message.recentBlockhash) throw new PriorSealError("INVALID_INTENT", "nonce must equal the transaction recentBlockhash");
+  if (input.callTarget != null || input.calldataHash != null || input.transactionValue != null || input.entryPoint != null || input.userOperationHash != null || input.eip7702 != null) throw new PriorSealError("INVALID_INTENT", "EVM transaction fields are not valid in a Solana transaction profile");
+  const asset = String(input.asset ?? "");
+  if (!/^solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp\/(?:slip44:501|spl:[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(asset)) throw new PriorSealError("INVALID_ASSET", "asset must identify a Solana mainnet SOL or SPL mint");
+  const validUntil = unixSeconds(input.validUntil, "validUntil");
+  const constraints = input.constraints == null ? void 0 : assertOnlyFields(input.constraints, ["minConfirmations", "maxGasUsed", "maxToleratedReorgDepth", "finalityRequirement"], "intent.constraints");
+  if (constraints?.finalityRequirement === "RPC_FINALIZED") throw new PriorSealError("INVALID_CONSTRAINT", "Solana transaction profile currently supports confirmed commitment only");
+  if (constraints?.maxGasUsed != null) uintString(constraints.maxGasUsed, "maxGasUsed");
+  if (constraints?.minConfirmations != null && (!Number.isSafeInteger(constraints.minConfirmations) || Number(constraints.minConfirmations) < 0 || Number(constraints.minConfirmations) > 1)) throw new PriorSealError("INVALID_CONSTRAINT", "Solana confirmed commitment supports minConfirmations 0 or 1");
+  if (constraints?.maxToleratedReorgDepth != null && (!Number.isSafeInteger(constraints.maxToleratedReorgDepth) || Number(constraints.maxToleratedReorgDepth) !== 0)) throw new PriorSealError("INVALID_CONSTRAINT", "Solana confirmed commitment does not support numeric reorg-depth constraints");
+  const normalizedConstraints = constraints === void 0 ? void 0 : {
+    ...constraints.minConfirmations != null ? { minConfirmations: constraints.minConfirmations } : {},
+    ...constraints.maxGasUsed != null ? { maxGasUsed: String(constraints.maxGasUsed) } : {},
+    ...constraints.maxToleratedReorgDepth != null ? { maxToleratedReorgDepth: constraints.maxToleratedReorgDepth } : {},
+    ...constraints.finalityRequirement != null ? { finalityRequirement: constraints.finalityRequirement } : {}
+  };
+  const intent = {
+    schema: EXACT_CALL_INTENT_SCHEMA,
+    executionProfile: SOLANA_TRANSACTION_INTENT_PROFILE,
+    intentId: protocolId(input.intentId, "intentId"),
+    chainId: 0,
+    chainRef: String(input.chainRef),
+    action: "SOLANA_TRANSACTION",
+    asset,
+    amount: uintString(input.amount, "amount"),
+    sender: message.feePayer,
+    recipient: message.feePayer,
+    validUntil,
+    nonce: message.recentBlockhash,
+    solanaTransaction: message,
+    ...input.contextCommitments ? { contextCommitments: normalizeContextCommitments(input.contextCommitments, true) } : {},
+    ...normalizedConstraints ? { constraints: normalizedConstraints } : {}
+  };
+  return { ...intent, intentHash: hashJson(intent) };
+}
 function normalizeContextCommitments(value, exactCall) {
   if (value == null) return void 0;
   if (!exactCall) throw new PriorSealError("INVALID_INTENT", "contextCommitments require priorseal.intent.v2");
@@ -100,6 +145,7 @@ export {
   EXACT_CALL_INTENT_SCHEMA,
   EXACT_CALL_PROFILE,
   INTENT_SCHEMA,
+  SOLANA_TRANSACTION_INTENT_PROFILE,
   assertIssuableIntentInput,
   buildIntent
 };

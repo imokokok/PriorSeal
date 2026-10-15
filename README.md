@@ -1,6 +1,6 @@
 # PriorSeal
 
-**Connect explicit authorization to observed EVM execution with independently verifiable evidence.**
+**Connect explicit authorization to observed EVM and Solana execution with independently verifiable evidence.**
 
 [![CI](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml/badge.svg)](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
@@ -8,14 +8,14 @@
 
 [Live console](https://priorseal.xyz/app) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
 
-An agent can propose and execute a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, or whether the observed execution matched it**. PriorSeal connects a principal-signed, time-bounded authorization to an identified EVM execution in a portable receipt that another party can verify independently. Its core is the relationship between **what was authorized before action** and **what was observed afterward**.
+An agent can propose and execute a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, or whether the observed execution matched it**. PriorSeal connects a principal-signed, time-bounded authorization to an identified EVM or Solana execution in a portable receipt that another party can verify independently. Its core is the relationship between **what was authorized before action** and **what was observed afterward**.
 
 ```text
 Bounded intent → Principal signature → Acceptance + time evidence
-               → EVM observation → Signed receipt → Independent review
+               → EVM / Solana observation → Signed receipt → Independent review
 ```
 
-PriorSeal is for teams building EVM agents, treasury automation, wallets, and transaction infrastructure. It sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys or move funds.
+PriorSeal is for teams building EVM and Solana agents, treasury automation, wallets, and transaction infrastructure. It sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys or move funds.
 
 ## Choose your integration path
 
@@ -23,6 +23,7 @@ PriorSeal is for teams building EVM agents, treasury automation, wallets, and tr
 | --- | --- |
 | Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
+| Bind a Solana mainnet transaction message to a wallet authorization and observed transaction | [Solana integration guide](docs/integrations/solana.md) |
 | Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
 | Review the assets, limits, recipient and router in one ERC-20 swap before authorization | [Reviewed swap authorization](docs/product/swap-authorization.md) |
 | See why an agent's replanned swap needs new approval | [Offline replan demo](examples/swap-replan-demo/README.md) |
@@ -33,12 +34,12 @@ Insight and PriorSeal work independently. Insight provides **oracle transparency
 
 ## What the evidence covers
 
-1. **Authority.** A user or organization signs a time-bounded, single-use EIP-712 or ERC-1271 authorization for an agent and executor. A deployment policy can bind a reviewed principal identity to an account; without that registry, a human-readable principal ID is self-asserted.
+1. **Authority.** A user or organization signs a time-bounded, single-use EIP-712, ERC-1271, or Solana Ed25519 message authorization for an agent and executor. A deployment policy can bind a reviewed principal identity to an account; without that registry, a human-readable principal ID is self-asserted.
 2. **Ordering.** PriorSeal accepts the authorization before execution. Production deployments require an independent pre-execution proof mode: RFC 3161 timestamp, witness quorum, or EVM anchor. The default development `issuer` mode provides only an issuer acceptance statement.
-3. **Execution.** PriorSeal observes a specified transaction through configured EVM RPC sources and compares the supported fields with the signed intent. Pending, unavailable, reverted, and reorged states remain explicit.
+3. **Execution.** PriorSeal observes a specified transaction through configured EVM or Solana RPC sources and compares the supported fields with the signed intent. Solana support binds the complete legacy, v0, or v1 compiled message, including resolved v0 address lookup accounts and v1 resource configuration, and currently observes confirmed mainnet-beta transactions. It does not decode arbitrary Solana program semantics. Pending, unavailable, reverted, and reorged states remain explicit.
 4. **Review.** An Ed25519-signed v3 receipt separates evidence validity, execution state, and authorization compliance. A reviewer can download it and verify its hashes, signatures, policy result, and binding locally with an independently confirmed issuer key.
 
-For contract calls, the `priorseal.intent.v2` exact-call profile binds the transaction envelope: chain, executor, nonce, target, calldata hash, and native value. Optional context commitments bind digests of external decisions, assessments, or a block-pinned ERC-8004 identity snapshot without claiming that PriorSeal made those decisions. See the [evidence relationship levels](docs/architecture/evidence-relationship-levels.md) and the [ERC-8004 integration guide](docs/integrations/erc-8004.md).
+For EVM contract calls, the `priorseal.intent.v2` exact-call profile binds the transaction envelope: chain, executor, nonce, target, calldata hash, and native value. The Solana transaction profile binds the signed message bytes represented as compiled instruction and account data. Optional context commitments bind digests of external decisions, assessments, or a block-pinned ERC-8004 identity snapshot without claiming that PriorSeal made those decisions. See the [evidence relationship levels](docs/architecture/evidence-relationship-levels.md), the [Solana integration guide](docs/integrations/solana.md), and the [ERC-8004 integration guide](docs/integrations/erc-8004.md).
 
 For ERC-4337 smart accounts, a second `intent.v2` profile binds the canonical UserOperation hash and supports commitments from Insight's signed risk assessments. EIP-7702 observation supports predelegated EntryPoint v0.7 accounts and marker-based v0.8/v0.9 flows, binding a signed authorization tuple when the operation requests a fresh delegation; all profiles pin delegate code and verify exact bundle calldata plus transaction-level delegation state. See the [ERC-4337 integration guide](docs/integrations/erc-4337.md) for supported scope and the distinction between UserOperation evidence and ordinary bundler transaction observation.
 
@@ -141,11 +142,13 @@ Other partner fixtures are under [`examples/`](examples/). Insight can be used i
 | Authorization and receipt semantics | [Signed authorization](docs/architecture/signed-authorization.md) · [Temporal evidence and finality](docs/architecture/temporal-finality.md) · [Lifecycle](docs/architecture/lifecycle.md) · [API compatibility](docs/api/compatibility.md) |
 | Security and operations | [Threat model](docs/security/threat-model.md) · [Operations](docs/runbooks/operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
 | SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |
+| Solana transaction authorization and observation | [Solana integration guide](docs/integrations/solana.md) |
+| Sandbox adapter proposal | [APS checkout-gate per-order limit check](docs/integrations/aps-checkout-gate-limit-check-2026-10.md) |
 
 Run `npm run check` for the repository checks, or `npm run release:check` for the full release gate. Production runs the API and console on Cloudflare Workers with D1 persistence; local Node deployments can use PostgreSQL.
 
 ## Work with PriorSeal
 
-For a pilot, choose one bounded EVM execution path and ask an independent reviewer to reproduce the authorization, timing, observation, and compliance result from its exported evidence. See the [collaboration guide](COLLABORATING.md) or [open a pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Code contributions follow [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow [SECURITY.md](SECURITY.md).
+For a pilot, choose one bounded EVM or Solana execution path and ask an independent reviewer to reproduce the authorization, timing, observation, and compliance result from its exported evidence. See the [collaboration guide](COLLABORATING.md) or [open a pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Code contributions follow [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow [SECURITY.md](SECURITY.md).
 
 MIT licensed. See [LICENSE](LICENSE).
