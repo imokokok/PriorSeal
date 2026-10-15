@@ -10,7 +10,7 @@ import {
   type WalletClient,
 } from 'viem'
 import { matchUniqueContextCommitment } from './context-commitment.js'
-import type { Authorization, ContextCommitment, Intent } from './types.js'
+import type { Authorization, ContextCommitment } from './types.js'
 
 export const ERC8004_IDENTITY_SNAPSHOT_SCHEMA = 'priorseal.erc8004.identity-snapshot.v1' as const
 export const ERC8004_IDENTITY_COMMITMENT_NAMESPACE = 'priorseal.erc8004.identity-snapshot.v1'
