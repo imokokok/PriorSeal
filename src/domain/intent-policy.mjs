@@ -15,15 +15,16 @@ const POLICY_CODES = Object.freeze({
   INVALID_POLICY: "POLICY_INVALID",
   EXACT_CALL_SEMANTICS_UNSUPPORTED: "POLICY_EXACT_CALL_SEMANTICS_UNSUPPORTED"
 });
-const listHas = (list, value) => Array.isArray(list) && !list.map(String).map((x) => x.toLowerCase()).includes(String(value).toLowerCase());
+const listHas = (list, value, caseSensitive = false) => Array.isArray(list) && !(caseSensitive ? list.map(String).includes(String(value)) : list.map(String).map((x) => x.toLowerCase()).includes(String(value).toLowerCase()));
 function evaluateIntentPolicy(intent, policy = {}, now = Math.floor(Date.now() / 1e3)) {
   const reasonCodes = [];
+  const caseSensitiveChain = intent.chainId === 0 || intent.chainId === "0";
   if (!validRuntimePolicy(policy)) reasonCodes.push(POLICY_CODES.INVALID_POLICY);
   if (listHas(policy.allowedChainIds, intent.chainId)) reasonCodes.push(POLICY_CODES.CHAIN_NOT_ALLOWED);
   if (listHas(policy.allowedActions, intent.action)) reasonCodes.push(POLICY_CODES.ACTION_NOT_ALLOWED);
-  if (listHas(policy.allowedAssets, intent.asset)) reasonCodes.push(POLICY_CODES.ASSET_NOT_ALLOWED);
-  if (listHas(policy.allowedSenders, intent.sender)) reasonCodes.push(POLICY_CODES.SENDER_NOT_ALLOWED);
-  if (listHas(policy.allowedRecipients, intent.recipient)) reasonCodes.push(POLICY_CODES.RECIPIENT_NOT_ALLOWED);
+  if (listHas(policy.allowedAssets, intent.asset, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.ASSET_NOT_ALLOWED);
+  if (listHas(policy.allowedSenders, intent.sender, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.SENDER_NOT_ALLOWED);
+  if (listHas(policy.allowedRecipients, intent.recipient, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.RECIPIENT_NOT_ALLOWED);
   try {
     if (policy.maxAmount != null && BigInt(intent.amount) > BigInt(policy.maxAmount)) reasonCodes.push(POLICY_CODES.AMOUNT_EXCEEDED);
     if (policy.maxValiditySeconds != null && Number(intent.validUntil) > now + Number(policy.maxValiditySeconds)) reasonCodes.push(POLICY_CODES.EXPIRY_TOO_FAR);
@@ -42,17 +43,17 @@ function evaluateAuthorizationPolicy(authorization, policy = {}, now = Math.floo
   if (Array.isArray(policy.principals)) {
     const matched = policy.principals.some((entry) => {
       const principal = entry;
-      return principal.id === authorization.principal.id && principal.type === authorization.principal.type && principal.account.toLowerCase() === authorization.principal.account && principal.authorizerType === authorization.authorizer.type;
+      return principal.id === authorization.principal.id && principal.type === authorization.principal.type && (authorization.authorizer.type === "solana-ed25519" ? principal.account === authorization.principal.account : principal.account.toLowerCase() === authorization.principal.account) && principal.authorizerType === authorization.authorizer.type;
     });
     if (!matched) reasonCodes.push(POLICY_CODES.PRINCIPAL_NOT_ALLOWED);
   }
-  if (policy.requireDistinctAuthorizerAndExecutor === true && String(authorization.authorizer?.address ?? "").toLowerCase() === String(authorization.delegate?.executor ?? "").toLowerCase()) {
+  if (policy.requireDistinctAuthorizerAndExecutor === true && (authorization.authorizer?.type === "solana-ed25519" ? authorization.authorizer.address === authorization.delegate?.executor : String(authorization.authorizer?.address ?? "").toLowerCase() === String(authorization.delegate?.executor ?? "").toLowerCase())) {
     reasonCodes.push(POLICY_CODES.AUTHORIZER_EXECUTOR_NOT_DISTINCT);
   }
   return { ...intentResult, allowed: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
 }
 function evaluateNewIntentPolicyCompatibility(intent, policy = {}) {
-  const exactCall = ["priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1"].includes(String(intent?.executionProfile ?? ""));
+  const exactCall = ["priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2"].includes(String(intent?.executionProfile ?? ""));
   const semanticRestrictionsConfigured = policy.allowedAssets !== void 0 || policy.allowedRecipients !== void 0 || policy.maxAmount !== void 0;
   return exactCall && semanticRestrictionsConfigured ? { allowed: false, reasonCodes: [POLICY_CODES.EXACT_CALL_SEMANTICS_UNSUPPORTED] } : { allowed: true, reasonCodes: [] };
 }

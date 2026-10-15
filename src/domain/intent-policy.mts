@@ -38,16 +38,17 @@ type AuthorizationForPolicy = {
 
 type RuntimePolicy = Record<string, unknown>;
 
-const listHas = (list: unknown, value: unknown): boolean => Array.isArray(list) && !list.map(String).map((x) => x.toLowerCase()).includes(String(value).toLowerCase());
+const listHas = (list: unknown, value: unknown, caseSensitive = false): boolean => Array.isArray(list) && !(caseSensitive ? list.map(String).includes(String(value)) : list.map(String).map((x) => x.toLowerCase()).includes(String(value).toLowerCase()));
 
 export function evaluateIntentPolicy(intent: IntentForPolicy, policy: RuntimePolicy = {}, now = Math.floor(Date.now() / 1000)) {
   const reasonCodes: PolicyCode[] = [];
+  const caseSensitiveChain = intent.chainId === 0 || intent.chainId === '0';
   if (!validRuntimePolicy(policy)) reasonCodes.push(POLICY_CODES.INVALID_POLICY);
   if (listHas(policy.allowedChainIds, intent.chainId)) reasonCodes.push(POLICY_CODES.CHAIN_NOT_ALLOWED);
   if (listHas(policy.allowedActions, intent.action)) reasonCodes.push(POLICY_CODES.ACTION_NOT_ALLOWED);
-  if (listHas(policy.allowedAssets, intent.asset)) reasonCodes.push(POLICY_CODES.ASSET_NOT_ALLOWED);
-  if (listHas(policy.allowedSenders, intent.sender)) reasonCodes.push(POLICY_CODES.SENDER_NOT_ALLOWED);
-  if (listHas(policy.allowedRecipients, intent.recipient)) reasonCodes.push(POLICY_CODES.RECIPIENT_NOT_ALLOWED);
+  if (listHas(policy.allowedAssets, intent.asset, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.ASSET_NOT_ALLOWED);
+  if (listHas(policy.allowedSenders, intent.sender, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.SENDER_NOT_ALLOWED);
+  if (listHas(policy.allowedRecipients, intent.recipient, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.RECIPIENT_NOT_ALLOWED);
   try {
     if (policy.maxAmount != null && BigInt(intent.amount) > BigInt(policy.maxAmount as string)) reasonCodes.push(POLICY_CODES.AMOUNT_EXCEEDED);
     if (policy.maxValiditySeconds != null && Number(intent.validUntil) > now + Number(policy.maxValiditySeconds)) reasonCodes.push(POLICY_CODES.EXPIRY_TOO_FAR);
@@ -69,13 +70,13 @@ export function evaluateAuthorizationPolicy(authorization: AuthorizationForPolic
       const principal = entry as { id?: unknown; type?: unknown; account: string; authorizerType?: unknown };
       return principal.id === authorization.principal.id
         && principal.type === authorization.principal.type
-        && principal.account.toLowerCase() === authorization.principal.account
+        && (authorization.authorizer.type === 'solana-ed25519' ? principal.account === authorization.principal.account : principal.account.toLowerCase() === authorization.principal.account)
         && principal.authorizerType === authorization.authorizer.type;
     });
     if (!matched) reasonCodes.push(POLICY_CODES.PRINCIPAL_NOT_ALLOWED);
   }
   if (policy.requireDistinctAuthorizerAndExecutor === true
-    && String(authorization.authorizer?.address ?? '').toLowerCase() === String(authorization.delegate?.executor ?? '').toLowerCase()) {
+    && (authorization.authorizer?.type === 'solana-ed25519' ? authorization.authorizer.address === authorization.delegate?.executor : String(authorization.authorizer?.address ?? '').toLowerCase() === String(authorization.delegate?.executor ?? '').toLowerCase())) {
     reasonCodes.push(POLICY_CODES.AUTHORIZER_EXECUTOR_NOT_DISTINCT);
   }
   return { ...intentResult, allowed: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
@@ -87,7 +88,7 @@ export function evaluateAuthorizationPolicy(authorization: AuthorizationForPolic
  * authorizations whose policy would appear to enforce those descriptive fields.
  */
 export function evaluateNewIntentPolicyCompatibility(intent: { executionProfile?: string | null } | null | undefined, policy: RuntimePolicy = {}) {
-  const exactCall = ['priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1'].includes(String(intent?.executionProfile ?? ''));
+  const exactCall = ['priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1', 'priorseal.execution-profile.solana-transaction.v2'].includes(String(intent?.executionProfile ?? ''));
   const semanticRestrictionsConfigured = policy.allowedAssets !== undefined || policy.allowedRecipients !== undefined || policy.maxAmount !== undefined;
   return exactCall && semanticRestrictionsConfigured
     ? { allowed: false, reasonCodes: [POLICY_CODES.EXACT_CALL_SEMANTICS_UNSUPPORTED] }

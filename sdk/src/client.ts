@@ -20,6 +20,7 @@ import type {
   WaitForObservationOptions,
   AuthorizationFlowOptions,
   AuthorizationCheckpoint,
+  SolanaMessageWallet,
   DeploymentCapabilities,
 } from './types.js'
 import { buildExactCallIntent } from './exact-call.js'
@@ -239,10 +240,12 @@ export class PriorSealClient {
     const expectedExpiresAt = input.expiresAt ?? input.intent.validUntil
     if (authorization.schema !== 'priorseal.authorization.v2' || authorization.authorizer.type !== 'eip712' || authorization.audience !== (input.audience ?? 'priorseal') || authorization.issuedAt !== issuedAt || authorization.notBefore !== expectedNotBefore || authorization.expiresAt !== expectedExpiresAt || authorization.maxUses !== (input.maxUses ?? '1') || (input.authorizationNonce !== undefined && authorization.authorizationNonce.toLowerCase() !== input.authorizationNonce.toLowerCase()) || (input.account && account !== input.account.toLowerCase()) || (checkpoint?.stage === 'PREPARED' && checkpoint.signature) || (checkpoint && checkpoint.stage !== 'PREPARED' && !checkpoint.signature)) throw new PriorSealApiError('Prepared authorization differs from requested audience, timing or permissions', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
     const { hashTypedData, recoverTypedDataAddress } = await import('./authorization-signature.js')
-    let signingData: Awaited<ReturnType<typeof import('./verifier.js')['authorizationSigningData']>>
+    let signingData: Exclude<Awaited<ReturnType<typeof import('./verifier.js')['authorizationSigningData']>>, { profile: 'solana-ed25519'; message: string }>
     try {
       const { authorizationSigningData } = await import('./verifier.js')
-      signingData = await authorizationSigningData(authorization)
+      const candidate = await authorizationSigningData(authorization)
+      if ('profile' in candidate) throw new Error('Solana message signing must use authorizeWithSolanaWallet')
+      signingData = candidate
       if (hashTypedData(signingData) !== hashTypedData(prepared.typedData as unknown as Parameters<typeof hashTypedData>[0])) throw new Error('Prepared typed data does not match authorization')
     } catch (error) {
       throw new PriorSealApiError('Prepared authorization or wallet typed data is inconsistent', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH', cause: error })
@@ -290,6 +293,64 @@ export class PriorSealClient {
     await options.onCheckpoint?.(structuredClone(state))
     const checkedAt = Math.floor(Date.now() / 1000)
     return { account, signature, prepared, accepted, checkpoint: state, authorizationWindow: { checkedAt, active: prepared.authorization.notBefore <= checkedAt && checkedAt < prepared.authorization.expiresAt, expiresAt: prepared.authorization.expiresAt }, nextAction: checkedAt >= prepared.authorization.expiresAt ? 'REVIEW_ACCEPTED_HISTORY_DO_NOT_EXECUTE' as const : checkedAt < prepared.authorization.notBefore ? 'WAIT_UNTIL_AUTHORIZATION_WINDOW' as const : 'CHECK_DISPATCH_POLICY' as const }
+  }
+
+  async authorizeWithSolanaWallet(input: WalletAuthorizationInput, wallet: SolanaMessageWallet, options: RequestOptions = {}) {
+    const { SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } = await import('./solana-transaction.js')
+    if (input.intent.executionProfile !== SOLANA_TRANSACTION_PROFILE || input.intent.chainId !== 0 || input.intent.chainRef !== SOLANA_MAINNET_CAIP2 || !input.intent.solanaTransaction) {
+      throw new PriorSealApiError('A Solana mainnet transaction intent is required', { code: 'INVALID_SOLANA_INTENT' })
+    }
+    if (!wallet || typeof wallet.signMessage !== 'function' || !wallet.publicKey) throw new PriorSealApiError('The connected Solana wallet does not support message signing', { code: 'WALLET_MESSAGE_SIGNING_UNAVAILABLE' })
+    const account = typeof wallet.publicKey === 'string' ? wallet.publicKey : wallet.publicKey.toBase58()
+    if (input.account && input.account !== account) throw new PriorSealApiError('The connected wallet does not match the requested account', { code: 'WALLET_ACCOUNT_MISMATCH' })
+    if (input.intent.sender !== input.intent.solanaTransaction.feePayer || input.delegate.executor !== input.intent.sender) {
+      throw new PriorSealApiError('The delegated executor must match the transaction fee payer', { code: 'WALLET_ACCOUNT_MISMATCH' })
+    }
+    const issuedAt = input.issuedAt ?? Math.floor(Date.now() / 1000)
+    const prepared = await this.prepareAuthorization({
+      intent: input.intent,
+      principal: { ...input.principal, account },
+      authorizer: { type: 'solana-ed25519', address: account },
+      delegate: input.delegate,
+      issuedAt,
+      notBefore: input.notBefore ?? issuedAt,
+      expiresAt: input.expiresAt ?? input.intent.validUntil,
+      authorizationNonce: input.authorizationNonce ?? generateAuthorizationNonce(),
+      maxUses: input.maxUses ?? '1',
+      audience: input.audience ?? 'priorseal',
+    }, options)
+    const authorization = prepared.authorization
+    const expectedIntent = { ...input.intent, schema: input.intent.schema ?? 'priorseal.intent.v2' }
+    const { intentHash: _expectedHash, ...expectedIntentBody } = expectedIntent
+    const { intentHash: _preparedHash, ...preparedIntentBody } = authorization.intent
+    if (stableJson(expectedIntentBody) !== stableJson(preparedIntentBody)
+      || authorization.schema !== 'priorseal.authorization.v2' || authorization.authorizer.type !== 'solana-ed25519'
+      || authorization.authorizer.address !== account || authorization.principal.account !== account
+      || authorization.delegate.executor !== input.intent.sender || authorization.principal.id !== input.principal.id
+      || authorization.principal.type !== input.principal.type || authorization.delegate.agentId !== input.delegate.agentId
+      || authorization.audience !== (input.audience ?? 'priorseal') || authorization.issuedAt !== issuedAt
+      || authorization.notBefore !== (input.notBefore ?? issuedAt) || authorization.expiresAt !== (input.expiresAt ?? input.intent.validUntil)
+      || authorization.maxUses !== (input.maxUses ?? '1')
+      || (input.authorizationNonce !== undefined && authorization.authorizationNonce !== input.authorizationNonce.toLowerCase())) {
+      throw new PriorSealApiError('Prepared Solana authorization differs from the requested intent and identity', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
+    }
+    const { authorizationSigningData } = await import('./verifier.js')
+    const signingData = await authorizationSigningData(authorization)
+    if (!('profile' in signingData) || signingData.profile !== 'solana-ed25519'
+      || stableJson(prepared.typedData) !== stableJson(signingData)) {
+      throw new PriorSealApiError('Prepared Solana signing message does not match authorization', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
+    }
+    const walletResult = await wallet.signMessage(new TextEncoder().encode(signingData.message))
+    const signatureBytes = walletResult instanceof Uint8Array ? walletResult : walletResult?.signature
+    if (!(signatureBytes instanceof Uint8Array) || signatureBytes.length !== 64) throw new PriorSealApiError('The wallet did not return a 64-byte Ed25519 message signature', { code: 'WALLET_SIGNATURE_UNAVAILABLE' })
+    const signature = encodeBase64(signatureBytes)
+    const accepted = await this.authorize({ ...authorization, signature }, options)
+    if (accepted.acceptance?.status !== 'ACCEPTED' || accepted.acceptance.authorizationId !== authorization.authorizationId
+      || stableJson(accepted.authorization) !== stableJson({ ...authorization, signature })) {
+      throw new PriorSealApiError('Accepted authorization differs from the signed Solana authorization', { code: 'AUTHORIZATION_RESPONSE_MISMATCH' })
+    }
+    const checkedAt = Math.floor(Date.now() / 1000)
+    return { account, signature, prepared, accepted, authorizationWindow: { checkedAt, active: authorization.notBefore <= checkedAt && checkedAt < authorization.expiresAt, expiresAt: authorization.expiresAt }, nextAction: checkedAt >= authorization.expiresAt ? 'REVIEW_ACCEPTED_HISTORY_DO_NOT_EXECUTE' as const : checkedAt < authorization.notBefore ? 'WAIT_UNTIL_AUTHORIZATION_WINDOW' as const : 'CHECK_DISPATCH_POLICY' as const }
   }
 
   authorizeExactCallWithWallet(input: ExactCallWalletAuthorizationInput, provider: Eip1193Provider, options?: AuthorizationFlowOptions) {
@@ -368,6 +429,12 @@ function requireCrypto() {
 
 function safeJson(value: string): unknown {
   try { return JSON.parse(value) } catch { throw new PriorSealApiError('PriorSeal API returned invalid JSON', { code: 'INVALID_RESPONSE' }) }
+}
+
+function encodeBase64(value: Uint8Array): string {
+  let binary = ''
+  for (const byte of value) binary += String.fromCharCode(byte)
+  return btoa(binary)
 }
 
 function stableJson(value: unknown): string {

@@ -1,4 +1,5 @@
 export const SUPPORTED_CHAINS = Object.freeze({
+  0: { name: 'Solana mainnet-beta', rpcEnv: 'PRIORSEAL_RPC_SOLANA_MAINNET' },
   1: { name: 'Ethereum', rpcEnv: 'PRIORSEAL_RPC_ETHEREUM' },
   8453: { name: 'Base', rpcEnv: 'PRIORSEAL_RPC_BASE' },
   84532: { name: 'Base Sepolia', rpcEnv: 'PRIORSEAL_RPC_BASE_SEPOLIA' },

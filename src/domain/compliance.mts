@@ -6,7 +6,7 @@ export type ComplianceStatus = (typeof COMPLIANCE_STATUSES)[number];
 const FINAL_EXECUTION_STATUSES = new Set(['CONFIRMED', 'REVERTED']);
 
 type ComplianceAuthorization = {
-  intent: { chainId: number | string; nonce?: string | null };
+  intent: { chainId: number | string; chainRef?: string | null; nonce?: string | null };
   delegate: { executor: string };
 };
 
@@ -25,8 +25,9 @@ export function assessCompliance({ authorization, execution, binding }: { author
   if (unavailableBindingReasons.length) return assessment('NOT_ASSESSABLE', unavailableBindingReasons);
 
   const correlationReasons: string[] = [];
-  if (Number(execution.chainId) !== Number(authorization.intent.chainId)) correlationReasons.push('CHAIN_MISMATCH');
-  if (String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor) correlationReasons.push('EXECUTOR_MISMATCH');
+  const solana = authorization.intent.chainRef?.startsWith('solana:') ?? false;
+  if (String(execution.chainId) !== String(authorization.intent.chainId) || (solana && execution.chainRef !== authorization.intent.chainRef)) correlationReasons.push('CHAIN_MISMATCH');
+  if (solana ? String(execution.sender ?? '') !== authorization.delegate.executor : String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor) correlationReasons.push('EXECUTOR_MISMATCH');
   if (String(execution.nonce ?? '') !== String(authorization.intent.nonce)) correlationReasons.push('NONCE_MISMATCH');
   if (correlationReasons.length) return assessment('NOT_ASSESSABLE', correlationReasons);
 

@@ -1,4 +1,5 @@
 // Generated from binding.mts by npm run core:build. Do not edit directly.
+import { canonicalize } from "./hashing.mjs";
 const BINDING_CODES = Object.freeze({
   CHAIN_MISMATCH: "CHAIN_MISMATCH",
   SENDER_MISMATCH: "SENDER_MISMATCH",
@@ -22,24 +23,30 @@ const BINDING_CODES = Object.freeze({
   CALLDATA_MISMATCH: "CALLDATA_MISMATCH",
   TRANSACTION_VALUE_MISMATCH: "TRANSACTION_VALUE_MISMATCH",
   AUTHORIZATION_AFTER_EXECUTION: "AUTHORIZATION_AFTER_EXECUTION",
-  OUTSIDE_AUTHORIZATION_WINDOW: "OUTSIDE_AUTHORIZATION_WINDOW"
+  OUTSIDE_AUTHORIZATION_WINDOW: "OUTSIDE_AUTHORIZATION_WINDOW",
+  CHAINREF_MISMATCH: "CHAINREF_MISMATCH",
+  SOLANA_MESSAGE_MISMATCH: "SOLANA_MESSAGE_MISMATCH"
 });
 const same = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
 function bindIntentExecution(intent, execution, now = execution.observedAt ?? Math.floor(Date.now() / 1e3)) {
   const reasons = [];
   const exactCall = intent.executionProfile === "priorseal.execution-profile.exact-call.v1";
   const erc4337 = intent.executionProfile === "priorseal.execution-profile.erc4337-user-operation.v1";
+  const solanaTransaction = intent.executionProfile === "priorseal.execution-profile.solana-transaction.v2";
+  const exactProfile = exactCall || solanaTransaction;
   if (execution?.executionDataAvailable === false) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
   if (execution.chainId !== intent.chainId) reasons.push(BINDING_CODES.CHAIN_MISMATCH);
+  if ((execution.chainRef ?? null) !== (intent.chainRef ?? null)) reasons.push(BINDING_CODES.CHAINREF_MISMATCH);
   if (!same(execution.action, intent.action)) reasons.push(BINDING_CODES.ACTION_MISMATCH);
-  if (!same(execution.sender, intent.sender)) reasons.push(BINDING_CODES.SENDER_MISMATCH);
-  if (!exactCall && !same(execution.recipient, intent.recipient)) reasons.push(BINDING_CODES.RECIPIENT_MISMATCH);
-  if (!exactCall && !same(execution.asset, intent.asset)) reasons.push(BINDING_CODES.ASSET_MISMATCH);
-  if (!exactCall && String(execution.amount ?? "") !== String(intent.amount)) reasons.push(BINDING_CODES.AMOUNT_MISMATCH);
+  if (!sameAddress(execution.sender, intent.sender, solanaTransaction)) reasons.push(BINDING_CODES.SENDER_MISMATCH);
+  if (!exactProfile && !sameAddress(execution.recipient, intent.recipient, solanaTransaction)) reasons.push(BINDING_CODES.RECIPIENT_MISMATCH);
+  if (!exactProfile && !same(execution.asset, intent.asset)) reasons.push(BINDING_CODES.ASSET_MISMATCH);
+  if (!exactProfile && String(execution.amount ?? "") !== String(intent.amount)) reasons.push(BINDING_CODES.AMOUNT_MISMATCH);
   if (String(execution.nonce ?? "") !== String(intent.nonce ?? "0")) reasons.push(BINDING_CODES.NONCE_MISMATCH);
   if (intent.callTarget != null && !same(execution.target, intent.callTarget)) reasons.push(BINDING_CODES.CALL_TARGET_MISMATCH);
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
   if (intent.transactionValue != null && String(execution.nativeValue ?? "") !== String(intent.transactionValue)) reasons.push(BINDING_CODES.TRANSACTION_VALUE_MISMATCH);
+  if (solanaTransaction && (!intent.solanaTransaction || !execution.solanaTransaction || canonicalize(intent.solanaTransaction) !== canonicalize(execution.solanaTransaction))) reasons.push(BINDING_CODES.SOLANA_MESSAGE_MISMATCH);
   if (erc4337 && !same(execution.userOperationHash, intent.userOperationHash)) reasons.push(BINDING_CODES.USER_OPERATION_HASH_MISMATCH);
   if (erc4337 && !same(execution.entryPoint, intent.entryPoint)) reasons.push(BINDING_CODES.ENTRY_POINT_MISMATCH);
   if (erc4337 && !same(execution.entryPointVersion, intent.entryPointVersion)) reasons.push(BINDING_CODES.ENTRY_POINT_VERSION_MISMATCH);
@@ -58,6 +65,9 @@ function bindIntentExecution(intent, execution, now = execution.observedAt ?? Ma
   }
   if (!exactCall && Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push(BINDING_CODES.AMBIGUOUS_TRANSFER);
   return { bound: reasons.length === 0, reasonCodes: [...new Set(reasons)] };
+}
+function sameAddress(a, b, caseSensitive) {
+  return caseSensitive ? String(a ?? "") === String(b ?? "") : same(a, b);
 }
 function matchesEip7702(expected, evidence) {
   if (!evidence || !same(evidence.delegateAddress, expected.delegateAddress) || !same(evidence.delegateCodeHash, expected.delegateCodeHash) || !same(evidence.authorizationTupleHash, expected.authorizationTupleHash) || evidence.authorizationIncluded !== (expected.authorizationTupleHash != null) || evidence.operationIncluded !== true) return false;

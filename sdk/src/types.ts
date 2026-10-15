@@ -58,12 +58,26 @@ export type HeadlessMarketStatePairResult = {
   executionEvidenceCommitment: ContextCommitment
 }
 
+export type SolanaTransactionMessage = {
+  network: 'mainnet-beta'
+  messageVersion: 'legacy' | 'v0' | 'v1'
+  transactionConfig?: { computeUnitLimit: number | null; heapSize: number | null; loadedAccountsDataSizeLimit: number | null; priorityFeeLamports: string | null }
+  feePayer: string
+  recentBlockhash: string
+  header: { numRequiredSignatures: number; numReadonlySignedAccounts: number; numReadonlyUnsignedAccounts: number }
+  accountKeys: string[]
+  addressTableLookups: Array<{ accountKey: string; writableIndexes: number[]; readonlyIndexes: number[] }>
+  loadedAddresses: { writable: string[]; readonly: string[] }
+  instructions: Array<{ programIdIndex: number; accountIndexes: number[]; data: string }>
+}
+
 export type Intent = {
   schema?: 'priorseal.intent.v1' | 'priorseal.intent.v2'
-  executionProfile?: 'priorseal.execution-profile.exact-call.v1' | 'priorseal.execution-profile.erc4337-user-operation.v1'
+  executionProfile?: 'priorseal.execution-profile.exact-call.v1' | 'priorseal.execution-profile.erc4337-user-operation.v1' | 'priorseal.execution-profile.solana-transaction.v2'
   intentId: string
   intentHash?: string
   chainId: number | string
+  chainRef?: string
   action: string
   asset: string
   amount: string
@@ -83,6 +97,7 @@ export type Intent = {
   accountCallValue?: string
   accountCallDataHash?: string
   eip7702?: { delegateAddress: string; delegateCodeHash: string; authorizationTupleHash?: string }
+  solanaTransaction?: SolanaTransactionMessage
   contextCommitments?: ContextCommitment[]
   constraints?: { minConfirmations?: number; maxGasUsed?: string; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' }
 }
@@ -92,6 +107,7 @@ export type ExecutionStatus = 'PENDING' | 'CONFIRMED' | 'REVERTED' | 'REORGED' |
 export type Execution = {
   schema?: string
   chainId: number | string
+  chainRef?: string
   txHash?: string
   status: ExecutionStatus
   blockNumber?: number | null
@@ -152,6 +168,7 @@ export type Execution = {
     finalizedBlock: { number: number; hash: string } | null
   }
   previousBlockHash?: string
+  solanaTransaction?: SolanaTransactionMessage
 }
 
 export type Binding = { bound: boolean; reasonCodes: string[]; [key: string]: unknown }
@@ -165,7 +182,7 @@ export type Authorization = {
   intent: Intent
   intentHash: string
   principal: { type: 'user' | 'organization'; id: string; account: string }
-  authorizer: { type: 'eip712' | 'eip1271'; address: string }
+  authorizer: { type: 'eip712' | 'eip1271' | 'solana-ed25519'; address: string }
   delegate: { agentId: string; executor: string }
   issuedAt: number
   notBefore: number
@@ -262,6 +279,11 @@ export type RequestOptions = { idempotencyKey?: string; signal?: AbortSignal; he
 
 export type Eip1193Provider = {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>
+}
+
+export type SolanaMessageWallet = {
+  publicKey: { toBase58(): string } | string
+  signMessage: (message: Uint8Array) => Promise<Uint8Array | { signature: Uint8Array }>
 }
 
 export type WalletAuthorizationInput = {

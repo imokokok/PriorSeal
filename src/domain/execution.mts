@@ -1,8 +1,10 @@
 export const EXECUTION_SCHEMA = 'priorseal.execution-observation.v1';
 export const EXECUTION_STATUSES = ['PENDING', 'CONFIRMED', 'REVERTED', 'REORGED', 'NOT_FOUND', 'RPC_ERROR', 'UNSUPPORTED_CHAIN'] as const;
+import type { SolanaTransactionMessage } from './solana.mjs';
 
 export type ExecutionInput = {
   chainId?: number | string;
+  chainRef?: string | null;
   txHash?: string | null;
   status?: string;
   blockNumber?: number | null;
@@ -62,10 +64,53 @@ export type ExecutionInput = {
     observedHeadHash: string | null;
     finalizedBlock: { number: number; hash: string } | null;
   };
+  solanaTransaction?: SolanaTransactionMessage | null;
 };
 
 export function normalizeExecution(input: ExecutionInput) {
-  return { schema: EXECUTION_SCHEMA, chainId: input.chainId, txHash: input.txHash?.toLowerCase(), status: input.status, blockNumber: input.blockNumber ?? null, blockHash: input.blockHash ?? null, executedAt: input.executedAt ?? null, observedAt: input.observedAt ?? Math.floor(Date.now() / 1000), action: input.action ?? null, nonce: input.nonce ?? null, sender: input.sender?.toLowerCase() ?? null, recipient: input.recipient?.toLowerCase() ?? null, target: input.target?.toLowerCase() ?? null, calldataHash: input.calldataHash?.toLowerCase() ?? null, asset: input.asset ?? null, amount: input.amount ?? null, transfers: input.transfers ?? [], transferMatchUnique: input.transferMatchUnique ?? false, nativeValue: input.nativeValue ?? null, tokenValue: input.tokenValue ?? null, gasUsed: input.gasUsed ?? null, fee: input.fee ?? null, ...(input.userOperationHash ? { userOperationHash: input.userOperationHash.toLowerCase() } : {}), ...(input.entryPoint ? { entryPoint: input.entryPoint.toLowerCase() } : {}), ...(input.entryPointCodeHash ? { entryPointCodeHash: input.entryPointCodeHash.toLowerCase() } : {}), ...(input.entryPointVersion ? { entryPointVersion: input.entryPointVersion } : {}), ...(input.userOperationSuccess !== undefined ? { userOperationSuccess: input.userOperationSuccess } : {}), ...(input.actualGasCost != null ? { actualGasCost: input.actualGasCost } : {}), ...(input.accountCallProfile ? { accountCallProfile: input.accountCallProfile } : {}), ...(input.accountCallTarget ? { accountCallTarget: input.accountCallTarget.toLowerCase() } : {}), ...(input.accountCallValue != null ? { accountCallValue: input.accountCallValue } : {}), ...(input.accountCallDataHash ? { accountCallDataHash: input.accountCallDataHash.toLowerCase() } : {}), ...(input.eip7702Delegation ? { eip7702Delegation: { ...input.eip7702Delegation, delegateAddress: input.eip7702Delegation.delegateAddress.toLowerCase(), delegateCodeHash: input.eip7702Delegation.delegateCodeHash.toLowerCase(), ...(input.eip7702Delegation.delegateObservedForExecution ? { delegateObservedForExecution: input.eip7702Delegation.delegateObservedForExecution.toLowerCase() } : {}), ...(input.eip7702Delegation.delegateAfter ? { delegateAfter: input.eip7702Delegation.delegateAfter.toLowerCase() } : {}) } } : {}), executionDataAvailable: input.executionDataAvailable ?? true, observationSource: input.observationSource ?? 'unknown', finalityState: input.finalityState ?? 'UNKNOWN', confirmations: input.confirmations ?? 0, ...(input.temporalEvidence ? { temporalEvidence: input.temporalEvidence } : {}) };
+  const solana = input.chainId === 0 || String(input.chainRef ?? '').startsWith('solana:');
+  return {
+    schema: EXECUTION_SCHEMA,
+    chainId: input.chainId,
+    ...(input.chainRef ? { chainRef: input.chainRef } : {}),
+    txHash: solana ? input.txHash : input.txHash?.toLowerCase(),
+    status: input.status,
+    blockNumber: input.blockNumber ?? null,
+    blockHash: input.blockHash ?? null,
+    executedAt: input.executedAt ?? null,
+    observedAt: input.observedAt ?? Math.floor(Date.now() / 1000),
+    action: input.action ?? null,
+    nonce: input.nonce ?? null,
+    sender: solana ? input.sender ?? null : input.sender?.toLowerCase() ?? null,
+    recipient: solana ? input.recipient ?? null : input.recipient?.toLowerCase() ?? null,
+    target: solana ? input.target ?? null : input.target?.toLowerCase() ?? null,
+    calldataHash: input.calldataHash?.toLowerCase() ?? null,
+    asset: input.asset ?? null,
+    amount: input.amount ?? null,
+    transfers: input.transfers ?? [],
+    transferMatchUnique: input.transferMatchUnique ?? false,
+    nativeValue: input.nativeValue ?? null,
+    tokenValue: input.tokenValue ?? null,
+    gasUsed: input.gasUsed ?? null,
+    fee: input.fee ?? null,
+    ...(input.userOperationHash ? { userOperationHash: input.userOperationHash.toLowerCase() } : {}),
+    ...(input.entryPoint ? { entryPoint: input.entryPoint.toLowerCase() } : {}),
+    ...(input.entryPointCodeHash ? { entryPointCodeHash: input.entryPointCodeHash.toLowerCase() } : {}),
+    ...(input.entryPointVersion ? { entryPointVersion: input.entryPointVersion } : {}),
+    ...(input.userOperationSuccess !== undefined ? { userOperationSuccess: input.userOperationSuccess } : {}),
+    ...(input.actualGasCost != null ? { actualGasCost: input.actualGasCost } : {}),
+    ...(input.accountCallProfile ? { accountCallProfile: input.accountCallProfile } : {}),
+    ...(input.accountCallTarget ? { accountCallTarget: input.accountCallTarget.toLowerCase() } : {}),
+    ...(input.accountCallValue != null ? { accountCallValue: input.accountCallValue } : {}),
+    ...(input.accountCallDataHash ? { accountCallDataHash: input.accountCallDataHash.toLowerCase() } : {}),
+    ...(input.eip7702Delegation ? { eip7702Delegation: { ...input.eip7702Delegation, delegateAddress: input.eip7702Delegation.delegateAddress.toLowerCase(), delegateCodeHash: input.eip7702Delegation.delegateCodeHash.toLowerCase(), ...(input.eip7702Delegation.delegateObservedForExecution ? { delegateObservedForExecution: input.eip7702Delegation.delegateObservedForExecution.toLowerCase() } : {}), ...(input.eip7702Delegation.delegateAfter ? { delegateAfter: input.eip7702Delegation.delegateAfter.toLowerCase() } : {}) } } : {}),
+    ...(input.solanaTransaction ? { solanaTransaction: input.solanaTransaction } : {}),
+    executionDataAvailable: input.executionDataAvailable ?? true,
+    observationSource: input.observationSource ?? 'unknown',
+    finalityState: input.finalityState ?? 'UNKNOWN',
+    confirmations: input.confirmations ?? 0,
+    ...(input.temporalEvidence ? { temporalEvidence: input.temporalEvidence } : {}),
+  };
 }
 
 type ReorgObservation = Pick<ExecutionInput, 'txHash' | 'blockHash' | 'status'>;

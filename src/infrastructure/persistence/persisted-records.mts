@@ -1,6 +1,7 @@
 import { assertSafeJson } from '../../shared/safe-json.mjs';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
+import { SOLANA_MAINNET_CAIP2 } from '../../domain/solana.mjs';
 
 type Store = ReturnType<typeof createMemoryStore>;
 type Intent = Parameters<Store['saveIntent']>[0];
@@ -32,14 +33,14 @@ export function persistedJson(value: unknown, label: string): unknown {
 export function persistedIntent(value: unknown): Intent {
   const item = record(persistedJson(value, 'intent'), 'intent');
   for (const field of ['intentId', 'intentHash', 'schema', 'action', 'sender', 'recipient', 'asset', 'amount', 'nonce']) string(item[field], `intent.${field}`);
-  if ((typeof item.chainId !== 'number' && typeof item.chainId !== 'string') || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1) throw new TypeError('Invalid persisted intent.chainId');
+  if ((typeof item.chainId !== 'number' && typeof item.chainId !== 'string') || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1 && !(Number(item.chainId) === 0 && item.chainRef === SOLANA_MAINNET_CAIP2)) throw new TypeError('Invalid persisted intent.chainId');
   integer(item.validUntil, 'intent.validUntil');
   return item as Intent;
 }
 
 export function persistedObservation(value: unknown): Observation {
   const item = record(persistedWorkerObservation(value), 'observation');
-  if ((typeof item.chainId !== 'number' && typeof item.chainId !== 'string') || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1) throw new TypeError('Invalid persisted observation.chainId');
+  if ((typeof item.chainId !== 'number' && typeof item.chainId !== 'string') || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1 && !(Number(item.chainId) === 0 && item.chainRef === SOLANA_MAINNET_CAIP2)) throw new TypeError('Invalid persisted observation.chainId');
   return item as Observation;
 }
 
@@ -91,7 +92,7 @@ export function persistedArchiveEntry(value: unknown): ArchiveEntry {
 
 export function persistedJobInput(value: unknown): ObservationJob['input'] {
   const item = record(persistedJson(value, 'job input'), 'job input');
-  if (item.chainId !== undefined && ((typeof item.chainId !== 'number' && typeof item.chainId !== 'string') || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 1)) throw new TypeError('Invalid persisted job input.chainId');
+  if (item.chainId !== undefined && ((typeof item.chainId !== 'number' && typeof item.chainId !== 'string') || !Number.isSafeInteger(Number(item.chainId)) || Number(item.chainId) < 0)) throw new TypeError('Invalid persisted job input.chainId');
   string(item.txHash, 'job input.txHash');
   return item as ObservationJob['input'];
 }

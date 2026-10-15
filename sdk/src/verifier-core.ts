@@ -1,5 +1,6 @@
 import type { Intent, KeyEntry, Receipt, TimestampPolicy, VerificationResult } from './types.js'
 import { verifyTypedData } from 'viem'
+import { solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
 
 const forbidden = new Set(['__proto__', 'prototype', 'constructor'])
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
@@ -9,7 +10,7 @@ const hashPattern = /^[0-9a-f]{64}$/
 const authorizedReceiptFields = ['algorithm', 'authorizationEvidence', 'authorizationHash', 'binding', 'compliance', 'domain', 'execution', 'executionHash', 'executionStatus', 'intentHash', 'issuedAt', 'issuer', 'keyId', 'outcome', 'reasonCodes', 'receiptId', 'schema', 'signature', 'validUntil', 'verifierVersion']
 const legacyReceiptFields = ['algorithm', 'binding', 'domain', 'execution', 'executionHash', 'intentHash', 'issuedAt', 'issuer', 'keyId', 'outcome', 'reasonCodes', 'receiptId', 'schema', 'signature', 'validUntil', 'verifierVersion']
 const authorizationFields = ['audience', 'authorizationId', 'authorizationNonce', 'authorizer', 'delegate', 'domain', 'expiresAt', 'intent', 'intentHash', 'issuedAt', 'maxUses', 'notBefore', 'policyHash', 'principal', 'schema', 'signature']
-const intentFields = ['action', 'amount', 'asset', 'calldataHash', 'chainId', 'chainIds', 'constraints', 'contextCommitments', 'entryPoint', 'entryPointCodeHash', 'entryPointVersion', 'executionProfile', 'intentHash', 'intentId', 'nonce', 'recipient', 'schema', 'sender', 'transactionValue', 'userOperationHash', 'validUntil', 'callTarget', 'accountCallProfile', 'accountCallTarget', 'accountCallValue', 'accountCallDataHash']
+const intentFields = ['action', 'amount', 'asset', 'calldataHash', 'chainId', 'chainRef', 'chainIds', 'constraints', 'contextCommitments', 'entryPoint', 'entryPointCodeHash', 'entryPointVersion', 'executionProfile', 'intentHash', 'intentId', 'nonce', 'recipient', 'schema', 'sender', 'transactionValue', 'userOperationHash', 'validUntil', 'callTarget', 'accountCallProfile', 'accountCallTarget', 'accountCallValue', 'accountCallDataHash', 'solanaTransaction']
 
 function canonicalize(value: unknown): string {
   if (value === undefined) throw new TypeError('undefined is not valid canonical JSON')
@@ -138,11 +139,13 @@ async function verifyAuthorizedReceiptOffline(receipt: Receipt, key: KeyEntry, n
   if (evidence.transparency && !await verifyTransparency(evidence.transparency, acceptance, key.publicKey, receipt.execution.executedAt ?? receipt.execution.observedAt ?? 0)) return fail('INVALID_TRANSPARENCY_PROOF')
   if (!authorization.signature) return fail('MISSING_AUTHORIZATION_SIGNATURE')
   const requiresContractVerification = authorization.authorizer.type === 'eip1271'
-  const authorizationValid = requiresContractVerification || await verifyTypedData({
-    address: authorization.authorizer.address as `0x${string}`,
-    ...authorizationTypedDataFor(authorization),
-    signature: authorization.signature as `0x${string}`,
-  })
+  const authorizationValid = requiresContractVerification || (authorization.authorizer.type === 'solana-ed25519'
+    ? await verifySolanaAuthorizationSignature(authorization)
+    : await verifyTypedData({
+      address: authorization.authorizer.address as `0x${string}`,
+      ...authorizationTypedDataFor(authorization),
+      signature: authorization.signature as `0x${string}`,
+    }))
   if (!authorizationValid) return fail('INVALID_AUTHORIZATION_SIGNATURE')
   const expectedBinding = bindingFor(authorization.intent, receipt.execution, authorization.delegate.executor, acceptance.acceptedAt, authorization.notBefore, authorization.expiresAt)
   if (canonicalize(expectedBinding) !== canonicalize(receipt.binding) || canonicalize(expectedBinding.reasonCodes) !== canonicalize(receipt.reasonCodes)) return fail('BINDING_MISMATCH')
@@ -168,11 +171,17 @@ function validAuthorizationShape(value: NonNullable<Receipt['authorizationEviden
   if (!hasOnlyFields(value, authorizationFields) || !hasOnlyFields(value.principal, ['account', 'id', 'type']) || !hasOnlyFields(value.authorizer, ['address', 'type']) || !hasOnlyFields(value.delegate, ['agentId', 'executor'])) return false
   const legacy = value.schema === 'priorseal.authorization.v1'
   if (!legacy && value.schema !== 'priorseal.authorization.v2') return false
-  if (value.domain !== (legacy ? 'priorseal/authorization/v1' : 'priorseal/authorization/v2') || !validIntentShape(value.intent)) return false
+  const solana = value.authorizer.type === 'solana-ed25519'
+  if (value.domain !== (solana ? 'priorseal/authorization/solana/v2' : legacy ? 'priorseal/authorization/v1' : 'priorseal/authorization/v2') || !validIntentShape(value.intent)) return false
   if (!hashPattern.test(value.intentHash) || !/^auth_[0-9a-f]{32}$/.test(value.authorizationId)) return false
-  if (!['user', 'organization'].includes(value.principal.type) || !identifierPattern.test(value.principal.id) || !canonicalAddress(value.principal.account)) return false
-  if (!['eip712', 'eip1271'].includes(value.authorizer.type) || !canonicalAddress(value.authorizer.address) || value.principal.account !== value.authorizer.address) return false
-  if (!identifierPattern.test(value.delegate.agentId) || !canonicalAddress(value.delegate.executor)) return false
+  if (!['user', 'organization'].includes(value.principal.type) || !identifierPattern.test(value.principal.id)) return false
+  if (solana) {
+    if (value.domain !== 'priorseal/authorization/solana/v2' || value.intent.executionProfile !== SOLANA_TRANSACTION_PROFILE
+      || !solanaPublicKey(value.principal.account) || !solanaPublicKey(value.authorizer.address) || value.principal.account !== value.authorizer.address
+      || !solanaPublicKey(value.delegate.executor)) return false
+  } else if (!canonicalAddress(value.principal.account) || !['eip712', 'eip1271'].includes(value.authorizer.type)
+    || !canonicalAddress(value.authorizer.address) || value.principal.account !== value.authorizer.address || !canonicalAddress(value.delegate.executor)) return false
+  if (!identifierPattern.test(value.delegate.agentId)) return false
   if (![value.issuedAt, value.notBefore, value.expiresAt].every(positiveUnixSeconds)) return false
   if (!/^0x[0-9a-f]{64}$/.test(value.authorizationNonce) || !/^0x[0-9a-f]{64}$/.test(value.policyHash) || value.maxUses !== '1' || !identifierPattern.test(value.audience)) return false
   return value.signature === undefined || typeof value.signature === 'string'
@@ -184,12 +193,23 @@ function validIntentShape(value: Intent) {
   const exactCall = value.schema === 'priorseal.intent.v2'
   const erc4337 = value.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1'
   const exactCallProfile = value.executionProfile === 'priorseal.execution-profile.exact-call.v1'
+  const solanaTransaction = value.executionProfile === SOLANA_TRANSACTION_PROFILE
   if (!exactCall && value.schema !== 'priorseal.intent.v1') return false
-  if (exactCall !== (exactCallProfile || erc4337) || (exactCallProfile && value.action !== 'CONTRACT_CALL') || (erc4337 && value.action !== 'ERC4337_USER_OPERATION')) return false
-  if (!identifierPattern.test(value.intentId) || !identifierPattern.test(value.action) || !positiveChainId(value.chainId) || !positiveUnixSeconds(value.validUntil)) return false
-  if (!canonicalAddress(value.sender) || !canonicalAddress(value.recipient) || !uintPattern.test(value.amount) || !uintPattern.test(value.nonce ?? '0')) return false
-  const asset = /^eip155:([1-9][0-9]*)\/(native|erc20:0x[0-9a-fA-F]{40})$/.exec(value.asset)
-  if (!asset || Number(asset[1]) !== value.chainId || !hashPattern.test(value.intentHash ?? '')) return false
+  if (exactCall !== (exactCallProfile || erc4337 || solanaTransaction) || (exactCallProfile && value.action !== 'CONTRACT_CALL') || (erc4337 && value.action !== 'ERC4337_USER_OPERATION') || (solanaTransaction && value.action !== 'SOLANA_TRANSACTION')) return false
+  if (!identifierPattern.test(value.intentId) || !identifierPattern.test(value.action) || !positiveUnixSeconds(value.validUntil)) return false
+  if (solanaTransaction) {
+    if (value.chainId !== 0 || value.chainRef !== SOLANA_MAINNET_CAIP2 || !solanaPublicKey(value.sender) || value.recipient !== value.sender
+      || !uintPattern.test(value.amount) || value.nonce !== value.solanaTransaction?.recentBlockhash || !hashPattern.test(value.intentHash ?? '')
+      || !/^solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp\/(?:slip44:501|spl:[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(value.asset)
+      || !validSolanaTransactionMessage(value.solanaTransaction) || value.solanaTransaction.feePayer !== value.sender
+      || value.callTarget != null || value.calldataHash != null || value.transactionValue != null
+      || value.entryPoint != null || value.userOperationHash != null || value.accountCallProfile != null) return false
+  } else {
+    if (value.chainRef != null || value.solanaTransaction != null || !positiveChainId(value.chainId)) return false
+    if (!canonicalAddress(value.sender) || !canonicalAddress(value.recipient) || !uintPattern.test(value.amount) || !uintPattern.test(value.nonce ?? '0')) return false
+    const asset = /^eip155:([1-9][0-9]*)\/(native|erc20:0x[0-9a-fA-F]{40})$/.exec(value.asset)
+    if (!asset || Number(asset[1]) !== value.chainId || !hashPattern.test(value.intentHash ?? '')) return false
+  }
   if (record.chainIds !== undefined && (!Array.isArray(record.chainIds) || !record.chainIds.every(positiveChainId))) return false
   if (value.callTarget !== undefined && !canonicalAddress(value.callTarget)) return false
   if (value.calldataHash !== undefined && !/^0x[0-9a-f]{64}$/.test(value.calldataHash)) return false
@@ -279,6 +299,77 @@ function canonicalAddress(value: unknown): value is string {
   return typeof value === 'string' && addressPattern.test(value)
 }
 
+function solanaPublicKey(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length < 32 || value.length > 44 || !/^[1-9A-HJ-NP-Za-km-z]+$/.test(value)) return false
+  try { return decodeBase58(value).length === 32 } catch { return false }
+}
+
+function decodeBase58(value: string): Uint8Array {
+  const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+  let integer = 0n
+  for (const character of value) {
+    const digit = alphabet.indexOf(character)
+    if (digit < 0) throw new TypeError('invalid base58')
+    integer = integer * 58n + BigInt(digit)
+  }
+  const bytes: number[] = []
+  while (integer > 0n) { bytes.push(Number(integer & 0xffn)); integer >>= 8n }
+  bytes.reverse()
+  let zeroes = 0
+  while (value[zeroes] === '1') zeroes += 1
+  return Uint8Array.from([...new Array(zeroes).fill(0), ...bytes])
+}
+
+function validSolanaTransactionMessage(value: unknown): value is NonNullable<Intent['solanaTransaction']> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const message = value as NonNullable<Intent['solanaTransaction']>
+  const baseKeys = 'accountKeys,addressTableLookups,feePayer,header,instructions,loadedAddresses,messageVersion,network,recentBlockhash'
+  const expectedKeys = message.messageVersion === 'v1' ? `${baseKeys},transactionConfig` : baseKeys
+  if (Object.keys(message).sort().join(',') !== expectedKeys
+    || message.network !== 'mainnet-beta' || !solanaPublicKey(message.feePayer) || !solanaPublicKey(message.recentBlockhash)
+    || !['legacy', 'v0', 'v1'].includes(message.messageVersion)
+    || !message.header || !Array.isArray(message.accountKeys)
+    || message.accountKeys.length < 1 || message.accountKeys.length > 256 || message.accountKeys[0] !== message.feePayer
+    || !message.accountKeys.every(solanaPublicKey) || new Set(message.accountKeys).size !== message.accountKeys.length
+    || !Array.isArray(message.addressTableLookups) || !Array.isArray(message.instructions) || message.instructions.length < 1 || message.instructions.length > 128
+    || !message.loadedAddresses || !Array.isArray(message.loadedAddresses.writable) || !Array.isArray(message.loadedAddresses.readonly)) return false
+  if (message.messageVersion === 'v1') {
+    const config = message.transactionConfig
+    if (!config || !Number.isSafeInteger(config.computeUnitLimit) || config.computeUnitLimit == null || config.computeUnitLimit <= 0 || config.computeUnitLimit > 0xffff_ffff || !Number.isSafeInteger(config.loadedAccountsDataSizeLimit) || config.loadedAccountsDataSizeLimit == null || config.loadedAccountsDataSizeLimit <= 0 || config.loadedAccountsDataSizeLimit > 0xffff_ffff || !(config.heapSize === null || Number.isSafeInteger(config.heapSize) && config.heapSize >= 0 && config.heapSize <= 0xffff_ffff) || !(config.priorityFeeLamports === null || uintPattern.test(config.priorityFeeLamports))) return false
+  } else if (message.transactionConfig !== undefined) return false
+  const header = message.header
+  if (!['numRequiredSignatures', 'numReadonlySignedAccounts', 'numReadonlyUnsignedAccounts'].every((key) => Number.isSafeInteger(header[key as keyof typeof header]))
+    || header.numRequiredSignatures < 1 || header.numRequiredSignatures > message.accountKeys.length
+    || header.numReadonlySignedAccounts >= header.numRequiredSignatures || header.numReadonlyUnsignedAccounts > message.accountKeys.length - header.numRequiredSignatures) return false
+  const total = message.accountKeys.length + message.loadedAddresses.writable.length + message.loadedAddresses.readonly.length
+  if (total > 256 || !message.loadedAddresses.writable.every(solanaPublicKey) || !message.loadedAddresses.readonly.every(solanaPublicKey)) return false
+  if (message.addressTableLookups.length > 32 || message.messageVersion !== 'v0' && message.addressTableLookups.length > 0
+    || message.addressTableLookups.some((lookup) => !solanaPublicKey(lookup.accountKey)
+      || !validByteIndexes(lookup.writableIndexes) || !validByteIndexes(lookup.readonlyIndexes))) return false
+  if (message.loadedAddresses.writable.length !== message.addressTableLookups.reduce((n, entry) => n + entry.writableIndexes.length, 0)
+    || message.loadedAddresses.readonly.length !== message.addressTableLookups.reduce((n, entry) => n + entry.readonlyIndexes.length, 0)) return false
+  if (message.messageVersion === 'v1' && (message.accountKeys.length > 96 || message.instructions.length > 64
+    || message.instructions.some((instruction) => instruction.accountIndexes.length > 255))) return false
+  return message.instructions.every((instruction) => Number.isSafeInteger(instruction.programIdIndex) && instruction.programIdIndex >= 0 && instruction.programIdIndex < total
+    && Array.isArray(instruction.accountIndexes) && instruction.accountIndexes.every((index) => Number.isSafeInteger(index) && index >= 0 && index < total)
+    && typeof instruction.data === 'string' && instruction.data.length <= 8192 && (instruction.data.length === 0 || /^[1-9A-HJ-NP-Za-km-z]+$/.test(instruction.data)))
+}
+
+function validByteIndexes(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length <= 256 && value.every((index) => Number.isSafeInteger(index) && index >= 0 && index <= 255) && new Set(value).size === value.length
+}
+
+async function verifySolanaAuthorizationSignature(authorization: NonNullable<Receipt['authorizationEvidence']>['authorization']) {
+  if (typeof authorization.signature !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(authorization.signature)) return false
+  let signature: Uint8Array
+  try { signature = decodeBase64(authorization.signature) } catch { return false }
+  if (signature.length !== 64 || btoa(String.fromCharCode(...signature)) !== authorization.signature) return false
+  const rawKey = new Uint8Array(decodeBase58(authorization.authorizer.address))
+  const message = new Uint8Array(new TextEncoder().encode(solanaAuthorizationMessage(authorization)))
+  const key = await crypto.subtle.importKey('raw', rawKey.buffer as ArrayBuffer, { name: 'Ed25519' }, false, ['verify'])
+  return crypto.subtle.verify({ name: 'Ed25519' }, key, new Uint8Array(signature).buffer as ArrayBuffer, message.buffer as ArrayBuffer)
+}
+
 function stripIntentHash(intent: Intent) {
   const { intentHash, ...unsigned } = intent as unknown as Record<string, unknown>
   return unsigned
@@ -292,19 +383,23 @@ function stripAuthorizationMetadata(authorization: NonNullable<Receipt['authoriz
 function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['authorization']['intent'], execution: Receipt['execution'], executor: string, acceptedAt: number, authorizationNotBefore: number, authorizationExpiresAt: number) {
   const reasons: string[] = []
   const same = (left: unknown, right: unknown) => String(left ?? '').toLowerCase() === String(right ?? '').toLowerCase()
-  const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1'
+  const solana = intent.executionProfile === SOLANA_TRANSACTION_PROFILE
+  const sameIdentity = (left: unknown, right: unknown) => solana ? String(left ?? '') === String(right ?? '') : same(left, right)
+  const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1' || solana
   const erc4337 = intent.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1'
   if (execution.executionDataAvailable === false) reasons.push('EXECUTION_UNAVAILABLE')
   if (Number(execution.chainId) !== Number(intent.chainId)) reasons.push('CHAIN_MISMATCH')
+  if ((execution.chainRef ?? null) !== (intent.chainRef ?? null)) reasons.push('CHAINREF_MISMATCH')
   if (!same(execution.action, intent.action)) reasons.push('ACTION_MISMATCH')
-  if (!same(execution.sender, intent.sender)) reasons.push('SENDER_MISMATCH')
-  if (!exactCall && !same(execution.recipient, intent.recipient)) reasons.push('RECIPIENT_MISMATCH')
+  if (!sameIdentity(execution.sender, intent.sender)) reasons.push('SENDER_MISMATCH')
+  if (!exactCall && !sameIdentity(execution.recipient, intent.recipient)) reasons.push('RECIPIENT_MISMATCH')
   if (!exactCall && !same(execution.asset, intent.asset)) reasons.push('ASSET_MISMATCH')
   if (!exactCall && String(execution.amount ?? '') !== String(intent.amount)) reasons.push('AMOUNT_MISMATCH')
   if (String(execution.nonce ?? '') !== String(intent.nonce ?? '0')) reasons.push('NONCE_MISMATCH')
   if (intent.callTarget != null && !same(execution.target, intent.callTarget)) reasons.push('CALL_TARGET_MISMATCH')
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push('CALLDATA_MISMATCH')
   if (intent.transactionValue != null && String(execution.nativeValue ?? '') !== String(intent.transactionValue)) reasons.push('TRANSACTION_VALUE_MISMATCH')
+  if (solana && (!intent.solanaTransaction || !execution.solanaTransaction || canonicalize(intent.solanaTransaction) !== canonicalize(execution.solanaTransaction))) reasons.push('SOLANA_MESSAGE_MISMATCH')
   if (erc4337 && !same(execution.userOperationHash, intent.userOperationHash)) reasons.push('USER_OPERATION_HASH_MISMATCH')
   if (erc4337 && !same(execution.entryPoint, intent.entryPoint)) reasons.push('ENTRY_POINT_MISMATCH')
   if (erc4337 && !same(execution.entryPointCodeHash, intent.entryPointCodeHash)) reasons.push('ENTRY_POINT_CODE_HASH_MISMATCH')
@@ -319,7 +414,7 @@ function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
     else if (BigInt(execution.gasUsed) > BigInt(intent.constraints.maxGasUsed)) reasons.push('GAS_LIMIT_EXCEEDED')
   }
   if (!exactCall && Array.isArray(execution.transfers) && execution.transfers.length > 1 && !execution.transferMatchUnique) reasons.push('AMBIGUOUS_TRANSFER')
-  if (!same(execution.sender, executor)) reasons.push('EXECUTOR_MISMATCH')
+  if (!sameIdentity(execution.sender, executor)) reasons.push('EXECUTOR_MISMATCH')
   const executedAt = execution.executedAt ?? execution.observedAt ?? 0
   if (acceptedAt > executedAt) reasons.push('AUTHORIZATION_AFTER_EXECUTION')
   if (executedAt < authorizationNotBefore || executedAt > authorizationExpiresAt) reasons.push('OUTSIDE_AUTHORIZATION_WINDOW')
@@ -370,8 +465,10 @@ function complianceFor(authorization: NonNullable<Receipt['authorizationEvidence
   const unavailableBindingReasons = binding.reasonCodes.filter((code) => ['EXECUTION_UNAVAILABLE', 'INSUFFICIENT_FINALITY'].includes(code))
   if (unavailableBindingReasons.length) return assessment('NOT_ASSESSABLE', unavailableBindingReasons)
   const correlationReasons: string[] = []
+  const solana = authorization.authorizer.type === 'solana-ed25519'
   if (Number(execution.chainId) !== Number(authorization.intent.chainId)) correlationReasons.push('CHAIN_MISMATCH')
-  if (String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor.toLowerCase()) correlationReasons.push('EXECUTOR_MISMATCH')
+  if (solana && execution.chainRef !== authorization.intent.chainRef) correlationReasons.push('CHAIN_MISMATCH')
+  if (solana ? String(execution.sender ?? '') !== authorization.delegate.executor : String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor.toLowerCase()) correlationReasons.push('EXECUTOR_MISMATCH')
   if (String(execution.nonce ?? '') !== String(authorization.intent.nonce)) correlationReasons.push('NONCE_MISMATCH')
   if (correlationReasons.length) return assessment('NOT_ASSESSABLE', correlationReasons)
   return binding.bound ? assessment('COMPLIANT', []) : assessment('NON_COMPLIANT', [...binding.reasonCodes])
@@ -501,7 +598,10 @@ async function verifyPolicyEvidence(authorization: NonNullable<Receipt['authoriz
 function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidence']>['authorization'], policy: Record<string, unknown> | null, evaluatedAt: number) {
   if (!policy) return { allowed: true, reasonCodes: [], policyId: null, evaluatedAt }
   const reasons: string[] = []
-  const listMisses = (value: unknown, candidate: unknown) => Array.isArray(value) && !value.map(String).map((item) => item.toLowerCase()).includes(String(candidate).toLowerCase())
+  const solana = authorization.authorizer.type === 'solana-ed25519'
+  const listMisses = (value: unknown, candidate: unknown, caseSensitive = false) => Array.isArray(value) && !(caseSensitive
+    ? value.map(String).includes(String(candidate))
+    : value.map(String).map((item) => item.toLowerCase()).includes(String(candidate).toLowerCase()))
   const intent = authorization.intent
   const listFields = ['allowedChainIds', 'allowedActions', 'allowedAssets', 'allowedSenders', 'allowedRecipients']
   const invalidPolicy = listFields.some((field) => policy[field] !== undefined && !Array.isArray(policy[field]))
@@ -515,9 +615,9 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
   if (invalidPolicy) reasons.push('POLICY_INVALID')
   if (listMisses(policy.allowedChainIds, intent.chainId)) reasons.push('POLICY_CHAIN_NOT_ALLOWED')
   if (listMisses(policy.allowedActions, intent.action)) reasons.push('POLICY_ACTION_NOT_ALLOWED')
-  if (listMisses(policy.allowedAssets, intent.asset)) reasons.push('POLICY_ASSET_NOT_ALLOWED')
-  if (listMisses(policy.allowedSenders, intent.sender)) reasons.push('POLICY_SENDER_NOT_ALLOWED')
-  if (listMisses(policy.allowedRecipients, intent.recipient)) reasons.push('POLICY_RECIPIENT_NOT_ALLOWED')
+  if (listMisses(policy.allowedAssets, intent.asset, solana)) reasons.push('POLICY_ASSET_NOT_ALLOWED')
+  if (listMisses(policy.allowedSenders, intent.sender, solana)) reasons.push('POLICY_SENDER_NOT_ALLOWED')
+  if (listMisses(policy.allowedRecipients, intent.recipient, solana)) reasons.push('POLICY_RECIPIENT_NOT_ALLOWED')
   try {
     if (policy.maxAmount != null && BigInt(intent.amount) > BigInt(String(policy.maxAmount))) reasons.push('POLICY_AMOUNT_EXCEEDED')
     if (policy.maxValiditySeconds != null && intent.validUntil > evaluatedAt + Number(policy.maxValiditySeconds)) reasons.push('POLICY_EXPIRY_TOO_FAR')
@@ -530,11 +630,11 @@ function evaluatePolicy(authorization: NonNullable<Receipt['authorizationEvidenc
   if (Array.isArray(policy.principals)) {
     const matched = policy.principals.some((value) => {
       const principal = value as Record<string, unknown>
-      return principal.id === authorization.principal.id && principal.type === authorization.principal.type && String(principal.account).toLowerCase() === authorization.principal.account && principal.authorizerType === authorization.authorizer.type
+      return principal.id === authorization.principal.id && principal.type === authorization.principal.type && (solana ? String(principal.account) === authorization.principal.account : String(principal.account).toLowerCase() === authorization.principal.account) && principal.authorizerType === authorization.authorizer.type
     })
     if (!matched) reasons.push('POLICY_PRINCIPAL_NOT_ALLOWED')
   }
-  if (policy.requireDistinctAuthorizerAndExecutor === true && authorization.authorizer.address.toLowerCase() === authorization.delegate.executor.toLowerCase()) reasons.push('POLICY_AUTHORIZER_EXECUTOR_NOT_DISTINCT')
+  if (policy.requireDistinctAuthorizerAndExecutor === true && (solana ? authorization.authorizer.address === authorization.delegate.executor : authorization.authorizer.address.toLowerCase() === authorization.delegate.executor.toLowerCase())) reasons.push('POLICY_AUTHORIZER_EXECUTOR_NOT_DISTINCT')
   return { allowed: reasons.length === 0, reasonCodes: [...new Set(reasons)], policyId: typeof policy.policyId === 'string' ? policy.policyId : null, evaluatedAt }
 }
 
@@ -558,5 +658,6 @@ export async function authorizationSigningData(authorization: NonNullable<Receip
   if (authorization.notBefore < authorization.issuedAt || authorization.expiresAt < authorization.notBefore || authorization.expiresAt > authorization.intent.validUntil) throw new TypeError('Invalid authorization time window')
   if (authorization.intentHash !== authorization.intent.intentHash || authorization.intentHash !== await hashJson(stripIntentHash(authorization.intent))) throw new TypeError('Prepared intent hash does not match its contents')
   if (authorization.authorizationId !== `auth_${(await hashJson(stripAuthorizationMetadata(authorization))).slice(0, 32)}`) throw new TypeError('Prepared authorization ID does not match its contents')
+  if (authorization.authorizer.type === 'solana-ed25519') return { profile: 'solana-ed25519' as const, message: solanaAuthorizationMessage(authorization) }
   return authorizationTypedDataFor(authorization)
 }
