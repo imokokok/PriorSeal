@@ -56,10 +56,13 @@ test('SDK rejects malformed capability claims instead of exposing them as typed 
   };
   const client = createPriorSealClient({ fetch: async () => response(valid) });
   assert.deepEqual(await client.capabilities(), valid);
+  const solana = { ...valid, chains: [0] };
+  const solanaClient = createPriorSealClient({ fetch: async () => response(solana) });
+  assert.deepEqual(await solanaClient.capabilities(), solana);
   for (const malformed of [
     { ...valid, executionProfiles: [42] },
     { ...valid, chains: ['8453'] },
-    { ...valid, chains: [0] },
+    { ...valid, chains: [-1] },
     { ...valid, authorizers: [null] },
   ]) {
     const badClient = createPriorSealClient({ fetch: async () => response(malformed) });
