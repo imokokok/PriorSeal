@@ -2,7 +2,12 @@
 
 ## Unreleased
 
+## 0.10.0 — 2026-10-15
+
 - Add ERC-8004 identity resolution and block-pinned snapshots, canonical agent references, caller-allowlisted registry checks, reputation and validation policy evaluation, context-bound trust-decision bundles, and explicit wallet-based feedback/validation writes. Preserve existing PriorSeal authorization signing bytes.
+- Add pinned-block replay for Insight's unsigned V3 risk report and support the single-swap, deadline-enforced SwapRouter02 multicall profile in authorization and review.
+- Add offline verification for Insight Decision Input v1 and exact V3 swap evidence, including independent key/policy trust, raw calldata re-decoding, authorized-call binding, and approved router deployment policy.
+- Label the local V3 simulation as unsigned advisory evidence and enforce the consumer's signed execution-receipt slippage ceiling during review.
 
 ## 0.9.3 — 2026-10-10
 
