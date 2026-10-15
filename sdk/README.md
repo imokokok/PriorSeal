@@ -3,10 +3,10 @@
 Typed browser and Node.js client connecting explicit authorization to observed EVM execution and independently verifiable receipts. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.9.1
+npm install priorseal-sdk@0.9.3
 ```
 
-Version **0.9.1** adds `compareV3SwapReplan()` to explain which approved swap fields a proposed call changes; the comparison does not authorize execution. Version 0.9.0 added signed temporal-finality constraints and offline replay checks for the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Version 0.8.0 added reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+Version **0.9.1** adds `compareV3SwapReplan()` to explain which approved swap fields a proposed call changes; the comparison does not authorize execution. The unreleased working tree adds ERC-8004 identity snapshots, trust-decision bundles, reputation and validation policy evaluation, and explicit wallet-based registry writes. Version 0.9.0 added signed temporal-finality constraints and offline replay checks for the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Version 0.8.0 added reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
 
 To require an RPC-finalized observation, set `intent.constraints.finalityRequirement` to `RPC_FINALIZED`. An optional `maxToleratedReorgDepth: N` requires at least `N + 1` confirmations. The offline verifier checks signed evidence consistency; an RPC finalized assertion remains an observation by the configured endpoint and issuer, not an embedded consensus proof. See [temporal evidence and finality](https://github.com/imokokok/PriorSeal/blob/main/docs/architecture/temporal-finality.md).
 
@@ -219,6 +219,31 @@ system remains authoritative for the digest's business meaning and may treat it
 as an advisory recommendation rather than an execution permission. Use
 `matchContextCommitment` when a protocol deliberately permits several
 commitments in the same namespace.
+
+## ERC-8004 agent identity and trust evidence
+
+The [ERC-8004 integration guide](../docs/integrations/erc-8004.md) covers agent identity resolution, context commitments, chain-verified reputation/validation policy, and explicit wallet-submitted feedback. The SDK exports these functions from the package root:
+
+```ts
+import {
+  formatERC8004AgentRef,
+  resolveERC8004Identity,
+  erc8004IdentitySnapshotCommitment,
+  verifyERC8004AuthorizationBinding,
+  readERC8004Reputation,
+  verifyAndEvaluateERC8004Reputation,
+  readERC8004Validations,
+  verifyAndEvaluateERC8004Validations,
+  createERC8004TrustDecisionBundle,
+  verifyERC8004AuthorizationTrustDecision,
+  hashERC8004Payload,
+  hashERC8004ContentBytes,
+} from 'priorseal-sdk'
+```
+
+The identity reference contains chain ID, registry address, and token ID. Registry addresses and reviewer/validator addresses must be independently selected by the integrating application. Reputation and validation evaluators return `INDETERMINATE` until the SDK re-reads the snapshot at its pinned block; a policy calculation over detached JSON is never presented as verified chain state. The SDK does not fetch registration URIs. Feedback and validation write helpers require an explicit viem `WalletClient`, preflight the relevant role and registry link, and return the transaction hash for the caller to track.
+
+The [read-only inspector](../examples/erc8004-agent-accountability-v1/README.md) demonstrates resolving a registered `agentWallet` and exporting the identity commitment without a wallet or transaction. `hashERC8004Payload` hashes canonical JSON for PriorSeal's bundle profile; `hashERC8004ContentBytes` hashes exact UTF-8 or byte content for ERC-8004 URI hashes.
 
 ## Short-window market-state evidence
 
