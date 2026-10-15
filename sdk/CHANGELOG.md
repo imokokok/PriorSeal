@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add ERC-8004 identity resolution and block-pinned snapshots, canonical agent references, caller-allowlisted registry checks, reputation and validation policy evaluation, context-bound trust-decision bundles, and explicit wallet-based feedback/validation writes. Preserve existing PriorSeal authorization signing bytes.
+
 ## 0.9.3 — 2026-10-10
 
 - Internal: release-pipeline fix release. Tag `sdk-v0.9.2` was cut for these changes but its publish run failed (workflow packed the wrong package); 0.9.2 was never published to npm. The SDK content is identical to what was dated 0.9.2.
