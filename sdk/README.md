@@ -1,12 +1,12 @@
 # priorseal-sdk
 
-Typed browser and Node.js client connecting explicit authorization to observed EVM execution and independently verifiable receipts. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
+Typed browser and Node.js client connecting explicit authorization to observed EVM or Solana execution and independently verifiable receipts. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.10.0
+npm install priorseal-sdk@0.11.0
 ```
 
-Version **0.10.0** adds ERC-8004 identity resolution and block-pinned snapshots, trust-decision bundles, reputation and validation policy evaluation, and explicit wallet-based registry writes while preserving existing PriorSeal authorization signing bytes. It also adds pinned-block replay for Insight's unsigned V3 risk report, offline verification for Insight Decision Input v1 and exact V3 swap evidence, and review-time enforcement of the signed execution-receipt slippage ceiling. Version **0.9.1** adds `compareV3SwapReplan()` to explain which approved swap fields a proposed call changes; the comparison does not authorize execution. Version 0.9.0 added signed temporal-finality constraints and offline replay checks for the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Version 0.8.0 added reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+Version **0.11.0** adds Solana mainnet-beta transaction authorization and observation for legacy, v0, and v1 compiled messages, exact message-byte hashing, v0 address lookup resolution, v1 resource configuration, and offline verification. Version **0.10.0** adds ERC-8004 identity resolution and block-pinned snapshots, trust-decision bundles, reputation and validation policy evaluation, and explicit wallet-based registry writes while preserving existing PriorSeal authorization signing bytes. It also adds pinned-block replay for Insight's unsigned V3 risk report, offline verification for Insight Decision Input v1 and exact V3 swap evidence, and review-time enforcement of the signed execution-receipt slippage ceiling. Version **0.9.1** adds `compareV3SwapReplan()` to explain which approved swap fields a proposed call changes; the comparison does not authorize execution. Version 0.9.0 added signed temporal-finality constraints and offline replay checks for the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Version 0.8.0 added reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
 
 To require an RPC-finalized observation, set `intent.constraints.finalityRequirement` to `RPC_FINALIZED`. An optional `maxToleratedReorgDepth: N` requires at least `N + 1` confirmations. The offline verifier checks signed evidence consistency; an RPC finalized assertion remains an observation by the configured endpoint and issuer, not an embedded consensus proof. See [temporal evidence and finality](https://github.com/imokokok/PriorSeal/blob/main/docs/architecture/temporal-finality.md).
 
@@ -55,6 +55,8 @@ const evidence = await priorseal.observeExecutionUntilFinal({
   confirmations: 12,
 })
 ```
+
+For Solana mainnet-beta, construct an intent from the fully compiled message and resolved address lookup table addresses, then authorize it with a wallet that supports off-chain Ed25519 message signing. The transaction's `recentBlockhash` is the bound nonce; `lastValidBlockHeight` is RPC metadata and is not represented as a signed message field. `hashSolanaTransactionMessage(message)` returns the SHA-256 hash of the exact legacy, v0, or v1 message bytes and can bind a pre-sign simulation to the same message. See the [Solana integration guide](https://github.com/imokokok/PriorSeal/blob/main/docs/integrations/solana.md) for a complete flow. The Solana wallet signer may be distinct from the transaction fee payer; the delegated executor must match the fee payer.
 
 ## Independent local verification
 

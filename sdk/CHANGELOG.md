@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.11.0 — 2026-10-15
+
+- Add Solana mainnet-beta authorization and observation for legacy, v0, and v1 compiled transaction messages, including exact message hashing, v0 address lookup resolution, v1 resource configuration, and offline receipt verification.
+
 ## 0.10.0 — 2026-10-15
 
 - Add ERC-8004 identity resolution and block-pinned snapshots, canonical agent references, caller-allowlisted registry checks, reputation and validation policy evaluation, context-bound trust-decision bundles, and explicit wallet-based feedback/validation writes. Preserve existing PriorSeal authorization signing bytes.
