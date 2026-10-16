@@ -248,7 +248,7 @@ function validateDeploymentConfig(config: ProductionConfig, environment: 'produc
   if (config.preExecutionProofMode === 'witness-quorum' && !config.witnessEndpointsFile && !config.witnessEndpointsJson) throw new TypeError(`${label} witness-quorum mode requires witness endpoints`);
   if (config.preExecutionProofMode === 'evm-anchor' && !config.transparencyAnchorFile && !config.transparencyAnchorJson) throw new TypeError(`${label} evm-anchor mode requires a transparency anchor`);
   if (environment === 'production' && !config.corsOrigins.length) throw new TypeError('Production requires at least one non-localhost CORS origin');
-  if (config.corsOrigins.some((origin: string) => new URL(origin).hostname === 'localhost')) throw new TypeError(`${label} must not allow localhost CORS origins`);
+  if (config.corsOrigins.some((origin: string) => new URL(origin).hostname === 'localhost')) throw new TypeError(`${label} requires non-localhost CORS origins`);
 }
 
 function proofModeValue(value: unknown, legacyAnchor: unknown, environment: string) {
