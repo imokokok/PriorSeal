@@ -21,7 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release-check:
+  release-core:
+    name: Release core gates
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -137,6 +138,44 @@ jobs:
         run: npm run release:check:pre-browser
       - name: Verify APS producer inputs and adapter boundaries
         run: npm run test:aps-priorseal
+      - name: RWA v2 durable authorization and receipt workflow (simulation)
+        run: npm run rwa:verify:prepared
+      - name: Install isolated execution drill dependency
+        run: npm install --prefix "$RUNNER_TEMP/local-evm" --ignore-scripts --no-audit --no-fund ganache@7.9.2
+      - name: Exercise local execution and database recovery
+        env:
+          GANACHE_MODULE: ${{ runner.temp }}/local-evm/node_modules/ganache/dist/node/core.js
+        run: node scripts/local-execution-drill.mjs
+      - name: Exercise the RWA signer boundary against local token transfers
+        env:
+          GANACHE_MODULE: ${{ runner.temp }}/local-evm/node_modules/ganache/dist/node/core.js
+        run: node scripts/rwa-local-execution-drill.mjs
+
+  browser-release:
+    name: Browser release gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/aps-priorseal-decision-binding-v1/package-lock.json
+      # preview:web rebuilds the checked-in core tools before starting the
+      # browser server, and those tools type-check the maintenance example.
+      - name: Install root and maintenance example dependencies
+        run: |
+          npm ci
+          npm ci --prefix examples/aps-priorseal-decision-binding-v1 --ignore-scripts
+      # This bundle is deliberately built in the browser job so the E2E suite
+      # cannot pass against a checked-in or stale distribution.
+      - name: Build the web bundle for browser acceptance
+        run: npm run sdk:build && npm --prefix web run bundle:prepared
       - name: Restore Playwright Chromium
         id: playwright-cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -153,15 +192,21 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Run browser release gate
         run: npm run test:e2e:prepared
-      - name: RWA v2 durable authorization and receipt workflow (simulation)
-        run: npm run rwa:verify:prepared
-      - name: Install isolated execution drill dependency
-        run: npm install --prefix "$RUNNER_TEMP/local-evm" --ignore-scripts --no-audit --no-fund ganache@7.9.2
-      - name: Exercise local execution and database recovery
+
+  # Preserve the existing required-check name. It completes only after the
+  # parallel release paths both succeed, so the faster schedule never weakens
+  # branch protection or permits a partial release validation.
+  release-check:
+    needs: [release-core, browser-release]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every release path to pass
         env:
-          GANACHE_MODULE: ${{ runner.temp }}/local-evm/node_modules/ganache/dist/node/core.js
-        run: node scripts/local-execution-drill.mjs
-      - name: Exercise the RWA signer boundary against local token transfers
-        env:
-          GANACHE_MODULE: ${{ runner.temp }}/local-evm/node_modules/ganache/dist/node/core.js
-        run: node scripts/rwa-local-execution-drill.mjs
+          CORE_RESULT: ${{ needs.release-core.result }}
+          BROWSER_RESULT: ${{ needs.browser-release.result }}
+        run: |
+          if [ "$CORE_RESULT" != 'success' ] || [ "$BROWSER_RESULT" != 'success' ]; then
+            echo "::error::Release paths finished with core=$CORE_RESULT browser=$BROWSER_RESULT"
+            exit 1
+          fi
