@@ -5571,6 +5571,37 @@ function verifyRoute(options) {
   }
 }
 
+// examples/402signal-eip3009-settlement-binding-v1/src/payment-networks.mjs
+var NETWORK_PROFILES = {
+  "eip155:8453": {
+    network: "eip155:8453",
+    chainId: 8453,
+    asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    assetSymbol: "USDC",
+    assetDecimals: 6,
+    eip712Name: "USD Coin",
+    eip712Version: "2"
+  },
+  "eip155:42161": {
+    network: "eip155:42161",
+    chainId: 42161,
+    asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    assetSymbol: "USDC",
+    assetDecimals: 6,
+    eip712Name: "USD Coin",
+    eip712Version: "2"
+  }
+};
+function getEvmPaymentNetworkProfile(network) {
+  if (typeof network !== "string" || !/^eip155:(0|[1-9][0-9]*)$/.test(network)) return null;
+  return NETWORK_PROFILES[network] ?? null;
+}
+function getEvmPaymentNetworkProfileForAsset(network, asset) {
+  const profile = getEvmPaymentNetworkProfile(network);
+  if (!profile || typeof asset !== "string" || asset.toLowerCase() !== profile.asset.toLowerCase()) return null;
+  return profile;
+}
+
 // examples/402signal-eip3009-settlement-binding-v1/src/verify-source.mjs
 var root = dirname(fileURLToPath(import.meta.url));
 var readText = (path) => readFileSync(resolve(root, path), "utf8");
@@ -5727,6 +5758,15 @@ function routeOptions(raw, context2, now) {
   };
 }
 async function verifyAuthorizationAndBinding({ pair, signed, verifiedRoute, routeDigest, now }) {
+  const accepted = verifiedRoute.accepted;
+  const networkProfile = getEvmPaymentNetworkProfileForAsset(accepted.network, accepted.asset);
+  if (!networkProfile) return blocked("UNSUPPORTED_PAYMENT_NETWORK_OR_ASSET");
+  if (pair.payment.domain.chainId !== networkProfile.chainId) return blocked("PAYMENT_NETWORK_MISMATCH");
+  if (pair.payment.domain.name !== networkProfile.eip712Name || pair.payment.domain.version !== networkProfile.eip712Version) {
+    return blocked("PAYMENT_TOKEN_DOMAIN_MISMATCH");
+  }
+  if (!sameAddress(pair.payment.domain.verifyingContract, networkProfile.asset)) return blocked("PAYMENT_TOKEN_MISMATCH");
+  if (pair.binding.domain.chainId !== networkProfile.chainId) return blocked("BINDING_NETWORK_MISMATCH");
   const paymentData = paymentTypedData(pair.payment);
   if (!await verifyTypedData({
     ...paymentData,
@@ -5765,14 +5805,18 @@ async function verifyAuthorizationAndBinding({ pair, signed, verifiedRoute, rout
   if (bindingExpiresAt > paymentValidBefore || bindingExpiresAt > verifiedRoute.expires_at) {
     return blocked("BINDING_WINDOW_TOO_WIDE");
   }
-  const accepted = verifiedRoute.accepted;
   if (accepted.network !== `eip155:${pair.payment.domain.chainId}`) return blocked("PAYMENT_NETWORK_MISMATCH");
   if (!sameAddress(accepted.asset, pair.payment.domain.verifyingContract)) return blocked("PAYMENT_TOKEN_MISMATCH");
   if (!sameAddress(accepted.payTo, pair.payment.message.to)) return blocked("PAYMENT_RECIPIENT_MISMATCH");
   if (BigInt(accepted.amount) !== BigInt(pair.payment.message.value)) return blocked("PAYMENT_AMOUNT_MISMATCH");
   return null;
 }
-function verifySettlementPayload(evidence, payment) {
+function verifySettlementPayload(evidence, payment, network, chainId, asset) {
+  const networkProfile = getEvmPaymentNetworkProfileForAsset(network, asset);
+  assert.ok(networkProfile, "settlement network and asset must be supported");
+  assert.equal(network, `eip155:${payment.domain.chainId}`);
+  assert.equal(chainId, payment.domain.chainId);
+  assert.ok(sameAddress(asset, payment.domain.verifyingContract));
   assert.equal(evidence.transaction.hash, evidence.receipt.transactionHash);
   assert.equal(evidence.receipt.status, "success");
   assert.ok(sameAddress(evidence.transaction.to, payment.domain.verifyingContract));
@@ -5809,7 +5853,12 @@ function verifySettlementPayload(evidence, payment) {
   assert.ok(sameAddress(transfer.args.to, payment.message.to));
   assert.equal(transfer.args.value, BigInt(payment.message.value));
 }
-function settlementOutcome(variant, evidence, payment) {
+function settlementOutcome(variant, evidence, payment, settlementNetwork, settlementChainId, settlementAsset) {
+  const networkProfile = getEvmPaymentNetworkProfileForAsset(settlementNetwork, settlementAsset);
+  assert.ok(networkProfile, "settlement network and asset must be supported");
+  assert.equal(settlementNetwork, `eip155:${payment.domain.chainId}`);
+  assert.equal(settlementChainId, payment.domain.chainId);
+  assert.ok(sameAddress(settlementAsset, payment.domain.verifyingContract));
   if (variant === "timeout") {
     assert.ok("submission" in evidence);
     assert.equal(evidence.submission.outcome, "timeout");
@@ -5819,7 +5868,7 @@ function settlementOutcome(variant, evidence, payment) {
   }
   assert.ok("transaction" in evidence && evidence.receipt && evidence.canonicalBlock);
   const completed = evidence;
-  verifySettlementPayload(completed, payment);
+  verifySettlementPayload(completed, payment, settlementNetwork, settlementChainId, settlementAsset);
   assert.equal(completed.receipt.blockHash, completed.canonicalBlock.hash);
   assert.equal(completed.receipt.blockNumber, completed.canonicalBlock.number);
   if (variant === "reorg") {
@@ -5888,7 +5937,10 @@ async function evaluate(vector, inputs2) {
   const outcome = settlementOutcome(
     settlementVariant,
     inputs2.settlement[settlementVariant],
-    pair.payment
+    pair.payment,
+    inputs2.settlement.network,
+    inputs2.settlement.chainId,
+    inputs2.settlement.asset
   );
   return finish({ release: "PAYLOAD_RELEASED", ...outcome });
 }

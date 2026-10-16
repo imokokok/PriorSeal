@@ -100,15 +100,32 @@ both sides of each “or” boundary are explicit:
   the portable evaluation package.
 
 The executable fixture uses the official Base route sample and therefore signs
-matching Base / USDC terms. It replaces the earlier Base Sepolia anchor table,
-which was illustrative but did not include enough raw route material to prove
-the cross-record term match.
+matching Base / USDC terms. The TypeScript adapter now has explicit native-USDC
+profiles for Base (`eip155:8453`) and Arbitrum One (`eip155:42161`), including
+each chain ID and EIP-712 token domain. The pinned route evidence remains Base;
+this bundle therefore exercises Base end to end and does not claim a verified
+Arbitrum route or live Arbitrum settlement. To exercise Arbitrum end to end,
+the route inputs must come from a separately verified Arbitrum x402 quote.
+Arbitrum uses native USDC at
+`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`; bridged USDC.e is intentionally
+not accepted by this profile. The contract and EIP-712 values match the
+[x402 EVM default asset table](https://github.com/x402-foundation/x402/blob/main/typescript/packages/mechanisms/evm/src/defaultAssets.ts)
+and Arbitrum's [USDC network documentation](https://developer.arbitrum.io/arbitrum-bridge/usdc-arbitrum-one).
+
+The adapter derives the EIP-712 chain ID from the selected CAIP-2 network,
+checks the native USDC contract and domain, and binds settlement evidence to
+the same network, chain ID and token. It rejects unsupported network/token
+pairs before accepting the payment authorization. This offline fixture remains
+synthetic and does not configure or call a live endpoint. Separately, PriorSeal's
+shared API has an opt-in x402 v2 payment integration for Base and Arbitrum One;
+see the [deployment guide](../../docs/integrations/x402-arbitrum.md).
 
 ## Offchain binding decision
 
 The additional binding uses an EIP-712 domain with name
-`PriorSeal EIP-3009 Settlement Binding`, version `1` and chain ID `8453`. It
-intentionally omits `verifyingContract`: no contract verifies this offchain
+`PriorSeal EIP-3009 Settlement Binding` and version `1`. This Base fixture uses
+chain ID `8453`; the Arbitrum profile derives `42161` from its CAIP-2 network.
+It intentionally omits `verifyingContract`: no contract verifies this offchain
 statement, and using the token address there would imply a contract role it
 does not have. The signed message still commits the route receipt digest,
 payment authorization digest, authorization nonce, independent binding nonce,

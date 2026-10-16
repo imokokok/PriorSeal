@@ -10,6 +10,7 @@ import { PassThrough, Readable } from 'node:stream';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { createHttpServer } from '../../src/index.mjs';
 import { authorizationTypedData, buildAuthorization, hashJson } from '../../src/index.mjs';
+import { parseX402Config } from '../../src/infrastructure/payments/x402-exact-evm.mjs';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const sender = `0x${'a'.repeat(40)}`;
@@ -63,6 +64,55 @@ async function request(server: TestServer, path: string, { method = 'GET', heade
   const res = new EventEmitter() as MockResponse; res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
   const done = new Promise<void>((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers ?? {}, buffer: () => Buffer.from(res.body ?? ''), json: (): HttpTestResponse => JSON.parse(Buffer.from(res.body ?? '').toString('utf8')) as HttpTestResponse, text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
+test('x402 Monad mainnet is advertised, verified, and settled through the HTTP lifecycle', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const facilitatorCalls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    facilitatorCalls.push(`${init?.method} ${url.pathname}`);
+    if (url.pathname === '/supported') return new Response(JSON.stringify({ kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:143' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const body = JSON.parse(String(init?.body)) as { paymentRequirements: { network: string; asset: string; extra: { name: string; version: string } } };
+    assert.equal(body.paymentRequirements.network, 'eip155:143');
+    assert.equal(body.paymentRequirements.asset, '0x754704Bc059F8C67012fEd69BC8A327a5aafb603');
+    assert.deepEqual(body.paymentRequirements.extra, { name: 'USDC', version: '2' });
+    if (url.pathname === '/verify') return new Response(JSON.stringify({ isValid: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.pathname === '/settle') return new Response(JSON.stringify({ success: true, network: 'eip155:143', transaction: `0x${'1'.repeat(64)}`, payer: `0x${'c'.repeat(40)}`, amount: '10000' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    throw new Error(`Unexpected facilitator request: ${url.pathname}`);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://monad-facilitator.test',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test',
+    PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path: '/v1/capabilities', description: 'Read deployment capabilities', price: '$0.01' }]),
+  });
+  assert.ok(x402);
+  const server = createHttpServer({ x402 });
+  t.after(() => server.close());
+
+  const unpaid = await request(server, '/v1/capabilities');
+  assert.equal(unpaid.status, 402);
+  assert.equal(unpaid.headers['cache-control'], 'no-store');
+  const challenge = unpaid.json() as unknown as { accepts: { network: string; amount: string; asset: string; extra: { name: string; version: string } }[] };
+  assert.deepEqual(challenge.accepts.map(requirement => requirement.network), ['eip155:143']);
+  const accepted = challenge.accepts[0];
+  assert.equal(accepted.amount, '10000');
+  assert.equal(accepted.asset, '0x754704Bc059F8C67012fEd69BC8A327a5aafb603');
+  assert.deepEqual(accepted.extra, { name: 'USDC', version: '2' });
+
+  const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: { ...accepted, scheme: 'exact', payTo: x402.payTo, maxTimeoutSeconds: 300 }, payload: {} })).toString('base64');
+  const paid = await request(server, '/v1/capabilities', { headers: { 'payment-signature': paymentHeader } });
+  assert.equal(paid.status, 200);
+  assert.equal(paid.headers['cache-control'], 'private, no-store');
+  assert.deepEqual(facilitatorCalls, ['GET /supported', 'POST /verify', 'POST /settle']);
+  const paymentResponse = JSON.parse(Buffer.from(paid.headers['payment-response'], 'base64').toString('utf8')) as { success: boolean; network: string; transaction: string };
+  assert.equal(paymentResponse.success, true);
+  assert.equal(paymentResponse.network, 'eip155:143');
+  assert.equal(paymentResponse.transaction, `0x${'1'.repeat(64)}`);
+  const capabilities = paid.json() as unknown as { payments: { x402: { configured: boolean; networks: { network: string }[] } } };
+  assert.equal(capabilities.payments.x402.configured, true);
+  assert.ok(capabilities.payments.x402.networks.some(network => network.network === 'eip155:143'));
+});
 test('request deadline terminates stalled bodies and rejects slow route work', async (t) => {
   const store = { async health() { await new Promise(resolve => setTimeout(resolve, 80)); return 'ok'; } };
   const server = createHttpServer({ store: store as unknown as ServerOptions['store'], requestTimeoutMs: 20 });
