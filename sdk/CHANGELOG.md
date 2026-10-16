@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.11.1 — 2026-10-17
+
+- Add the published exact-call partner reference and portable v3 verification-bundle path to the SDK documentation. The fixture demonstrates local receipt verification, binding mismatch outcomes, context-commitment comparison, component hashes, and a signature-tamper rejection without an API, wallet, or RPC endpoint.
+- Documentation and distribution maintenance release only: exported runtime APIs and SDK runtime dependencies are unchanged from 0.11.0. Repository-level release provenance and dependency controls are maintained separately from the SDK verifier's evidence claims.
+
 ## 0.11.0 — 2026-10-15
 
 - Add Solana mainnet-beta authorization and observation for legacy, v0, and v1 compiled transaction messages, including exact message hashing, v0 address lookup resolution, v1 resource configuration, and offline receipt verification.

@@ -1,0 +1,15 @@
+{
+  "schema": "priorseal.keys.v1",
+  "issuer": "priorseal-partner-reference-test-issuer",
+  "keys": [
+    {
+      "issuer": "priorseal-partner-reference-test-issuer",
+      "keyId": "partner-reference-test-key-1",
+      "algorithm": "Ed25519",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA1238bj1eePRsVOlCHJedzcDZ0DmBthqGWrICsYCNzpA=\n-----END PUBLIC KEY-----\n",
+      "validFrom": null,
+      "validUntil": null,
+      "status": "active"
+    }
+  ]
+}
