@@ -1,0 +1,12 @@
+{
+  "name": "@priorseal/sbom-tooling",
+  "private": true,
+  "description": "Pinned tooling for generating release SBOMs.",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@cyclonedx/cyclonedx-npm": "6.0.1",
+    "libxmljs2": "0.37.0"
+  }
+}
