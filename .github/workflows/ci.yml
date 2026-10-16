@@ -26,7 +26,10 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:17
+        # ECR Public began returning data-limit (429) errors before the job
+        # could start. The official Docker image is the runner-native service
+        # source and avoids that independent ECR availability quota.
+        image: postgres:17
         env:
           POSTGRES_USER: priorseal_test
           POSTGRES_PASSWORD: ci-test-only
