@@ -1,0 +1,39 @@
+{
+  "schema": "priorseal.portable-verification-bundle.manifest.v1",
+  "fixtureId": "exact-call-partner-reference-v1",
+  "files": {
+    "authorization.json": {
+      "sha256": "eee5f44031b60cfcfa9b66457d52d094b91cd7def35bbc79ce440f24a771b28a"
+    },
+    "context-approval.json": {
+      "sha256": "343ff91a17a34ba037079ecb2323cb077cd8442bb906cee3334e61e4a0d9d4f0"
+    },
+    "issuer-key.json": {
+      "sha256": "fdfb1cdc7ab07ebf3d820776f4568d26bbc58d43e40ac22f3d342de7c6b8a269"
+    },
+    "receipt.json": {
+      "sha256": "fd183b57aef0a6b9f9fdcc4ba924e9efe0c44fd7a27b72c21ba26dda48fe7d61"
+    },
+    "receipt-tampered-signature.json": {
+      "sha256": "1123d15d95d21b18bc7a108e6bbc9cc819bdc3044cf77cc58afc77888be0569c"
+    }
+  },
+  "schemaVersion": "priorseal.execution-receipt.v3",
+  "profile": "priorseal.execution-profile.exact-call.v1",
+  "verifier": {
+    "package": "priorseal-sdk",
+    "version": "0.11.1",
+    "surface": "verifyReceiptLocally"
+  },
+  "expected": {
+    "valid": true,
+    "code": "OK",
+    "outcome": "COMPLETED",
+    "executionStatus": "CONFIRMED",
+    "complianceStatus": "COMPLIANT",
+    "tamperedReceipt": {
+      "valid": false,
+      "code": "INVALID_SIGNATURE"
+    }
+  }
+}

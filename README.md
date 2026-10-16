@@ -23,6 +23,7 @@ PriorSeal is for teams building EVM and Solana agents, treasury automation, wall
 | --- | --- |
 | Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
+| Start a reproducible exact-call integration and hand a reviewer a portable v3 receipt bundle | [Exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) |
 | Bind a Solana mainnet transaction message to a wallet authorization and observed transaction | [Solana integration guide](docs/integrations/solana.md) |
 | Accept x402 API payments in USDC on Base, Arbitrum One, and Monad | [x402 payment integration](docs/integrations/x402-evm.md) |
 | Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
@@ -125,6 +126,7 @@ These examples have different evidence scopes. Read each example's README before
 
 | Example | What it demonstrates |
 | --- | --- |
+| [Exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) | Synthetic integration boundary, five exact-call outcomes, context binding, and a portable v3 bundle with an offline tamper check. |
 | [Exact-call SDK integration](examples/web3-agent-kit-context-binding-v1/README.md) | Binds a partner-owned call-envelope digest to a principal-signed authorization. |
 | [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) | Combines signed Insight advisory input, an agent-side policy decision, and PriorSeal authorization in a synthetic flow. |
 | [Base Sepolia live evidence](examples/web3-agent-kit-base-sepolia-live-v1/README.md) | Verifies one real testnet transaction authorized before signing; it does not include a live Insight attestation. |
