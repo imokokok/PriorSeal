@@ -24,6 +24,7 @@ PriorSeal is for teams building EVM and Solana agents, treasury automation, wall
 | Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
 | Bind a Solana mainnet transaction message to a wallet authorization and observed transaction | [Solana integration guide](docs/integrations/solana.md) |
+| Accept x402 API payments in USDC on Base, Arbitrum One, and Monad | [x402 payment integration](docs/integrations/x402-evm.md) |
 | Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
 | Review the assets, limits, recipient and router in one ERC-20 swap before authorization | [Reviewed swap authorization](docs/product/swap-authorization.md) |
 | See why an agent's replanned swap needs new approval | [Offline replan demo](examples/swap-replan-demo/README.md) |
@@ -143,6 +144,7 @@ Other partner fixtures are under [`examples/`](examples/). Insight can be used i
 | Security and operations | [Threat model](docs/security/threat-model.md) · [Operations](docs/runbooks/operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
 | SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |
 | Solana transaction authorization and observation | [Solana integration guide](docs/integrations/solana.md) |
+| x402 API payments on Base, Arbitrum One, and Monad | [x402 payment integration](docs/integrations/x402-evm.md) |
 | Sandbox adapter proposal | [APS checkout-gate per-order limit check](docs/integrations/aps-checkout-gate-limit-check-2026-10.md) |
 
 Run `npm run check` for the repository checks, or `npm run release:check` for the full release gate. Production runs the API and console on Cloudflare Workers with D1 persistence; local Node deployments can use PostgreSQL.

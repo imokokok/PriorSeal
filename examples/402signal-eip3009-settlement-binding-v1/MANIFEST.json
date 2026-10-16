@@ -6,13 +6,13 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 6404,
-      "sha256": "c233b1f7f702e0a60b73b7552d8039e39ce4860874652aca00ed0ec710fc3498"
+      "bytes": 7738,
+      "sha256": "1231b77b6703acdbaa5009f76c7aa63df361593f68cc2a12dd4b6b2de2939e4f"
     },
     {
       "path": "TEST-RECORD.md",
-      "bytes": 1520,
-      "sha256": "faea0b43eb12484e2d512041ade72e0b27555f6ba87621ccda7173774b8085ad"
+      "bytes": 1827,
+      "sha256": "c94cc63131e73fc9357db68a2bbc9c25b6c59afe847b0ebd385371ff088357cf"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -21,8 +21,8 @@
     },
     {
       "path": "verify.mjs",
-      "bytes": 197525,
-      "sha256": "39e956c4497459194c7fcd4e0e295eea4a174556e635813d81f04690274818f8"
+      "bytes": 200166,
+      "sha256": "d310bb3b48a0d9f3d436c4e69b702a5020d6047863a1c664844462643db3f0bf"
     },
     {
       "path": "fixture/generated/cases.json",
@@ -31,13 +31,13 @@
     },
     {
       "path": "fixture/generated/settlement-evidence.json",
-      "bytes": 4939,
-      "sha256": "d94790ac63f9e32235fc6c091c4edd50585f2b8f54f251b4cfd23acf2423d19d"
+      "bytes": 5043,
+      "sha256": "c03cca7285aef9e18d15bdf0f9760d00637bbc2df78d886055a7b0553aa951a1"
     },
     {
       "path": "fixture/generated/signed-authorizations.json",
-      "bytes": 13476,
-      "sha256": "94d0dcb5c81e2c428781a774739c4417cc336613ede5a1f9f1f398818e060fc0"
+      "bytes": 13512,
+      "sha256": "e130ad403e56ef9e43e9f07cbb95b73bcaccb1dd46b3cfcdc292b6c125493d9b"
     },
     {
       "path": "fixture/raw/route-context.json",

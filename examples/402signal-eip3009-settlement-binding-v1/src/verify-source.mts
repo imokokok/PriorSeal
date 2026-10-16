@@ -16,6 +16,7 @@ import {
   type RouteGuardOptions,
   type VerifiedRoute,
 } from '../vendor/route-guard-v0.7.3.mjs'
+import { getEvmPaymentNetworkProfileForAsset } from './payment-networks.mjs'
 
 type Manifest = typeof import('../MANIFEST.json', { with: { type: 'json' } })
 type RouteContext = typeof import('../fixture/raw/route-context.json', { with: { type: 'json' } })
@@ -215,6 +216,16 @@ async function verifyAuthorizationAndBinding({ pair, signed, verifiedRoute, rout
   routeDigest: `0x${string}`
   now: number
 }): Promise<VerificationResult | null> {
+  const accepted = verifiedRoute.accepted
+  const networkProfile = getEvmPaymentNetworkProfileForAsset(accepted.network, accepted.asset)
+  if (!networkProfile) return blocked('UNSUPPORTED_PAYMENT_NETWORK_OR_ASSET')
+  if (pair.payment.domain.chainId !== networkProfile.chainId) return blocked('PAYMENT_NETWORK_MISMATCH')
+  if (pair.payment.domain.name !== networkProfile.eip712Name || pair.payment.domain.version !== networkProfile.eip712Version) {
+    return blocked('PAYMENT_TOKEN_DOMAIN_MISMATCH')
+  }
+  if (!sameAddress(pair.payment.domain.verifyingContract, networkProfile.asset)) return blocked('PAYMENT_TOKEN_MISMATCH')
+  if (pair.binding.domain.chainId !== networkProfile.chainId) return blocked('BINDING_NETWORK_MISMATCH')
+
   const paymentData = paymentTypedData(pair.payment)
   if (!(await verifyTypedData({
     ...paymentData,
@@ -256,7 +267,6 @@ async function verifyAuthorizationAndBinding({ pair, signed, verifiedRoute, rout
     return blocked('BINDING_WINDOW_TOO_WIDE')
   }
 
-  const accepted = verifiedRoute.accepted
   if (accepted.network !== `eip155:${pair.payment.domain.chainId}`) return blocked('PAYMENT_NETWORK_MISMATCH')
   if (!sameAddress(accepted.asset, pair.payment.domain.verifyingContract)) return blocked('PAYMENT_TOKEN_MISMATCH')
   if (!sameAddress(accepted.payTo, pair.payment.message.to)) return blocked('PAYMENT_RECIPIENT_MISMATCH')
@@ -264,7 +274,12 @@ async function verifyAuthorizationAndBinding({ pair, signed, verifiedRoute, rout
   return null
 }
 
-function verifySettlementPayload(evidence: CompletedSettlement, payment: PaymentRecord) {
+function verifySettlementPayload(evidence: CompletedSettlement, payment: PaymentRecord, network: string, chainId: number, asset: string) {
+  const networkProfile = getEvmPaymentNetworkProfileForAsset(network, asset)
+  assert.ok(networkProfile, 'settlement network and asset must be supported')
+  assert.equal(network, `eip155:${payment.domain.chainId}`)
+  assert.equal(chainId, payment.domain.chainId)
+  assert.ok(sameAddress(asset, payment.domain.verifyingContract))
   assert.equal(evidence.transaction.hash, evidence.receipt.transactionHash)
   assert.equal(evidence.receipt.status, 'success')
   assert.ok(sameAddress(evidence.transaction.to, payment.domain.verifyingContract))
@@ -308,7 +323,16 @@ function settlementOutcome(
   variant: SettlementVariant,
   evidence: SettlementEvidence[SettlementVariant],
   payment: PaymentRecord,
+  settlementNetwork: string,
+  settlementChainId: number,
+  settlementAsset: string,
 ): Omit<VerificationResult, 'release'> {
+  const networkProfile = getEvmPaymentNetworkProfileForAsset(settlementNetwork, settlementAsset)
+  assert.ok(networkProfile, 'settlement network and asset must be supported')
+  assert.equal(settlementNetwork, `eip155:${payment.domain.chainId}`)
+  assert.equal(settlementChainId, payment.domain.chainId)
+  assert.ok(sameAddress(settlementAsset, payment.domain.verifyingContract))
+
   if (variant === 'timeout') {
     assert.ok('submission' in evidence)
     assert.equal(evidence.submission.outcome, 'timeout')
@@ -319,7 +343,7 @@ function settlementOutcome(
 
   assert.ok('transaction' in evidence && evidence.receipt && evidence.canonicalBlock)
   const completed = evidence as CompletedSettlement
-  verifySettlementPayload(completed, payment)
+  verifySettlementPayload(completed, payment, settlementNetwork, settlementChainId, settlementAsset)
   assert.equal(completed.receipt.blockHash, completed.canonicalBlock.hash)
   assert.equal(completed.receipt.blockNumber, completed.canonicalBlock.number)
 
@@ -396,6 +420,9 @@ async function evaluate(vector: CaseVector, inputs: Inputs): Promise<Verificatio
     settlementVariant,
     inputs.settlement[settlementVariant],
     pair.payment,
+    inputs.settlement.network,
+    inputs.settlement.chainId,
+    inputs.settlement.asset,
   )
   return finish({ release: 'PAYLOAD_RELEASED', ...outcome })
 }

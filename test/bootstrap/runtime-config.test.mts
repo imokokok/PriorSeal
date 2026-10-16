@@ -41,6 +41,7 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     databaseBackend: 'postgresql',
     corsOrigins: ['https://console.example'],
     trustProxy: true,
+    x402: void 0,
   });
 });
 

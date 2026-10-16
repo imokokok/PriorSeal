@@ -1,5 +1,6 @@
 // Generated from runtime-config.mts by npm run core:build. Do not edit directly.
 import { createArchiveAccess } from "../application/archive/evidence-archive.mjs";
+import { parseX402Config } from "../infrastructure/payments/x402-exact-evm.mjs";
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 function loadRuntimeConfig(environment = process.env) {
   const runtimeEnvironment = environmentValue(environment.PRIORSEAL_ENVIRONMENT);
@@ -20,6 +21,7 @@ function loadRuntimeConfig(environment = process.env) {
   const erc4337EntryPoints = parseErc4337EntryPoints(optionalJson(environment.PRIORSEAL_ERC4337_ENTRY_POINTS_JSON, "PRIORSEAL_ERC4337_ENTRY_POINTS_JSON"));
   const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, "PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON"));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, "PRIORSEAL_SAFE_4337_TRUST_JSON"));
+  const x402 = parseX402Config(environment);
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some((entry) => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
   }
@@ -69,7 +71,8 @@ function loadRuntimeConfig(environment = process.env) {
     databaseDirectUrl: databaseUrl(environment.DATABASE_URL_UNPOOLED, "DATABASE_URL_UNPOOLED"),
     databaseBackend: databaseBackendValue(environment.PRIORSEAL_DATABASE_BACKEND),
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
-    trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, "PRIORSEAL_TRUST_PROXY", false)
+    trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, "PRIORSEAL_TRUST_PROXY", false),
+    x402
   };
   if (runtimeEnvironment === "production" || runtimeEnvironment === "staging") {
     validateDeploymentConfig(config, runtimeEnvironment);
