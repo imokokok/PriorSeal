@@ -71,5 +71,71 @@
       }
     ]
   },
-  "triggers": { "crons": ["* * * * *"] }
+  "triggers": { "crons": ["* * * * *"] },
+  "env": {
+    "staging": {
+      "assets": {
+        "directory": "./web/dist",
+        "binding": "ASSETS",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/v1/*", "/health/*", "/.well-known/*", "/openapi/*"]
+      },
+      "routes": [],
+      "vars": {
+        "PRIORSEAL_ENVIRONMENT": "staging",
+        "PRIORSEAL_ISSUER": "priorseal-staging",
+        "PRIORSEAL_KEY_ID": "staging-1",
+        "PRIORSEAL_BUILD_VERSION": "staging",
+        "PRIORSEAL_AUTHORIZATION_AUDIENCE": "priorseal-staging",
+        "PRIORSEAL_PREEXECUTION_PROOF_MODE": "rfc3161",
+        "PRIORSEAL_DATABASE_BACKEND": "d1",
+        "PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS": "false",
+        "PRIORSEAL_CORS_ORIGINS": "",
+        "PRIORSEAL_TRUST_PROXY": "true"
+      },
+      "secrets": {
+        "required": [
+          "PRIORSEAL_PRIVATE_KEY_PEM",
+          "PRIORSEAL_PUBLIC_KEY_PEM",
+          "PRIORSEAL_POLICY_JSON",
+          "PRIORSEAL_RPC_BASE_SEPOLIA"
+        ]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "priorseal-staging",
+          "database_id": "2a1ac01a-af10-4f2d-918e-41e8c13d39da",
+          "migrations_dir": "d1/migrations"
+        }
+      ],
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
+      "ratelimits": [
+        {
+          "name": "HTTP_RATE_LIMITER",
+          "namespace_id": "2026101601",
+          "simple": { "limit": 60, "period": 60 }
+        }
+      ],
+      "queues": {
+        "producers": [
+          { "binding": "OBSERVATION_QUEUE", "queue": "priorseal-staging-observations" }
+        ],
+        "consumers": [
+          {
+            "queue": "priorseal-staging-observations",
+            "max_batch_size": 5,
+            "max_batch_timeout": 1,
+            "max_retries": 10
+          }
+        ]
+      },
+      "triggers": { "crons": ["* * * * *"] },
+      "observability": {
+        "enabled": true,
+        "logs": { "enabled": true, "head_sampling_rate": 1 },
+        "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+      }
+    }
+  }
 }
