@@ -51,6 +51,8 @@
     "rwa:execution:check:prepared": "npm run core:build:tools && node scripts/verify-rwa-execution-profiles.mjs",
     "rwa:execution:check:online": "npm run sdk:build && npm run core:build:tools && node scripts/verify-rwa-execution-profiles.mjs --online",
     "swap:execution:check": "npm run sdk:build && npm run core:build && node scripts/swap-authorization-local-drill.mjs",
+    "pilot:restricted-automation": "npm run sdk:build && npm run core:build && node scripts/swap-authorization-local-drill.mjs",
+    "verify:restricted-automation-pilot": "npm run sdk:build && npm run core:build && node scripts/verify-restricted-automation-pilot.mjs",
     "verify:wak-base-sepolia:router": "npm run core:build:tools && node scripts/verify-wak-base-sepolia-router.mjs",
     "verify:wak-frozen-multicall:sheet": "npm run core:build:tools && node scripts/verify-wak-frozen-multicall-sheet.mjs",
     "sdk:build": "npm run rwa:parity && npm --prefix sdk run build",
