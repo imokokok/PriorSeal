@@ -104,12 +104,12 @@ export function LandingPage() {
           <div className="museum-hero__copy">
             <div className="museum-hero__eyebrow"><p className="museum-kicker"><span>PRIORSEAL</span> / EVIDENCE INFRASTRUCTURE</p><span className="museum-hero__edition">EDITION 001 — EVM AGENTS</span></div>
             <h1 data-route-heading tabIndex={-1}>Authority,<br /><em>before action.</em></h1>
-            <p className="museum-hero__statement">Connect what a person or organization explicitly authorized before action to an agent’s observed EVM execution. Retain a signed receipt others can verify independently.</p>
+            <p className="museum-hero__statement">Give an agent a bounded, principal-signed action—not a blank check. Connect what a person or organization explicitly authorized before action to an agent’s observed EVM execution, with a signed receipt others can verify independently.</p>
             <div className="museum-actions">
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Authorize an intent <span>→</span></Link>
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
             </div>
-            <div className="museum-hero__foot"><span>01 / 06</span><p>Portable evidence for EVM agents.<br />No custody. No transaction-signing keys.</p><a href="#system" aria-label="Explore the PriorSeal system">↓</a></div>
+            <div className="museum-hero__foot"><span>01 / 06</span><p>Bounded authority and portable evidence for EVM agents.<br />No custody. No transaction-signing keys.</p><a href="#system" aria-label="Explore the PriorSeal system">↓</a></div>
           </div>
           <EvidenceIllustration />
         </section>
@@ -209,9 +209,9 @@ export function LandingPage() {
 
         <section className="museum-closing">
           <div data-reveal>
-            <p className="museum-kicker">DESIGN PARTNERS / EVM AGENTS</p>
-            <h2>Build one real<br />evidence flow.</h2>
-            <p className="museum-closing__statement">Use PriorSeal for authorization and execution evidence on one bounded EVM path. Pair it with Insight when you also need oracle transparency and risk assessments; each product remains independently usable.</p>
+            <p className="museum-kicker">DESIGN PARTNERS / AGENT SYSTEMS</p>
+            <h2>Build one verifiable<br />agent flow.</h2>
+            <p className="museum-closing__statement">Use PriorSeal to give an agent explicit, bounded authority and portable execution evidence on one EVM path. Pair it with Insight when you also need oracle transparency and risk assessments; each product remains independently usable.</p>
             <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/sdk">Review the SDK <span>↗</span></Link></div>
           </div>
           <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for EVM agents.</span><span><a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>

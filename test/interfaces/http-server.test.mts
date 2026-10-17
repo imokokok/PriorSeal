@@ -12,6 +12,7 @@ import { createHttpServer, createMemoryStore, x402PaymentLedgerId } from '../../
 import { authorizationTypedData, buildAuthorization, hashJson } from '../../src/index.mjs';
 import { parseX402Config } from '../../src/infrastructure/payments/x402-exact-evm.mjs';
 import { verifyX402PaymentEvidence } from '../../src/domain/x402-payment-evidence.mjs';
+import { agentCredentialHash, createAgentMeter, parseAgentMeterConfig } from '../../src/application/commerce/agent-meter.mjs';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const sender = `0x${'a'.repeat(40)}`;
@@ -65,6 +66,69 @@ async function request(server: TestServer, path: string, { method = 'GET', heade
   const res = new EventEmitter() as MockResponse; res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
   const done = new Promise<void>((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers ?? {}, buffer: () => Buffer.from(res.body ?? ''), json: (): HttpTestResponse => JSON.parse(Buffer.from(res.body ?? '').toString('utf8')) as HttpTestResponse, text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
+test('metered agent calls require a credential, consume only successful calls and expose their usage record', async (t) => {
+  const secret = 'agent-secret-that-is-long-enough-for-a-commercial-service-boundary';
+  const store = createMemoryStore();
+  const meter = createAgentMeter(parseAgentMeterConfig({
+    schema: 'priorseal.agent-meter.v1',
+    creditUnitUsd: '0.01',
+    operatorCredentialHash: agentCredentialHash('operator-secret-that-is-long-enough-for-a-commercial-service-boundary'),
+    accounts: [{ accountId: 'team:alpha', credentialHash: agentCredentialHash(secret), provisionedCredits: '1', status: 'active' }],
+    routes: [{ routeId: 'capabilities', method: 'GET', path: '/v1/capabilities', credits: '1' }],
+  }), store);
+  const server = createHttpServer({ store, agentMeter: meter });
+  t.after(() => server.close());
+  const denied = await request(server, '/v1/capabilities', { headers: { 'idempotency-key': 'agent-call-1' } });
+  assert.equal(denied.status, 401);
+  const paid = await request(server, '/v1/capabilities', { headers: { 'idempotency-key': 'agent-call-1', 'x-priorseal-agent-key': secret } });
+  assert.equal(paid.status, 200);
+  assert.match(String(paid.headers['x-priorseal-usage-id']), /^amu_[0-9a-f]{32}$/);
+  const agentCredits = (paid.json() as unknown as { payments: { agentCredits: { creditUnitUsd: string; routes: { priceUsd: string }[] } } }).payments.agentCredits;
+  assert.equal(agentCredits.creditUnitUsd, '0.01');
+  assert.deepEqual(agentCredits.routes.map(route => route.priceUsd), ['0.01']);
+  const replay = await request(server, '/v1/capabilities', { headers: { 'idempotency-key': 'agent-call-1', 'x-priorseal-agent-key': secret } });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.headers['x-priorseal-usage-id'], paid.headers['x-priorseal-usage-id']);
+  const usage = await request(server, '/v1/agent-accounts/self/usage?limit=1', { headers: { 'x-priorseal-agent-key': secret } });
+  assert.equal(usage.status, 200);
+  assert.deepEqual((usage.json() as unknown as { items: { routeId: string; state: string }[] }).items.map(entry => [entry.routeId, entry.state]), [['capabilities', 'CONSUMED']]);
+  const exhausted = await request(server, '/v1/capabilities', { headers: { 'idempotency-key': 'agent-call-2', 'x-priorseal-agent-key': secret } });
+  assert.equal(exhausted.status, 402);
+  assert.equal(exhausted.json().error.code, 'AGENT_CREDITS_EXHAUSTED');
+});
+test('operator endpoints issue, inspect, credit, and revoke a narrowly scoped Agent service account', async (t) => {
+  const operatorSecret = 'operator-secret-that-is-long-enough-for-a-commercial-service-boundary';
+  const meter = createAgentMeter(parseAgentMeterConfig({
+    schema: 'priorseal.agent-meter.v1', creditUnitUsd: '0.01', operatorCredentialHash: agentCredentialHash(operatorSecret), accounts: [],
+    routes: [],
+  }), createMemoryStore());
+  const server = createHttpServer({ agentMeter: meter });
+  t.after(() => server.close());
+  const denied = await request(server, '/v1/agent-accounts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId: 'team:issued', provisionedCredits: '2' }) });
+  assert.equal(denied.status, 403);
+  const issued = await request(server, '/v1/agent-accounts', { method: 'POST', headers: { 'content-type': 'application/json', 'x-priorseal-operator-key': operatorSecret }, body: JSON.stringify({ accountId: 'team:issued', provisionedCredits: '2' }) });
+  assert.equal(issued.status, 201);
+  const credential = (issued.json() as unknown as { credential: string }).credential;
+  assert.match(credential, /^psa_[A-Za-z0-9_-]{43}$/);
+  const self = await request(server, '/v1/agent-accounts/self', { headers: { 'x-priorseal-agent-key': credential } });
+  assert.equal(self.status, 200);
+  assert.equal((self.json() as unknown as { account: { remainingCredits: string } }).account.remainingCredits, '2');
+  const missingIdempotency = await request(server, '/v1/agent-accounts/team:issued/credits', { method: 'POST', headers: { 'content-type': 'application/json', 'x-priorseal-operator-key': operatorSecret }, body: JSON.stringify({ credits: '3' }) });
+  assert.equal(missingIdempotency.status, 400);
+  const credited = await request(server, '/v1/agent-accounts/team:issued/credits', { method: 'POST', headers: { 'content-type': 'application/json', 'x-priorseal-operator-key': operatorSecret, 'idempotency-key': 'credit-1' }, body: JSON.stringify({ credits: '3', reference: 'invoice:1' }) });
+  assert.equal(credited.status, 201);
+  assert.equal((credited.json() as unknown as { account: { remainingCredits: string } }).account.remainingCredits, '5');
+  assert.match((credited.json() as unknown as { operation: { operationId: string } }).operation.operationId, /^aco_[0-9a-f]{32}$/);
+  const replayedCredit = await request(server, '/v1/agent-accounts/team:issued/credits', { method: 'POST', headers: { 'content-type': 'application/json', 'x-priorseal-operator-key': operatorSecret, 'idempotency-key': 'credit-1' }, body: JSON.stringify({ credits: '3', reference: 'invoice:1' }) });
+  assert.equal(replayedCredit.status, 200);
+  assert.equal(replayedCredit.headers['idempotency-replayed'], 'true');
+  assert.equal((replayedCredit.json() as unknown as { account: { remainingCredits: string } }).account.remainingCredits, '5');
+  const revoked = await request(server, '/v1/agent-accounts/team:issued/revoke', { method: 'POST', headers: { 'content-type': 'application/json', 'x-priorseal-operator-key': operatorSecret }, body: '{}' });
+  assert.equal(revoked.status, 200);
+  assert.equal((revoked.json() as unknown as { account: { status: string } }).account.status, 'revoked');
+  const rejectedSelf = await request(server, '/v1/agent-accounts/self', { headers: { 'x-priorseal-agent-key': credential } });
+  assert.equal(rejectedSelf.status, 403);
+});
 test('x402 Monad mainnet is advertised, verified, and settled through the HTTP lifecycle', async (t) => {
   const originalFetch = globalThis.fetch;
   const facilitatorCalls: string[] = [];

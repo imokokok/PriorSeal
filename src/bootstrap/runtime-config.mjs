@@ -1,6 +1,7 @@
 // Generated from runtime-config.mts by npm run core:build. Do not edit directly.
 import { createArchiveAccess } from "../application/archive/evidence-archive.mjs";
 import { parseX402Config } from "../infrastructure/payments/x402-exact-evm.mjs";
+import { parseAgentMeterConfig } from "../application/commerce/agent-meter.mjs";
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 function loadRuntimeConfig(environment = process.env) {
   const runtimeEnvironment = environmentValue(environment.PRIORSEAL_ENVIRONMENT);
@@ -18,6 +19,7 @@ function loadRuntimeConfig(environment = process.env) {
   const witnessEndpointsFile = optionalValue(environment.PRIORSEAL_WITNESS_ENDPOINTS_FILE);
   const witnessEndpointsJson = optionalJson(environment.PRIORSEAL_WITNESS_ENDPOINTS_JSON, "PRIORSEAL_WITNESS_ENDPOINTS_JSON");
   const archiveCredentials = optionalJson(environment.PRIORSEAL_ARCHIVE_CREDENTIALS_JSON, "PRIORSEAL_ARCHIVE_CREDENTIALS_JSON");
+  const agentMeter = parseAgentMeterConfig(optionalJson(environment.PRIORSEAL_AGENT_METER_JSON, "PRIORSEAL_AGENT_METER_JSON"));
   const erc4337EntryPoints = parseErc4337EntryPoints(optionalJson(environment.PRIORSEAL_ERC4337_ENTRY_POINTS_JSON, "PRIORSEAL_ERC4337_ENTRY_POINTS_JSON"));
   const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, "PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON"));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, "PRIORSEAL_SAFE_4337_TRUST_JSON"));
@@ -43,6 +45,7 @@ function loadRuntimeConfig(environment = process.env) {
   const config = {
     environment: runtimeEnvironment,
     ...archiveCredentials ? { archiveCredentials } : {},
+    ...agentMeter ? { agentMeter } : {},
     erc4337EntryPoints,
     eip7702Delegates,
     safe4337Trust,

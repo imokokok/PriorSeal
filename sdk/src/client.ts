@@ -22,6 +22,12 @@ import type {
   AuthorizationCheckpoint,
   SolanaMessageWallet,
   DeploymentCapabilities,
+  AgentServiceAccount,
+  AgentUsage,
+  AgentActionInput,
+  AgentActionResult,
+  AuthorizationFlowResult,
+  Eip712AuthorizationSigner,
 } from './types.js'
 import { buildExactCallIntent } from './exact-call.js'
 import { validatePriorSealResponse } from './response-validation.js'
@@ -81,6 +87,17 @@ export class PriorSealClient {
 
   capabilities(options?: RequestOptions) {
     return this.request<DeploymentCapabilities>('/v1/capabilities', {}, options)
+  }
+
+  /** Read the balance and status of the configured Agent service credential. */
+  agentAccount(options?: RequestOptions) {
+    return this.request<{ account: AgentServiceAccount; requestId?: string }>('/v1/agent-accounts/self', {}, options)
+  }
+
+  /** Read the credential holder's recent debit ledger; this cannot grant execution authority. */
+  agentUsage(limit = 25, options?: RequestOptions) {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new TypeError('agent usage limit must be an integer from 1 through 100')
+    return this.request<{ items: AgentUsage[]; requestId?: string }>(`/v1/agent-accounts/self/usage?limit=${limit}`, {}, options)
   }
 
   createIntent(intent: Intent, options?: RequestOptions) {
@@ -295,6 +312,46 @@ export class PriorSealClient {
     return { account, signature, prepared, accepted, checkpoint: state, authorizationWindow: { checkedAt, active: prepared.authorization.notBefore <= checkedAt && checkedAt < prepared.authorization.expiresAt, expiresAt: prepared.authorization.expiresAt }, nextAction: checkedAt >= prepared.authorization.expiresAt ? 'REVIEW_ACCEPTED_HISTORY_DO_NOT_EXECUTE' as const : checkedAt < prepared.authorization.notBefore ? 'WAIT_UNTIL_AUTHORIZATION_WINDOW' as const : 'CHECK_DISPATCH_POLICY' as const }
   }
 
+  /**
+   * Authorize from a Node or agent runtime without giving the SDK a private
+   * key. The supplied signer remains the principal-controlled signature
+   * boundary; the SDK verifies the returned signature before acceptance.
+   */
+  async authorizeWithEip712Signer(input: WalletAuthorizationInput, signer: Eip712AuthorizationSigner, options: AuthorizationFlowOptions = {}): Promise<AuthorizationFlowResult> {
+    if (!signer || typeof signer.account !== 'string' || typeof signer.signTypedData !== 'function') throw new PriorSealApiError('The authorization signer is not usable', { code: 'WALLET_ACCOUNT_UNAVAILABLE' })
+    const account = signer.account.toLowerCase()
+    if (!/^0x[0-9a-f]{40}$/.test(account)) throw new PriorSealApiError('The authorization signer did not provide a valid EVM account', { code: 'WALLET_ACCOUNT_UNAVAILABLE' })
+    if (input.account && input.account.toLowerCase() !== account) throw new PriorSealApiError('The authorization signer does not match the requested account', { code: 'WALLET_ACCOUNT_MISMATCH', details: { expectedAccount: input.account, signerAccount: account } })
+    const provider: Eip1193Provider = {
+      async request({ method, params }) {
+        if (method === 'eth_requestAccounts') return [account]
+        if (method !== 'eth_signTypedData_v4' || String(params?.[0] ?? '').toLowerCase() !== account || typeof params?.[1] !== 'string') throw new PriorSealApiError('PriorSeal requested an unexpected authorization signer operation', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
+        const typedData = safeJson(params[1])
+        if (!isRecord(typedData)) throw new PriorSealApiError('PriorSeal prepared invalid EIP-712 typed data', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
+        const signature = await signer.signTypedData(typedData)
+        if (typeof signature !== 'string') throw new PriorSealApiError('The authorization signer did not return an EVM signature', { code: 'WALLET_SIGNATURE_UNAVAILABLE' })
+        return signature
+      },
+    }
+    return this.authorizeWithWallet({ ...input, account }, provider, options)
+  }
+
+  /**
+   * Runs one bounded agent action without taking custody of either principal or
+   * executor keys. `submit` is invoked once only; callers must reconcile an
+   * uncertain submission rather than retrying it automatically.
+   */
+  async runAgentAction(input: AgentActionInput, options: AuthorizationFlowOptions & WaitForObservationOptions = {}): Promise<AgentActionResult> {
+    const authorization = await this.authorizeWithEip712Signer(input.authorization, input.signer, options)
+    if (!authorization.authorizationWindow.active) throw new PriorSealApiError('Accepted authorization is not active for agent submission', { code: 'AUTHORIZATION_NOT_ACTIVE', details: { nextAction: authorization.nextAction, authorizationId: authorization.accepted.authorization.authorizationId } })
+    const chainId = Number(authorization.accepted.authorization.intent.chainId)
+    if (!Number.isSafeInteger(chainId) || chainId < 1) throw new PriorSealApiError('Agent actions signed with EIP-712 require an EVM chain identifier', { code: 'INVALID_CHAIN_ID' })
+    const submitted = await input.submit({ authorization: authorization.accepted.authorization, acceptance: authorization.accepted, prepared: authorization.prepared })
+    if (!submitted || typeof submitted.txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(submitted.txHash)) throw new PriorSealApiError('The agent executor did not return a transaction hash', { code: 'AGENT_SUBMISSION_INVALID' })
+    const execution = await this.observeExecutionUntilFinal({ authorizationId: authorization.accepted.authorization.authorizationId, chainId, txHash: submitted.txHash, confirmations: input.confirmations ?? 0 }, options)
+    return { authorization, execution }
+  }
+
   async authorizeWithSolanaWallet(input: WalletAuthorizationInput, wallet: SolanaMessageWallet, options: RequestOptions = {}) {
     const { SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } = await import('./solana-transaction.js')
     if (input.intent.executionProfile !== SOLANA_TRANSACTION_PROFILE || input.intent.chainId !== 0 || input.intent.chainRef !== SOLANA_MAINNET_CAIP2 || !input.intent.solanaTransaction) {
@@ -429,6 +486,10 @@ function requireCrypto() {
 
 function safeJson(value: string): unknown {
   try { return JSON.parse(value) } catch { throw new PriorSealApiError('PriorSeal API returned invalid JSON', { code: 'INVALID_RESPONSE' }) }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function encodeBase64(value: Uint8Array): string {

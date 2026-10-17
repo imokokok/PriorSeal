@@ -1,5 +1,24 @@
 export type ChainId = 1 | 8453 | 84532 | 42161
 
+/** A service-credit account. It pays only for PriorSeal API usage. */
+export type AgentServiceAccount = {
+  accountId: string
+  provisionedCredits: string
+  remainingCredits: string
+  status: 'active' | 'revoked'
+}
+
+/** A non-secret debit record for the credential currently held by the Agent. */
+export type AgentUsage = {
+  usageId: string
+  accountId: string
+  routeId: string
+  requestKey: string
+  credits: string
+  reservedAt: number
+  state: 'RESERVED' | 'CONSUMED' | 'RELEASED'
+}
+
 export type ContextCommitment = { namespace: string; algorithm: 'keccak256' | 'sha256'; digest: string }
 export type ContextCommitmentMatch = {
   matched: boolean
@@ -299,6 +318,16 @@ export type WalletAuthorizationInput = {
   audience?: string
 }
 
+/**
+ * A principal-controlled EIP-712 signing boundary for a headless agent.
+ * The signer may be a wallet bridge, hardware-backed service, Safe module, or
+ * another reviewed authority. It is not an executor private key.
+ */
+export type Eip712AuthorizationSigner = {
+  account: string
+  signTypedData: (typedData: Record<string, unknown>) => Promise<string>
+}
+
 export type PreparedAuthorization = { authorization: Authorization; typedData: Record<string, unknown>; requestId?: string }
 export type AcceptedAuthorization = { authorization: Authorization; acceptance: AuthorizationReceipt; policyEvidence?: PolicyEvidence; timestampEvidence?: TimestampEvidence; witnessEvidence?: WitnessEvidence; policy: { allowed: boolean; reasonCodes: string[]; policyId: string | null }; requestId?: string }
 export type ObservationResult = { observation: Execution; receipt: Receipt | null; authorizationAssociation?: 'CANDIDATE' | 'FINAL' | 'UNRELATED'; executionCorrelation?: 'MATCH' | 'MISMATCH' | 'INDETERMINATE'; verification?: VerificationResult; observationJob?: ObservationJob; requestId?: string }
@@ -333,6 +362,34 @@ export type AuthorizationFlowOptions = RequestOptions & {
   checkpoint?: AuthorizationCheckpoint
   onCheckpoint?: (checkpoint: AuthorizationCheckpoint) => void | Promise<void>
 }
+
+export type AuthorizationFlowResult = {
+  account: string
+  signature: string
+  prepared: PreparedAuthorization
+  accepted: AcceptedAuthorization
+  checkpoint: AuthorizationCheckpoint
+  authorizationWindow: { checkedAt: number; active: boolean; expiresAt: number }
+  nextAction: 'CHECK_DISPATCH_POLICY' | 'WAIT_UNTIL_AUTHORIZATION_WINDOW' | 'REVIEW_ACCEPTED_HISTORY_DO_NOT_EXECUTE'
+}
+
+/**
+ * The SDK supplies only signed public authorization artifacts to this callback.
+ * The integrator owns transaction signing and submission and must not retry an
+ * uncertain submission as if it were absent.
+ */
+export type AgentActionInput = {
+  authorization: WalletAuthorizationInput
+  signer: Eip712AuthorizationSigner
+  submit: (input: { authorization: Authorization; acceptance: AcceptedAuthorization; prepared: PreparedAuthorization }) => Promise<{ txHash: string }>
+  confirmations?: number
+}
+
+export type AgentActionResult = {
+  authorization: AuthorizationFlowResult
+  execution: ObservationResult
+}
+
 export type DeploymentCapabilities = {
   schema: 'priorseal.capabilities.v1'
   issuer: string
@@ -354,4 +411,8 @@ export type DeploymentCapabilities = {
   readinessScope: string
   checkedAt: number
   archive: { enabled: boolean; retention: string; scope: string }
+  payments?: {
+    x402: { configured: boolean; networks: { family: string; network: string; chainId: number; name: string; asset: string; assetName: string }[]; routes: { method: string; path: string; description: string; price: string }[] }
+    agentCredits: { configured: boolean; creditUnitUsd: string | null; credentialHeader: 'x-priorseal-agent-key' | null; accountStatusPath: '/v1/agent-accounts/self' | null; usagePath: '/v1/agent-accounts/self/usage' | null; routes: { routeId: string; method: 'GET' | 'POST'; path: string; credits: string; priceUsd: string }[] }
+  }
 }

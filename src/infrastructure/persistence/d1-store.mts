@@ -4,6 +4,7 @@ import { archivePage, type ArchiveAccess, type ArchiveQuery } from '../../applic
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from '../../domain/merkle-log.mjs';
 import { assertReceiptIdentity } from './receipt-identity.mjs';
 import { assertX402PaymentLedgerEvent, type X402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
+import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation } from '../../application/commerce/agent-meter.mjs';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedWorkerObservation } from './persisted-records.mjs';
@@ -19,6 +20,9 @@ type D1Value = string | number | boolean | null;
 type LogRow = { sequence: number; authorization_hash: string; accepted_at: number; previous_entry_hash: string | null; entry_hash: string };
 type AuthorizationRow = { authorization_json: string; acceptance_json: string; policy_json: string; timestamp_evidence_json: string | null; witness_evidence_json: string | null; status: string; bound_tx_hash: string | null; uses: number };
 type JobRow = { job_id: string; idempotency_key: string; input_json: string; state: ObservationJob['state']; attempts: number; next_attempt_at: number; observation_json: string | null; result_json: string | null; error_json: string | null; created_at: number; lease_token: string | null; lease_expires_at: number | null };
+type AgentUsageRow = { usage_id: string; account_id: string; route_id: string; request_key: string; credits: number; reserved_at: number; state: AgentUsageReservation['state'] };
+type AgentMeterAccountRow = { account_id: string; credential_hash: string; provisioned_credits: number; remaining_credits: number; status: AgentMeterAccount['status'] };
+type AgentCreditOperationRow = { operation_id: string; account_id: string; request_key: string; credits: number; reference: string | null; credited_at: number };
 
 const json = (value: unknown): string | null => value == null ? null : JSON.stringify(value);
 const parsed = (value: string | null | undefined, label: string): unknown => value == null ? null : persistedJson(value, label);
@@ -49,6 +53,9 @@ function jobRecord(row: JobRow, includeLease = false): ObservationJob {
     ...(includeLease && row.lease_token ? { leaseToken: row.lease_token } : {}),
   };
 }
+function agentUsageRecord(row: AgentUsageRow): AgentUsageReservation { return { usageId: row.usage_id, accountId: row.account_id, routeId: row.route_id, requestKey: row.request_key, credits: String(row.credits), reservedAt: Number(row.reserved_at), state: row.state }; }
+function creditOperationRecord(row: AgentCreditOperationRow): AgentCreditOperation { return { operationId: row.operation_id, accountId: row.account_id, requestKey: row.request_key, credits: String(row.credits), reference: row.reference, creditedAt: Number(row.credited_at) }; }
+function agentAccountState(row: AgentMeterAccountRow) { return { accountId: row.account_id, provisionedCredits: String(row.provisioned_credits), remainingCredits: String(row.remaining_credits), status: row.status }; }
 /** D1's batch is the transaction boundary; concurrent log appends retry after a unique-sequence collision. */
 export function createD1Store(database: D1Database) {
   if (!database?.prepare || !database?.batch) throw new TypeError('createD1Store requires a D1 binding');
@@ -130,6 +137,58 @@ export function createD1Store(database: D1Database) {
       if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError('Invalid x402 payment ledger identifier');
       const rows = await all<{ event_json: string }>("SELECT event_json FROM x402_payment_ledger_events WHERE ledger_id=? ORDER BY occurred_at,CASE event_type WHEN 'PAYMENT_AUTHORIZED' THEN 0 WHEN 'REFUND_RECORDED' THEN 2 ELSE 1 END,event_id", ledgerId);
       return rows.map(row => assertX402PaymentLedgerEvent(persistedJson(row.event_json, 'x402 payment ledger event')));
+    },
+    async provisionAgentMeterAccount(input: AgentMeterAccount) {
+      const credits = Number(input.provisionedCredits);
+      await run(`INSERT INTO agent_meter_accounts (account_id,credential_hash,provisioned_credits,remaining_credits,status) VALUES (?,?,?,?,?) ON CONFLICT(account_id) DO UPDATE SET remaining_credits=agent_meter_accounts.remaining_credits+MAX(0,excluded.provisioned_credits-agent_meter_accounts.provisioned_credits),provisioned_credits=MAX(agent_meter_accounts.provisioned_credits,excluded.provisioned_credits)`, input.accountId, input.credentialHash, credits, credits, input.status);
+    },
+    async createAgentMeterAccount(input: AgentMeterAccount) { return Boolean(await first<{ account_id: string }>('INSERT INTO agent_meter_accounts (account_id,credential_hash,provisioned_credits,remaining_credits,status) VALUES (?,?,?,?,?) ON CONFLICT(account_id) DO NOTHING RETURNING account_id', input.accountId, input.credentialHash, Number(input.provisionedCredits), Number(input.provisionedCredits), input.status)); },
+    async findAgentMeterAccountByCredentialHash(credentialHash: string) { const row = await first<AgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE credential_hash=?', credentialHash); return row ? { accountId: row.account_id, credentialHash: row.credential_hash, provisionedCredits: String(row.provisioned_credits), status: row.status } : null; },
+    async getAgentMeterAccount(accountId: string) { const row = await first<AgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=?', accountId); return row ? agentAccountState(row) : null; },
+    async creditAgentMeterAccount(input: AgentCreditOperation) {
+      const existing = await first<AgentCreditOperationRow>('SELECT * FROM agent_meter_credit_operations WHERE account_id=? AND request_key=?', input.accountId, input.requestKey);
+      if (existing) {
+        if (String(existing.credits) !== input.credits || existing.reference !== input.reference) throw failed('IDEMPOTENCY_CONFLICT', 'Agent credit idempotency key was reused for a different operation');
+        const account = await first<AgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=?', input.accountId);
+        return account ? { replay: true, operation: creditOperationRecord(existing), account: agentAccountState(account) } : null;
+      }
+      if (!await first<AgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=?', input.accountId)) return null;
+      await batch([
+        statement('INSERT INTO agent_meter_credit_operations (operation_id,account_id,request_key,credits,reference,credited_at) VALUES (?,?,?,?,?,?) ON CONFLICT(account_id,request_key) DO NOTHING', input.operationId, input.accountId, input.requestKey, Number(input.credits), input.reference, input.creditedAt),
+        statement('UPDATE agent_meter_accounts SET provisioned_credits=provisioned_credits+?,remaining_credits=remaining_credits+? WHERE account_id=? AND changes()=1', Number(input.credits), Number(input.credits), input.accountId),
+      ]);
+      const operation = await first<AgentCreditOperationRow>('SELECT * FROM agent_meter_credit_operations WHERE account_id=? AND request_key=?', input.accountId, input.requestKey);
+      const account = await first<AgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=?', input.accountId);
+      if (!operation || !account) return null;
+      if (String(operation.credits) !== input.credits || operation.reference !== input.reference) throw failed('IDEMPOTENCY_CONFLICT', 'Agent credit idempotency key was reused for a different operation');
+      return { replay: operation.operation_id !== input.operationId, operation: creditOperationRecord(operation), account: agentAccountState(account) };
+    },
+    async revokeAgentMeterAccount(accountId: string) { const row = await first<AgentMeterAccountRow>("UPDATE agent_meter_accounts SET status='revoked' WHERE account_id=? RETURNING *", accountId); return row ? agentAccountState(row) : null; },
+    async listAgentMeterUsage(accountId: string, limit: number) { const rows = await all<AgentUsageRow>('SELECT * FROM agent_meter_usage WHERE account_id=? ORDER BY reserved_at DESC,usage_id DESC LIMIT ?', accountId, limit); return rows.map(agentUsageRecord); },
+    async reserveAgentUsage(input: Omit<AgentUsageReservation, 'usageId' | 'state'>) {
+      const existing = await first<AgentUsageRow>('SELECT * FROM agent_meter_usage WHERE account_id=? AND request_key=?', input.accountId, input.requestKey);
+      if (existing) {
+        if (existing.route_id !== input.routeId || String(existing.credits) !== input.credits) throw failed('IDEMPOTENCY_CONFLICT', 'Agent request key was reused for a different metered route');
+        return { kind: 'replayed' as const, reservation: agentUsageRecord(existing) };
+      }
+      const usageId = `amu_${hashJson({ accountId: input.accountId, requestKey: input.requestKey }).slice(0, 32)}`;
+      const credits = Number(input.credits);
+      await batch([
+        statement(`UPDATE agent_meter_accounts SET remaining_credits=remaining_credits-? WHERE account_id=? AND status='active' AND remaining_credits>=? AND NOT EXISTS (SELECT 1 FROM agent_meter_usage WHERE account_id=? AND request_key=?)`, credits, input.accountId, credits, input.accountId, input.requestKey),
+        statement(`INSERT INTO agent_meter_usage (usage_id,account_id,route_id,request_key,credits,reserved_at,state) SELECT ?,?,?,?,?,?,'RESERVED' WHERE changes()=1`, usageId, input.accountId, input.routeId, input.requestKey, credits, input.reservedAt),
+      ]);
+      const reserved = await first<AgentUsageRow>('SELECT * FROM agent_meter_usage WHERE account_id=? AND request_key=?', input.accountId, input.requestKey);
+      return reserved ? { kind: 'reserved' as const, reservation: agentUsageRecord(reserved) } : { kind: 'insufficient' as const };
+    },
+    async settleAgentUsage(usageId: string, outcome: 'CONSUMED' | 'RELEASED') {
+      if (!/^amu_[0-9a-f]{32}$/.test(usageId)) throw new TypeError('Invalid agent metering usage identifier');
+      if (outcome === 'CONSUMED') await run(`UPDATE agent_meter_usage SET state='CONSUMED' WHERE usage_id=? AND state='RESERVED'`, usageId);
+      else await batch([
+        statement(`UPDATE agent_meter_accounts SET remaining_credits=remaining_credits+(SELECT credits FROM agent_meter_usage WHERE usage_id=? AND state='RESERVED') WHERE account_id=(SELECT account_id FROM agent_meter_usage WHERE usage_id=? AND state='RESERVED')`, usageId, usageId),
+        statement(`UPDATE agent_meter_usage SET state='RELEASED' WHERE usage_id=? AND state='RESERVED'`, usageId),
+      ]);
+      const saved = await first<AgentUsageRow>('SELECT * FROM agent_meter_usage WHERE usage_id=?', usageId);
+      return saved ? agentUsageRecord(saved) : null;
     },
     async saveArchiveEntry(entry: ArchiveEntry) {
       await run(`INSERT INTO project_evidence_archive (project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,environment,entry_id) DO NOTHING`, entry.projectId, entry.environment, entry.id, entry.artifactHash, entry.kind, entry.createdAt, entry.txHash, entry.authorizationId, entry.status, entry.supersedesId, json(entry));

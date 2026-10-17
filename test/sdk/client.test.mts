@@ -43,6 +43,28 @@ test('SDK rejects malformed successful API responses before exposing typed value
   await assert.rejects(health.health(), { code: 'INVALID_RESPONSE' });
 });
 
+test('SDK reads the Agent service account without turning it into execution authority', async () => {
+  const calls: string[] = [];
+  const client = createPriorSealClient({ headers: { 'x-priorseal-agent-key': 'service-credential' }, fetch: async (url, init) => {
+    calls.push(String(url));
+    assert.equal(new Headers(init?.headers).get('x-priorseal-agent-key'), 'service-credential');
+    return response({ account: { accountId: 'team:alpha', provisionedCredits: '10', remainingCredits: '7', status: 'active' } });
+  } });
+  assert.equal((await client.agentAccount()).account.remainingCredits, '7');
+  assert.deepEqual(calls, ['/v1/agent-accounts/self']);
+});
+
+test('SDK reads only the service credential usage ledger and validates every entry', async () => {
+  const client = createPriorSealClient({ fetch: async (url) => {
+    assert.equal(String(url), '/v1/agent-accounts/self/usage?limit=1');
+    return response({ items: [{ usageId: 'amu_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', accountId: 'team:alpha', routeId: 'prepare', requestKey: 'request-1', credits: '3', reservedAt: 1000, state: 'CONSUMED' }] });
+  } });
+  assert.equal((await client.agentUsage(1)).items[0]?.state, 'CONSUMED');
+  assert.throws(() => client.agentUsage(101), /1 through 100/);
+  const malformed = createPriorSealClient({ fetch: async () => response({ items: [{ usageId: 'amu_1', accountId: 'team:alpha', routeId: 'prepare', requestKey: 'request-1', credits: '3', reservedAt: 1000, state: 'BAD' }] }) });
+  await assert.rejects(malformed.agentUsage(), { code: 'INVALID_RESPONSE' });
+});
+
 test('SDK rejects malformed capability claims instead of exposing them as typed deployment facts', async () => {
   const valid = {
     schema: 'priorseal.capabilities.v1', issuer: 'priorseal', audience: 'priorseal',
@@ -127,6 +149,45 @@ test('SDK wallet helper prepares, signs and accepts an authorization', async (t)
   assert.equal(requests.length, 2);
   assert.equal(requests[1]?.body.signature, flow.signature);
   assert.match(generateAuthorizationNonce(), /^0x[0-9a-f]{64}$/);
+});
+
+test('SDK lets a headless agent use a principal-controlled EIP-712 signer and observes one submitted action', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_500_000 });
+  const signer = privateKeyToAccount(generatePrivateKey());
+  const account = signer.address.toLowerCase();
+  const txHash = `0x${'9'.repeat(64)}`;
+  const authorization = buildAuthorization({ schema: 'priorseal.authorization.v2', domain: 'priorseal/authorization/v2', intent: { intentId: 'agent-action-1', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '1', sender: account, recipient: `0x${'b'.repeat(40)}`, validUntil: 2_000 }, principal: { type: 'user', id: 'user:agent', account }, authorizer: { type: 'eip712', address: account }, delegate: { agentId: 'agent:1', executor: account }, issuedAt: 1_000, notBefore: 1_000, expiresAt: 2_000, authorizationNonce: `0x${'3'.repeat(64)}`, maxUses: '1', audience: 'priorseal', policyHash: `0x${'0'.repeat(64)}` });
+  const calls: { url: string; body: Record<string, unknown> }[] = [];
+  let submissions = 0;
+  const client = createPriorSealClient({ fetch: async (url, init) => {
+    const body = parseRequestBody(init?.body);
+    calls.push({ url: String(url), body });
+    if (String(url).endsWith('/prepare')) return response({ authorization, typedData: JSON.parse(JSON.stringify(authorizationTypedData(authorization), (_key, value) => typeof value === 'bigint' ? value.toString() : value)) });
+    if (String(url).endsWith('/authorizations')) return response({ authorization: body, acceptance: { authorizationId: authorization.authorizationId, status: 'ACCEPTED' }, policy: { allowed: true, reasonCodes: [], policyId: null } }, 201);
+    return response({ observation: { chainId: 8453, txHash, status: 'CONFIRMED' }, receipt: null });
+  } });
+  const result = await client.runAgentAction({
+    authorization: { intent: authorization.intent as Intent, principal: { type: 'user', id: 'user:agent' }, delegate: authorization.delegate, issuedAt: 1_000, authorizationNonce: authorization.authorizationNonce },
+    signer: { account, signTypedData: typedData => signer.signTypedData(typedData as Parameters<typeof signer.signTypedData>[0]) },
+    async submit({ authorization: accepted }) {
+      submissions += 1;
+      assert.equal(accepted.authorizationId, authorization.authorizationId);
+      assert.match(accepted.signature ?? '', /^0x[0-9a-f]{130}$/);
+      return { txHash };
+    },
+    confirmations: 12,
+  });
+  assert.equal(submissions, 1);
+  assert.equal(result.authorization.accepted.authorization.authorizationId, authorization.authorizationId);
+  assert.equal(result.execution.observation.txHash, txHash);
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls[2]?.body, { authorizationId: authorization.authorizationId, chainId: 8453, txHash, confirmations: 12 });
+});
+
+test('SDK does not let an agent substitute a signer account for the requested principal', async () => {
+  const signer = privateKeyToAccount(generatePrivateKey());
+  const client = createPriorSealClient({ fetch: async () => { throw new Error('No HTTP request should be made'); } });
+  await assert.rejects(client.authorizeWithEip712Signer({ intent: { intentId: 'mismatch', chainId: 8453, action: 'TRANSFER', asset: 'eip155:8453/native', amount: '1', sender: signer.address, recipient: `0x${'b'.repeat(40)}`, validUntil: 2_000 }, principal: { type: 'user', id: 'user:agent' }, delegate: { agentId: 'agent:1', executor: signer.address }, account: `0x${'c'.repeat(40)}` }, { account: signer.address, signTypedData: async () => '0x' }), { code: 'WALLET_ACCOUNT_MISMATCH' });
 });
 
 test('SDK builds canonical exact-call intents with external context commitments', () => {
