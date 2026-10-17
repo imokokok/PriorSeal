@@ -58,6 +58,7 @@ const onDemandOperationSources = [
   "scripts/production-smoke.mts",
   "scripts/rotation-impact.mts",
   "scripts/x402-production-readiness.mts",
+  "scripts/x402-evidence-pack.mts",
   "scripts/x402-staging-bundle-rehearsal.mts",
   "scripts/x402-staging-receipt-fixture.mts",
   "scripts/x402-staging-paid-rehearsal.mts",

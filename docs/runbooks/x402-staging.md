@@ -156,6 +156,7 @@ other request target, redirect, quote change, or second signed request:
 ```sh
 npm run x402:staging:bundle -- \
   --receipt-id psr_... \
+  --evidence-out /absolute/new/local-directory \
   --confirm-single-payment
 ```
 
@@ -176,6 +177,16 @@ Reconcile that evidence with its own terminal `DELIVERED` ledger event; it is
 not evidence for the `/v1/version` settlement. Restore the normal staging
 authorization policy after a temporary fixture policy has served its single
 execution.
+
+`--evidence-out` is required and must name a new absolute directory outside
+the repository. The runner creates that directory with mode `0700` and writes
+each JSON artifact with mode `0600`: the returned verification bundle, a
+sanitised settlement summary, the payment challenge hash, local verification
+results, and a SHA-256 manifest. It refuses to persist raw
+`PAYMENT-SIGNATURE` material, payment payloads, or private-key fields. Use a
+retained local evidence volume; do not point it at Git, cloud-sync folders, or
+an existing directory. The destination is allocated before a signed payment
+request is possible, so a bad output path fails before settlement.
 
 The run is a failure—not a reason to retry automatically—when settlement is
 unknown, the resource was withheld, a transaction or amount differs, payment
