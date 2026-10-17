@@ -34,17 +34,18 @@ export function PageHeader({ eyebrow, title, children, actions }: { eyebrow?: st
 const nav = [
   { index: '01', key: 'overview', label: 'Overview', to: '/app', group: 'Workspace' },
   { index: '02', key: 'intent', label: 'New authorization', to: '/app/intents/new', group: 'Operate' },
-  { index: '03', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Operate' },
-  { index: '04', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence' },
-  { index: '05', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence' },
-  { index: '06', key: 'verify', label: 'Verify receipt', to: '/app/verify', group: 'Evidence' },
-  { index: '07', key: 'sdk', label: 'SDK integration', to: '/app/sdk', group: 'Developers' },
-  { index: '08', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Developers' },
-  { index: '09', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Developers' },
-  { index: '10', key: 'api', label: 'API reference', to: '/app/api', group: 'Developers' },
+  { index: '03', key: 'jupiter', label: 'Guarded Jupiter swap', to: '/app/jupiter-guarded-swap', group: 'Operate' },
+  { index: '04', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Operate' },
+  { index: '05', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence' },
+  { index: '06', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence' },
+  { index: '07', key: 'verify', label: 'Verify receipt', to: '/app/verify', group: 'Evidence' },
+  { index: '08', key: 'sdk', label: 'SDK integration', to: '/app/sdk', group: 'Developers' },
+  { index: '09', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Developers' },
+  { index: '10', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Developers' },
+  { index: '11', key: 'api', label: 'API reference', to: '/app/api', group: 'Developers' },
   ...(import.meta.env.DEV ? [
-    { index: '11', key: 'erc4337-pilot', label: 'Safe 4337 pilot', to: '/app/erc4337-pilot', group: 'Developers' },
-    { index: '12', key: 'eip7702-pilot', label: 'MetaMask 7702 pilot', to: '/app/eip7702-pilot', group: 'Developers' },
+    { index: '12', key: 'erc4337-pilot', label: 'Safe 4337 pilot', to: '/app/erc4337-pilot', group: 'Developers' },
+    { index: '13', key: 'eip7702-pilot', label: 'MetaMask 7702 pilot', to: '/app/eip7702-pilot', group: 'Developers' },
   ] : []),
 ]
 const AppShellContext = createContext(false)

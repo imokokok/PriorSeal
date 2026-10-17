@@ -2,7 +2,7 @@
 
 ## Core
 
-**Connect explicit authorization to observed EVM execution with independently verifiable evidence.**
+**Connect explicit authorization to observed EVM and Solana execution with independently verifiable evidence.**
 
 PriorSeal preserves the relationship between what a principal authorized before action and what was observed afterward. A portable receipt lets another party check signed permission, supported ordering evidence, execution state, and compliance with the authorization's bound fields.
 
@@ -42,15 +42,15 @@ that the subject action was authorized.
 ## Public copy
 
 - Homepage headline: **Authority, before action.**
-- Short description: **Authorization and execution evidence for agents—what was authorized, what was observed, and what an independent reviewer can verify.**
-- SDK description: **A TypeScript client for agents to prepare explicit authorization, observe EVM execution, and produce independently verifiable receipts.**
+- Short description: **Authorization and execution evidence for EVM and Solana agents—what was authorized, what was observed, and what an independent reviewer can verify.**
+- SDK description: **A TypeScript client for agents to prepare explicit authorization, observe EVM and Solana execution, and produce independently verifiable receipts.**
 
 ## Three independently selectable offers
 
 | Offer | Buyer need | Evidence scope |
 | --- | --- | --- |
 | Insight | Oracle transparency, monitoring, and risk assessment | Oracle observations and assessments; supported execution-price/fill evidence |
-| PriorSeal | Explicit authorization and execution accountability | Principal-signed permission, ordering evidence, observed EVM execution, and supported authorization compliance |
+| PriorSeal | Explicit authorization and execution accountability | Principal-signed permission, ordering evidence, observed EVM or Solana execution, and supported authorization compliance |
 | Insight + PriorSeal | Connect assessment, authorization, execution, and review | Linked original artifacts with separate keys, trust checks, and verification scopes |
 
 Combined description: **Oracle risk intelligence, explicit authorization, and verifiable execution evidence for onchain agents.**

@@ -168,6 +168,23 @@ call without granting any substitute execution authority.
 
 For Solana mainnet-beta, construct an intent from the fully compiled message and resolved address lookup table addresses, then authorize it with a wallet that supports off-chain Ed25519 message signing. The transaction's `recentBlockhash` is the bound nonce; `lastValidBlockHeight` is RPC metadata and is not represented as a signed message field. `hashSolanaTransactionMessage(message)` returns the SHA-256 hash of the exact legacy, v0, or v1 message bytes and can bind a pre-sign simulation to the same message. See the [Solana integration guide](https://github.com/imokokok/PriorSeal/blob/main/docs/integrations/solana.md) for a complete flow. The Solana wallet signer may be distinct from the transaction fee payer; the delegated executor must match the fee payer.
 
+### Jupiter Guarded Swap
+
+`createJupiterRouterClient()` obtains Jupiter Router's raw instructions;
+`prepareGuardedJupiterSwap()` enforces a program/amount/slippage/fee policy,
+durable input/output mint admission and a caller-visible output floor. It
+requires the host application to compile one exact self-paying Solana message,
+then checks every final instruction, account meta and byte against Jupiter's
+build before binding an Insight pre-sign simulation receipt. Use
+`reviewGuardedJupiterSwap()` to produce a non-secret signing-review record;
+`authorizeGuardedJupiterSwap()` revalidates the prepared object before it
+obtains the principal's message authorization;
+`observeGuardedJupiterSwap()` observes the one submitted signature. None of
+these functions signs or broadcasts a Solana transaction, accepts a gasless
+fee payer, or retries an altered transaction. See the [Jupiter Guarded Swap
+guide](../docs/integrations/jupiter-guarded-swap.md) for the integration
+contract and required controls.
+
 ## Independent local verification
 
 Supply `receipt` from your export and `keyRegistry` from a separately confirmed issuer configuration. The verifier does not establish key provenance for you.

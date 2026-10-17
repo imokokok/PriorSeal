@@ -6,6 +6,39 @@ export { validatePriorSealResponse } from './response-validation.js'
 export { buildExactCallIntent, parseExactCallTransaction, parseContextCommitments } from './exact-call.js'
 export { buildSolanaTransactionIntent, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
 export type { SolanaTransactionIntentInput } from './solana-transaction.js'
+export {
+  createInsightSolanaSimulationClient,
+  createJupiterRouterClient,
+  prepareGuardedJupiterSwap,
+  assertPreparedGuardedJupiterSwap,
+  reviewGuardedJupiterSwap,
+  authorizeGuardedJupiterSwap,
+  observeGuardedJupiterSwap,
+  solanaAssetIdForMint,
+  JupiterGuardedSwapError,
+  INSIGHT_SOLANA_SIMULATION_NAMESPACE,
+  JUPITER_ROUTER_BUILD_URL,
+  SOLANA_COMPUTE_BUDGET_PROGRAM,
+  SOLANA_NATIVE_WRAPPED_MINT,
+} from './jupiter-guarded-swap.js'
+export type {
+  AuthorizeGuardedJupiterSwapInput,
+  GuardedJupiterSwapRequest,
+  GuardedJupiterSwapReview,
+  InsightSolanaSimulation,
+  InsightSolanaSimulationClient,
+  InsightSolanaSimulationClientOptions,
+  JupiterGuardPolicy,
+  JupiterInstruction,
+  JupiterInstructionAccount,
+  JupiterRouterBuild,
+  JupiterRouterBuildRequest,
+  JupiterRouterClient,
+  JupiterRouterClientOptions,
+  JupiterTransactionCompiler,
+  PrepareGuardedJupiterSwapOptions,
+  PreparedGuardedJupiterSwap,
+} from './jupiter-guarded-swap.js'
 export { ERC4337_USER_OPERATION_NAMESPACE, ERC4337_EXECUTION_EVENT_NAMESPACE, ERC4337_EXECUTION_PROFILE, ERC4337_EIP7702_FACTORY_MARKER, computeERC4337EntryPointCodeHash, computeEIP7702AuthorizationTupleHash, decodeSafe4337CallData, parseERC4337UserOperationInput, bindERC4337UserOperation, buildERC4337UserOperationIntent, verifyERC4337ExecutionEvidence } from './erc4337.js'
 export type { ERC4337Version, ERC4337UserOperationInput, ERC4337AuthorizationIntentInput, ERC4337OperationBinding, ERC4337ExecutionEvidence, ERC4337EIP7702DelegationEvidence } from './erc4337.js'
 export { V3_SINGLE_SWAP_ABI, SWAP_APPROVAL_NAMESPACE, createV3SwapApproval, parseV3SwapApproval, decodeV3SingleSwap, assertV3SwapRouterCode, swapApprovalCommitment, assertV3SwapTransaction, buildV3SwapIntent, assertV3SwapAuthorization, compareV3SwapReplan } from './swap-authorization.js'
