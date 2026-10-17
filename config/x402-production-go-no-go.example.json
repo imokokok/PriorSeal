@@ -13,6 +13,10 @@
   },
   "payment": {
     "facilitatorUrl": "https://REPLACE_WITH_APPROVED_X402_V2_FACILITATOR",
+    "facilitatorAuth": {
+      "mode": "REPLACE_WITH_APPROVED_AUTH_MODE_OR_NULL",
+      "secretNames": ["REPLACE_WITH_APPROVED_FACILITATOR_SECRET_NAME"]
+    },
     "networks": ["eip155:8453"],
     "evmPayTo": "REPLACE_WITH_REVIEWED_PRODUCTION_PAYEE",
     "solanaPayTo": null,
