@@ -19,6 +19,15 @@ read-only `GET /v1/receipts/:receiptId/bundle` route. This is a commercial
 rollout decision, not a claim that the other supported payment rails are ready
 for customers.
 
+Choose the facilitator separately. A candidate is eligible only when its live
+`GET /supported` response contains the exact v2 tuple `exact` +
+`eip155:8453`, and its documented `POST /verify` and `POST /settle` request
+and response shapes are compatible with PriorSeal's x402 v2 lifecycle. Do not
+infer Base mainnet support from a similarly named testnet network, an example
+URL, or a marketing claim. In particular, do not treat the public
+`https://x402.org/facilitator` endpoint as a Base-mainnet default: verify the
+live response before every release.
+
 ## 2. Apply production prerequisites
 
 Before setting any `PRIORSEAL_X402_*` configuration, apply the x402 payment
@@ -32,7 +41,7 @@ Configure the reviewed values as production Worker environment variables and
 secrets. The minimum nonsecret values are:
 
 ```dotenv
-PRIORSEAL_X402_FACILITATOR_URL=https://x402.org/facilitator
+PRIORSEAL_X402_FACILITATOR_URL=https://REPLACE_WITH_APPROVED_X402_V2_FACILITATOR
 PRIORSEAL_X402_RESOURCE_ORIGIN=https://priorseal.xyz
 PRIORSEAL_X402_PAY_TO=0x...reviewed-mainnet-payee...
 PRIORSEAL_X402_NETWORKS=eip155:8453
@@ -43,6 +52,13 @@ PRIORSEAL_X402_ROUTES_JSON=[{"method":"GET","path":"/v1/receipts/:receiptId/bund
 Store any facilitator credentials only in
 `PRIORSEAL_X402_FACILITATOR_HEADERS_JSON` as a Worker secret. Never set
 `PRIORSEAL_X402_ENABLE_TESTNETS=true` in production.
+
+Before deployment, record the dated `/supported` response and the approved
+facilitator contract or service terms. If the facilitator needs headers, record
+only the secret name and the owner; never put a credential in the change record
+or this repository. A provider that exposes a proprietary merchant API rather
+than compatible `/verify` and `/settle` endpoints is a separate integration,
+not a drop-in value for `PRIORSEAL_X402_FACILITATOR_URL`.
 
 ## 3. Run the no-payment production x402 check
 

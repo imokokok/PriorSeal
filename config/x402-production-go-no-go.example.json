@@ -12,17 +12,17 @@
     }
   },
   "payment": {
-    "facilitatorUrl": "https://x402.org/facilitator",
+    "facilitatorUrl": "https://REPLACE_WITH_APPROVED_X402_V2_FACILITATOR",
     "networks": ["eip155:8453"],
     "evmPayTo": "REPLACE_WITH_REVIEWED_PRODUCTION_PAYEE",
     "solanaPayTo": null,
     "timeoutMs": 15000
   },
   "releaseGates": {
-    "x402PaymentLedgerMigration": "012_x402_payment_ledger.sql",
+    "x402PaymentLedgerMigration": "d1/migrations/0002_x402_payment_ledger.sql",
     "issuerPublicKeyFingerprint": "REPLACE_WITH_REVIEWED_PRODUCTION_ISSUER_KEY_SHA256",
     "approvedPayeeRecord": "REPLACE_WITH_CHANGE_RECORD",
-    "facilitatorApprovalRecord": "REPLACE_WITH_CHANGE_RECORD",
+    "facilitatorApprovalRecord": "REPLACE_WITH_CHANGE_RECORD__EXACT_SUPPORTED_VERIFY_SETTLE_PROOF",
     "rollbackOwner": "REPLACE_WITH_ON_CALL_OWNER",
     "paidSettlementAuthorized": false
   }
