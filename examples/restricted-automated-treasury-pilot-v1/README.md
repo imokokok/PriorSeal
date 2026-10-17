@@ -46,6 +46,14 @@ npm run verify:restricted-automation-pilot -- \
 
 The verifier refuses to establish trust from the key registry carried inside the Evidence Pack. In a real pilot, the customer and independent reviewer must pin the issuer key through their own approved channel before they use the package.
 
+## Run a private staging pilot
+
+For a reusable private pilot procedure—scope validation, role separation,
+staging acceptance checks, independent Evidence Pack verification, and delivery
+recording—use [the pilot run pack](./PILOT-RUN-PACK.md). It adds no public
+design-partner page, intake form, or marketing workflow. Keep all completed
+scope and delivery records in a customer-controlled private location.
+
 ## Production handoff criteria
 
 This is a reusable local acceptance drill, not a production integration. Before a customer operation is in scope, fix the following in that customer's environment:
