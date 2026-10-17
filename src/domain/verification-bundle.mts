@@ -6,10 +6,10 @@ export const VERIFICATION_BUNDLE_TRUST = Object.freeze({
   notice: 'Bundled keys are discovery metadata, not an independent trust anchor.',
 });
 
-type BuildVerificationBundleInput<R, K> = { receipt: R; keyRegistry: K; assembledAt?: number };
-type VerificationBundle<R, K> = { schema: typeof VERIFICATION_BUNDLE_SCHEMA; receipt: R; keyRegistry: K; assembledAt: number; trust: typeof VERIFICATION_BUNDLE_TRUST; bundleHash: string };
+type BuildVerificationBundleInput<R, K> = { receipt: R; keyRegistry: K; assembledAt?: number; paymentEvidence?: unknown };
+type VerificationBundle<R, K> = { schema: typeof VERIFICATION_BUNDLE_SCHEMA; receipt: R; keyRegistry: K; assembledAt: number; trust: typeof VERIFICATION_BUNDLE_TRUST; paymentEvidence?: unknown; bundleHash: string };
 
-export function buildVerificationBundle<R, K>({ receipt, keyRegistry, assembledAt = Math.floor(Date.now() / 1000) }: BuildVerificationBundleInput<R, K>): VerificationBundle<R, K> {
+export function buildVerificationBundle<R, K>({ receipt, keyRegistry, assembledAt = Math.floor(Date.now() / 1000), paymentEvidence }: BuildVerificationBundleInput<R, K>): VerificationBundle<R, K> {
   if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) throw new TypeError('receipt must be an object');
   const registry = keyRegistry as { schema?: unknown; keys?: unknown } | null | undefined;
   if (!registry || registry.schema !== 'priorseal.keys.v1' || !Array.isArray(registry.keys)) throw new TypeError('keyRegistry must be a PriorSeal key registry');
@@ -20,6 +20,7 @@ export function buildVerificationBundle<R, K>({ receipt, keyRegistry, assembledA
     keyRegistry,
     assembledAt,
     trust: VERIFICATION_BUNDLE_TRUST,
+    ...(paymentEvidence === undefined ? {} : { paymentEvidence }),
   };
   return { ...unsigned, bundleHash: hashJson(unsigned) };
 }

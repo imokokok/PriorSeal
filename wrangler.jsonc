@@ -91,7 +91,15 @@
         "PRIORSEAL_DATABASE_BACKEND": "d1",
         "PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS": "false",
         "PRIORSEAL_CORS_ORIGINS": "",
-        "PRIORSEAL_TRUST_PROXY": "true"
+        "PRIORSEAL_TRUST_PROXY": "true",
+        "PRIORSEAL_X402_FACILITATOR_URL": "https://x402.org/facilitator",
+        "PRIORSEAL_X402_RESOURCE_ORIGIN": "https://priorseal-staging.priorseal.workers.dev",
+        "PRIORSEAL_X402_PAY_TO": "0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231",
+        "PRIORSEAL_X402_ENABLE_TESTNETS": "true",
+        "PRIORSEAL_X402_NETWORKS": "eip155:84532",
+        "PRIORSEAL_X402_STAGING_OBSERVATION_NETWORKS": "eip155:84532",
+        "PRIORSEAL_X402_TIMEOUT_MS": "15000",
+        "PRIORSEAL_X402_ROUTES_JSON": "[{\"method\":\"GET\",\"path\":\"/v1/receipts/:receiptId/bundle\",\"description\":\"Staging x402 receipt-bundle rehearsal\",\"price\":\"$0.01\"}]"
       },
       "secrets": {
         "required": [

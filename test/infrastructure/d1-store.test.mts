@@ -4,9 +4,29 @@ import { createD1Store } from '../../src/infrastructure/persistence/d1-store.mjs
 import { createMemoryStore } from '../../src/infrastructure/persistence/memory-store.mjs';
 import { archiveQuery, type ArchiveAccess } from '../../src/application/archive/evidence-archive.mjs';
 import type { ObservationJob } from '../../src/application/observations/observation-worker.mjs';
+import { buildX402PaymentLedgerEvent } from '../../src/domain/x402-payment-ledger.mjs';
 import { testD1 } from '../support/d1.mjs';
 
 const txHash = `0x${'a'.repeat(64)}`;
+const x402LedgerContext = {
+  payload: { x402Version: 2 as const, accepted: { scheme: 'exact' as const, network: 'eip155:8453', amount: '10000', asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', payTo: `0x${'b'.repeat(40)}`, maxTimeoutSeconds: 300, extra: { name: 'USD Coin', version: '2' } }, payload: { opaque: 'payment' } },
+  requirement: { scheme: 'exact' as const, network: 'eip155:8453', amount: '10000', asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', payTo: `0x${'b'.repeat(40)}`, maxTimeoutSeconds: 300, extra: { name: 'USD Coin', version: '2' } },
+};
+
+test('D1 persists privacy-minimised x402 delivery events idempotently', async () => {
+  const fixture = testD1();
+  try {
+    const store = createD1Store(fixture.database);
+    const event = buildX402PaymentLedgerEvent({
+      type: 'DELIVERED', context: x402LedgerContext, resourceUrl: 'https://api.example.test/v1/receipts/psr_1/bundle', occurredAt: 1_800_000_000,
+      responseStatus: 200, responseBody: { bundleHash: 'a'.repeat(64) }, settlement: { success: true, network: 'eip155:8453', transaction: `0x${'1'.repeat(64)}`, amount: '10000' }, settlementAttempts: 1,
+    });
+    assert.deepEqual(await store.appendX402PaymentLedgerEvent(event), event);
+    assert.deepEqual(await store.appendX402PaymentLedgerEvent(event), event);
+    assert.deepEqual(await store.listX402PaymentLedgerEvents(event.ledgerId), [event]);
+    assert.equal(String(fixture.sqlite.prepare('SELECT event_json FROM x402_payment_ledger_events').get()?.event_json).includes('"opaque"'), false);
+  } finally { fixture.sqlite.close(); }
+});
 
 test('D1 preserves receipt identity across direct and atomic observation writes', async () => {
   const fixture = testD1();

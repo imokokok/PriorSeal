@@ -139,6 +139,19 @@ CREATE INDEX project_archive_page_idx ON project_evidence_archive(project_id, en
 CREATE INDEX project_archive_tx_idx ON project_evidence_archive(project_id, environment, tx_hash, sequence DESC);
 CREATE INDEX project_archive_authorization_idx ON project_evidence_archive(project_id, environment, authorization_id, sequence DESC);
 
+CREATE TABLE x402_payment_ledger_events (
+  event_id TEXT PRIMARY KEY,
+  ledger_id TEXT NOT NULL,
+  payment_network TEXT NOT NULL,
+  settlement_tx TEXT,
+  event_type TEXT NOT NULL CHECK (event_type IN ('PAYMENT_AUTHORIZED','RESOURCE_WITHHELD','SETTLEMENT_FAILED','SETTLEMENT_UNKNOWN','DELIVERED','REFUND_RECORDED')),
+  occurred_at INTEGER NOT NULL,
+  resource_hash TEXT,
+  event_json TEXT NOT NULL
+);
+CREATE INDEX x402_payment_ledger_events_ledger_idx ON x402_payment_ledger_events(ledger_id, occurred_at, event_id);
+CREATE INDEX x402_payment_ledger_events_settlement_idx ON x402_payment_ledger_events(payment_network, settlement_tx);
+
 CREATE TABLE witness_attestations (
   request_hash TEXT NOT NULL,
   witness_id TEXT NOT NULL,

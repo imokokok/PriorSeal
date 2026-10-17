@@ -1,11 +1,26 @@
 // Generated from x402-exact-evm.mts by npm run core:build. Do not edit directly.
 import { getAddress } from "viem";
 import { assertSafeJson } from "../../shared/safe-json.mjs";
-const X402_NETWORKS = Object.freeze([
-  { network: "eip155:8453", chainId: 8453, name: "Base", asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", assetName: "USD Coin", assetVersion: "2" },
-  { network: "eip155:42161", chainId: 42161, name: "Arbitrum One", asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", assetName: "USD Coin", assetVersion: "2" },
-  { network: "eip155:143", chainId: 143, name: "Monad", asset: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603", assetName: "USDC", assetVersion: "2" }
+import { decodeBase58, isSolanaPublicKey, SOLANA_MAINNET_CAIP2 } from "../../domain/solana.mjs";
+const X402_EVM_NETWORKS = Object.freeze([
+  { family: "evm", network: "eip155:1", chainId: 1, name: "Ethereum", asset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", assetName: "USD Coin", assetVersion: "2" },
+  { family: "evm", network: "eip155:8453", chainId: 8453, name: "Base", asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", assetName: "USD Coin", assetVersion: "2" },
+  { family: "evm", network: "eip155:10", chainId: 10, name: "OP Mainnet", asset: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", assetName: "USD Coin", assetVersion: "2" },
+  { family: "evm", network: "eip155:42161", chainId: 42161, name: "Arbitrum One", asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", assetName: "USD Coin", assetVersion: "2" },
+  { family: "evm", network: "eip155:137", chainId: 137, name: "Polygon PoS", asset: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359", assetName: "USD Coin", assetVersion: "2" },
+  { family: "evm", network: "eip155:43114", chainId: 43114, name: "Avalanche C-Chain", asset: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", assetName: "USD Coin", assetVersion: "2" },
+  { family: "evm", network: "eip155:1329", chainId: 1329, name: "Sei", asset: "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392", assetName: "USD Coin", assetVersion: "2" },
+  { family: "evm", network: "eip155:196", chainId: 196, name: "X Layer", asset: "0xB6CEceAB302E2E4948951eE7843FC24E92933061", assetName: "USD Coin", assetVersion: "2" },
+  { family: "evm", network: "eip155:143", chainId: 143, name: "Monad", asset: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603", assetName: "USDC", assetVersion: "2" }
 ]);
+const X402_SOLANA_NETWORKS = Object.freeze([
+  { family: "svm", network: SOLANA_MAINNET_CAIP2, chainId: 0, name: "Solana mainnet-beta", asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", assetName: "USDC" }
+]);
+const X402_STAGING_EVM_NETWORKS = Object.freeze([
+  { family: "evm", network: "eip155:84532", chainId: 84532, name: "Base Sepolia", asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", assetName: "USDC", assetVersion: "2" }
+]);
+const X402_NETWORKS = Object.freeze([...X402_EVM_NETWORKS, ...X402_SOLANA_NETWORKS]);
+const X402_STAGING_NETWORKS = Object.freeze([...X402_NETWORKS, ...X402_STAGING_EVM_NETWORKS]);
 const MAX_FACILITATOR_RESPONSE_BYTES = 64 * 1024;
 const PAYMENT_HEADER_LIMIT = 64 * 1024;
 const MAX_TIMEOUT_MS = 2147483647;
@@ -17,20 +32,29 @@ function parseX402Config(environment) {
     facilitatorHeadersJson: optional(environment.PRIORSEAL_X402_FACILITATOR_HEADERS_JSON),
     resourceOrigin: optional(environment.PRIORSEAL_X402_RESOURCE_ORIGIN),
     payTo: optional(environment.PRIORSEAL_X402_PAY_TO),
+    solanaPayTo: optional(environment.PRIORSEAL_X402_SOLANA_PAY_TO),
+    networks: optional(environment.PRIORSEAL_X402_NETWORKS),
+    enableTestnets: optional(environment.PRIORSEAL_X402_ENABLE_TESTNETS),
     timeoutMs: optional(environment.PRIORSEAL_X402_TIMEOUT_MS),
     routesJson: optional(environment.PRIORSEAL_X402_ROUTES_JSON)
   };
-  if (!Object.values(raw).some(Boolean)) return void 0;
-  for (const field of ["facilitatorUrl", "resourceOrigin", "payTo", "routesJson"]) {
+  if (!Object.entries(raw).some(([key, value]) => key !== "enableTestnets" && Boolean(value))) return void 0;
+  for (const field of ["facilitatorUrl", "resourceOrigin", "routesJson"]) {
     if (!raw[field]) throw new TypeError(`PRIORSEAL_X402_${field === "routesJson" ? "ROUTES_JSON" : field === "facilitatorUrl" ? "FACILITATOR_URL" : field === "resourceOrigin" ? "RESOURCE_ORIGIN" : "PAY_TO"} is required when x402 is configured`);
   }
+  if (!raw.payTo && !raw.solanaPayTo) throw new TypeError("PRIORSEAL_X402_PAY_TO or PRIORSEAL_X402_SOLANA_PAY_TO is required when x402 is configured");
   const facilitatorUrl = parseFacilitatorUrl(raw.facilitatorUrl);
   const resourceOrigin = parseResourceOrigin(raw.resourceOrigin);
-  const payTo = parseEvmAddress(raw.payTo, "PRIORSEAL_X402_PAY_TO");
+  const payTo = raw.payTo ? parseEvmAddress(raw.payTo, "PRIORSEAL_X402_PAY_TO") : void 0;
+  const solanaPayTo = raw.solanaPayTo ? parseSolanaPublicKey(raw.solanaPayTo, "PRIORSEAL_X402_SOLANA_PAY_TO") : void 0;
+  const testnetNetworksEnabled = parseTestnetNetworkFlag(raw.enableTestnets, environment.PRIORSEAL_ENVIRONMENT);
+  const networkSelection = parseNetworkSelection(raw.networks, testnetNetworksEnabled);
+  if (networkSelection.networksExplicitlyConfigured && networkSelection.networks.some((network) => network.startsWith("eip155:")) && !payTo) throw new TypeError("PRIORSEAL_X402_NETWORKS selects an EVM payment rail but PRIORSEAL_X402_PAY_TO is not configured");
+  if (networkSelection.networksExplicitlyConfigured && networkSelection.networks.includes(SOLANA_MAINNET_CAIP2) && !solanaPayTo) throw new TypeError("PRIORSEAL_X402_NETWORKS selects Solana but PRIORSEAL_X402_SOLANA_PAY_TO is not configured");
   const timeoutMs = parseTimeout(raw.timeoutMs);
   const facilitatorHeaders = parseFacilitatorHeaders(raw.facilitatorHeadersJson);
   const routes = parseRoutes(raw.routesJson);
-  return { facilitatorUrl, facilitatorHeaders, resourceOrigin, payTo, timeoutMs, routes };
+  return { facilitatorUrl, facilitatorHeaders, resourceOrigin, ...payTo ? { payTo } : {}, ...solanaPayTo ? { solanaPayTo } : {}, ...networkSelection, testnetNetworksEnabled, timeoutMs, routes };
 }
 function matchX402Route(config, method, path) {
   if (!config || method?.toUpperCase() !== "GET") return void 0;
@@ -40,8 +64,8 @@ function createX402PaymentService(config) {
   return {
     async prepare(route, resourceUrl, paymentHeader, signal) {
       const supported = await getSupportedNetworks(config, signal);
-      const requirements = X402_NETWORKS.map((network) => makeRequirement(config, route, network)).filter((requirement2) => supported.has(requirement2.network));
-      if (requirements.length === 0) throw new Error("Configured facilitator does not support exact EVM payments on any configured network");
+      const requirements = X402_STAGING_NETWORKS.filter((network) => config.networks.includes(network.network)).map((network) => makeRequirement(config, route, network, supported.solanaFeePayer)).filter((requirement2) => Boolean(requirement2 && supported.networks.has(requirement2.network)));
+      if (requirements.length === 0) throw new Error("Configured facilitator does not support exact payments on any locally configured network");
       const resource = { url: resourceUrl, description: route.description, mimeType: "application/json", serviceName: "PriorSeal" };
       let payload;
       let malformed = false;
@@ -80,9 +104,11 @@ function createX402PaymentService(config) {
         paymentPayload: context.payload,
         paymentRequirements: context.requirement
       };
+      let settlementAttempts = 1;
       let settlement = parseSettlementResponse(await facilitatorJson(config, "settle", request, signal), context.requirement);
       if (!settlement.success && settlement.errorReason === "settlement_pending") {
         const pending = settlement;
+        settlementAttempts++;
         try {
           settlement = parseSettlementResponse(await facilitatorJson(config, "settle", request, signal), context.requirement);
         } catch {
@@ -97,7 +123,7 @@ function createX402PaymentService(config) {
         ...settlement.payer ? { payer: settlement.payer } : {},
         ...settlement.amount ? { amount: settlement.amount } : {}
       };
-      return { success: settlement.success, response: buyerFacing, header: encodeBase64Json(buyerFacing) };
+      return { success: settlement.success, settlement, attempts: settlementAttempts, response: buyerFacing, header: encodeBase64Json(buyerFacing) };
     }
   };
 }
@@ -105,7 +131,7 @@ function parseSettlementResponse(value, requirement) {
   if (!isRecord(value) || typeof value.success !== "boolean" || typeof value.network !== "string" || typeof value.transaction !== "string") {
     throw new Error("Configured facilitator returned an invalid settlement response");
   }
-  if (value.network !== requirement.network || value.transaction.length > 128 || value.transaction !== "" && !/^0x[0-9a-fA-F]{64}$/.test(value.transaction)) {
+  if (value.network !== requirement.network || value.transaction.length > 128 || value.transaction !== "" && !validSettlementTransaction(value.transaction, requirement.network)) {
     throw new Error("Configured facilitator returned a mismatched settlement response");
   }
   if (value.success && !value.transaction) throw new Error("Configured facilitator returned a successful settlement without a transaction");
@@ -116,23 +142,37 @@ function parseSettlementResponse(value, requirement) {
   let payer;
   if (value.payer !== void 0) {
     if (typeof value.payer !== "string") throw new Error("Configured facilitator returned an invalid payer");
-    payer = parseEvmAddress(value.payer, "facilitator payer");
+    payer = requirement.network === SOLANA_MAINNET_CAIP2 ? parseSolanaPublicKey(value.payer, "facilitator payer") : parseEvmAddress(value.payer, "facilitator payer");
   }
   let amount;
   if (value.amount !== void 0) {
     if (typeof value.amount !== "string" || value.amount !== requirement.amount) throw new Error("Configured facilitator returned a mismatched settlement amount");
     amount = value.amount;
   }
+  const errorReason = typeof value.errorReason === "string" ? value.errorReason : void 0;
   return {
     success: value.success,
     transaction: value.transaction,
     network: value.network,
-    errorReason: typeof value.errorReason === "string" ? value.errorReason : void 0,
-    payer,
-    amount
+    ...errorReason ? { errorReason } : {},
+    ...payer ? { payer } : {},
+    ...amount ? { amount } : {}
   };
 }
-function makeRequirement(config, route, network) {
+function makeRequirement(config, route, network, solanaFeePayer) {
+  if (network.family === "svm") {
+    if (!config.solanaPayTo || !solanaFeePayer) return null;
+    return {
+      scheme: "exact",
+      network: network.network,
+      amount: priceToAtomicUnits(route.price),
+      asset: network.asset,
+      payTo: config.solanaPayTo,
+      maxTimeoutSeconds: 60,
+      extra: { feePayer: solanaFeePayer }
+    };
+  }
+  if (!config.payTo) return null;
   return {
     scheme: "exact",
     network: network.network,
@@ -203,6 +243,10 @@ function parseEvmAddress(value, name) {
     throw new TypeError(`${name} must be a valid EVM address`);
   }
 }
+function parseSolanaPublicKey(value, name) {
+  if (!isSolanaPublicKey(value)) throw new TypeError(`${name} must be a valid 32-byte Solana public key`);
+  return value;
+}
 function parseFacilitatorHeaders(value) {
   if (!value) return {};
   let parsed;
@@ -235,6 +279,23 @@ function parseTimeout(value) {
   if (!Number.isSafeInteger(timeout) || timeout < 1e3 || timeout > MAX_TIMEOUT_MS) throw new TypeError(`PRIORSEAL_X402_TIMEOUT_MS must be between 1000 and ${MAX_TIMEOUT_MS}`);
   return timeout;
 }
+function parseNetworkSelection(value, allowTestnets) {
+  if (!value) return { networks: X402_NETWORKS.map((network) => network.network), networksExplicitlyConfigured: false };
+  const networks = value.split(",").map((network) => network.trim());
+  const supportedNetworks = allowTestnets ? X402_STAGING_NETWORKS : X402_NETWORKS;
+  if (!networks.length || networks.some((network) => !network) || networks.length > supportedNetworks.length || new Set(networks).size !== networks.length) throw new TypeError("PRIORSEAL_X402_NETWORKS must be a comma-separated list of unique supported CAIP-2 networks");
+  const supported = new Set(supportedNetworks.map((network) => network.network));
+  if (networks.some((network) => !supported.has(network))) throw new TypeError("PRIORSEAL_X402_NETWORKS contains an unsupported payment network");
+  return { networks, networksExplicitlyConfigured: true };
+}
+function parseTestnetNetworkFlag(value, runtimeEnvironment) {
+  if (!value) return false;
+  if (value !== "true" && value !== "false") throw new TypeError("PRIORSEAL_X402_ENABLE_TESTNETS must be true or false");
+  if (value === "false") return false;
+  const environment = runtimeEnvironment?.trim() || "development";
+  if (!["staging", "test", "development"].includes(environment)) throw new TypeError("PRIORSEAL_X402_ENABLE_TESTNETS is allowed only in staging, test, or development");
+  return true;
+}
 async function getSupportedNetworks(config, parentSignal) {
   const cacheKey = `${config.facilitatorUrl}
 ${JSON.stringify(config.facilitatorHeaders.supported ?? {})}`;
@@ -244,7 +305,10 @@ ${JSON.stringify(config.facilitatorHeaders.supported ?? {})}`;
     if (!isRecord(value) || !Array.isArray(value.kinds)) throw new Error("Configured facilitator returned an invalid supported response");
     const kinds = value.kinds;
     for (const kind of kinds) if (!isRecord(kind) || typeof kind.x402Version !== "number" || typeof kind.scheme !== "string" || typeof kind.network !== "string") throw new Error("Configured facilitator returned an invalid supported response");
-    return new Set(kinds.filter((kind) => kind.x402Version === 2 && kind.scheme === "exact").map((kind) => kind.network));
+    return {
+      networks: new Set(kinds.filter((kind) => kind.x402Version === 2 && kind.scheme === "exact").map((kind) => kind.network)),
+      solanaFeePayer: solanaFeePayerFromSupported(value)
+    };
   });
   capabilityCache.set(cacheKey, { expiresAt: Date.now() + 6e4, promise });
   try {
@@ -253,6 +317,19 @@ ${JSON.stringify(config.facilitatorHeaders.supported ?? {})}`;
     capabilityCache.delete(cacheKey);
     throw error;
   }
+}
+function solanaFeePayerFromSupported(value) {
+  if (value.signers === void 0) return null;
+  if (!isRecord(value.signers)) throw new Error("Configured facilitator returned invalid signer metadata");
+  const relevant = [value.signers[SOLANA_MAINNET_CAIP2], value.signers["solana:*"]];
+  const candidates = [];
+  for (const group of relevant) {
+    if (group === void 0) continue;
+    if (!Array.isArray(group) || !group.every(isSolanaPublicKey)) throw new Error("Configured facilitator returned invalid Solana signer metadata");
+    candidates.push(...group);
+  }
+  const unique = [...new Set(candidates)];
+  return unique.length === 1 ? unique[0] : null;
 }
 async function facilitatorJson(config, operation, body, parentSignal) {
   const url = operation === "supported" ? `${config.facilitatorUrl}/supported` : `${config.facilitatorUrl}/${operation}`;
@@ -264,12 +341,15 @@ async function facilitatorJson(config, operation, body, parentSignal) {
   try {
     const response = await fetch(url, {
       method: operation === "supported" ? "GET" : "POST",
-      redirect: "error",
+      // Cloudflare Workers does not implement redirect: 'error'. Manual mode
+      // preserves the same fail-closed rule across both supported runtimes.
+      redirect: "manual",
       headers: { "content-type": "application/json", ...config.facilitatorHeaders[operation] },
       ...operation === "supported" ? {} : { body: JSON.stringify(body) },
       signal: controller.signal
     });
     const text = await readLimitedText(response, MAX_FACILITATOR_RESPONSE_BYTES);
+    if (response.status >= 300 && response.status < 400) throw new Error(`Configured facilitator ${operation} attempted an unexpected redirect`);
     if (!response.ok) throw new Error(`Configured facilitator ${operation} failed with HTTP ${response.status}`);
     let result;
     try {
@@ -322,11 +402,20 @@ function decodePaymentHeader(value) {
   assertSafeJson(parsed);
   if (!isRecord(parsed) || parsed.x402Version !== 2 || !isRecord(parsed.accepted) || !isRecord(parsed.payload) || parsed.resource !== void 0 && !isRecord(parsed.resource) || parsed.extensions !== void 0 && !isRecord(parsed.extensions)) throw new TypeError("Invalid PAYMENT-SIGNATURE payload");
   const accepted = parsed.accepted;
-  if (accepted.scheme !== "exact" || typeof accepted.network !== "string" || typeof accepted.amount !== "string" || typeof accepted.asset !== "string" || typeof accepted.payTo !== "string" || !Number.isSafeInteger(accepted.maxTimeoutSeconds) || !isRecord(accepted.extra)) throw new TypeError("Invalid PAYMENT-SIGNATURE accepted requirements");
+  if (accepted.scheme !== "exact" || typeof accepted.network !== "string" || typeof accepted.amount !== "string" || typeof accepted.asset !== "string" || typeof accepted.payTo !== "string" || !Number.isSafeInteger(accepted.maxTimeoutSeconds) || !isStringRecord(accepted.extra)) throw new TypeError("Invalid PAYMENT-SIGNATURE accepted requirements");
   return parsed;
 }
 function matchesRequirement(accepted, requirement) {
-  return accepted.scheme === requirement.scheme && accepted.network === requirement.network && accepted.amount === requirement.amount && accepted.asset.toLowerCase() === requirement.asset.toLowerCase() && accepted.payTo.toLowerCase() === requirement.payTo.toLowerCase() && accepted.maxTimeoutSeconds === requirement.maxTimeoutSeconds && accepted.extra.name === requirement.extra.name && accepted.extra.version === requirement.extra.version && Object.keys(accepted.extra).length === 2;
+  const svm = requirement.network === SOLANA_MAINNET_CAIP2;
+  return accepted.scheme === requirement.scheme && accepted.network === requirement.network && accepted.amount === requirement.amount && (svm ? accepted.asset === requirement.asset : accepted.asset.toLowerCase() === requirement.asset.toLowerCase()) && (svm ? accepted.payTo === requirement.payTo : accepted.payTo.toLowerCase() === requirement.payTo.toLowerCase()) && accepted.maxTimeoutSeconds === requirement.maxTimeoutSeconds && sameStringRecord(accepted.extra, requirement.extra);
+}
+function validSettlementTransaction(value, network) {
+  if (network !== SOLANA_MAINNET_CAIP2) return /^0x[0-9a-fA-F]{64}$/.test(value);
+  try {
+    return decodeBase58(value).length === 64;
+  } catch {
+    return false;
+  }
 }
 function encodeBase64Json(value) {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
@@ -340,11 +429,23 @@ function optional(value) {
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+function isStringRecord(value) {
+  return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
+}
+function sameStringRecord(left, right) {
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index] && left[key] === right[key]);
+}
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 export {
+  X402_EVM_NETWORKS,
   X402_NETWORKS,
+  X402_SOLANA_NETWORKS,
+  X402_STAGING_EVM_NETWORKS,
+  X402_STAGING_NETWORKS,
   createX402PaymentService,
   matchX402Route,
   parseX402Config

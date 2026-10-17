@@ -4,6 +4,7 @@ import { hashJson } from "../../domain/hashing.mjs";
 import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from "../../domain/merkle-log.mjs";
 import { assertReceiptIdentity } from "./receipt-identity.mjs";
+import { assertX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedWorkerObservation } from "./persisted-records.mjs";
 const json = (value) => value == null ? null : JSON.stringify(value);
 const parsed = (value, label) => value == null ? null : persistedJson(value, label);
@@ -103,6 +104,18 @@ function createD1Store(database) {
   }
   const store = {
     archiveRetention: "until_operator_deletion",
+    async appendX402PaymentLedgerEvent(value) {
+      const event = assertX402PaymentLedgerEvent(value);
+      await run("INSERT INTO x402_payment_ledger_events (event_id,ledger_id,payment_network,settlement_tx,event_type,occurred_at,resource_hash,event_json) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING", event.eventId, event.ledgerId, event.requirement?.network ?? event.refund.network, event.settlement?.transaction ?? event.refund?.transaction ?? null, event.type, event.occurredAt, event.resource?.responseHash ?? null, json(event));
+      const saved = await first("SELECT event_json FROM x402_payment_ledger_events WHERE event_id=?", event.eventId);
+      if (!saved) throw new Error("x402 payment ledger event disappeared during insert");
+      return assertX402PaymentLedgerEvent(persistedJson(saved.event_json, "x402 payment ledger event"));
+    },
+    async listX402PaymentLedgerEvents(ledgerId) {
+      if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError("Invalid x402 payment ledger identifier");
+      const rows = await all("SELECT event_json FROM x402_payment_ledger_events WHERE ledger_id=? ORDER BY occurred_at,CASE event_type WHEN 'PAYMENT_AUTHORIZED' THEN 0 WHEN 'REFUND_RECORDED' THEN 2 ELSE 1 END,event_id", ledgerId);
+      return rows.map((row) => assertX402PaymentLedgerEvent(persistedJson(row.event_json, "x402 payment ledger event")));
+    },
     async saveArchiveEntry(entry) {
       await run(`INSERT INTO project_evidence_archive (project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,environment,entry_id) DO NOTHING`, entry.projectId, entry.environment, entry.id, entry.artifactHash, entry.kind, entry.createdAt, entry.txHash, entry.authorizationId, entry.status, entry.supersedesId, json(entry));
       const saved = await this.getArchiveEntry(entry, entry.id);

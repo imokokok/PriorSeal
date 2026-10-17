@@ -1,0 +1,29 @@
+{
+  "schema": "priorseal.x402-production-go-no-go.v1",
+  "status": "DRAFT_DO_NOT_DEPLOY",
+  "target": {
+    "environment": "production",
+    "resourceOrigin": "https://priorseal.xyz",
+    "route": {
+      "method": "GET",
+      "path": "/v1/receipts/:receiptId/bundle",
+      "description": "Export a portable PriorSeal receipt bundle",
+      "price": "$0.01"
+    }
+  },
+  "payment": {
+    "facilitatorUrl": "https://x402.org/facilitator",
+    "networks": ["eip155:8453"],
+    "evmPayTo": "REPLACE_WITH_REVIEWED_PRODUCTION_PAYEE",
+    "solanaPayTo": null,
+    "timeoutMs": 15000
+  },
+  "releaseGates": {
+    "x402PaymentLedgerMigration": "012_x402_payment_ledger.sql",
+    "issuerPublicKeyFingerprint": "REPLACE_WITH_REVIEWED_PRODUCTION_ISSUER_KEY_SHA256",
+    "approvedPayeeRecord": "REPLACE_WITH_CHANGE_RECORD",
+    "facilitatorApprovalRecord": "REPLACE_WITH_CHANGE_RECORD",
+    "rollbackOwner": "REPLACE_WITH_ON_CALL_OWNER",
+    "paidSettlementAuthorized": false
+  }
+}

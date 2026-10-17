@@ -5,6 +5,12 @@ import { testPostgresPool, type TestClient } from '../support/postgres.mjs';
 import { pglitePool } from '../support/postgres.mjs';
 import { PGlite } from '@electric-sql/pglite';
 import { readFile } from 'node:fs/promises';
+import { buildX402PaymentLedgerEvent } from '../../src/domain/x402-payment-ledger.mjs';
+
+const x402LedgerContext = {
+  payload: { x402Version: 2 as const, accepted: { scheme: 'exact' as const, network: 'eip155:8453', amount: '10000', asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', payTo: `0x${'b'.repeat(40)}`, maxTimeoutSeconds: 300, extra: { name: 'USD Coin', version: '2' } }, payload: { opaque: 'payment' } },
+  requirement: { scheme: 'exact' as const, network: 'eip155:8453', amount: '10000', asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', payTo: `0x${'b'.repeat(40)}`, maxTimeoutSeconds: 300, extra: { name: 'USD Coin', version: '2' } },
+};
 
 const hasCode = (error: unknown, code: string) => typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 
@@ -24,6 +30,23 @@ test('Postgres idempotency rows can be read and expired rows can be replaced', a
   assert.deepEqual(await store.getIdempotency('scope', 'key'), { requestHash: 'hash', response: { ok: true }, expiresAt: 2_000 });
   assert.deepEqual(await store.reserveIdempotency({ scope: 'scope', key: 'key', requestHash: 'new', response: { ok: false }, expiresAt: 3_000 }), { replay: false, response: { ok: false } });
   assert.match(calls[1], /expires_at <= now\(\)/);
+});
+
+test('Postgres persists a privacy-minimised x402 delivery ledger event idempotently', async () => {
+  const database = new PGlite();
+  try {
+    for (const migration of ['001_init.sql', '012_x402_payment_ledger.sql']) await database.exec(await readFile(new URL(`../../migrations/${migration}`, import.meta.url), 'utf8'));
+    const store = createPostgresStore(pglitePool(database));
+    const event = buildX402PaymentLedgerEvent({
+      type: 'DELIVERED', context: x402LedgerContext, resourceUrl: 'https://api.example.test/v1/receipts/psr_1/bundle', occurredAt: 1_800_000_000,
+      responseStatus: 200, responseBody: { bundleHash: 'a'.repeat(64) }, settlement: { success: true, network: 'eip155:8453', transaction: `0x${'1'.repeat(64)}`, amount: '10000' }, settlementAttempts: 1,
+    });
+    assert.deepEqual(await store.appendX402PaymentLedgerEvent(event), event);
+    assert.deepEqual(await store.appendX402PaymentLedgerEvent(event), event);
+    assert.deepEqual(await store.listX402PaymentLedgerEvents(event.ledgerId), [event]);
+    const row = await database.query('SELECT event_json::text AS event_json FROM x402_payment_ledger_events') as { rows: { event_json: string }[] };
+    assert.equal(String(row.rows[0].event_json).includes('"opaque"'), false);
+  } finally { await database.close(); }
 });
 
 test('Postgres observation persistence rolls back the authorization claim with evidence', async () => {

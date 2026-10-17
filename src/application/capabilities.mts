@@ -1,6 +1,6 @@
 import { hashJson } from '../domain/hashing.mjs';
 import { SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
-import { X402_NETWORKS, type X402Config } from '../infrastructure/payments/x402-exact-evm.mjs';
+import { X402_STAGING_NETWORKS, type X402Config } from '../infrastructure/payments/x402-exact-evm.mjs';
 
 type CapabilityPolicy = { allowedChainIds?: number[]; allowedActions?: unknown; allowedAssets?: string[]; allowedRecipients?: string[]; maxAmount?: string; minConfirmations?: number; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' };
 type CapabilityStore = { health?: () => Promise<unknown> | unknown; archiveRetention?: string };
@@ -25,7 +25,9 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
   const rpc = rpcChainIds === undefined ? 'unknown' : chains.some(id => rpcChainIds.includes(id)) ? 'configured' : 'unavailable';
   return {
     schema: 'priorseal.capabilities.v1', issuer, audience,
-    payments: { x402: { configured: Boolean(x402), networks: x402 ? X402_NETWORKS.map(({ network, chainId, name, asset, assetName }) => ({ network, chainId, name, asset, assetName })) : [], routes: x402?.routes.map(({ method, path, description, price }) => ({ method, path, description, price })) ?? [] } },
+    payments: { x402: { configured: Boolean(x402), networks: x402 ? X402_STAGING_NETWORKS
+      .filter(network => x402.networks.includes(network.network) && (network.family === 'evm' ? Boolean(x402.payTo) : Boolean(x402.solanaPayTo)))
+      .map(({ family, network, chainId, name, asset, assetName }) => ({ family, network, chainId, name, asset, assetName })) : [], routes: x402?.routes.map(({ method, path, description, price }) => ({ method, path, description, price })) ?? [] } },
     executionProfiles: [...(transfer ? ['priorseal.intent.v1'] : []), ...(exactCall ? ['priorseal.execution-profile.exact-call.v1'] : []), ...(erc4337 ? ['priorseal.execution-profile.erc4337-user-operation.v1'] : []), ...(solanaTransaction ? ['priorseal.execution-profile.solana-transaction.v2'] : [])],
     erc4337EntryPoints: erc4337EntryPoints.filter(entry => chains.includes(entry.chainId)),
     safe4337Trust: safe4337Trust.filter(entry => evmChains.includes(entry.chainId)),

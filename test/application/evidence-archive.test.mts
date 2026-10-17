@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { createArchiveAccess, archiveEntry, archiveQuery, type ArchiveAccess } from '../../src/application/archive/evidence-archive.mjs';
 import { createMemoryStore } from '../../src/infrastructure/persistence/memory-store.mjs';
 import { deploymentCapabilities } from '../../src/application/capabilities.mjs';
+import { parseX402Config } from '../../src/infrastructure/payments/x402-exact-evm.mjs';
 
 const a: ArchiveAccess = { projectId: 'alpha', environment: 'prod', role: 'writer' };
 const b = { ...a, projectId: 'beta' };
@@ -118,4 +119,15 @@ test('capability action matching follows the case-insensitive policy evaluator',
   const invalid = await deploymentCapabilities({ ...base, policy: { allowedActions: null } });
   assert.deepEqual(invalid.executionProfiles, []);
   assert.equal(invalid.workflowReady, false);
+});
+
+test('capabilities publish an explicitly enabled Base Sepolia staging x402 rail', async () => {
+  const x402 = parseX402Config({
+    PRIORSEAL_ENVIRONMENT: 'staging', PRIORSEAL_X402_ENABLE_TESTNETS: 'true',
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'eip155:84532', PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
+  });
+  assert.ok(x402);
+  const capabilities = await deploymentCapabilities({ issuer: 'test', audience: 'test-env', keyConfigured: true, proofMode: 'issuer', timestampConfigured: false, witnessConfigured: false, anchorConfigured: false, rpcChainIds: [84532], store: createMemoryStore(), now: 1000, archiveEnabled: false, x402 });
+  assert.deepEqual(capabilities.payments.x402.networks.map(network => network.network), ['eip155:84532']);
 });

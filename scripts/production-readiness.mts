@@ -28,7 +28,7 @@ if (config.privateKeyFile) {
 
 const pool = new pg.Pool({ connectionString: config.databaseDirectUrl });
 try {
-  await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
+  await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials), x402Enabled: Boolean(config.x402) });
 } finally {
   await pool.end();
 }

@@ -34,7 +34,10 @@ type RuntimeEnvironmentInput = Partial<Record<
   'PRIORSEAL_TRUST_PROXY' |
   'PRIORSEAL_X402_FACILITATOR_HEADERS_JSON' |
   'PRIORSEAL_X402_FACILITATOR_URL' |
+  'PRIORSEAL_X402_ENABLE_TESTNETS' |
   'PRIORSEAL_X402_PAY_TO' |
+  'PRIORSEAL_X402_SOLANA_PAY_TO' |
+  'PRIORSEAL_X402_NETWORKS' |
   'PRIORSEAL_X402_RESOURCE_ORIGIN' |
   'PRIORSEAL_X402_ROUTES_JSON' |
   'PRIORSEAL_X402_TIMEOUT_MS' |
@@ -243,6 +246,7 @@ type ProductionConfig = {
   issuer: string; authorizationAudience: string; preExecutionProofMode: string;
   witnessEndpointsFile?: string; witnessEndpointsJson?: unknown;
   transparencyAnchorFile?: string; transparencyAnchorJson?: unknown; corsOrigins: string[];
+  x402?: { networksExplicitlyConfigured: boolean; testnetNetworksEnabled: boolean };
 };
 function validateDeploymentConfig(config: ProductionConfig, environment: 'production' | 'staging') {
   const label = environment === 'production' ? 'Production' : 'Staging';
@@ -258,6 +262,8 @@ function validateDeploymentConfig(config: ProductionConfig, environment: 'produc
   if (config.preExecutionProofMode === 'evm-anchor' && !config.transparencyAnchorFile && !config.transparencyAnchorJson) throw new TypeError(`${label} evm-anchor mode requires a transparency anchor`);
   if (environment === 'production' && !config.corsOrigins.length) throw new TypeError('Production requires at least one non-localhost CORS origin');
   if (config.corsOrigins.some((origin: string) => new URL(origin).hostname === 'localhost')) throw new TypeError(`${label} requires non-localhost CORS origins`);
+  if (config.x402 && !config.x402.networksExplicitlyConfigured) throw new TypeError(`${label} requires an explicit PRIORSEAL_X402_NETWORKS allowlist when x402 is enabled`);
+  if (environment === 'production' && config.x402?.testnetNetworksEnabled) throw new TypeError('Production cannot enable x402 testnet payment rails');
 }
 
 function proofModeValue(value: unknown, legacyAnchor: unknown, environment: string) {

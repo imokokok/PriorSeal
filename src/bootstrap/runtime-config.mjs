@@ -194,6 +194,8 @@ function validateDeploymentConfig(config, environment) {
   if (config.preExecutionProofMode === "evm-anchor" && !config.transparencyAnchorFile && !config.transparencyAnchorJson) throw new TypeError(`${label} evm-anchor mode requires a transparency anchor`);
   if (environment === "production" && !config.corsOrigins.length) throw new TypeError("Production requires at least one non-localhost CORS origin");
   if (config.corsOrigins.some((origin) => new URL(origin).hostname === "localhost")) throw new TypeError(`${label} requires non-localhost CORS origins`);
+  if (config.x402 && !config.x402.networksExplicitlyConfigured) throw new TypeError(`${label} requires an explicit PRIORSEAL_X402_NETWORKS allowlist when x402 is enabled`);
+  if (environment === "production" && config.x402?.testnetNetworksEnabled) throw new TypeError("Production cannot enable x402 testnet payment rails");
 }
 function proofModeValue(value, legacyAnchor, environment) {
   const explicit = optionalValue(value);

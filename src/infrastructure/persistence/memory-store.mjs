@@ -3,10 +3,15 @@ import { hashJson } from "../../domain/hashing.mjs";
 import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from "../../domain/merkle-log.mjs";
 import { assertReceiptIdentity } from "./receipt-identity.mjs";
+import { assertX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
+function paymentLedgerEventOrder(type) {
+  return type === "PAYMENT_AUTHORIZED" ? 0 : type === "REFUND_RECORDED" ? 2 : 1;
+}
 function createMemoryStore({ clock = () => Date.now() } = {}) {
   const intents = /* @__PURE__ */ new Map(), receipts = /* @__PURE__ */ new Map(), observations = /* @__PURE__ */ new Map(), idempotency = /* @__PURE__ */ new Map(), jobs = /* @__PURE__ */ new Map(), authorizations = /* @__PURE__ */ new Map(), archive = /* @__PURE__ */ new Map();
   const archiveEntries = [], authorizationLog = [];
   const logByAuthorizationHash = /* @__PURE__ */ new Map(), merkleNodes = /* @__PURE__ */ new Map(), usedAuthorizationNonces = /* @__PURE__ */ new Set();
+  const x402PaymentLedger = /* @__PURE__ */ new Map();
   function appendLogEntry(entry) {
     const nodes = merkleAppendNodes(entry.sequence, entry.entryHash, (start, level) => merkleNodes.get(merkleNodeKey(start, level)));
     authorizationLog.push(entry);
@@ -15,6 +20,19 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
   }
   return {
     archiveRetention: "process_lifetime",
+    async appendX402PaymentLedgerEvent(value) {
+      const event = assertX402PaymentLedgerEvent(value);
+      const entries = x402PaymentLedger.get(event.ledgerId) ?? /* @__PURE__ */ new Map();
+      x402PaymentLedger.set(event.ledgerId, entries);
+      const existing = entries.get(event.eventId);
+      if (existing) return structuredClone(existing);
+      entries.set(event.eventId, structuredClone(event));
+      return structuredClone(event);
+    },
+    async listX402PaymentLedgerEvents(ledgerId) {
+      if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError("Invalid x402 payment ledger identifier");
+      return [...x402PaymentLedger.get(ledgerId)?.values() ?? []].sort((left, right) => left.occurredAt - right.occurredAt || paymentLedgerEventOrder(left.type) - paymentLedgerEventOrder(right.type) || left.eventId.localeCompare(right.eventId)).map((value) => structuredClone(value));
+    },
     async saveArchiveEntry(entry) {
       const key = JSON.stringify([entry.projectId, entry.environment, entry.id]);
       const existing = archive.get(key);

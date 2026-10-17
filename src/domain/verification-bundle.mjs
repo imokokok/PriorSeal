@@ -5,7 +5,7 @@ const VERIFICATION_BUNDLE_TRUST = Object.freeze({
   model: "PIN_ISSUER_KEY_OUT_OF_BAND",
   notice: "Bundled keys are discovery metadata, not an independent trust anchor."
 });
-function buildVerificationBundle({ receipt, keyRegistry, assembledAt = Math.floor(Date.now() / 1e3) }) {
+function buildVerificationBundle({ receipt, keyRegistry, assembledAt = Math.floor(Date.now() / 1e3), paymentEvidence }) {
   if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) throw new TypeError("receipt must be an object");
   const registry = keyRegistry;
   if (!registry || registry.schema !== "priorseal.keys.v1" || !Array.isArray(registry.keys)) throw new TypeError("keyRegistry must be a PriorSeal key registry");
@@ -15,7 +15,8 @@ function buildVerificationBundle({ receipt, keyRegistry, assembledAt = Math.floo
     receipt,
     keyRegistry,
     assembledAt,
-    trust: VERIFICATION_BUNDLE_TRUST
+    trust: VERIFICATION_BUNDLE_TRUST,
+    ...paymentEvidence === void 0 ? {} : { paymentEvidence }
   };
   return { ...unsigned, bundleHash: hashJson(unsigned) };
 }

@@ -25,7 +25,7 @@ PriorSeal is for teams building EVM and Solana agents, treasury automation, wall
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
 | Start a reproducible exact-call integration and hand a reviewer a portable v3 receipt bundle | [Exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) |
 | Bind a Solana mainnet transaction message to a wallet authorization and observed transaction | [Solana integration guide](docs/integrations/solana.md) |
-| Accept x402 API payments in USDC on Base, Arbitrum One, and Monad | [x402 payment integration](docs/integrations/x402-evm.md) |
+| Accept x402 API payments in USDC on aligned EVM networks and Solana | [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md) |
 | Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
 | Review the assets, limits, recipient and router in one ERC-20 swap before authorization | [Reviewed swap authorization](docs/product/swap-authorization.md) |
 | See why an agent's replanned swap needs new approval | [Offline replan demo](examples/swap-replan-demo/README.md) |
@@ -34,12 +34,18 @@ PriorSeal is for teams building EVM and Solana agents, treasury automation, wall
 
 Insight and PriorSeal work independently. Insight provides **oracle transparency and risk intelligence**; PriorSeal provides **authorization and execution evidence**. The combined path links assessment, authorization, execution, and review while keeping each product’s trust checks separate. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
 
+For x402 API payments, the aligned production rails are Ethereum, OP Mainnet,
+Polygon PoS, Monad, X Layer, Sei, Base, Arbitrum One, Avalanche C-Chain, and
+Solana mainnet-beta. A rail is advertised only when its payee is configured and
+the selected facilitator currently supports it; execution observation still
+requires that chain's independently configured RPC endpoint.
+
 ## What the evidence covers
 
 1. **Authority.** A user or organization signs a time-bounded, single-use EIP-712, ERC-1271, or Solana Ed25519 message authorization for an agent and executor. A deployment policy can bind a reviewed principal identity to an account; without that registry, a human-readable principal ID is self-asserted.
 2. **Ordering.** PriorSeal accepts the authorization before execution. Production deployments require an independent pre-execution proof mode: RFC 3161 timestamp, witness quorum, or EVM anchor. The default development `issuer` mode provides only an issuer acceptance statement.
 3. **Execution.** PriorSeal observes a specified transaction through configured EVM or Solana RPC sources and compares the supported fields with the signed intent. Solana support binds the complete legacy, v0, or v1 compiled message, including resolved v0 address lookup accounts and v1 resource configuration, and currently observes confirmed mainnet-beta transactions. It does not decode arbitrary Solana program semantics. Pending, unavailable, reverted, and reorged states remain explicit.
-4. **Review.** An Ed25519-signed v3 receipt separates evidence validity, execution state, and authorization compliance. A reviewer can download it and verify its hashes, signatures, policy result, and binding locally with an independently confirmed issuer key.
+4. **Review.** An Ed25519-signed v3 receipt separates evidence validity, execution state, and authorization compliance. A reviewer can download it and verify its hashes, signatures, policy result, and binding locally with an independently confirmed issuer key. A paid x402 receipt-bundle export can additionally carry a signed payment-to-resource evidence statement without conflating the payment rail with the subject execution chain.
 
 For EVM contract calls, the `priorseal.intent.v2` exact-call profile binds the transaction envelope: chain, executor, nonce, target, calldata hash, and native value. The Solana transaction profile binds the signed message bytes represented as compiled instruction and account data. Optional context commitments bind digests of external decisions, assessments, or a block-pinned ERC-8004 identity snapshot without claiming that PriorSeal made those decisions. See the [evidence relationship levels](docs/architecture/evidence-relationship-levels.md), the [Solana integration guide](docs/integrations/solana.md), and the [ERC-8004 integration guide](docs/integrations/erc-8004.md).
 
@@ -126,7 +132,6 @@ These examples have different evidence scopes. Read each example's README before
 
 | Example | What it demonstrates |
 | --- | --- |
-| [Exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) | Synthetic integration boundary, five exact-call outcomes, context binding, and a portable v3 bundle with an offline tamper check. |
 | [Exact-call SDK integration](examples/web3-agent-kit-context-binding-v1/README.md) | Binds a partner-owned call-envelope digest to a principal-signed authorization. |
 | [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) | Combines signed Insight advisory input, an agent-side policy decision, and PriorSeal authorization in a synthetic flow. |
 | [Base Sepolia live evidence](examples/web3-agent-kit-base-sepolia-live-v1/README.md) | Verifies one real testnet transaction authorized before signing; it does not include a live Insight attestation. |
@@ -146,7 +151,8 @@ Other partner fixtures are under [`examples/`](examples/). Insight can be used i
 | Security and operations | [Threat model](docs/security/threat-model.md) · [Supply-chain controls](docs/security/supply-chain.md) · [Operations](docs/runbooks/operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
 | SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |
 | Solana transaction authorization and observation | [Solana integration guide](docs/integrations/solana.md) |
-| x402 API payments on Base, Arbitrum One, and Monad | [x402 payment integration](docs/integrations/x402-evm.md) |
+| Payment, observation, and advanced-profile boundaries by chain | [Chain capability matrix](docs/architecture/chain-capabilities.md) |
+| x402 API payments on aligned EVM networks and Solana | [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md) |
 | Sandbox adapter proposal | [APS checkout-gate per-order limit check](docs/integrations/aps-checkout-gate-limit-check-2026-10.md) |
 
 Run `npm run check` for the repository checks, or `npm run release:check` for the full release gate. Production runs the API and console on Cloudflare Workers with D1 persistence; local Node deployments can use PostgreSQL.

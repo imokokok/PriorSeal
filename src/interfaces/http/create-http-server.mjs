@@ -17,6 +17,8 @@ import { createMemoryRateLimiter } from "./rate-limiter.mjs";
 import { readJsonBody, requestPath } from "./request-parser.mjs";
 import { errorBody, sendJson } from "./response-writer.mjs";
 import { hashJson } from "../../domain/hashing.mjs";
+import { buildX402PaymentEvidence, signX402PaymentEvidence } from "../../domain/x402-payment-evidence.mjs";
+import { buildX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
 import { createStaticAssetHandler } from "./static-assets.mjs";
 import { buildVerificationBundle } from "../../domain/verification-bundle.mjs";
 import { assertIssuableIntentInput } from "../../domain/intent.mjs";
@@ -94,7 +96,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         }
         throw new PriorSealError("NOT_FOUND", "Archive route not found");
       }
-      if (req.method === "GET" && path === "/v1/version") return respond(200, { service: "priorseal", version, protocol: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.witness-attestation.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.verification-bundle.v1"], requestId });
+      if (req.method === "GET" && path === "/v1/version") return respond(200, { service: "priorseal", version, protocol: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.witness-attestation.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1"], requestId });
       if (req.method === "GET" && path === "/openapi/v1.json") return respond(200, OPENAPI, { "cache-control": "public, max-age=300" });
       if (req.method === "POST" && path === "/v1/intents") {
         const result = await createIntent({ input: body, idempotencyKey: typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : void 0, store, policy, now });
@@ -172,6 +174,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       throw new PriorSealError("NOT_FOUND", "Route not found");
     };
     let paymentContext;
+    let paymentResourceUrl;
     const runDispatch = async () => {
       try {
         await deadline.run(dispatch);
@@ -200,10 +203,11 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         try {
           const requestUrl = new URL(req.url ?? path, x402.resourceOrigin);
           const resourceUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, x402.resourceOrigin).toString();
+          paymentResourceUrl = resourceUrl;
           const rawPaymentHeader = req.headers["payment-signature"];
           prepared = await x402Payments.prepare(paidRoute, resourceUrl, typeof rawPaymentHeader === "string" ? rawPaymentHeader : rawPaymentHeader ? "invalid" : void 0, deadline.signal);
-        } catch {
-          logger?.error?.({ event: "x402.facilitator_unavailable", requestId, method: req.method, path });
+        } catch (error) {
+          logger?.error?.({ event: "x402.facilitator_unavailable", requestId, method: req.method, path, code: errorCode(error) || "INTERNAL_ERROR", message: errorMessage(error) });
           respond(503, errorBody("PAYMENT_UNAVAILABLE", "Payment verification is temporarily unavailable", requestId));
           return;
         }
@@ -216,6 +220,13 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
           return;
         }
         paymentContext = prepared.context;
+        try {
+          await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: "PAYMENT_AUTHORIZED", context: paymentContext, resourceUrl: paymentResourceUrl, occurredAt: now() }));
+        } catch (error) {
+          logger?.error?.({ event: "x402.payment_ledger_unavailable", requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || "INTERNAL_ERROR" });
+          respond(503, errorBody("PAYMENT_UNAVAILABLE", "Payment delivery records are temporarily unavailable", requestId));
+          return;
+        }
         captureResponse = true;
         await runDispatch();
         captureResponse = false;
@@ -225,22 +236,50 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
           return;
         }
         if (completedResponse.status < 200 || completedResponse.status >= 300) {
+          try {
+            await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: "RESOURCE_WITHHELD", context: paymentContext, resourceUrl: paymentResourceUrl, occurredAt: now(), responseStatus: completedResponse.status, responseBody: completedResponse.body }));
+          } catch (error) {
+            logger?.error?.({ event: "x402.payment_ledger_write_failed", requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || "INTERNAL_ERROR" });
+          }
           sendJson(res, completedResponse.status, completedResponse.body, requestId, completedResponse.headers);
           return;
         }
         try {
           const settlement = await x402Payments.settle(paymentContext, deadline.signal);
           if (!settlement.success) {
+            try {
+              await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: "SETTLEMENT_FAILED", context: paymentContext, resourceUrl: paymentResourceUrl, occurredAt: now(), responseStatus: completedResponse.status, responseBody: completedResponse.body, settlement: settlement.settlement, settlementAttempts: settlement.attempts }));
+            } catch (error) {
+              logger?.error?.({ event: "x402.payment_ledger_write_failed", requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || "INTERNAL_ERROR" });
+            }
             respond(402, errorBody("PAYMENT_FAILED", "Payment settlement failed", requestId), { "payment-response": settlement.header, "cache-control": "no-store" });
             return;
           }
-          sendJson(res, completedResponse.status, completedResponse.body, requestId, {
+          let paymentBoundBody = completedResponse.body;
+          if (privateKeyPem && paymentResourceUrl) {
+            try {
+              paymentBoundBody = bindX402PaymentEvidenceToBundle({ body: completedResponse.body, resourceUrl: paymentResourceUrl, status: completedResponse.status, context: paymentContext, settlement: settlement.settlement, issuer, keyId, privateKeyPem, issuedAt: Math.floor(now() / 1e3) });
+            } catch (error) {
+              logger?.error?.({ event: "x402.payment_evidence_write_failed", requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || "INTERNAL_ERROR" });
+            }
+          }
+          try {
+            await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: "DELIVERED", context: paymentContext, resourceUrl: paymentResourceUrl, occurredAt: now(), responseStatus: completedResponse.status, responseBody: paymentBoundBody, settlement: settlement.settlement, settlementAttempts: settlement.attempts, paymentEvidenceId: paymentEvidenceId(paymentBoundBody) }));
+          } catch (error) {
+            logger?.error?.({ event: "x402.payment_ledger_write_failed", requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || "INTERNAL_ERROR" });
+          }
+          sendJson(res, completedResponse.status, paymentBoundBody, requestId, {
             ...completedResponse.headers,
             "payment-response": settlement.header,
             "cache-control": "private, no-store"
           });
-        } catch {
-          logger?.error?.({ event: "x402.settlement_unavailable", requestId, method: req.method, path, network: paymentContext.requirement.network });
+        } catch (error) {
+          try {
+            await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: "SETTLEMENT_UNKNOWN", context: paymentContext, resourceUrl: paymentResourceUrl, occurredAt: now(), responseStatus: completedResponse.status, responseBody: completedResponse.body }));
+          } catch (ledgerError) {
+            logger?.error?.({ event: "x402.payment_ledger_write_failed", requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(ledgerError) || "INTERNAL_ERROR" });
+          }
+          logger?.error?.({ event: "x402.settlement_unavailable", requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || "INTERNAL_ERROR" });
           respond(503, errorBody("PAYMENT_UNAVAILABLE", "Payment settlement is temporarily unavailable", requestId));
         }
         return;
@@ -255,10 +294,30 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
 function jsonSafe(value) {
   return JSON.parse(JSON.stringify(value, (_, item) => typeof item === "bigint" ? item.toString() : item));
 }
+function bindX402PaymentEvidenceToBundle({ body, resourceUrl, status, context, settlement, issuer, keyId, privateKeyPem, issuedAt }) {
+  if (!isRecord(body) || body.schema !== "priorseal.verification-bundle.v1" || typeof body.bundleHash !== "string" || !/^[0-9a-f]{64}$/.test(body.bundleHash) || !isRecord(body.receipt) || !isRecord(body.keyRegistry) || !Number.isSafeInteger(body.assembledAt)) return body;
+  const evidence = signX402PaymentEvidence(buildX402PaymentEvidence({
+    paymentPayload: context.payload,
+    requirement: context.requirement,
+    settlement,
+    service: { resourceUrl, responseStatus: status, responseHash: body.bundleHash },
+    issuer,
+    keyId,
+    issuedAt
+  }), privateKeyPem);
+  return buildVerificationBundle({ receipt: body.receipt, keyRegistry: body.keyRegistry, assembledAt: body.assembledAt, paymentEvidence: evidence });
+}
+function paymentEvidenceId(body) {
+  const value = isRecord(body) && isRecord(body.paymentEvidence) ? body.paymentEvidence.paymentEvidenceId : void 0;
+  return typeof value === "string" && /^psp_[0-9a-f]{32}$/.test(value) ? value : void 0;
+}
 function keyRegistryDocument(issuer, keyRegistry) {
-  return { schema: "priorseal.keys.v1", issuer, keys: keyRegistry.list(), verifierVersion: "3.0.0", schemaVersions: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.verification-bundle.v1"] };
+  return { schema: "priorseal.keys.v1", issuer, keys: keyRegistry.list(), verifierVersion: "3.0.0", schemaVersions: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1"] };
 }
 const OPENAPI = { openapi: "3.1.0", info: { title: "PriorSeal API", version: "2.0.0", description: "Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts." }, paths: { "/v1/capabilities": { get: { summary: "Deployment configuration and workflow capabilities" } }, "/v1/archive": { get: { summary: "List private uploaded evidence with a project bearer credential" }, post: { summary: "Archive immutable evidence with a writer credential" } }, "/v1/archive/export": { get: { summary: "Export a private snapshot page including raw artifacts" } }, "/v1/archive/{entryId}": { get: { summary: "Read private project evidence" } }, "/v1/intents": { post: { summary: "Create a legacy unsigned intent draft", deprecated: true, responses: { "201": { description: "Created" } } } }, "/v1/authorizations/prepare": { post: { summary: "Canonicalize an authorization and return EIP-712 typed data or a Solana message" } }, "/v1/authorizations": { post: { summary: "Verify and accept a signed authorization" } }, "/v1/authorizations/{authorizationId}": { get: { summary: "Read authorization state" } }, "/v1/authorizations/{authorizationId}/transparency": { get: { summary: "Read signed transparency evidence and any verified external anchor" } }, "/v1/executions/observe": { post: { summary: "Observe EVM or Solana execution against an authorization" } }, "/v1/observation-jobs/{jobId}": { get: { summary: "Read automatic finality observation job" } }, "/v1/receipts/{receiptId}": { get: { summary: "Read receipt" } }, "/v1/receipts/{receiptId}/bundle": { get: { summary: "Export portable receipt evidence and key-discovery metadata" } }, "/v1/receipts/verify": { post: { summary: "Convenience verification, not authority" } }, "/.well-known/priorseal-keys.json": { get: { summary: "Read the issuer public-key registry" } }, "/v1/version": { get: { summary: "Read service and protocol versions" } }, "/health/live": { get: { summary: "Liveness" } }, "/health/ready": { get: { summary: "Readiness" } } } };
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 export {
   createHttpServer
 };
