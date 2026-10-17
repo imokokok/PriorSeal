@@ -47,14 +47,14 @@ test("x402 evidence pack is private, hashed, and excludes sensitive payment mate
 		localVerification: { valid: true, code: "OK" },
 		paymentEvidenceVerification: { valid: true, code: "OK" },
 	});
-	assert.equal((await stat(completed.directory)).mode & 0o777, 0o700);
-	assert.equal((await stat(completed.manifestPath)).mode & 0o777, 0o600);
 	const manifest = JSON.parse(
 		await readFile(completed.manifestPath, "utf8"),
 	) as {
 		files: Array<{ name: string; sha256: string }>;
 		retention: { rawPaymentSignatureStored: boolean };
 	};
+	assert.equal((await stat(completed.directory)).mode & 0o777, 0o700);
+	assert.equal((await stat(completed.manifestPath)).mode & 0o777, 0o600);
 	assert.deepEqual(
 		manifest.files.map((file) => file.name),
 		[
