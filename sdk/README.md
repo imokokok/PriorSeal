@@ -56,6 +56,116 @@ const evidence = await priorseal.observeExecutionUntilFinal({
 })
 ```
 
+### Headless or single-agent runtime
+
+For a server-side or single-agent integration, use an external
+principal-controlled EIP-712 signing boundary instead of placing a wallet key
+in the SDK. `runAgentAction()` prepares and verifies the authorization, calls
+your submission callback once, and observes the resulting hash. It never owns
+either signing key and does not retry an uncertain submission.
+
+```ts
+import { createPriorSealClient } from 'priorseal-sdk'
+
+const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.xyz' })
+
+const result = await priorseal.runAgentAction({
+  authorization: {
+    intent, // Exact transaction fields prepared by your agent.
+    principal: { type: 'organization', id: 'treasury:main' },
+    delegate: { agentId: 'agent:treasury', executor: intent.sender },
+    audience: (await priorseal.capabilities()).audience,
+  },
+  signer: {
+    account: principalAuthority.address,
+    // This boundary belongs to the principal, not the agent executor.
+    signTypedData: typedData => principalAuthority.signTypedData(typedData),
+  },
+  submit: async ({ authorization }) => {
+    // Your executor must recheck the accepted exact authorization before it
+    // signs and broadcasts. Return the one transaction hash it submitted.
+    return { txHash: await executor.submitOnce(authorization) }
+  },
+  confirmations: 12,
+})
+
+await yourEvidenceStore.save(result.execution.receipt)
+```
+
+Do not use the signer callback as a hidden unrestricted wallet. It receives an
+exact, time-limited, single-use authorization request and should independently
+enforce the principal's approval policy. A changed action requires a fresh
+authorization. x402, where a deployment enables it, pays for eligible
+read-only PriorSeal evidence exports; it does not authorize this action or pay
+for write requests.
+
+### Agent-paid evidence exports with x402
+
+`createX402AgentFetch()` lets an agent automatically pay an eligible x402
+receipt-bundle challenge through an external service-payer signer. A policy is
+mandatory: pin the service origin and bundle path, then set the highest
+per-call amount and, in production, the expected payment rail, USDC contract,
+and payee. The wrapper performs at most one signed retry and refuses POST
+requests.
+
+```ts
+import { createPriorSealClient, createX402AgentFetch } from 'priorseal-sdk'
+
+const paidFetch = createX402AgentFetch({
+  signer: async ({ challenge, allowedRequirements }) => {
+    // Your x402-capable payer verifies the selected requirement and returns
+    // its base64 x402 v2 PAYMENT-SIGNATURE value. Keep its key outside the SDK.
+    return servicePayer.signX402Payment({ challenge, allowedRequirements })
+  },
+  policy: {
+    allowedOrigins: ['https://priorseal.xyz'],
+    allowPath: pathname => /^\/v1\/receipts\/[^/]+\/bundle$/.test(pathname),
+    maxAmountAtomic: '10000', // 0.01 USDC at six decimals
+    allowedNetworks: ['eip155:8453'],
+    allowedAssets: ['0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'],
+    allowedPayTos: ['0xYourReviewedPriorSealPayee'],
+  },
+})
+
+const paidPriorseal = createPriorSealClient({
+  baseUrl: 'https://priorseal.xyz',
+  fetch: paidFetch,
+})
+const bundle = await paidPriorseal.getVerificationBundle(receiptId)
+```
+
+The shown address is a placeholder: use a separately verified deployment
+payee. Do not use this transport until the deployment advertises the intended
+route and network through `capabilities().payments.x402`, and do not use
+discovery data from a bundle as your payment-policy trust source.
+
+### Prepaid Agent service credits
+
+Where a deployment advertises `capabilities().payments.agentCredits`, an
+operator may have enabled prepaid, protocol-neutral service credits for a
+narrow route list. Give the SDK an Agent service credential in its default
+headers; every mutating SDK request already supplies an idempotency key. The
+credential pays only for PriorSeal service usage—it does not sign, broaden, or
+authorize an onchain action.
+
+```ts
+const priorseal = createPriorSealClient({
+  baseUrl: 'https://priorseal.example',
+  headers: { 'x-priorseal-agent-key': process.env.PRIORSEAL_AGENT_SERVICE_KEY! },
+})
+
+const capabilities = await priorseal.capabilities()
+// Pin the reviewed route/price policy before making metered calls. The server
+// provides exact decimal USD strings; do not calculate prices with floats.
+console.log(capabilities.payments?.agentCredits?.routes)
+console.log((await priorseal.agentAccount()).account.remainingCredits)
+console.log((await priorseal.agentUsage(25)).items)
+```
+
+Store this credential separately from both the principal authorization signer
+and the executor key. If it is revoked or depleted, the service rejects the
+call without granting any substitute execution authority.
+
 For Solana mainnet-beta, construct an intent from the fully compiled message and resolved address lookup table addresses, then authorize it with a wallet that supports off-chain Ed25519 message signing. The transaction's `recentBlockhash` is the bound nonce; `lastValidBlockHeight` is RPC metadata and is not represented as a signed message field. `hashSolanaTransactionMessage(message)` returns the SHA-256 hash of the exact legacy, v0, or v1 message bytes and can bind a pre-sign simulation to the same message. See the [Solana integration guide](https://github.com/imokokok/PriorSeal/blob/main/docs/integrations/solana.md) for a complete flow. The Solana wallet signer may be distinct from the transaction fee payer; the delegated executor must match the fee payer.
 
 ## Independent local verification

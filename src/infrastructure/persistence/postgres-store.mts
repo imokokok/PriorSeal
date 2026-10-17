@@ -5,6 +5,7 @@ import { archivePage, type ArchiveAccess, type ArchiveQuery } from '../../applic
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from '../../domain/merkle-log.mjs';
 import { assertReceiptIdentity } from './receipt-identity.mjs';
 import { assertX402PaymentLedgerEvent, type X402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
+import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation } from '../../application/commerce/agent-meter.mjs';
 import type { Pool, PoolClient } from 'pg';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
@@ -19,7 +20,12 @@ type LogEntry = Awaited<ReturnType<MemoryStore['appendAuthorizationLog']>>;
 type Receipt = Parameters<MemoryStore['saveReceipt']>[0] & { intentHash: string; execution: { txHash: string }; schema: string; issuer: string; keyId: string; outcome: string; signature?: string };
 type PgJobRow = { job_id: string; idempotency_key: string; input_json: unknown; state: string; attempts: number; next_attempt_at: string | Date; observation_json: unknown; result_json: unknown; error_json: unknown; created_at: string | Date; lease_token: string; lease_expires_at: string | Date };
 type PgAuthorizationRow = { authorization_json: unknown; acceptance_json: unknown; policy_json: unknown; timestamp_evidence_json: unknown; witness_evidence_json: unknown; status: string; bound_tx_hash: string | null; uses: number };
+type PgAgentUsageRow = { usage_id: string; account_id: string; route_id: string; request_key: string; credits: string | number; reserved_at: string | Date; state: AgentUsageReservation['state'] };
+type PgAgentMeterAccountRow = { account_id: string; credential_hash: string; provisioned_credits: string | number; remaining_credits: string | number; status: AgentMeterAccount['status'] };
+type PgAgentCreditOperationRow = { operation_id: string; account_id: string; request_key: string; credits: string | number; reference: string | null; credited_at: string | Date };
 type MerkleAcceptance = Pick<AuthorizationRecord['acceptance'], 'sequence' | 'entryHash'>;
+function agentAccountState(row: PgAgentMeterAccountRow) { return { accountId: row.account_id, provisionedCredits: String(row.provisioned_credits), remainingCredits: String(row.remaining_credits), status: row.status }; }
+function creditOperationRecord(row: PgAgentCreditOperationRow): AgentCreditOperation { return { operationId: row.operation_id, accountId: row.account_id, requestKey: row.request_key, credits: String(row.credits), reference: row.reference, creditedAt: row.credited_at instanceof Date ? row.credited_at.getTime() : new Date(row.credited_at).getTime() }; }
 
 async function appendMerkleIndex(client: PoolClient, sequence: number, entryHash: string) {
   const siblings: { start: number; level: number }[] = [];
@@ -55,6 +61,63 @@ export function createPostgresStore(pool: Pool) {
       if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError('Invalid x402 payment ledger identifier');
       const result = await pool.query<{ event_json: unknown }>("SELECT event_json FROM x402_payment_ledger_events WHERE ledger_id=$1 ORDER BY occurred_at,CASE event_type WHEN 'PAYMENT_AUTHORIZED' THEN 0 WHEN 'REFUND_RECORDED' THEN 2 ELSE 1 END,event_id", [ledgerId]);
       return result.rows.map(row => assertX402PaymentLedgerEvent(persistedJson(row.event_json, 'x402 payment ledger event')));
+    },
+    async provisionAgentMeterAccount(input: AgentMeterAccount) {
+      await pool.query(`INSERT INTO agent_meter_accounts (account_id,credential_hash,provisioned_credits,remaining_credits,status) VALUES ($1,$2,$3,$3,$4) ON CONFLICT(account_id) DO UPDATE SET remaining_credits=agent_meter_accounts.remaining_credits+GREATEST(0,EXCLUDED.provisioned_credits-agent_meter_accounts.provisioned_credits),provisioned_credits=GREATEST(agent_meter_accounts.provisioned_credits,EXCLUDED.provisioned_credits)`, [input.accountId, input.credentialHash, input.provisionedCredits, input.status]);
+    },
+    async createAgentMeterAccount(input: AgentMeterAccount) { const result = await pool.query<{ account_id: string }>('INSERT INTO agent_meter_accounts (account_id,credential_hash,provisioned_credits,remaining_credits,status) VALUES ($1,$2,$3,$3,$4) ON CONFLICT(account_id) DO NOTHING RETURNING account_id', [input.accountId, input.credentialHash, input.provisionedCredits, input.status]); return Boolean(result.rows[0]); },
+    async findAgentMeterAccountByCredentialHash(credentialHash: string) { const result = await pool.query<PgAgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE credential_hash=$1', [credentialHash]); const row = result.rows[0]; return row ? { accountId: row.account_id, credentialHash: row.credential_hash, provisionedCredits: String(row.provisioned_credits), status: row.status } : null; },
+    async getAgentMeterAccount(accountId: string) { const result = await pool.query<PgAgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=$1', [accountId]); const row = result.rows[0]; return row ? agentAccountState(row) : null; },
+    async creditAgentMeterAccount(input: AgentCreditOperation) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const account = await client.query<PgAgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=$1 FOR UPDATE', [input.accountId]);
+        if (!account.rows[0]) { await client.query('COMMIT'); return null; }
+        const inserted = await client.query<PgAgentCreditOperationRow>('INSERT INTO agent_meter_credit_operations (operation_id,account_id,request_key,credits,reference,credited_at) VALUES ($1,$2,$3,$4,$5,to_timestamp($6 / 1000.0)) ON CONFLICT(account_id,request_key) DO NOTHING RETURNING *', [input.operationId, input.accountId, input.requestKey, input.credits, input.reference, input.creditedAt]);
+        if (!inserted.rows[0]) {
+          const existing = await client.query<PgAgentCreditOperationRow>('SELECT * FROM agent_meter_credit_operations WHERE account_id=$1 AND request_key=$2', [input.accountId, input.requestKey]);
+          const operation = existing.rows[0];
+          if (!operation || String(operation.credits) !== input.credits || operation.reference !== input.reference) { const error = Object.assign(new Error('Agent credit idempotency key was reused for a different operation'), { code: 'IDEMPOTENCY_CONFLICT' }); throw error; }
+          await client.query('COMMIT'); return { replay: true, operation: creditOperationRecord(operation), account: agentAccountState(account.rows[0]) };
+        }
+        const credited = await client.query<PgAgentMeterAccountRow>('UPDATE agent_meter_accounts SET provisioned_credits=provisioned_credits+$2,remaining_credits=remaining_credits+$2 WHERE account_id=$1 RETURNING *', [input.accountId, input.credits]);
+        await client.query('COMMIT'); return { replay: false, operation: creditOperationRecord(inserted.rows[0]), account: agentAccountState(credited.rows[0]) };
+      } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+    },
+    async revokeAgentMeterAccount(accountId: string) { const result = await pool.query<PgAgentMeterAccountRow>("UPDATE agent_meter_accounts SET status='revoked' WHERE account_id=$1 RETURNING *", [accountId]); const row = result.rows[0]; return row ? agentAccountState(row) : null; },
+    async listAgentMeterUsage(accountId: string, limit: number) { const result = await pool.query<PgAgentUsageRow>('SELECT * FROM agent_meter_usage WHERE account_id=$1 ORDER BY reserved_at DESC,usage_id DESC LIMIT $2', [accountId, limit]); return result.rows.map(rowToAgentUsage); },
+    async reserveAgentUsage(input: Omit<AgentUsageReservation, 'usageId' | 'state'>) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const existing = await client.query<PgAgentUsageRow>('SELECT * FROM agent_meter_usage WHERE account_id=$1 AND request_key=$2 FOR UPDATE', [input.accountId, input.requestKey]);
+        if (existing.rows[0]) {
+          const row = existing.rows[0];
+          if (row.route_id !== input.routeId || String(row.credits) !== input.credits) { const error: Error & { code?: string } = new Error('Agent request key was reused for a different metered route'); error.code = 'IDEMPOTENCY_CONFLICT'; throw error; }
+          await client.query('COMMIT'); return { kind: 'replayed' as const, reservation: rowToAgentUsage(row) };
+        }
+        const debited = await client.query("UPDATE agent_meter_accounts SET remaining_credits=remaining_credits-$2 WHERE account_id=$1 AND status='active' AND remaining_credits >= $2 RETURNING account_id", [input.accountId, input.credits]);
+        if (!debited.rows[0]) { await client.query('COMMIT'); return { kind: 'insufficient' as const }; }
+        const usageId = `amu_${hashJson({ accountId: input.accountId, requestKey: input.requestKey }).slice(0, 32)}`;
+        const saved = await client.query<PgAgentUsageRow>("INSERT INTO agent_meter_usage (usage_id,account_id,route_id,request_key,credits,reserved_at,state) VALUES ($1,$2,$3,$4,$5,to_timestamp($6 / 1000.0),'RESERVED') RETURNING *", [usageId, input.accountId, input.routeId, input.requestKey, input.credits, input.reservedAt]);
+        await client.query('COMMIT'); return { kind: 'reserved' as const, reservation: rowToAgentUsage(saved.rows[0]) };
+      } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+    },
+    async settleAgentUsage(usageId: string, outcome: 'CONSUMED' | 'RELEASED') {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const found = await client.query<PgAgentUsageRow>('SELECT * FROM agent_meter_usage WHERE usage_id=$1 FOR UPDATE', [usageId]);
+        const usage = found.rows[0];
+        if (!usage) { await client.query('COMMIT'); return null; }
+        if (usage.state === 'RESERVED') {
+          if (outcome === 'RELEASED') await client.query('UPDATE agent_meter_accounts SET remaining_credits=remaining_credits+$2 WHERE account_id=$1', [usage.account_id, usage.credits]);
+          const settled = await client.query<PgAgentUsageRow>('UPDATE agent_meter_usage SET state=$2 WHERE usage_id=$1 RETURNING *', [usageId, outcome]);
+          await client.query('COMMIT'); return rowToAgentUsage(settled.rows[0]);
+        }
+        await client.query('COMMIT'); return rowToAgentUsage(usage);
+      } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
     },
     async saveArchiveEntry(entry: ArchiveEntry) {
       const result = await pool.query('INSERT INTO project_evidence_archive (project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (project_id,environment,entry_id) DO NOTHING RETURNING entry_json,sequence', [entry.projectId, entry.environment, entry.id, entry.artifactHash, entry.kind, entry.createdAt, entry.txHash, entry.authorizationId, entry.status, entry.supersedesId, entry]);
@@ -218,4 +281,5 @@ export function createPostgresStore(pool: Pool) {
 }
 
 function rowToJob(row: PgJobRow, { includeLease = false } = {}): ObservationJob { return { jobId: persistedStatus(row.job_id, 'job.jobId'), idempotencyKey: row.idempotency_key, input: persistedJobInput(row.input_json), state: persistedStatus(row.state, 'job.state'), attempts: persistedCount(row.attempts, 'job.attempts'), nextAttemptAt: persistedTimestamp(row.next_attempt_at, 'job.nextAttemptAt'), observation: row.observation_json == null ? null : persistedWorkerObservation(row.observation_json), result: persistedJobResult(row.result_json), error: persistedJobError(row.error_json), createdAt: persistedTimestamp(row.created_at, 'job.createdAt'), ...(includeLease ? { leaseToken: row.lease_token, leaseExpiresAt: persistedTimestamp(row.lease_expires_at, 'job.leaseExpiresAt') } : {}) }; }
+function rowToAgentUsage(row: PgAgentUsageRow): AgentUsageReservation { return { usageId: row.usage_id, accountId: row.account_id, routeId: row.route_id, requestKey: row.request_key, credits: String(row.credits), reservedAt: persistedTimestamp(row.reserved_at, 'agent usage reservedAt'), state: row.state }; }
 function rowToAuthorization(row: PgAuthorizationRow): AuthorizationRecord { const policyEvidence = persistedPolicy(row.policy_json); return { authorization: persistedAuthorization(row.authorization_json), acceptance: persistedAcceptance(row.acceptance_json), policy: policyEvidence?.result ?? policyEvidence, policyEvidence: policyEvidence?.schema === 'priorseal.policy-evidence.v1' ? policyEvidence : undefined, ...(row.timestamp_evidence_json ? { timestampEvidence: persistedJson(row.timestamp_evidence_json, 'timestamp evidence') } : {}), ...(row.witness_evidence_json ? { witnessEvidence: persistedJson(row.witness_evidence_json, 'witness evidence') } : {}), status: persistedStatus(row.status, 'authorization.status'), boundTxHash: row.bound_tx_hash, uses: persistedCount(row.uses, 'authorization.uses') }; }

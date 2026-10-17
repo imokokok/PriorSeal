@@ -21,11 +21,12 @@ PriorSeal is for teams building EVM and Solana agents, treasury automation, wall
 
 | Need | Start here |
 | --- | --- |
+| Give an agent bounded authority and portable evidence around one action | [Agent usage and payment model](docs/product/agent-usage-model.md) · [PriorSeal offline example](#run-the-offline-example) |
 | Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
 | Start a reproducible exact-call integration and hand a reviewer a portable v3 receipt bundle | [Exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) |
 | Bind a Solana mainnet transaction message to a wallet authorization and observed transaction | [Solana integration guide](docs/integrations/solana.md) |
-| Accept x402 API payments in USDC on aligned EVM networks and Solana | [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md) |
+| Configure x402 payment for eligible read-only evidence exports | [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md) |
 | Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
 | Review the assets, limits, recipient and router in one ERC-20 swap before authorization | [Reviewed swap authorization](docs/product/swap-authorization.md) |
 | See why an agent's replanned swap needs new approval | [Offline replan demo](examples/swap-replan-demo/README.md) |
@@ -33,6 +34,15 @@ PriorSeal is for teams building EVM and Solana agents, treasury automation, wall
 | Keep assessment, authorization, and execution evidence together | [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) and [composite review manifests](sdk/README.md#composite-review-manifests) |
 
 Insight and PriorSeal work independently. Insight provides **oracle transparency and risk intelligence**; PriorSeal provides **authorization and execution evidence**. The combined path links assessment, authorization, execution, and review while keeping each product’s trust checks separate. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
+
+PriorSeal is designed as an agent-facing, per-use authorization and evidence
+layer: an agent can call the service and, where enabled, pay for an eligible
+evidence export, but its service payment never gives it authority over a
+customer transaction. The principal's explicit signed authorization remains
+separate. The currently supported x402 route is a configured read-only receipt
+bundle export; it is not a public production offering unless the relevant
+production gates have been completed. See the
+[agent usage and payment model](docs/product/agent-usage-model.md).
 
 For x402 API payments, the aligned production rails are Ethereum, OP Mainnet,
 Polygon PoS, Monad, X Layer, Sei, Base, Arbitrum One, Avalanche C-Chain, and
@@ -146,7 +156,7 @@ Other partner fixtures are under [`examples/`](examples/). Insight can be used i
 
 | Topic | Start here |
 | --- | --- |
-| Product scope and evidence limits | [Positioning](docs/product/positioning.md) · [First-release scope](docs/product/first-release-scope.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
+| Product scope, commercial direction and evidence limits | [Positioning](docs/product/positioning.md) · [First-release scope](docs/product/first-release-scope.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
 | Authorization and receipt semantics | [Signed authorization](docs/architecture/signed-authorization.md) · [Temporal evidence and finality](docs/architecture/temporal-finality.md) · [Lifecycle](docs/architecture/lifecycle.md) · [API compatibility](docs/api/compatibility.md) |
 | Security and operations | [Threat model](docs/security/threat-model.md) · [Supply-chain controls](docs/security/supply-chain.md) · [Operations](docs/runbooks/operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
 | SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |
