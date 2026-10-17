@@ -14,7 +14,7 @@ const environment = {
   PRIORSEAL_ISSUER: 'priorseal.xyz', PRIORSEAL_KEY_ID: 'production-1', PRIORSEAL_BUILD_VERSION: 'a'.repeat(40), PRIORSEAL_AUTHORIZATION_AUDIENCE: 'priorseal.xyz', PRIORSEAL_PREEXECUTION_PROOF_MODE: 'rfc3161',
   PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS: 'false', PRIORSEAL_TRUST_PROXY: 'true',
   PRIORSEAL_PRIVATE_KEY_PEM: '-----BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----', PRIORSEAL_PUBLIC_KEY_PEM: '-----BEGIN PUBLIC KEY-----\nfixture\n-----END PUBLIC KEY-----', PRIORSEAL_POLICY_JSON: '{}', PRIORSEAL_CORS_ORIGINS: 'https://priorseal.example',
-  PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: origin, PRIORSEAL_X402_PAY_TO: payTo, PRIORSEAL_X402_NETWORKS: 'eip155:8453', PRIORSEAL_X402_TIMEOUT_MS: '15000', PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path, description: 'Export a portable receipt bundle', price: '$0.01' }]),
+  PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: origin, PRIORSEAL_X402_PAY_TO: payTo, PRIORSEAL_X402_NETWORKS: 'eip155:8453', PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path, description: 'Export a portable receipt bundle', price: '$0.01' }]),
 };
 
 test('production x402 readiness is quote-only and rejects any settlement path', async (t) => {
