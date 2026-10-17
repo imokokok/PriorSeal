@@ -1,0 +1,36 @@
+.jupiter-flow { margin: 0 0 22px; display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--ink); background: var(--ink); gap: 1px; }
+.jupiter-flow > div { min-height: 89px; padding: 15px; display: grid; align-content: space-between; gap: 8px; color: var(--muted); background: var(--porcelain); }
+.jupiter-flow > div.complete { color: var(--porcelain); background: var(--wine); }
+.jupiter-flow span, .jupiter-index { color: inherit; font: 600 11px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.jupiter-flow strong { font: 400 18px/1.1 "Iowan Old Style", Baskerville, Georgia, serif; }
+.jupiter-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .65fr); gap: 22px; align-items: start; }
+.jupiter-import h2, .jupiter-state h2, .jupiter-review h2, .jupiter-submit h2, .jupiter-evidence h2 { margin: 10px 0 8px; font: 400 31px/1.1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.jupiter-import > p, .jupiter-submit > p, .jupiter-evidence > p { max-width: 760px; margin: 0 0 22px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.jupiter-import__actions, .jupiter-review-actions { margin-top: 19px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.jupiter-review-actions > span { max-width: 510px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.jupiter-state { background: #ebe8df; border-color: var(--ink); }
+.jupiter-state::before { background: var(--ink); }
+.jupiter-state dl, .jupiter-details { margin: 20px 0 0; border-top: 1px solid var(--ink); }
+.jupiter-state dl > div, .jupiter-details > div { min-height: 49px; display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: 12px; border-bottom: 1px solid var(--rule); }
+.jupiter-state dt, .jupiter-details dt, .jupiter-summary dt { color: var(--muted); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }
+.jupiter-state dd, .jupiter-details dd { min-width: 0; margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.jupiter-review, .jupiter-submit, .jupiter-evidence { margin-top: 22px; }
+.jupiter-summary { margin: 25px 0 22px; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--ink); border-left: 1px solid var(--rule); }
+.jupiter-summary > div { min-width: 0; min-height: 108px; padding: 15px; display: grid; align-content: start; gap: 10px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.jupiter-summary dd { min-width: 0; margin: 0; display: grid; gap: 7px; overflow-wrap: anywhere; }
+.jupiter-summary strong { font: 400 24px/1.05 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.03em; }
+.jupiter-summary dd > span { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.jupiter-review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.jupiter-review-grid > section { min-width: 0; padding: 18px; background: #f0eee7; border: 1px solid var(--rule); }
+.jupiter-review-grid h3 { margin: 0; font: 400 21px "Iowan Old Style", Baskerville, Georgia, serif; }
+.jupiter-review-grid p { color: var(--muted); font-size: 12px; line-height: 1.55; }
+.jupiter-tags { margin-top: 17px; display: flex; flex-wrap: wrap; gap: 6px; }
+.jupiter-tags span { max-width: 100%; padding: 6px 8px; overflow: hidden; color: var(--wine); border: 1px solid #bca5a9; font: 600 11px "JetBrains Mono", monospace; text-overflow: ellipsis; white-space: nowrap; }
+.jupiter-warnings { margin-top: 20px; display: grid; gap: 10px; }
+.jupiter-submit-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .6fr); gap: 22px; align-items: end; }
+.jupiter-submit-check { min-height: 98px; padding: 16px; display: grid; align-content: start; gap: 8px; color: var(--porcelain); background: var(--ink); }
+.jupiter-submit-check strong { font: 600 12px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }
+.jupiter-submit-check span { color: #c7c2b8; font-size: 12px; line-height: 1.5; }
+.jupiter-signature { margin-top: 22px; padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: #eeece5; border-left: 4px solid var(--wine); }
+@media (max-width: 920px) { .jupiter-flow { grid-template-columns: 1fr; } .jupiter-flow > div { min-height: 55px; grid-template-columns: 52px 1fr; align-items: center; } .jupiter-layout, .jupiter-review-grid, .jupiter-submit-grid { grid-template-columns: 1fr; } .jupiter-summary { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .jupiter-summary { grid-template-columns: 1fr; } .jupiter-signature { align-items: flex-start; flex-direction: column; } }
