@@ -1,0 +1,126 @@
+{
+  "schema": "priorseal.exact-call-partner-reference.manifest.v1",
+  "fixtureId": "exact-call-partner-reference-v1",
+  "files": {
+    "README.md": {
+      "sha256": "fa50fd9bc72793744b9c62b51952488dc46923da6c48e819778098b9fbba5198"
+    },
+    "TEST-RECORD.md": {
+      "sha256": "0aed3f20fa51757c0e56aa0807159f2d16f23192999ea61bd79e4607bda3cdbe"
+    },
+    "generate-fixtures.mts": {
+      "sha256": "7d57b453920904723ea05332abd7b76ffe86d14597553f91946f5fee28e5753c"
+    },
+    "generate-fixtures.mjs": {
+      "sha256": "35ed00660053e42b4952b197a15c83ae12c5ebc38902618e82ae59cd26182fd2"
+    },
+    "verify.mts": {
+      "sha256": "c3bf80bad45188ec2b1acc63ec4886470d265e39d3caf73f43900c3613cb069a"
+    },
+    "verify.mjs": {
+      "sha256": "3aec4c45d32ee4edd820ce7c82130a0b6cae52b7546267609aa1aadf13a1204b"
+    },
+    "fixture/authorization.json": {
+      "sha256": "eee5f44031b60cfcfa9b66457d52d094b91cd7def35bbc79ce440f24a771b28a"
+    },
+    "fixture/issuer-key.json": {
+      "sha256": "fdfb1cdc7ab07ebf3d820776f4568d26bbc58d43e40ac22f3d342de7c6b8a269"
+    },
+    "fixture/context-approval.json": {
+      "sha256": "343ff91a17a34ba037079ecb2323cb077cd8442bb906cee3334e61e4a0d9d4f0"
+    },
+    "fixture/context-approval-mismatched.json": {
+      "sha256": "6dc74b4829c24c6d2bfe2fa798c3b30397f93a79db44dfbf21f2a2e8b921b23b"
+    },
+    "fixture/receipts/exact-match.json": {
+      "sha256": "fd183b57aef0a6b9f9fdcc4ba924e9efe0c44fd7a27b72c21ba26dda48fe7d61"
+    },
+    "fixture/receipts/target-mismatch.json": {
+      "sha256": "8e083e7be3bb22eaea95950a9d3b413154ec270fb94a9c0609ceed29412ca68d"
+    },
+    "fixture/receipts/calldata-mismatch.json": {
+      "sha256": "414df8c06ce9ef30a35b741a2e4b5257831909bdb17c276c192729b241526aeb"
+    },
+    "fixture/receipts/chain-mismatch.json": {
+      "sha256": "873a4acf73f48fe8c4b84eda57504039ca8fed5b3a4a4714282976cd713461d6"
+    },
+    "fixture/receipts/authorization-expired.json": {
+      "sha256": "8657c20764e4ade1547e8bd3522ebee64c055c805a8e7081cf7331231cc846a3"
+    },
+    "verification-bundle/MANIFEST.json": {
+      "sha256": "fdabb00c72795bb32e6316e8bab2fa3f92275cb97590c5d7240a1716a213b66d"
+    }
+  },
+  "schemaVersion": "priorseal.execution-receipt.v3",
+  "profile": "priorseal.execution-profile.exact-call.v1",
+  "verifier": {
+    "package": "priorseal-sdk",
+    "version": "0.11.1",
+    "surface": "verifyReceiptLocally"
+  },
+  "contextCommitment": {
+    "namespace": "partner.reference-approval.v1",
+    "algorithm": "sha256",
+    "digest": "0xfdaa05cfce7398016534c328683f504d608745a59e88571b4a50fddd48904c15"
+  },
+  "cases": [
+    {
+      "id": "exact-match",
+      "receipt": "fixture/receipts/exact-match.json",
+      "bound": true,
+      "reasonCodes": [],
+      "complianceStatus": "COMPLIANT",
+      "outcome": "COMPLETED"
+    },
+    {
+      "id": "target-mismatch",
+      "receipt": "fixture/receipts/target-mismatch.json",
+      "bound": false,
+      "reasonCodes": [
+        "CALL_TARGET_MISMATCH"
+      ],
+      "complianceStatus": "NON_COMPLIANT",
+      "outcome": "COMPLETED"
+    },
+    {
+      "id": "calldata-mismatch",
+      "receipt": "fixture/receipts/calldata-mismatch.json",
+      "bound": false,
+      "reasonCodes": [
+        "CALLDATA_MISMATCH"
+      ],
+      "complianceStatus": "NON_COMPLIANT",
+      "outcome": "COMPLETED"
+    },
+    {
+      "id": "chain-mismatch",
+      "receipt": "fixture/receipts/chain-mismatch.json",
+      "bound": false,
+      "reasonCodes": [
+        "CHAIN_MISMATCH"
+      ],
+      "complianceStatus": "NOT_ASSESSABLE",
+      "outcome": "COMPLETED"
+    },
+    {
+      "id": "authorization-expired",
+      "receipt": "fixture/receipts/authorization-expired.json",
+      "bound": false,
+      "reasonCodes": [
+        "OUTSIDE_AUTHORIZATION_WINDOW",
+        "OUTSIDE_TIME_WINDOW"
+      ],
+      "complianceStatus": "NON_COMPLIANT",
+      "outcome": "COMPLETED"
+    }
+  ],
+  "contextMismatch": {
+    "document": "fixture/context-approval-mismatched.json",
+    "code": "CONTEXT_COMMITMENT_DIGEST_MISMATCH"
+  },
+  "limits": [
+    "Synthetic offline fixture only; no transaction is constructed, signed, or broadcast by this example.",
+    "The public issuer key enables signature verification but does not establish issuer trust.",
+    "The context document is application-owned data; PriorSeal binds only its declared digest."
+  ]
+}

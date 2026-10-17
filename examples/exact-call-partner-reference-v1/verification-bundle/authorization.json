@@ -1,0 +1,51 @@
+{
+  "schema": "priorseal.authorization.v2",
+  "domain": "priorseal/authorization/v2",
+  "intent": {
+    "schema": "priorseal.intent.v2",
+    "executionProfile": "priorseal.execution-profile.exact-call.v1",
+    "intentId": "partner-reference-exact-call-001",
+    "chainId": 8453,
+    "action": "CONTRACT_CALL",
+    "asset": "eip155:8453/native",
+    "amount": "1000000000000000",
+    "sender": "0x2222222222222222222222222222222222222222",
+    "recipient": "0x5555555555555555555555555555555555555555",
+    "validUntil": 2000,
+    "nonce": "17",
+    "callTarget": "0x3333333333333333333333333333333333333333",
+    "calldataHash": "0x6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a",
+    "transactionValue": "1000000000000000",
+    "contextCommitments": [
+      {
+        "namespace": "partner.reference-approval.v1",
+        "algorithm": "sha256",
+        "digest": "0xfdaa05cfce7398016534c328683f504d608745a59e88571b4a50fddd48904c15"
+      }
+    ],
+    "intentHash": "eb388b4945d80e292281b59924791608763dfa85dc6c1da854cd6216accede93"
+  },
+  "intentHash": "eb388b4945d80e292281b59924791608763dfa85dc6c1da854cd6216accede93",
+  "principal": {
+    "type": "user",
+    "id": "partner-reference-principal",
+    "account": "0x77952ce83ca3cad9f7adcfabeda85bd2f1f52008"
+  },
+  "authorizer": {
+    "type": "eip712",
+    "address": "0x77952ce83ca3cad9f7adcfabeda85bd2f1f52008"
+  },
+  "delegate": {
+    "agentId": "partner-reference-agent",
+    "executor": "0x2222222222222222222222222222222222222222"
+  },
+  "issuedAt": 1000,
+  "notBefore": 1000,
+  "expiresAt": 2000,
+  "authorizationNonce": "0x9191919191919191919191919191919191919191919191919191919191919191",
+  "maxUses": "1",
+  "audience": "priorseal",
+  "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "signature": "0x70292d4c82aeb3423336bc2aac632365a82677d4b0766dd843872d376ebb9ce35b707c42594af34390c2aa400e129f9d1c6ce1482e68e78b6383b7f9331aaa661c",
+  "authorizationId": "auth_613df27f28b78dd3c1a25353ac52821a"
+}

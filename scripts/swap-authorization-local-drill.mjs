@@ -2,20 +2,27 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { once } from "node:events";
-import { readFile, readdir } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import solc from "solc";
 import { createPublicClient, createWalletClient, custom, defineChain, encodeFunctionData, keccak256, parseAbi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { createDefiExecutionGateway, createDefiViemSubmitter, createPostgresDefiAttemptStore } from "priorseal-sdk/defi";
-import { createHttpServer, createPostgresRwaAttemptStore, createPostgresStore } from "../src/index.mjs";
+import { buildVerificationBundle, createHttpServer, createPostgresRwaAttemptStore, createPostgresStore } from "../src/index.mjs";
 import { observeEvm } from "../src/infrastructure/blockchain/evm/observer.mjs";
 import { assertV3SwapAuthorization, buildV3SwapIntent, createPriorSealClient, createV3SwapApproval, generateAuthorizationNonce, V3_SINGLE_SWAP_ABI } from "../sdk/dist/index.js";
-import { verifyReceiptLocally } from "../sdk/dist/verifier.js";
+import { verifyReceiptLocally, verifyVerificationBundleLocally } from "../sdk/dist/verifier.js";
 if (!process.env.GANACHE_MODULE) throw new Error("Set GANACHE_MODULE to a local ganache@7.9.2/dist/node/core.js path");
 const { default: ganache } = await import(pathToFileURL(process.env.GANACHE_MODULE).href);
 const now = Math.floor(Date.now() / 1e3);
+const outputDirectory = process.env.PRIORSEAL_PILOT_OUTPUT_DIR?.trim() || null;
+const outputDirectoryPath = outputDirectory ? resolve(outputDirectory) : null;
+if (outputDirectoryPath) {
+  await mkdir(outputDirectoryPath, { recursive: true, mode: 448 });
+  if ((await readdir(outputDirectoryPath)).length > 0) throw new Error(`PILOT_OUTPUT_DIRECTORY_NOT_EMPTY:${outputDirectoryPath}`);
+}
 const provider = ganache.provider({ chain: { chainId: 8453, time: new Date(now * 1e3), hardfork: "shanghai" }, logging: { quiet: true }, wallet: { totalAccounts: 3 } });
 const db = new PGlite();
 let server;
@@ -153,8 +160,16 @@ contract Router {
   assert.equal(observed.receipt?.compliance?.status, "COMPLIANT");
   assert.equal(observed.receipt?.executionStatus, "CONFIRMED");
   assert.ok(observed.receipt);
-  const verified = await verifyReceiptLocally(observed.receipt, { expectedAudience: audience, trustedKeys: { issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null } });
+  const trustRoot = { issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null };
+  const verified = await verifyReceiptLocally(observed.receipt, { expectedAudience: audience, trustedKeys: trustRoot });
   assert.equal(verified.valid, true, JSON.stringify(verified));
+  const evidencePack = buildVerificationBundle({
+    receipt: observed.receipt,
+    keyRegistry: { schema: "priorseal.keys.v1", issuer, keys: [trustRoot] },
+    assembledAt: now + 2
+  });
+  const verifiedPack = await verifyVerificationBundleLocally(evidencePack, { expectedAudience: audience, trustedKeys: trustRoot });
+  assert.equal(verifiedPack.valid, true, JSON.stringify(verifiedPack));
   assertV3SwapAuthorization({ approval, transaction, intent: observed.receipt.authorizationEvidence.authorization.intent, routerBytecode: bytecode, now });
   const balanceAbi = parseAbi(["function balanceOf(address) view returns(uint256)"]);
   assert.equal(await publicClient.readContract({ address: outputToken, abi: balanceAbi, functionName: "balanceOf", args: [receiver] }), 900000n);
@@ -198,7 +213,59 @@ contract Router {
   assert.equal(unsafeBroadcasts, 0);
   assert.equal((await guardedGateway.status(guardedInput.authorizationId))?.status, "UNCERTAIN");
   assert.equal((await guardedGateway.execute(guardedInput)).replay, true);
-  process.stdout.write(JSON.stringify({ ok: true, scope: "ISOLATED_LOCAL_EVM_TEST_TOKENS", authorizationAccepted: true, changedRecipientRejected: true, durableExecutorSubmitted: true, replayBlocked: true, crossRouteNonceClaimBlocked: true, recoveredFinality: true, preBroadcastRouterMutationBlocked: true, uncertainNonceNotRetried: true, transactionMined: true, receiptCompliant: true, receiptIndependentlyVerified: true, outputBalance: "900000" }, null, 2) + "\n");
+  const summary = {
+    schema: "priorseal.restricted-automation-pilot-run.v1",
+    scope: "ISOLATED_LOCAL_EVM_TEST_TOKENS",
+    evidencePack: { schema: evidencePack.schema, bundleHash: evidencePack.bundleHash, receiptId: observed.receipt.receiptId },
+    operation: {
+      executionProfile: authorized.authorization.intent.executionProfile,
+      chainId: transaction.chainId,
+      sender,
+      router,
+      inputToken,
+      outputToken,
+      recipient: receiver,
+      txHash
+    },
+    checks: {
+      authorizationAccepted: true,
+      changedRecipientRejected: true,
+      durableExecutorSubmitted: true,
+      replayBlocked: true,
+      crossRouteNonceClaimBlocked: true,
+      recoveredFinality: true,
+      preBroadcastRouterMutationBlocked: true,
+      uncertainNonceNotRetried: true,
+      transactionMined: true,
+      receiptCompliant: true,
+      evidencePackIndependentlyVerified: true,
+      outputBalance: "900000"
+    },
+    limits: {
+      localEvmOnly: true,
+      testTokensOnly: true,
+      ephemeralIssuer: true,
+      productionReadinessClaimed: false
+    }
+  };
+  if (outputDirectoryPath) {
+    const directory = outputDirectoryPath;
+    await Promise.all([
+      writeFile(resolve(directory, "evidence-pack.json"), `${JSON.stringify(evidencePack, null, 2)}
+`, { encoding: "utf8", mode: 384, flag: "wx" }),
+      writeFile(resolve(directory, "trust-root.json"), `${JSON.stringify({
+        schema: "priorseal.pilot-trust-root.v1",
+        audience,
+        key: trustRoot,
+        testOnly: true,
+        notice: "Pin this key through an independent channel before relying on a real deployment. This local run generates an ephemeral test key."
+      }, null, 2)}
+`, { encoding: "utf8", mode: 384, flag: "wx" }),
+      writeFile(resolve(directory, "run-summary.json"), `${JSON.stringify(summary, null, 2)}
+`, { encoding: "utf8", mode: 384, flag: "wx" })
+    ]);
+  }
+  process.stdout.write(JSON.stringify({ ok: true, ...summary, outputDirectory }, null, 2) + "\n");
 } finally {
   if (server?.listening) {
     const closed = once(server, "close");

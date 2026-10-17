@@ -17,6 +17,7 @@
     "example:aps-priorseal": "npm --prefix examples/aps-priorseal-decision-binding-v1 run verify",
     "test:aps-priorseal": "npm --prefix examples/aps-priorseal-decision-binding-v1 run verify:producer && npm --prefix examples/aps-priorseal-decision-binding-v1 test",
     "example:receipt": "node examples/create-signed-receipt.mjs",
+    "example:exact-call-partner-reference": "npm run sdk:build && npm run core:build && node examples/exact-call-partner-reference-v1/generate-fixtures.mjs && node examples/exact-call-partner-reference-v1/verify.mjs",
     "example:erc8004-inspect": "npm run sdk:build && npm run core:build && node examples/erc8004-agent-accountability-v1/inspect.mjs",
     "example:swap-replan": "npm run sdk:build && npm run core:build && node examples/swap-replan-demo/verify.mjs",
     "example:boundaryattest-paired": "npm run sdk:build && node examples/boundaryattest-paired-v0.2/verify.reference.mjs",
@@ -51,6 +52,9 @@
     "rwa:execution:check:prepared": "npm run core:build:tools && node scripts/verify-rwa-execution-profiles.mjs",
     "rwa:execution:check:online": "npm run sdk:build && npm run core:build:tools && node scripts/verify-rwa-execution-profiles.mjs --online",
     "swap:execution:check": "npm run sdk:build && npm run core:build && node scripts/swap-authorization-local-drill.mjs",
+    "pilot:restricted-automation": "npm run sdk:build && npm run core:build && node scripts/swap-authorization-local-drill.mjs",
+    "verify:restricted-automation-pilot": "npm run sdk:build && npm run core:build && node scripts/verify-restricted-automation-pilot.mjs",
+    "validate:restricted-automation-pilot-pack": "npm run sdk:build && npm run core:build && node scripts/validate-restricted-pilot-pack.mjs",
     "verify:wak-base-sepolia:router": "npm run core:build:tools && node scripts/verify-wak-base-sepolia-router.mjs",
     "verify:wak-frozen-multicall:sheet": "npm run core:build:tools && node scripts/verify-wak-frozen-multicall-sheet.mjs",
     "sdk:build": "npm run rwa:parity && npm --prefix sdk run build",
@@ -61,7 +65,7 @@
     "core:build:tools": "node scripts/build-core.mjs --tools-only",
     "core:build:operations": "node scripts/build-core.mjs --operations-only",
     "core:check": "node scripts/build-core.mjs --check",
-    "portable:check": "node examples/402signal-eip3009-settlement-binding-v1/scripts/build.mjs --check && node scripts/build-web3-agent-kit-integration-spike-v1.0.1.mjs --check && node scripts/build-web3-agent-kit-integration-spike-v1.1.mjs --check",
+    "portable:check": "node examples/402signal-eip3009-settlement-binding-v1/scripts/build.mjs --check && node scripts/build-web3-agent-kit-integration-spike-v1.0.1.mjs --check && node scripts/build-web3-agent-kit-integration-spike-v1.1.mjs --check && node examples/exact-call-partner-reference-v1/verify.mjs",
     "source:policy": "node scripts/check-typescript-policy.mjs",
     "worker:types:check": "wrangler types worker-configuration.d.ts --check",
     "test": "npm run sdk:build && npm run test:prepared",
@@ -141,6 +145,7 @@
     "wrangler": "^4.149.0"
   },
   "overrides": {
+    "tmp": "0.2.7",
     "@gelatonetwork/relay-sdk": {
       "axios": "1.20.0",
       "ethers": {

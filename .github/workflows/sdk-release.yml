@@ -68,14 +68,14 @@ jobs:
           (
             cd "$sbom_input"
             "$GITHUB_WORKSPACE/tools/sbom/node_modules/.bin/cyclonedx-npm" \
-            --package-lock-only \
-            --omit dev \
-            --output-reproducible \
-            --validate \
-            --output-format JSON \
-            --output-file "$sbom" \
-            --mc-type library \
-            package.json
+              --package-lock-only \
+              --omit dev \
+              --output-reproducible \
+              --validate \
+              --output-format JSON \
+              --output-file "$sbom" \
+              --mc-type library \
+              package.json
           )
           jq -e --arg version "$SDK_VERSION" '
             .bomFormat == "CycloneDX"

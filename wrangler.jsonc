@@ -29,8 +29,7 @@
     "PRIORSEAL_AUTHORIZATION_AUDIENCE": "priorseal.xyz",
     "PRIORSEAL_PREEXECUTION_PROOF_MODE": "rfc3161",
     "PRIORSEAL_CORS_ORIGINS": "https://priorseal.xyz,https://www.priorseal.xyz",
-    "PRIORSEAL_TRUST_PROXY": "true",
-    "PRIORSEAL_X402_PAY_TO": "0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231"
+    "PRIORSEAL_TRUST_PROXY": "true"
   },
   "secrets": {
     "required": [

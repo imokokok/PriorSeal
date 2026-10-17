@@ -26,4 +26,16 @@ test('Worker configuration binds rate limiting and immutable version metadata', 
   assert.equal(config.ratelimits[0].name, 'HTTP_RATE_LIMITER');
   assert.equal(config.ratelimits[0].simple.limit, 60);
   assert.equal(config.vars.PRIORSEAL_BUILD_VERSION, undefined);
+
+  const x402Fields = [
+    'PRIORSEAL_X402_FACILITATOR_URL',
+    'PRIORSEAL_X402_RESOURCE_ORIGIN',
+    'PRIORSEAL_X402_PAY_TO',
+    'PRIORSEAL_X402_ROUTES_JSON',
+  ];
+  const configuredX402Fields = x402Fields.filter((field) => typeof config.vars[field] === 'string' && config.vars[field].trim());
+  assert.ok(
+    configuredX402Fields.length === 0 || configuredX402Fields.length === x402Fields.length,
+    'x402 must be fully configured or disabled; partial configuration prevents Worker startup',
+  );
 });

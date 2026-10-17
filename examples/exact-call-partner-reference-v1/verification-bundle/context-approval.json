@@ -1,0 +1,6 @@
+{
+  "schema": "partner.reference-approval.v1",
+  "decisionId": "reference-decision-001",
+  "decision": "ALLOW",
+  "scope": "synthetic exact-call envelope only"
+}
