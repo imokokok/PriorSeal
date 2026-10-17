@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the Jupiter Guarded Swap adapter for self-paying Solana `ExactIn` Router
+  builds. It binds an independently simulated exact message to a PriorSeal
+  authorization, supports deployment-owned mint/program/ALT/fee limits and
+  produces a non-secret signing review. The adapter fails closed when any
+  compiled instruction, account meta or instruction byte differs from the
+  Jupiter build, and revalidates a prepared object immediately before wallet
+  authorization. It never receives signing keys or broadcasts transactions.
+
 ## 0.11.1 — 2026-10-17
 
 - Add the published exact-call partner reference and portable v3 verification-bundle path to the SDK documentation. The fixture demonstrates local receipt verification, binding mismatch outcomes, context-commitment comparison, component hashes, and a signature-tamper rejection without an API, wallet, or RPC endpoint.
