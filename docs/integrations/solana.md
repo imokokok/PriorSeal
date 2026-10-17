@@ -2,6 +2,13 @@
 
 PriorSeal supports a bounded Solana mainnet-beta workflow: prepare a complete compiled transaction message, obtain a principal's Ed25519 message authorization, submit the transaction through your execution system, then observe the transaction and export the signed PriorSeal receipt.
 
+The deployment can independently accept x402 Solana mainnet USDC for eligible
+read-only API exports. That payment rail is not the execution chain by
+definition: a Solana payment can purchase evidence about an EVM transaction,
+and a payment receipt must not be interpreted as authorization for the subject
+transaction. See the [x402 integration guide](x402-evm.md) and [chain
+capability matrix](../architecture/chain-capabilities.md).
+
 This profile binds the complete versioned transaction message, not an interpretation of arbitrary program behavior. It supports legacy, v0, and v1 messages on Solana mainnet-beta and observes the confirmed commitment. `RPC_FINALIZED`, devnet, testnet, and semantic decoding of arbitrary instructions are not supported by this profile.
 
 ## Build the exact message intent

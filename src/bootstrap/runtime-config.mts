@@ -1,4 +1,5 @@
 import { createArchiveAccess } from '../application/archive/evidence-archive.mjs';
+import { parseX402Config } from '../infrastructure/payments/x402-exact-evm.mjs';
 
 type RuntimeEnvironmentInput = Partial<Record<
   'DATABASE_URL' |
@@ -31,6 +32,15 @@ type RuntimeEnvironmentInput = Partial<Record<
   'PRIORSEAL_TRANSPARENCY_ANCHOR_FILE' |
   'PRIORSEAL_TRANSPARENCY_ANCHOR_JSON' |
   'PRIORSEAL_TRUST_PROXY' |
+  'PRIORSEAL_X402_FACILITATOR_HEADERS_JSON' |
+  'PRIORSEAL_X402_FACILITATOR_URL' |
+  'PRIORSEAL_X402_ENABLE_TESTNETS' |
+  'PRIORSEAL_X402_PAY_TO' |
+  'PRIORSEAL_X402_SOLANA_PAY_TO' |
+  'PRIORSEAL_X402_NETWORKS' |
+  'PRIORSEAL_X402_RESOURCE_ORIGIN' |
+  'PRIORSEAL_X402_ROUTES_JSON' |
+  'PRIORSEAL_X402_TIMEOUT_MS' |
   'PRIORSEAL_WITNESS_ENDPOINTS_FILE' |
   'PRIORSEAL_WITNESS_ENDPOINTS_JSON',
   string
@@ -62,6 +72,7 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
   const erc4337EntryPoints = parseErc4337EntryPoints(optionalJson(environment.PRIORSEAL_ERC4337_ENTRY_POINTS_JSON, 'PRIORSEAL_ERC4337_ENTRY_POINTS_JSON'));
   const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, 'PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON'));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, 'PRIORSEAL_SAFE_4337_TRUST_JSON'));
+  const x402 = parseX402Config(environment);
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some(entry => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
   }
@@ -113,8 +124,11 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
     databaseBackend: databaseBackendValue(environment.PRIORSEAL_DATABASE_BACKEND),
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
     trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, 'PRIORSEAL_TRUST_PROXY', false),
+    x402,
   };
-  if (runtimeEnvironment === 'production') validateProductionConfig(config);
+  if (runtimeEnvironment === 'production' || runtimeEnvironment === 'staging') {
+    validateDeploymentConfig(config, runtimeEnvironment);
+  }
   return config;
 }
 
@@ -221,7 +235,7 @@ function runtimeValue(value: unknown) {
 
 function environmentValue(value: unknown) {
   const environment = optionalValue(value) ?? 'development';
-  if (!['development', 'test', 'production'].includes(environment)) throw new TypeError('PRIORSEAL_ENVIRONMENT must be development, test, or production');
+  if (!['development', 'test', 'production', 'staging'].includes(environment)) throw new TypeError('PRIORSEAL_ENVIRONMENT must be development, test, or production (or staging)');
   return environment;
 }
 
@@ -232,19 +246,24 @@ type ProductionConfig = {
   issuer: string; authorizationAudience: string; preExecutionProofMode: string;
   witnessEndpointsFile?: string; witnessEndpointsJson?: unknown;
   transparencyAnchorFile?: string; transparencyAnchorJson?: unknown; corsOrigins: string[];
+  x402?: { networksExplicitlyConfigured: boolean; testnetNetworksEnabled: boolean };
 };
-function validateProductionConfig(config: ProductionConfig) {
-  if (config.databaseBackend !== 'd1' && !config.databaseUrl) throw new TypeError('Production requires a database connection');
-  if ((config.runtime ?? 'node') === 'node' && !config.databaseDirectUrl) throw new TypeError('Production Node runtime requires DATABASE_URL_UNPOOLED');
-  if (!(config.privateKeyFile && config.publicKeyFile) && !(config.privateKeyPem && config.publicKeyPem)) throw new TypeError('Production requires issuer signing keys');
-  if (config.keyId === 'default') throw new TypeError('Production requires a deployment-specific PRIORSEAL_KEY_ID');
-  if (config.buildVersion === 'dev') throw new TypeError('Production requires PRIORSEAL_BUILD_VERSION');
-  if (!config.policyFile && !config.policyJson) throw new TypeError('Production requires an authorization policy');
-  if (config.issuer === 'priorseal-local' || config.authorizationAudience === 'priorseal') throw new TypeError('Production requires deployment-specific issuer and authorization audience values');
-  if (config.preExecutionProofMode === 'issuer') throw new TypeError('Production requires rfc3161, witness-quorum, or evm-anchor pre-execution proof');
-  if (config.preExecutionProofMode === 'witness-quorum' && !config.witnessEndpointsFile && !config.witnessEndpointsJson) throw new TypeError('Production witness-quorum mode requires witness endpoints');
-  if (config.preExecutionProofMode === 'evm-anchor' && !config.transparencyAnchorFile && !config.transparencyAnchorJson) throw new TypeError('Production evm-anchor mode requires a transparency anchor');
-  if (!config.corsOrigins.length || config.corsOrigins.some((origin: string) => new URL(origin).hostname === 'localhost')) throw new TypeError('Production requires at least one non-localhost CORS origin');
+function validateDeploymentConfig(config: ProductionConfig, environment: 'production' | 'staging') {
+  const label = environment === 'production' ? 'Production' : 'Staging';
+  if (config.databaseBackend !== 'd1' && !config.databaseUrl) throw new TypeError(`${label} requires a database connection`);
+  if ((config.runtime ?? 'node') === 'node' && !config.databaseDirectUrl) throw new TypeError(`${label} Node runtime requires DATABASE_URL_UNPOOLED`);
+  if (!(config.privateKeyFile && config.publicKeyFile) && !(config.privateKeyPem && config.publicKeyPem)) throw new TypeError(`${label} requires issuer signing keys`);
+  if (config.keyId === 'default') throw new TypeError(`${label} requires a deployment-specific PRIORSEAL_KEY_ID`);
+  if (config.buildVersion === 'dev') throw new TypeError(`${label} requires PRIORSEAL_BUILD_VERSION`);
+  if (!config.policyFile && !config.policyJson) throw new TypeError(`${label} requires an authorization policy`);
+  if (config.issuer === 'priorseal-local' || config.authorizationAudience === 'priorseal') throw new TypeError(`${label} requires deployment-specific issuer and authorization audience values`);
+  if (config.preExecutionProofMode === 'issuer') throw new TypeError(`${label} requires rfc3161, witness-quorum, or evm-anchor pre-execution proof`);
+  if (config.preExecutionProofMode === 'witness-quorum' && !config.witnessEndpointsFile && !config.witnessEndpointsJson) throw new TypeError(`${label} witness-quorum mode requires witness endpoints`);
+  if (config.preExecutionProofMode === 'evm-anchor' && !config.transparencyAnchorFile && !config.transparencyAnchorJson) throw new TypeError(`${label} evm-anchor mode requires a transparency anchor`);
+  if (environment === 'production' && !config.corsOrigins.length) throw new TypeError('Production requires at least one non-localhost CORS origin');
+  if (config.corsOrigins.some((origin: string) => new URL(origin).hostname === 'localhost')) throw new TypeError(`${label} requires non-localhost CORS origins`);
+  if (config.x402 && !config.x402.networksExplicitlyConfigured) throw new TypeError(`${label} requires an explicit PRIORSEAL_X402_NETWORKS allowlist when x402 is enabled`);
+  if (environment === 'production' && config.x402?.testnetNetworksEnabled) throw new TypeError('Production cannot enable x402 testnet payment rails');
 }
 
 function proofModeValue(value: unknown, legacyAnchor: unknown, environment: string) {
@@ -252,7 +271,10 @@ function proofModeValue(value: unknown, legacyAnchor: unknown, environment: stri
   if (explicit && !['issuer', 'rfc3161', 'witness-quorum', 'evm-anchor'].includes(explicit)) throw new TypeError('PRIORSEAL_PREEXECUTION_PROOF_MODE must be issuer, rfc3161, witness-quorum, or evm-anchor');
   if (explicit) return explicit;
   if (booleanValue(legacyAnchor, 'PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR', false)) return 'evm-anchor';
-  if (environment === 'production') throw new TypeError('Production requires explicit PRIORSEAL_PREEXECUTION_PROOF_MODE');
+  if (environment === 'production' || environment === 'staging') {
+    const label = environment === 'production' ? 'Production' : 'Staging';
+    throw new TypeError(`${label} requires explicit PRIORSEAL_PREEXECUTION_PROOF_MODE`);
+  }
   return 'issuer';
 }
 

@@ -55,11 +55,17 @@ const onDemandOperationSources = [
   'scripts/erc4337-pilot-doctor.mts',
   'scripts/erc4337-eip7702-doctor.mts',
   'scripts/prepare-transparency-anchor.mts',
+  'scripts/record-x402-refund.mts',
   'scripts/record-transparency-anchor.mts',
   'scripts/production-readiness.mts',
   'scripts/production-smoke-readonly.mts',
   'scripts/production-smoke.mts',
   'scripts/rotation-impact.mts',
+  'scripts/x402-production-readiness.mts',
+  'scripts/x402-staging-bundle-rehearsal.mts',
+  'scripts/x402-staging-receipt-fixture.mts',
+  'scripts/x402-staging-paid-rehearsal.mts',
+  'scripts/x402-staging-readiness.mts',
 ].map((path) => join(projectRoot, path));
 const onDemandPaths = new Set([...onDemandGeneratorSources, ...onDemandToolSources, ...onDemandOperationSources]);
 // Ignored script outputs are optional until generated. Once present, verify

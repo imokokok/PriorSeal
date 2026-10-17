@@ -8,8 +8,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { createHttpServer } from '../../src/index.mjs';
+import { createHttpServer, createMemoryStore, x402PaymentLedgerId } from '../../src/index.mjs';
 import { authorizationTypedData, buildAuthorization, hashJson } from '../../src/index.mjs';
+import { parseX402Config } from '../../src/infrastructure/payments/x402-exact-evm.mjs';
+import { verifyX402PaymentEvidence } from '../../src/domain/x402-payment-evidence.mjs';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const sender = `0x${'a'.repeat(40)}`;
@@ -63,6 +65,141 @@ async function request(server: TestServer, path: string, { method = 'GET', heade
   const res = new EventEmitter() as MockResponse; res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
   const done = new Promise<void>((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers ?? {}, buffer: () => Buffer.from(res.body ?? ''), json: (): HttpTestResponse => JSON.parse(Buffer.from(res.body ?? '').toString('utf8')) as HttpTestResponse, text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
+test('x402 Monad mainnet is advertised, verified, and settled through the HTTP lifecycle', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const facilitatorCalls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    facilitatorCalls.push(`${init?.method} ${url.pathname}`);
+    if (url.pathname === '/supported') return new Response(JSON.stringify({ kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:143' }, { x402Version: 2, scheme: 'exact', network: 'eip155:8453' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const body = JSON.parse(String(init?.body)) as { paymentRequirements: { network: string; asset: string; extra: { name: string; version: string } } };
+    assert.equal(body.paymentRequirements.network, 'eip155:143');
+    assert.equal(body.paymentRequirements.asset, '0x754704Bc059F8C67012fEd69BC8A327a5aafb603');
+    assert.deepEqual(body.paymentRequirements.extra, { name: 'USDC', version: '2' });
+    if (url.pathname === '/verify') return new Response(JSON.stringify({ isValid: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.pathname === '/settle') return new Response(JSON.stringify({ success: true, network: 'eip155:143', transaction: `0x${'1'.repeat(64)}`, payer: `0x${'c'.repeat(40)}`, amount: '10000' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    throw new Error(`Unexpected facilitator request: ${url.pathname}`);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://monad-facilitator.test',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test',
+    PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'eip155:143',
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path: '/v1/capabilities', description: 'Read deployment capabilities', price: '$0.01' }]),
+  });
+  assert.ok(x402);
+  const server = createHttpServer({ x402 });
+  t.after(() => server.close());
+
+  const unpaid = await request(server, '/v1/capabilities');
+  assert.equal(unpaid.status, 402);
+  assert.equal(unpaid.headers['cache-control'], 'no-store');
+  const challenge = unpaid.json() as unknown as { accepts: { network: string; amount: string; asset: string; extra: { name: string; version: string } }[] };
+  assert.deepEqual(challenge.accepts.map(requirement => requirement.network), ['eip155:143']);
+  const accepted = challenge.accepts[0];
+  assert.equal(accepted.amount, '10000');
+  assert.equal(accepted.asset, '0x754704Bc059F8C67012fEd69BC8A327a5aafb603');
+  assert.deepEqual(accepted.extra, { name: 'USDC', version: '2' });
+
+  const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: { ...accepted, scheme: 'exact', payTo: x402.payTo!, maxTimeoutSeconds: 300 }, payload: {} })).toString('base64');
+  const paid = await request(server, '/v1/capabilities', { headers: { 'payment-signature': paymentHeader } });
+  assert.equal(paid.status, 200);
+  assert.equal(paid.headers['cache-control'], 'private, no-store');
+  assert.deepEqual(facilitatorCalls, ['GET /supported', 'POST /verify', 'POST /settle']);
+  const paymentResponse = JSON.parse(Buffer.from(paid.headers['payment-response'], 'base64').toString('utf8')) as { success: boolean; network: string; transaction: string };
+  assert.equal(paymentResponse.success, true);
+  assert.equal(paymentResponse.network, 'eip155:143');
+  assert.equal(paymentResponse.transaction, `0x${'1'.repeat(64)}`);
+  const capabilities = paid.json() as unknown as { payments: { x402: { configured: boolean; networks: { network: string }[] } } };
+  assert.equal(capabilities.payments.x402.configured, true);
+  assert.ok(capabilities.payments.x402.networks.some(network => network.network === 'eip155:143'));
+});
+test('x402 Solana mainnet advertises the facilitator fee payer and settles a base58 signature', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const feePayer = 'EwWqGE4ZFKLofuestmU4LDdK7XM1N4ALgdZccwYugwGd';
+  const merchant = '2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4';
+  const signature = `${'1'.repeat(63)}2`; // 64 decoded bytes: 63 zero bytes then 0x01.
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    if (url.pathname === '/supported') return new Response(JSON.stringify({
+      kinds: [{ x402Version: 2, scheme: 'exact', network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' }],
+      signers: { 'solana:*': [feePayer] },
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const body = JSON.parse(String(init?.body)) as { paymentRequirements: { network: string; payTo: string; extra: Record<string, string> } };
+    assert.equal(body.paymentRequirements.network, 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');
+    assert.equal(body.paymentRequirements.payTo, merchant);
+    assert.deepEqual(body.paymentRequirements.extra, { feePayer });
+    if (url.pathname === '/verify') return new Response(JSON.stringify({ isValid: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.pathname === '/settle') return new Response(JSON.stringify({ success: true, network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', transaction: signature, payer: feePayer, amount: '10000' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    throw new Error(`Unexpected facilitator request: ${url.pathname}`);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://solana-facilitator.test',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test',
+    PRIORSEAL_X402_SOLANA_PAY_TO: merchant,
+    PRIORSEAL_X402_NETWORKS: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path: '/v1/capabilities', description: 'Read deployment capabilities', price: '$0.01' }]),
+  });
+  assert.ok(x402);
+  const server = createHttpServer({ x402 });
+  t.after(() => server.close());
+  const unpaid = await request(server, '/v1/capabilities');
+  assert.equal(unpaid.status, 402);
+  const challenge = unpaid.json() as unknown as { accepts: Array<{ network: string; asset: string; extra: Record<string, string> }> };
+  assert.deepEqual(challenge.accepts, [{ scheme: 'exact', network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', amount: '10000', asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', payTo: merchant, maxTimeoutSeconds: 60, extra: { feePayer } }]);
+  const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: challenge.accepts[0], payload: {} })).toString('base64');
+  const paid = await request(server, '/v1/capabilities', { headers: { 'payment-signature': paymentHeader } });
+  assert.equal(paid.status, 200);
+  const settlement = JSON.parse(Buffer.from(paid.headers['payment-response'], 'base64').toString('utf8')) as { success: boolean; transaction: string; network: string };
+  assert.equal(settlement.success, true);
+  assert.equal(settlement.transaction, signature);
+  assert.equal(settlement.network, 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');
+  const capabilities = paid.json() as unknown as { payments: { x402: { networks: Array<{ family: string; network: string }> } } };
+  assert.deepEqual(capabilities.payments.x402.networks, [{ family: 'svm', network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', chainId: 0, name: 'Solana mainnet-beta', asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', assetName: 'USDC' }]);
+});
+test('a paid receipt bundle includes issuer-signed x402 payment evidence', async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    if (url.pathname === '/supported') return new Response(JSON.stringify({ kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:8453' }] }), { status: 200 });
+    if (url.pathname === '/verify') return new Response(JSON.stringify({ isValid: true }), { status: 200 });
+    if (url.pathname === '/settle') return new Response(JSON.stringify({ success: true, network: 'eip155:8453', transaction: `0x${'1'.repeat(64)}`, payer: `0x${'c'.repeat(40)}`, amount: '10000' }), { status: 200 });
+    throw new Error(`Unexpected facilitator request: ${url.pathname} (${init?.method})`);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://payment-evidence-facilitator.test',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test',
+    PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path: '/v1/receipts/:receiptId/bundle', description: 'Export a receipt bundle', price: '$0.01' }]),
+  });
+  assert.ok(x402);
+  const txHash = `0x${'1'.repeat(64)}`;
+  const store = createMemoryStore();
+  const server = createHttpServer({ store, x402, privateKeyPem, publicKeyPem, issuer: 'priorseal.test', keyId: 'test-1', observer: async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_000, observedAt: 1_001, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'evm-json-rpc:eip155:8453:configured-1' }) as unknown as ObserverResult });
+  t.after(() => server.close());
+  await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
+  const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash }) });
+  const receiptId = observed.json().receipt.receiptId;
+  const unpaid = await request(server, `/v1/receipts/${receiptId}/bundle`);
+  assert.equal(unpaid.status, 402);
+  const accepted = (unpaid.json() as unknown as { accepts: Array<Record<string, unknown>> }).accepts[0];
+  const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted, payload: {} })).toString('base64');
+  const paid = await request(server, `/v1/receipts/${receiptId}/bundle`, { headers: { 'payment-signature': paymentHeader } });
+  assert.equal(paid.status, 200);
+  const bundle = paid.json() as unknown as { bundleHash: string; paymentEvidence: Record<string, unknown> & { service: { responseHash: string } } };
+  assert.notEqual(bundle.paymentEvidence.service.responseHash, bundle.bundleHash);
+  assert.deepEqual(verifyX402PaymentEvidence(bundle.paymentEvidence, publicKeyPem), { valid: true, code: 'OK', paymentEvidenceId: bundle.paymentEvidence.paymentEvidenceId });
+  const ledgerContext = { payload: { x402Version: 2 as const, accepted, payload: {} }, requirement: accepted } as Parameters<typeof x402PaymentLedgerId>[0];
+  const ledger = await store.listX402PaymentLedgerEvents(x402PaymentLedgerId(ledgerContext, `https://api.example.test/v1/receipts/${receiptId}/bundle`));
+  assert.deepEqual(ledger.map(event => event.type), ['PAYMENT_AUTHORIZED', 'DELIVERED']);
+  assert.equal(ledger.at(-1)?.paymentEvidenceId, bundle.paymentEvidence.paymentEvidenceId);
+});
 test('request deadline terminates stalled bodies and rejects slow route work', async (t) => {
   const store = { async health() { await new Promise(resolve => setTimeout(resolve, 80)); return 'ok'; } };
   const server = createHttpServer({ store: store as unknown as ServerOptions['store'], requestTimeoutMs: 20 });

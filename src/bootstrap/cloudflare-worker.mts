@@ -23,6 +23,7 @@ async function withRuntime<T, R extends { server?: Runtime['server'] }>(environm
       d1: environment.DB,
       assertSchema: false,
       rateLimiter: createCloudflareRateLimiter(environment.HTTP_RATE_LIMITER),
+      logger: { error: (entry) => console.error(JSON.stringify({ level: 'error', ...entry })) },
       dispatchObservationJob: (job: ObservationJob) => environment.OBSERVATION_QUEUE.send({ jobId: job.jobId }),
     });
     return await operation(runtime);

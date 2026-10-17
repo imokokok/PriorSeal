@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { archivePage, type ArchiveAccess, type ArchiveQuery } from '../../application/archive/evidence-archive.mjs';
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from '../../domain/merkle-log.mjs';
 import { assertReceiptIdentity } from './receipt-identity.mjs';
+import { assertX402PaymentLedgerEvent, type X402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
 import type { Pool, PoolClient } from 'pg';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
@@ -42,6 +43,19 @@ export function createPostgresStore(pool: Pool) {
   if (!pool?.query) throw new TypeError('createPostgresStore requires a pg-compatible pool');
   return {
     archiveRetention: 'until_operator_deletion',
+    async appendX402PaymentLedgerEvent(value: X402PaymentLedgerEvent) {
+      const event = assertX402PaymentLedgerEvent(value);
+      const result = await pool.query<{ event_json: unknown }>('INSERT INTO x402_payment_ledger_events (event_id,ledger_id,payment_network,settlement_tx,event_type,occurred_at,resource_hash,event_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (event_id) DO NOTHING RETURNING event_json', [event.eventId, event.ledgerId, event.requirement?.network ?? event.refund!.network, event.settlement?.transaction ?? event.refund?.transaction ?? null, event.type, event.occurredAt, event.resource?.responseHash ?? null, event]);
+      if (result.rows[0]) return assertX402PaymentLedgerEvent(persistedJson(result.rows[0].event_json, 'x402 payment ledger event'));
+      const existing = await pool.query<{ event_json: unknown }>('SELECT event_json FROM x402_payment_ledger_events WHERE event_id=$1', [event.eventId]);
+      if (!existing.rows[0]) throw new Error('x402 payment ledger event disappeared during insert');
+      return assertX402PaymentLedgerEvent(persistedJson(existing.rows[0].event_json, 'x402 payment ledger event'));
+    },
+    async listX402PaymentLedgerEvents(ledgerId: string) {
+      if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError('Invalid x402 payment ledger identifier');
+      const result = await pool.query<{ event_json: unknown }>("SELECT event_json FROM x402_payment_ledger_events WHERE ledger_id=$1 ORDER BY occurred_at,CASE event_type WHEN 'PAYMENT_AUTHORIZED' THEN 0 WHEN 'REFUND_RECORDED' THEN 2 ELSE 1 END,event_id", [ledgerId]);
+      return result.rows.map(row => assertX402PaymentLedgerEvent(persistedJson(row.event_json, 'x402 payment ledger event')));
+    },
     async saveArchiveEntry(entry: ArchiveEntry) {
       const result = await pool.query('INSERT INTO project_evidence_archive (project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (project_id,environment,entry_id) DO NOTHING RETURNING entry_json,sequence', [entry.projectId, entry.environment, entry.id, entry.artifactHash, entry.kind, entry.createdAt, entry.txHash, entry.authorizationId, entry.status, entry.supersedesId, entry]);
       if (result.rows[0]) return { ...persistedArchiveEntry(result.rows[0].entry_json), sequence: Number(result.rows[0].sequence) };

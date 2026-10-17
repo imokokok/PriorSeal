@@ -1,5 +1,12 @@
 # Test record
 
+## 2026-10-16 update
+
+Added explicit Base and Arbitrum One native-USDC EIP-3009 profiles to the
+TypeScript adapter. The bundled route and settlement fixture remains Base-only;
+no Arbitrum route proof or live settlement was added. This change has not been
+run through the verifier or repository test suite.
+
 Date: 2026-09-18 (Asia/Shanghai)
 
 Scope: nonproduction, EOA-only, fully offline synthetic evaluation.

@@ -30,12 +30,12 @@ async function createPriorSealRuntime(options = {}) {
 async function createPriorSealBackgroundRuntime(options = {}) {
   return composeRuntime(options, false);
 }
-async function composeRuntime({ config, environment = process.env, database, d1, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, assertSchema = true }, http) {
+async function composeRuntime({ config, environment = process.env, database, d1, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, logger, assertSchema = true }, http) {
   if (!config) throw new TypeError("Runtime config is required");
   const ownsPool = !database;
   const pool = d1 ? null : database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
   try {
-    if (assertSchema && config.environment === "production" && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials) });
+    if (assertSchema && config.environment === "production" && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials), x402Enabled: Boolean(config.x402) });
     const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : void 0;
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();
@@ -80,7 +80,7 @@ async function composeRuntime({ config, environment = process.env, database, d1,
         return job;
       }
     } : baseObservationWorker;
-    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter((id) => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === "rfc3161", witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === "witness-quorum", transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, version: config.buildVersion, staticDir, observer, rateLimiter }) : void 0;
+    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter((id) => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === "rfc3161", witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === "witness-quorum", transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, x402: config.x402, version: config.buildVersion, staticDir, observer, rateLimiter, logger }) : void 0;
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {

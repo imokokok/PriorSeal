@@ -26,6 +26,8 @@ import { createWitnessHttpServer } from "./interfaces/http/create-witness-http-s
 import { buildTimestampPolicy, createTimestampRequest, buildTimestampEvidence, validateTimestampEvidenceClaims, verifyTimestampEvidence, DIGICERT_RFC3161_PROFILE, DIGICERT_RFC3161_URL } from "./domain/rfc3161.mjs";
 import { createDigiCertTimestampProvider } from "./infrastructure/timestamp/digicert-rfc3161-client.mjs";
 import { buildVerificationBundle, VERIFICATION_BUNDLE_SCHEMA, VERIFICATION_BUNDLE_TRUST } from "./domain/verification-bundle.mjs";
+import { buildX402PaymentEvidence, signX402PaymentEvidence, verifyX402PaymentEvidence, X402_PAYMENT_EVIDENCE_SCHEMA, X402_PAYMENT_EVIDENCE_DOMAIN } from "./domain/x402-payment-evidence.mjs";
+import { buildX402PaymentLedgerEvent, buildX402PaymentRefundLedgerEvent, assertX402PaymentLedgerEvent, x402PaymentLedgerId, X402_PAYMENT_LEDGER_SCHEMA } from "./domain/x402-payment-ledger.mjs";
 export {
   AUTHORIZED_RECEIPT_SCHEMA,
   COMPLIANCE_STATUSES,
@@ -34,6 +36,10 @@ export {
   LEGACY_AUTHORIZED_RECEIPT_SCHEMA,
   VERIFICATION_BUNDLE_SCHEMA,
   VERIFICATION_BUNDLE_TRUST,
+  X402_PAYMENT_EVIDENCE_DOMAIN,
+  X402_PAYMENT_EVIDENCE_SCHEMA,
+  X402_PAYMENT_LEDGER_SCHEMA,
+  assertX402PaymentLedgerEvent,
   assessCompliance,
   authorizationTypedData,
   authorizeIntent,
@@ -51,6 +57,9 @@ export {
   buildWitnessEvidence,
   buildWitnessPolicy,
   buildWitnessRequest,
+  buildX402PaymentEvidence,
+  buildX402PaymentLedgerEvent,
+  buildX402PaymentRefundLedgerEvent,
   canonicalize,
   classifyExecutionOutcome,
   createRwaAttemptStore2 as createDefiAttemptStore,
@@ -79,6 +88,7 @@ export {
   sha256Hex,
   signReceipt,
   signWitnessAttestation,
+  signX402PaymentEvidence,
   validateAuthorizedReceiptClaims,
   validateTimestampEvidenceClaims,
   verifyAuthorization,
@@ -90,5 +100,7 @@ export {
   verifyTransparencyEvidence,
   verifyWitnessAttestation,
   verifyWitnessEvidence,
-  witnessRequestForAuthorization
+  verifyX402PaymentEvidence,
+  witnessRequestForAuthorization,
+  x402PaymentLedgerId
 };

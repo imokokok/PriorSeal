@@ -2,6 +2,7 @@ import { hashJson } from '../../domain/hashing.mjs';
 import { archiveEntry, archivePage, type ArchiveAccess, type ArchiveQuery } from '../../application/archive/evidence-archive.mjs';
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from '../../domain/merkle-log.mjs';
 import { assertReceiptIdentity } from './receipt-identity.mjs';
+import { assertX402PaymentLedgerEvent, type X402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
 import type { Authorization, AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { ObservationJob, WorkerObservation } from '../../application/observations/observation-worker.mjs';
 import type { buildIntent } from '../../domain/intent.mjs';
@@ -15,10 +16,13 @@ type Receipt = Record<string, unknown> & { receiptId: string };
 type IdempotencyRecord = { requestHash: string; response: unknown; expiresAt: number };
 type MerkleAcceptance = Pick<AuthorizationAcceptance, 'sequence' | 'entryHash'>;
 
+function paymentLedgerEventOrder(type: X402PaymentLedgerEvent['type']) { return type === 'PAYMENT_AUTHORIZED' ? 0 : type === 'REFUND_RECORDED' ? 2 : 1; }
+
 export function createMemoryStore({ clock = () => Date.now() } = {}) {
   const intents = new Map<string, Intent>(), receipts = new Map<string, Receipt>(), observations = new Map<string, Observation[]>(), idempotency = new Map<string, IdempotencyRecord>(), jobs = new Map<string, ObservationJob>(), authorizations = new Map<string, AuthorizationRecord>(), archive = new Map<string, ArchiveEntry>();
   const archiveEntries: ArchiveEntry[] = [], authorizationLog: LogEntry[] = [];
   const logByAuthorizationHash = new Map<string, LogEntry>(), merkleNodes = new Map<string, string>(), usedAuthorizationNonces = new Set<string>();
+  const x402PaymentLedger = new Map<string, Map<string, X402PaymentLedgerEvent>>();
 
   function appendLogEntry(entry: LogEntry) {
     const nodes = merkleAppendNodes(entry.sequence, entry.entryHash, (start, level) => merkleNodes.get(merkleNodeKey(start, level)));
@@ -29,6 +33,19 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
 
   return {
   archiveRetention: 'process_lifetime',
+  async appendX402PaymentLedgerEvent(value: X402PaymentLedgerEvent) {
+    const event = assertX402PaymentLedgerEvent(value);
+    const entries = x402PaymentLedger.get(event.ledgerId) ?? new Map<string, X402PaymentLedgerEvent>();
+    x402PaymentLedger.set(event.ledgerId, entries);
+    const existing = entries.get(event.eventId);
+    if (existing) return structuredClone(existing);
+    entries.set(event.eventId, structuredClone(event));
+    return structuredClone(event);
+  },
+  async listX402PaymentLedgerEvents(ledgerId: string) {
+    if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError('Invalid x402 payment ledger identifier');
+    return [...(x402PaymentLedger.get(ledgerId)?.values() ?? [])].sort((left, right) => left.occurredAt - right.occurredAt || paymentLedgerEventOrder(left.type) - paymentLedgerEventOrder(right.type) || left.eventId.localeCompare(right.eventId)).map(value => structuredClone(value));
+  },
   async saveArchiveEntry(entry: ReturnType<typeof archiveEntry>) {
     const key = JSON.stringify([entry.projectId, entry.environment, entry.id]);
     const existing = archive.get(key);
@@ -53,6 +70,7 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
           (query.filters.to !== null && entry.createdAt > query.filters.to)) continue;
       rows.push(entry);
     }
+
     return { ...archivePage(rows, query, snapshot), retention: 'process_lifetime' };
   },
   async saveIntent(intent: Intent) { const existing = intents.get(intent.intentId); if (existing && existing.intentHash !== intent.intentHash) throw new Error('DUPLICATE_INTENT'); intents.set(intent.intentId, intent); return intent; },

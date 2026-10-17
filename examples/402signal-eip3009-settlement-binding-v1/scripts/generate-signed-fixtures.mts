@@ -12,6 +12,7 @@ import {
   stringToHex,
 } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
+import { getEvmPaymentNetworkProfileForAsset } from '../src/payment-networks.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
@@ -64,7 +65,14 @@ function hex(value: string, label: string): `0x${string}` {
 const response = readJson<RouteResponse>(resolve(raw, 'route-response.json'))
 const challenge = readJson<SellerChallenge>(resolve(raw, 'seller-challenge.json'))
 const context = readJson<RouteContext>(resolve(raw, 'route-context.json'))
-const accepted = challenge.accepts[0]
+const selectedIndex = response.decision_binding.selected_index
+if (!Number.isSafeInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= challenge.accepts.length) {
+  throw new TypeError('route response selected_index must identify an accepted payment requirement')
+}
+const accepted = challenge.accepts[selectedIndex]
+if (!accepted) throw new TypeError('route response selected payment requirement is missing')
+const networkProfile = getEvmPaymentNetworkProfileForAsset(accepted.network, accepted.asset)
+if (!networkProfile) throw new TypeError(`unsupported x402 EVM network or USDC asset: ${accepted.network}`)
 
 const privateKey = generatePrivateKey()
 const buyer = privateKeyToAccount(privateKey)
@@ -97,16 +105,16 @@ const bindingTypes = {
 } as const
 
 const paymentDomain = {
-  name: 'USD Coin',
-  version: '2',
-  chainId: 8453,
+  name: networkProfile.eip712Name,
+  version: networkProfile.eip712Version,
+  chainId: networkProfile.chainId,
   verifyingContract: hex(accepted.asset, 'accepted asset'),
 } as const
 
 const bindingDomain = {
   name: 'PriorSeal EIP-3009 Settlement Binding',
   version: '1',
-  chainId: 8453,
+  chainId: networkProfile.chainId,
 } as const
 
 const typedPayment = (message: PaymentMessage) => ({
@@ -309,6 +317,9 @@ const signed = {
 const settlement = {
   schema: 'priorseal.synthetic-eip3009-settlement-evidence.v1',
   nonproduction: true,
+  network: networkProfile.network,
+  chainId: networkProfile.chainId,
+  asset: networkProfile.asset,
   matching: { transaction, receipt, canonicalBlock, authorizationState: true },
   timeout: {
     submission: { transactionHash, outcome: 'timeout' },

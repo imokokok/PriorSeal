@@ -1,0 +1,166 @@
+# x402 payments on aligned EVM networks and Solana
+
+PriorSeal's shared Node and Cloudflare Worker API can accept x402 v2 `exact`
+USDC payments on Ethereum, OP Mainnet, Polygon PoS, Monad, X Layer, Sei,
+Base, Arbitrum One, and Avalanche C-Chain. It can also accept Solana mainnet
+USDC (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`). The API delegates signature
+verification and settlement to a facilitator configured by the deployment
+operator. The actual `PAYMENT-REQUIRED` response contains only locally
+configured payment families that the facilitator currently advertises through
+`/supported`.
+
+Payment is disabled unless all required `PRIORSEAL_X402_*` settings are
+provided. An EVM payee is shared across every EVM option; a Solana merchant
+public key is separate. The deployment operator still configures the
+facilitator, resource origin, paid routes, and their prices. Once configured,
+`/v1/capabilities` lists the locally enabled payment families and route price
+schedule. A paid request checks the facilitator's current `/supported` response
+and offers only the compatible networks. The request returns HTTP 503 if it
+cannot produce at least one safe payment option.
+
+One `PRIORSEAL_X402_PAY_TO` address and one route/price schedule are shared
+across advertised EVM networks. `PRIORSEAL_X402_SOLANA_PAY_TO` is the Solana
+merchant public key for mainnet USDC. Configure one or both; a deployment may
+operate as EVM-only, Solana-only, or accept both payment families.
+
+## Configure a deployment
+
+Set these values in the API process environment or as Cloudflare Worker
+secrets/vars:
+
+| Variable | Required | Purpose |
+|---|---:|---|
+| `PRIORSEAL_X402_FACILITATOR_URL` | Yes | Facilitator base URL; the service calls `/supported`, `/verify`, and `/settle`. |
+| `PRIORSEAL_X402_FACILITATOR_HEADERS_JSON` | No | Per-operation authentication headers, stored as a secret. |
+| `PRIORSEAL_X402_PAY_TO` | One payee required | EVM address that receives USDC on configured EVM networks. |
+| `PRIORSEAL_X402_SOLANA_PAY_TO` | One payee required | Solana merchant public key that receives mainnet USDC. |
+| `PRIORSEAL_X402_NETWORKS` | Yes in staging/production | Comma-separated, exact CAIP-2 payment-rail allowlist. |
+| `PRIORSEAL_X402_RESOURCE_ORIGIN` | Yes | Public HTTPS API origin used in the x402 resource URL. |
+| `PRIORSEAL_X402_ROUTES_JSON` | Yes | Explicit list of paid, read-only GET routes and their prices. |
+| `PRIORSEAL_X402_TIMEOUT_MS` | No | Facilitator request timeout; defaults to 15000, allowed range 1000–2147483647. |
+
+Example route configuration (choose the price and routes for the deployment):
+
+```json
+[
+  {
+    "method": "GET",
+    "path": "/v1/receipts/:receiptId/bundle",
+    "description": "Export a portable PriorSeal receipt bundle",
+    "price": "$0.01"
+  }
+]
+```
+
+Prices are exact USD strings with up to six decimal places and are converted to
+USDC atomic units. Only `/v1/` GET routes are accepted. POST routes remain
+outside x402 because the default `exact` flow can settle after the resource
+handler; keeping the allowlist read-only avoids charging around a write request
+whose response later fails.
+
+`PRIORSEAL_X402_NETWORKS` is intentionally a deployment rollout control, not
+a list of every rail the binary understands. Staging and production reject an
+implicit all-rail configuration. Every selected EVM rail requires the EVM
+payee; selected Solana requires the Solana payee. Start with a narrow list and
+use the [staging rollout runbook](../runbooks/x402-staging.md) to verify the
+deployed API and facilitator before any paid rehearsal.
+
+For Solana, the resource server obtains the sponsor's public `feePayer` from
+the facilitator's x402 v2 signer discovery metadata. PriorSeal offers a Solana
+option only when the facilitator reports exactly one valid Solana signer for
+the mainnet network (or `solana:*`). The client signs a partially signed SPL
+USDC payment transaction; the sponsor performs the final fee-payer signature
+and submission. A missing or ambiguous signer therefore fails closed instead
+of producing an unusable quote.
+
+Facilitator authentication is independently configured for each operation:
+
+```json
+{
+  "supported": { "Authorization": "Bearer <facilitator credential>" },
+  "verify": { "Authorization": "Bearer <facilitator credential>" },
+  "settle": { "Authorization": "Bearer <facilitator credential>" }
+}
+```
+
+Do not commit real credentials. The parser rejects reserved transport headers,
+line breaks, and URLs containing credentials or query parameters. Production
+facilitator and public resource URLs must use HTTPS.
+
+For Cloudflare, add each secret to the intended environment with Wrangler, for
+example `wrangler secret put PRIORSEAL_X402_FACILITATOR_HEADERS_JSON --env staging`.
+Secrets are environment-specific, so configure them separately for staging and
+production. The routes JSON, origin, payee, and facilitator URL can be deployed
+as environment vars. This repository change does not run Wrangler or deploy a
+Worker.
+
+## Request and settlement behavior
+
+- An unpaid request receives HTTP 402, a `PAYMENT-REQUIRED` header, and a JSON
+  body containing each network the facilitator currently supports.
+- A paid request supplies the base64 JSON x402 v2 payload in
+  `PAYMENT-SIGNATURE`. The facilitator verifies the selected option before the
+  GET handler runs.
+- The facilitator settles only after the GET handler returns a 2xx response.
+  A failed handler is returned without settlement. If settlement fails, the
+  protected response body is withheld and the 402 response includes the
+  facilitator result in `PAYMENT-RESPONSE`. A `settlement_pending` result is
+  retried once with the same payload so a facilitator can reconcile a broadcast
+  transaction.
+- Successful responses include `PAYMENT-RESPONSE` and use private, no-store
+  caching. CORS preflight allows `PAYMENT-SIGNATURE` and exposes the two
+  payment response headers to configured browser origins.
+- Facilitator errors fail closed with HTTP 503. Neither its credentials nor raw
+  response body are included in API errors or logs.
+
+## Payment-to-evidence binding for paid receipt bundles
+
+When a caller pays to export `GET /v1/receipts/:receiptId/bundle` and the
+PriorSeal issuer signing key is configured, the returned verification bundle
+also contains a signed `priorseal.x402-payment-evidence.v1` object. It binds:
+
+- a hash of the payment payload (not the raw, potentially sensitive payload);
+- the accepted x402 requirement and successful settlement result;
+- the resource URL, HTTP success status, and the pre-extension bundle hash;
+- the issuer, key ID, issue time, and Ed25519 signature.
+
+The original execution receipt remains unchanged. Consumers verify the payment
+evidence with the issuer key from the bundled registry (after establishing
+trust in that key out of band) and independently reconcile the settlement on
+its own payment network. A Solana `payer`, if a facilitator returns one, is
+facilitator-provided settlement metadata; it must not be assumed to identify
+either the SPL token authority or the `feePayer` sponsor without
+facilitator-specific validation. Payment and subject-execution networks remain
+independent. On an EVM EIP-3009 rail, the facilitator may submit
+`transferWithAuthorization` as the on-chain transaction sender. Reconciliation
+must therefore bind the quoted `payer` to the USDC authorization calldata and
+the ERC-20 `Transfer` log, rather than assuming the transaction submitter is
+the token payer.
+The public core API exports `verifyX402PaymentEvidence()` for this signature
+and binding check.
+
+The server also persists an immutable, privacy-minimised payment/delivery
+ledger. It records authorization, withheld resource, settlement result,
+delivery, and externally verified refund-record events. It never stores the
+raw payment payload—only its hash—and it is not exposed as a public buyer API.
+Operators reconcile it with the facilitator and payment network through the
+[staging rollout runbook](../runbooks/x402-staging.md).
+
+The EVM USDC contracts and their EIP-712 domain names are pinned in the source
+network registry and follow the [x402 EVM default asset
+table](https://github.com/x402-foundation/x402/blob/main/typescript/packages/mechanisms/evm/src/defaultAssets.ts).
+Solana mainnet uses the canonical USDC mint
+`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`. Facilitator support, not
+this static registry, decides what a live deployment advertises.
+
+This integration implements the x402 v2 HTTP header and facilitator lifecycle
+for the configured EVM and Solana networks. `/v1/capabilities` describes
+locally configured payment families; each payment challenge reflects the
+facilitator's current network support. A payment rail is distinct from an EVM
+or Solana execution-observation capability; see the [chain capability
+matrix](../architecture/chain-capabilities.md). Facilitator choice, account
+funding, route pricing, route selection, and production activation remain
+deployment configuration.
+The offline fixture in
+[`examples/402signal-eip3009-settlement-binding-v1`](../../examples/402signal-eip3009-settlement-binding-v1/README.md)
+continues to be a separate, synthetic 402Signal route-binding example.

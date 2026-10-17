@@ -1,0 +1,18 @@
+{
+  "policyId": "priorseal-staging-v1",
+  "principals": [],
+  "allowedChainIds": [84532],
+  "allowedActions": ["TRANSFER", "CONTRACT_CALL"],
+  "allowedAssets": [],
+  "allowedSenders": [],
+  "allowedRecipients": [],
+  "maxAmount": "0",
+  "maxValiditySeconds": 900,
+  "minConfirmations": 1,
+  "requireDistinctAuthorizerAndExecutor": true,
+  "timestampPolicy": {
+    "schema": "priorseal.timestamp-policy.v1",
+    "profile": "digicert-rfc3161-v1",
+    "maxClockSkewSeconds": 300
+  }
+}

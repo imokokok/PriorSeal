@@ -41,7 +41,39 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     databaseBackend: 'postgresql',
     corsOrigins: ['https://console.example'],
     trustProxy: true,
+    x402: void 0,
   });
+});
+
+test('runtime configuration accepts a Solana-only x402 payment rail', () => {
+  const config = loadRuntimeConfig({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example',
+    PRIORSEAL_X402_SOLANA_PAY_TO: '11111111111111111111111111111111',
+    PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
+  });
+  assert.equal(config.x402?.payTo, undefined);
+  assert.equal(config.x402?.solanaPayTo, '11111111111111111111111111111111');
+  assert.throws(() => loadRuntimeConfig({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_SOLANA_PAY_TO: '11111111111111111111111111111111',
+    PRIORSEAL_X402_NETWORKS: 'eip155:8453', PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
+  }), /EVM payment rail/);
+  assert.throws(() => loadRuntimeConfig({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
+  }), /selects Solana/);
+});
+
+test('Base Sepolia x402 is an explicit staging-only payment rail', () => {
+  const x402 = {
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'eip155:84532', PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
+  };
+  assert.throws(() => loadRuntimeConfig({ ...x402, PRIORSEAL_ENVIRONMENT: 'test' }), /unsupported payment network/);
+  const staging = loadRuntimeConfig({ ...x402, PRIORSEAL_ENVIRONMENT: 'test', PRIORSEAL_X402_ENABLE_TESTNETS: 'true' });
+  assert.deepEqual(staging.x402?.networks, ['eip155:84532']);
+  assert.equal(staging.x402?.testnetNetworksEnabled, true);
+  assert.throws(() => loadRuntimeConfig({ ...x402, PRIORSEAL_ENVIRONMENT: 'production', PRIORSEAL_X402_ENABLE_TESTNETS: 'true' }), /allowed only/);
 });
 
 test('runtime configuration rejects ambiguous or invalid values before startup', () => {
@@ -74,6 +106,12 @@ test('production runtime fails closed unless security dependencies are explicit'
     DATABASE_URL: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full', DATABASE_URL_UNPOOLED: 'postgresql://app:secret@db.example/priorseal?sslmode=verify-full',
   };
   assert.equal(loadRuntimeConfig(base).environment, 'production');
+  const x402 = {
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
+  };
+  assert.throws(() => loadRuntimeConfig({ ...base, ...x402 }), /X402_NETWORKS allowlist/);
+  assert.deepEqual(loadRuntimeConfig({ ...base, ...x402, PRIORSEAL_X402_NETWORKS: 'eip155:8453' }).x402?.networks, ['eip155:8453']);
   const { DATABASE_URL: _pooled, DATABASE_URL_UNPOOLED: _direct, ...d1Base } = base;
   assert.equal(loadRuntimeConfig({ ...d1Base, PRIORSEAL_RUNTIME: 'cloudflare-workers', PRIORSEAL_DATABASE_BACKEND: 'd1' }).databaseBackend, 'd1');
   const { PRIORSEAL_TRANSPARENCY_ANCHOR_FILE: _anchor, ...withoutAnchor } = base;
