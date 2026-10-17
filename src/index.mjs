@@ -28,6 +28,7 @@ import { createDigiCertTimestampProvider } from "./infrastructure/timestamp/digi
 import { buildVerificationBundle, VERIFICATION_BUNDLE_SCHEMA, VERIFICATION_BUNDLE_TRUST } from "./domain/verification-bundle.mjs";
 import { buildX402PaymentEvidence, signX402PaymentEvidence, verifyX402PaymentEvidence, X402_PAYMENT_EVIDENCE_SCHEMA, X402_PAYMENT_EVIDENCE_DOMAIN } from "./domain/x402-payment-evidence.mjs";
 import { buildX402PaymentLedgerEvent, buildX402PaymentRefundLedgerEvent, assertX402PaymentLedgerEvent, x402PaymentLedgerId, X402_PAYMENT_LEDGER_SCHEMA } from "./domain/x402-payment-ledger.mjs";
+import { agentCredentialHash, createAgentMeter, parseAgentMeterConfig } from "./application/commerce/agent-meter.mjs";
 export {
   AUTHORIZED_RECEIPT_SCHEMA,
   COMPLIANCE_STATUSES,
@@ -39,6 +40,7 @@ export {
   X402_PAYMENT_EVIDENCE_DOMAIN,
   X402_PAYMENT_EVIDENCE_SCHEMA,
   X402_PAYMENT_LEDGER_SCHEMA,
+  agentCredentialHash,
   assertX402PaymentLedgerEvent,
   assessCompliance,
   authorizationTypedData,
@@ -62,6 +64,7 @@ export {
   buildX402PaymentRefundLedgerEvent,
   canonicalize,
   classifyExecutionOutcome,
+  createAgentMeter,
   createRwaAttemptStore2 as createDefiAttemptStore,
   createDefiExecutionGateway,
   createRwaViemSubmitter2 as createDefiViemSubmitter,
@@ -82,6 +85,7 @@ export {
   executeRwaAuthorized,
   getDefiAttempt,
   hashJson,
+  parseAgentMeterConfig,
   readWitnessEndpoints,
   reconcileDefiAttempt,
   reconcileRwaAttempt,

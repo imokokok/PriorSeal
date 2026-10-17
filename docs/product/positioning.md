@@ -10,11 +10,40 @@ Its product path is **bounded intent → principal authorization → acceptance 
 
 中文：**将事前的明确授权与事后的实际执行连接起来，形成可独立验证的证据。**
 
+## Agent-native commercial framing
+
+PriorSeal is the **per-use authorization and evidence layer for agents**. An
+agent can prepare a bounded action, call PriorSeal to obtain authorization and
+observation evidence, and retrieve a portable receipt for its operator or a
+reviewer. The principal—not PriorSeal and not the agent's service-payment
+wallet—retains control of the onchain action through an explicit signed
+authorization.
+
+This deliberately separates three roles that can be held by different
+accounts:
+
+| Role | What it controls | What it cannot establish alone |
+| --- | --- | --- |
+| Service payer | Payment for PriorSeal API usage | Permission to execute the subject transaction |
+| Principal / authorizer | The bounded action the agent may take | Settlement of a PriorSeal service charge |
+| Executor | Submission of the subject transaction | A broader authorization than the signed intent |
+
+The eventual self-serve payment mechanism can be x402 or another reviewed
+prepaid-usage design, but it does not replace principal authorization. A
+payment rail is separate from the subject-execution chain and never proves
+that the subject action was authorized.
+
+中文：**PriorSeal 是 Agent 按调用使用的授权与证据层；Agent 可以自动为服务
+付费，但只能在授权人可独立证明的边界内行动。**
+
+独立商业化的当前范围、已验证能力与生产上线门槛见
+[PriorSeal 独立商业化就绪度](standalone-commercial-readiness.md)。
+
 ## Public copy
 
 - Homepage headline: **Authority, before action.**
-- Short description: **What was authorized. What was observed. Portable authorization and execution evidence for EVM agents.**
-- SDK description: **A TypeScript client linking explicit authorization to observed EVM execution and independently verifiable receipts.**
+- Short description: **Authorization and execution evidence for agents—what was authorized, what was observed, and what an independent reviewer can verify.**
+- SDK description: **A TypeScript client for agents to prepare explicit authorization, observe EVM execution, and produce independently verifiable receipts.**
 
 ## Three independently selectable offers
 

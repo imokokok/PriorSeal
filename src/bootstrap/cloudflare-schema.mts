@@ -7,7 +7,7 @@ type Config = ReturnType<typeof loadRuntimeConfig>;
 export function createSchemaGuard(now: () => number = Date.now) {
   const readyUntil = new Map<string, number>();
   return async (database: D1Database, config: Config, context: ExecutionContext, cache: Cache) => {
-    const cacheUrl = `https://priorseal.internal/schema/d1-0001/${config.preExecutionProofMode}/${config.archiveCredentials ? 'archive' : 'public'}`;
+    const cacheUrl = `https://priorseal.internal/schema/d1-0004/${config.preExecutionProofMode}/${config.archiveCredentials ? 'archive' : 'public'}/${config.agentMeter ? 'agent-meter' : 'unmetered'}`;
     const currentTime = now();
     if ((readyUntil.get(cacheUrl) ?? 0) > currentTime) return;
     const cacheKey = new Request(cacheUrl);
@@ -22,6 +22,7 @@ export function createSchemaGuard(now: () => number = Date.now) {
 
     const required = ['authorization_log', 'authorization_log_merkle_nodes', 'authorizations', 'observation_jobs', 'receipts'];
     if (config.archiveCredentials) required.push('project_evidence_archive');
+    if (config.agentMeter) required.push('agent_meter_accounts', 'agent_meter_usage', 'agent_meter_credit_operations');
     if (config.preExecutionProofMode === 'witness-quorum') required.push('witness_attestations');
     const rows = await database.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${required.map(() => '?').join(',')})`).bind(...required).all<{ name: string }>();
     if (rows.results.length !== required.length) throw new TypeError('Required D1 production tables are missing');

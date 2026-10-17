@@ -28,6 +28,40 @@ test('D1 persists privacy-minimised x402 delivery events idempotently', async ()
   } finally { fixture.sqlite.close(); }
 });
 
+test('D1 atomically reserves and settles prepaid Agent credits without duplicate debits', async () => {
+  const fixture = testD1();
+  try {
+    const store = createD1Store(fixture.database);
+    assert.equal(await store.createAgentMeterAccount({ accountId: 'team:alpha', credentialHash: 'a'.repeat(64), provisionedCredits: '2', status: 'active' }), true);
+    assert.equal(await store.createAgentMeterAccount({ accountId: 'team:alpha', credentialHash: 'b'.repeat(64), provisionedCredits: '2', status: 'active' }), false);
+    const credit = { operationId: 'aco_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', accountId: 'team:alpha', requestKey: 'credit-1', credits: '3', reference: 'invoice:1', creditedAt: 999 };
+    const credited = await store.creditAgentMeterAccount(credit);
+    assert.equal(credited?.replay, false);
+    assert.equal(credited?.account.remainingCredits, '5');
+    const replayedCredit = await store.creditAgentMeterAccount(credit);
+    assert.equal(replayedCredit?.replay, true);
+    assert.equal(replayedCredit?.account.remainingCredits, '5');
+    await assert.rejects(store.creditAgentMeterAccount({ ...credit, credits: '4' }), { code: 'IDEMPOTENCY_CONFLICT' });
+    const input = { accountId: 'team:alpha', routeId: 'prepare', requestKey: 'agent-call-1', credits: '1', reservedAt: 1000 };
+    const reserved = await store.reserveAgentUsage(input);
+    assert.equal(reserved.kind, 'reserved');
+    const replay = await store.reserveAgentUsage(input);
+    assert.equal(replay.kind, 'replayed');
+    if (reserved.kind !== 'reserved' || replay.kind !== 'replayed') throw new Error('Expected reserved Agent credit usage');
+    assert.equal(replay.reservation.usageId, reserved.reservation.usageId);
+    await store.settleAgentUsage(reserved.reservation.usageId, 'RELEASED');
+    const afterRelease = await store.reserveAgentUsage({ ...input, requestKey: 'agent-call-2' });
+    assert.equal(afterRelease.kind, 'reserved');
+    if (afterRelease.kind !== 'reserved') throw new Error('Expected released credit to be reusable');
+    await store.settleAgentUsage(afterRelease.reservation.usageId, 'CONSUMED');
+    const finalCredit = await store.reserveAgentUsage({ ...input, requestKey: 'agent-call-3' });
+    assert.equal(finalCredit.kind, 'reserved');
+    if (finalCredit.kind !== 'reserved') throw new Error('Expected final credit reservation');
+    await store.settleAgentUsage(finalCredit.reservation.usageId, 'CONSUMED');
+    assert.equal((await store.reserveAgentUsage({ ...input, requestKey: 'agent-call-4' })).kind, 'reserved');
+  } finally { fixture.sqlite.close(); }
+});
+
 test('D1 preserves receipt identity across direct and atomic observation writes', async () => {
   const fixture = testD1();
   try {

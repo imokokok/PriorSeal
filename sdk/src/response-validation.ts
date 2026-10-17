@@ -42,6 +42,10 @@ function archiveItem(value: unknown): boolean {
   return record(value) && hasString(value, 'id') && hasString(value, 'kind') && hasString(value, 'artifactHash') && hasString(value, 'status') && Number.isSafeInteger(value.createdAt)
 }
 
+function agentUsage(value: unknown): boolean {
+  return record(value) && hasString(value, 'usageId') && hasString(value, 'accountId') && hasString(value, 'routeId') && hasString(value, 'requestKey') && hasString(value, 'credits') && Number.isSafeInteger(value.reservedAt) && (value.state === 'RESERVED' || value.state === 'CONSUMED' || value.state === 'RELEASED')
+}
+
 /** Validate untrusted wire data before a typed client or console consumes it. */
 export function validatePriorSealResponse(path: string, value: unknown): void {
   safeJson(value, path)
@@ -53,6 +57,10 @@ export function validatePriorSealResponse(path: string, value: unknown): void {
     if (!hasString(value, 'service') || !hasString(value, 'version') || !strings(value.protocol)) invalid(path)
   } else if (route === '/v1/capabilities') {
     if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry >= 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean') invalid(path)
+  } else if (route === '/v1/agent-accounts/self/usage') {
+    if (!Array.isArray(value.items) || !value.items.every(agentUsage)) invalid(path)
+  } else if (route === '/v1/agent-accounts/self') {
+    if (!record(value.account) || !hasString(value.account, 'accountId') || !hasString(value.account, 'provisionedCredits') || !hasString(value.account, 'remainingCredits') || (value.account.status !== 'active' && value.account.status !== 'revoked')) invalid(path)
   } else if (route === '/v1/intents') {
     if (!record(value.intent) || !hasString(value, 'intentHash') || !record(value.policy)) invalid(path)
   } else if (route === '/v1/authorizations/prepare') {
