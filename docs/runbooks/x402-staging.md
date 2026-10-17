@@ -20,6 +20,25 @@ PRIORSEAL_X402_NETWORKS=eip155:84532
 PRIORSEAL_X402_PAY_TO=0x...testnet-merchant-address...
 ```
 
+The current staging facilitator is CDP. Keep the Base Sepolia allowlist above,
+set the exact URL and auth mode below as non-secret Worker variables, and store
+the two credential values only as Worker secrets. Do not use a wallet private
+key or `CDP_WALLET_SECRET`; the hosted facilitator requires only this API-key
+pair.
+
+```dotenv
+PRIORSEAL_X402_FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402
+PRIORSEAL_X402_FACILITATOR_AUTH_MODE=cdp
+# Worker secrets: PRIORSEAL_X402_CDP_API_KEY_ID, PRIORSEAL_X402_CDP_API_KEY_SECRET
+```
+
+The secret values must never appear in `wrangler.jsonc`, an operator command
+argument, a local environment file intended for source control, or a rollout
+record. In the Cloudflare dashboard, their rows must read `Secret` and `Value
+encrypted`; the generic Wrangler configuration-sync banner may remain because
+ordinary runtime variables are defined in the dashboard, but it must never
+render either CDP credential.
+
 `PRIORSEAL_X402_ENABLE_TESTNETS=true` is accepted only in staging, test, or
 development, and unlocks only the separate `eip155:84532` registry entry. An
 allowlisted EVM rail requires `PRIORSEAL_X402_PAY_TO`; an allowlisted Solana

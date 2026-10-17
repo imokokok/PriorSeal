@@ -92,7 +92,8 @@
         "PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS": "false",
         "PRIORSEAL_CORS_ORIGINS": "",
         "PRIORSEAL_TRUST_PROXY": "true",
-        "PRIORSEAL_X402_FACILITATOR_URL": "https://x402.org/facilitator",
+        "PRIORSEAL_X402_FACILITATOR_URL": "https://api.cdp.coinbase.com/platform/v2/x402",
+        "PRIORSEAL_X402_FACILITATOR_AUTH_MODE": "cdp",
         "PRIORSEAL_X402_RESOURCE_ORIGIN": "https://priorseal-staging.priorseal.workers.dev",
         "PRIORSEAL_X402_PAY_TO": "0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231",
         "PRIORSEAL_X402_ENABLE_TESTNETS": "true",
@@ -106,7 +107,9 @@
           "PRIORSEAL_PRIVATE_KEY_PEM",
           "PRIORSEAL_PUBLIC_KEY_PEM",
           "PRIORSEAL_POLICY_JSON",
-          "PRIORSEAL_RPC_BASE_SEPOLIA"
+          "PRIORSEAL_RPC_BASE_SEPOLIA",
+          "PRIORSEAL_X402_CDP_API_KEY_ID",
+          "PRIORSEAL_X402_CDP_API_KEY_SECRET"
         ]
       },
       "d1_databases": [
