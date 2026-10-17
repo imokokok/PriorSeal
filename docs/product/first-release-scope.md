@@ -2,6 +2,14 @@
 
 PriorSeal’s core is the independently verifiable relationship between explicit authorization before action and observed EVM execution afterward. It can be used independently. Insight supplies separate oracle transparency, risk assessments, and price/fill evidence when the two products are combined. See [product positioning](positioning.md).
 
+PriorSeal 当前可作为受限自动化的付费设计伙伴试点独立交付；公开自助付费
+仍受生产 x402 Go/No-Go 约束。详见
+[独立商业化就绪度](standalone-commercial-readiness.md)。
+
+PriorSeal 的长期商业方向是 Agent 按调用使用的授权与证据层；当前单次授权
+不等同于可重复的自动授权，服务付款也不构成链上行动权限。详见
+[Agent usage and payment model](agent-usage-model.md)。
+
 ## Primary user
 
 The first release serves agent builders and treasury engineering teams that need a portable, independently verifiable statement connecting a pre-authorized intent to an observed EVM execution.

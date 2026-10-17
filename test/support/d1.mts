@@ -6,6 +6,8 @@ export function testD1() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
   sqlite.exec(readFileSync(new URL('../../d1/migrations/0001_initial.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../../d1/migrations/0003_agent_meter.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../../d1/migrations/0004_agent_meter_credit_operations.sql', import.meta.url), 'utf8'));
   const calls: { sql: string; values: SQLInputValue[] }[] = [];
   const batches: number[] = [];
   type Statement = D1PreparedStatement & { execute(): { results: unknown[] } };

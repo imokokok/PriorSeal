@@ -1,9 +1,8 @@
 # x402 production Go/No-Go
 
-This package prepares a production x402 rollout without activating it. It does
-not authorize a production deployment or a payment. Production starts with one
-mainnet rail and one read-only route; adding a rail is a separate approved
-change.
+This package governs the production x402 rollout. It does not authorize a
+payment. Production starts with one mainnet rail and one read-only route;
+adding a rail is a separate approved change.
 
 ## 1. Complete the reviewed configuration record
 
@@ -46,7 +45,7 @@ PRIORSEAL_X402_RESOURCE_ORIGIN=https://priorseal.xyz
 PRIORSEAL_X402_PAY_TO=0x...reviewed-mainnet-payee...
 PRIORSEAL_X402_NETWORKS=eip155:8453
 PRIORSEAL_X402_TIMEOUT_MS=15000
-PRIORSEAL_X402_ROUTES_JSON=[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a portable PriorSeal receipt bundle","price":"$0.01"}]
+PRIORSEAL_X402_ROUTES_JSON=[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a portable PriorSeal receipt bundle","price":"$0.02"}]
 ```
 
 Store any facilitator credentials only in

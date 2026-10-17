@@ -3,6 +3,7 @@ import { archiveEntry, archivePage, type ArchiveAccess, type ArchiveQuery } from
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from '../../domain/merkle-log.mjs';
 import { assertReceiptIdentity } from './receipt-identity.mjs';
 import { assertX402PaymentLedgerEvent, type X402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
+import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation } from '../../application/commerce/agent-meter.mjs';
 import type { Authorization, AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { ObservationJob, WorkerObservation } from '../../application/observations/observation-worker.mjs';
 import type { buildIntent } from '../../domain/intent.mjs';
@@ -23,6 +24,9 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
   const archiveEntries: ArchiveEntry[] = [], authorizationLog: LogEntry[] = [];
   const logByAuthorizationHash = new Map<string, LogEntry>(), merkleNodes = new Map<string, string>(), usedAuthorizationNonces = new Set<string>();
   const x402PaymentLedger = new Map<string, Map<string, X402PaymentLedgerEvent>>();
+  const agentMeterAccounts = new Map<string, { credentialHash: string; provisionedCredits: bigint; remainingCredits: bigint; status: AgentMeterAccount['status'] }>();
+  const agentMeterUsage = new Map<string, AgentUsageReservation>();
+  const agentMeterCreditOperations = new Map<string, AgentCreditOperation>();
 
   function appendLogEntry(entry: LogEntry) {
     const nodes = merkleAppendNodes(entry.sequence, entry.entryHash, (start, level) => merkleNodes.get(merkleNodeKey(start, level)));
@@ -45,6 +49,72 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
   async listX402PaymentLedgerEvents(ledgerId: string) {
     if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError('Invalid x402 payment ledger identifier');
     return [...(x402PaymentLedger.get(ledgerId)?.values() ?? [])].sort((left, right) => left.occurredAt - right.occurredAt || paymentLedgerEventOrder(left.type) - paymentLedgerEventOrder(right.type) || left.eventId.localeCompare(right.eventId)).map(value => structuredClone(value));
+  },
+  async provisionAgentMeterAccount(input: AgentMeterAccount) {
+    const provisionedCredits = BigInt(input.provisionedCredits);
+    const existing = agentMeterAccounts.get(input.accountId);
+    if (!existing) { agentMeterAccounts.set(input.accountId, { credentialHash: input.credentialHash, provisionedCredits, remainingCredits: provisionedCredits, status: input.status }); return; }
+    if (provisionedCredits > existing.provisionedCredits) existing.remainingCredits += provisionedCredits - existing.provisionedCredits;
+    existing.provisionedCredits = provisionedCredits > existing.provisionedCredits ? provisionedCredits : existing.provisionedCredits;
+    // Existing accounts are operator-managed. Configuration may top up a
+    // bootstrap allocation, but cannot silently undo a revoke or rotate a key.
+  },
+  async createAgentMeterAccount(input: AgentMeterAccount) {
+    if (agentMeterAccounts.has(input.accountId)) return false;
+    const provisionedCredits = BigInt(input.provisionedCredits);
+    agentMeterAccounts.set(input.accountId, { credentialHash: input.credentialHash, provisionedCredits, remainingCredits: provisionedCredits, status: input.status });
+    return true;
+  },
+  async findAgentMeterAccountByCredentialHash(credentialHash: string) {
+    const found = [...agentMeterAccounts.entries()].find(([, account]) => account.credentialHash === credentialHash);
+    return found ? { accountId: found[0], credentialHash: found[1].credentialHash, provisionedCredits: String(found[1].provisionedCredits), status: found[1].status } : null;
+  },
+  async getAgentMeterAccount(accountId: string) { const account = agentMeterAccounts.get(accountId); return account && { accountId, provisionedCredits: String(account.provisionedCredits), remainingCredits: String(account.remainingCredits), status: account.status }; },
+  async creditAgentMeterAccount(input: AgentCreditOperation) {
+    const key = `${input.accountId}:${input.requestKey}`;
+    const existing = agentMeterCreditOperations.get(key);
+    if (existing) {
+      if (existing.credits !== input.credits || existing.reference !== input.reference) throw Object.assign(new Error('Agent credit idempotency key was reused for a different operation'), { code: 'IDEMPOTENCY_CONFLICT' });
+      const account = agentMeterAccounts.get(input.accountId);
+      return account && { replay: true, operation: structuredClone(existing), account: { accountId: input.accountId, provisionedCredits: String(account.provisionedCredits), remainingCredits: String(account.remainingCredits), status: account.status } };
+    }
+    const account = agentMeterAccounts.get(input.accountId);
+    if (!account) return null;
+    const amount = BigInt(input.credits);
+    account.provisionedCredits += amount; account.remainingCredits += amount;
+    agentMeterCreditOperations.set(key, structuredClone(input));
+    return { replay: false, operation: structuredClone(input), account: { accountId: input.accountId, provisionedCredits: String(account.provisionedCredits), remainingCredits: String(account.remainingCredits), status: account.status } };
+  },
+  async revokeAgentMeterAccount(accountId: string) { const account = agentMeterAccounts.get(accountId); if (!account) return null; account.status = 'revoked'; return { accountId, provisionedCredits: String(account.provisionedCredits), remainingCredits: String(account.remainingCredits), status: account.status }; },
+  async listAgentMeterUsage(accountId: string, limit: number) { return [...agentMeterUsage.values()].filter(entry => entry.accountId === accountId).sort((left, right) => right.reservedAt - left.reservedAt || right.usageId.localeCompare(left.usageId)).slice(0, limit).map(value => structuredClone(value)); },
+  async reserveAgentUsage(input: Omit<AgentUsageReservation, 'usageId' | 'state'>) {
+    const key = `${input.accountId}:${input.requestKey}`;
+    const existing = agentMeterUsage.get(key);
+    if (existing) {
+      if (existing.routeId !== input.routeId || existing.credits !== input.credits) throw Object.assign(new Error('Agent request key was reused for a different metered route'), { code: 'IDEMPOTENCY_CONFLICT' });
+      return { kind: 'replayed' as const, reservation: structuredClone(existing) };
+    }
+    const account = agentMeterAccounts.get(input.accountId);
+    const credits = BigInt(input.credits);
+    if (!account || account.status !== 'active' || account.remainingCredits < credits) return { kind: 'insufficient' as const };
+    account.remainingCredits -= credits;
+    const reservation: AgentUsageReservation = { ...input, usageId: `amu_${hashJson({ accountId: input.accountId, requestKey: input.requestKey }).slice(0, 32)}`, state: 'RESERVED' };
+    agentMeterUsage.set(key, reservation);
+    return { kind: 'reserved' as const, reservation: structuredClone(reservation) };
+  },
+  async settleAgentUsage(usageId: string, outcome: 'CONSUMED' | 'RELEASED') {
+    const entry = [...agentMeterUsage.entries()].find(([, value]) => value.usageId === usageId);
+    if (!entry) return null;
+    const [key, reservation] = entry;
+    if (reservation.state !== 'RESERVED') return structuredClone(reservation);
+    if (outcome === 'RELEASED') {
+      const account = agentMeterAccounts.get(reservation.accountId);
+      if (!account) throw new Error('Metered account disappeared before credit release');
+      account.remainingCredits += BigInt(reservation.credits);
+    }
+    const settled = { ...reservation, state: outcome } as AgentUsageReservation;
+    agentMeterUsage.set(key, settled);
+    return structuredClone(settled);
   },
   async saveArchiveEntry(entry: ReturnType<typeof archiveEntry>) {
     const key = JSON.stringify([entry.projectId, entry.environment, entry.id]);
