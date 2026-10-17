@@ -53,6 +53,23 @@ Store any facilitator credentials only in
 `PRIORSEAL_X402_FACILITATOR_HEADERS_JSON` as a Worker secret. Never set
 `PRIORSEAL_X402_ENABLE_TESTNETS=true` in production.
 
+For the CDP-hosted facilitator, use the exact public base URL and opt-in auth
+mode below. Store both named values as Worker secrets using the reviewed
+`wrangler versions secret` workflow; do not put them in `wrangler.jsonc`, a
+tracked `.env`, a change record, or a command argument. Use an approved secret
+manager or a transient operator environment for the local no-payment check.
+
+```dotenv
+PRIORSEAL_X402_FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402
+PRIORSEAL_X402_FACILITATOR_AUTH_MODE=cdp
+# Worker secrets: PRIORSEAL_X402_CDP_API_KEY_ID, PRIORSEAL_X402_CDP_API_KEY_SECRET
+```
+
+CDP mode creates a fresh method/path-bound JWT for `/supported`, `/verify`, and
+`/settle`. It requires a CDP 64-byte Ed25519 API-key secret and must not be
+combined with `PRIORSEAL_X402_FACILITATOR_HEADERS_JSON`. The CDP API credential
+is distinct from the Base payee and any wallet private key.
+
 Before deployment, record the dated `/supported` response and the approved
 facilitator contract or service terms. If the facilitator needs headers, record
 only the secret name and the owner; never put a credential in the change record

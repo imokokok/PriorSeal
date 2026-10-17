@@ -2,6 +2,7 @@
 import { getAddress } from "viem";
 import { assertSafeJson } from "../../shared/safe-json.mjs";
 import { decodeBase58, isSolanaPublicKey, SOLANA_MAINNET_CAIP2 } from "../../domain/solana.mjs";
+import { CDP_X402_FACILITATOR_URL, cdpFacilitatorAuthHeaders, parseCdpFacilitatorAuth } from "./cdp-facilitator-auth.mjs";
 const X402_EVM_NETWORKS = Object.freeze([
   { family: "evm", network: "eip155:1", chainId: 1, name: "Ethereum", asset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", assetName: "USD Coin", assetVersion: "2" },
   { family: "evm", network: "eip155:8453", chainId: 8453, name: "Base", asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", assetName: "USD Coin", assetVersion: "2" },
@@ -30,6 +31,9 @@ function parseX402Config(environment) {
   const raw = {
     facilitatorUrl: optional(environment.PRIORSEAL_X402_FACILITATOR_URL),
     facilitatorHeadersJson: optional(environment.PRIORSEAL_X402_FACILITATOR_HEADERS_JSON),
+    facilitatorAuthMode: optional(environment.PRIORSEAL_X402_FACILITATOR_AUTH_MODE),
+    cdpApiKeyId: optional(environment.PRIORSEAL_X402_CDP_API_KEY_ID),
+    cdpApiKeySecret: optional(environment.PRIORSEAL_X402_CDP_API_KEY_SECRET),
     resourceOrigin: optional(environment.PRIORSEAL_X402_RESOURCE_ORIGIN),
     payTo: optional(environment.PRIORSEAL_X402_PAY_TO),
     solanaPayTo: optional(environment.PRIORSEAL_X402_SOLANA_PAY_TO),
@@ -53,8 +57,9 @@ function parseX402Config(environment) {
   if (networkSelection.networksExplicitlyConfigured && networkSelection.networks.includes(SOLANA_MAINNET_CAIP2) && !solanaPayTo) throw new TypeError("PRIORSEAL_X402_NETWORKS selects Solana but PRIORSEAL_X402_SOLANA_PAY_TO is not configured");
   const timeoutMs = parseTimeout(raw.timeoutMs);
   const facilitatorHeaders = parseFacilitatorHeaders(raw.facilitatorHeadersJson);
+  const facilitatorAuth = parseFacilitatorAuth(raw.facilitatorAuthMode, raw.cdpApiKeyId, raw.cdpApiKeySecret, facilitatorUrl, Boolean(raw.facilitatorHeadersJson));
   const routes = parseRoutes(raw.routesJson);
-  return { facilitatorUrl, facilitatorHeaders, resourceOrigin, ...payTo ? { payTo } : {}, ...solanaPayTo ? { solanaPayTo } : {}, ...networkSelection, testnetNetworksEnabled, timeoutMs, routes };
+  return { facilitatorUrl, facilitatorHeaders, ...facilitatorAuth ? { facilitatorAuth } : {}, resourceOrigin, ...payTo ? { payTo } : {}, ...solanaPayTo ? { solanaPayTo } : {}, ...networkSelection, testnetNetworksEnabled, timeoutMs, routes };
 }
 function matchX402Route(config, method, path) {
   if (!config || method?.toUpperCase() !== "GET") return void 0;
@@ -272,6 +277,15 @@ function parseFacilitatorHeaders(value) {
   }
   return result;
 }
+function parseFacilitatorAuth(mode, cdpApiKeyId, cdpApiKeySecret, facilitatorUrl, staticHeadersConfigured) {
+  if (!mode) {
+    if (cdpApiKeyId || cdpApiKeySecret) throw new TypeError("CDP facilitator credentials require PRIORSEAL_X402_FACILITATOR_AUTH_MODE=cdp");
+    return void 0;
+  }
+  if (mode !== "cdp") throw new TypeError("PRIORSEAL_X402_FACILITATOR_AUTH_MODE must be cdp when configured");
+  if (facilitatorUrl !== CDP_X402_FACILITATOR_URL) throw new TypeError(`PRIORSEAL_X402_FACILITATOR_AUTH_MODE=cdp requires ${CDP_X402_FACILITATOR_URL}`);
+  return parseCdpFacilitatorAuth({ apiKeyId: cdpApiKeyId, apiKeySecret: cdpApiKeySecret, facilitatorUrl, hasStaticHeaders: staticHeadersConfigured });
+}
 function parseTimeout(value) {
   if (!value) return 15e3;
   if (!/^\d+$/.test(value)) throw new TypeError("PRIORSEAL_X402_TIMEOUT_MS must be a positive integer");
@@ -298,7 +312,8 @@ function parseTestnetNetworkFlag(value, runtimeEnvironment) {
 }
 async function getSupportedNetworks(config, parentSignal) {
   const cacheKey = `${config.facilitatorUrl}
-${JSON.stringify(config.facilitatorHeaders.supported ?? {})}`;
+${JSON.stringify(config.facilitatorHeaders.supported ?? {})}
+${config.facilitatorAuth?.provider ?? ""}:${config.facilitatorAuth?.apiKeyId ?? ""}`;
   const cached = capabilityCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.promise;
   const promise = facilitatorJson(config, "supported", void 0, parentSignal).then((value) => {
@@ -339,12 +354,13 @@ async function facilitatorJson(config, operation, body, parentSignal) {
   parentSignal?.addEventListener("abort", abortFromParent, { once: true });
   const timer = setTimeout(() => controller.abort(new Error("Facilitator request timed out")), config.timeoutMs);
   try {
+    const authHeaders = config.facilitatorAuth ? await cdpFacilitatorAuthHeaders(config.facilitatorAuth, operation) : {};
     const response = await fetch(url, {
       method: operation === "supported" ? "GET" : "POST",
       // Cloudflare Workers does not implement redirect: 'error'. Manual mode
       // preserves the same fail-closed rule across both supported runtimes.
       redirect: "manual",
-      headers: { "content-type": "application/json", ...config.facilitatorHeaders[operation] },
+      headers: { "content-type": "application/json", ...authHeaders, ...config.facilitatorHeaders[operation] },
       ...operation === "supported" ? {} : { body: JSON.stringify(body) },
       signal: controller.signal
     });

@@ -32,6 +32,9 @@ secrets/vars:
 |---|---:|---|
 | `PRIORSEAL_X402_FACILITATOR_URL` | Yes | Facilitator base URL; the service calls `/supported`, `/verify`, and `/settle`. |
 | `PRIORSEAL_X402_FACILITATOR_HEADERS_JSON` | No | Per-operation authentication headers, stored as a secret. |
+| `PRIORSEAL_X402_FACILITATOR_AUTH_MODE` | No | Set only to `cdp` for CDP's hosted facilitator; it creates a short-lived JWT for each operation. |
+| `PRIORSEAL_X402_CDP_API_KEY_ID` | With `AUTH_MODE=cdp` | CDP API-key identifier, stored as a Worker secret. |
+| `PRIORSEAL_X402_CDP_API_KEY_SECRET` | With `AUTH_MODE=cdp` | CDP 64-byte Ed25519 API-key secret, stored as a Worker secret. |
 | `PRIORSEAL_X402_PAY_TO` | One payee required | EVM address that receives USDC on configured EVM networks. |
 | `PRIORSEAL_X402_SOLANA_PAY_TO` | One payee required | Solana merchant public key that receives mainnet USDC. |
 | `PRIORSEAL_X402_NETWORKS` | Yes in staging/production | Comma-separated, exact CAIP-2 payment-rail allowlist. |
@@ -73,7 +76,8 @@ USDC payment transaction; the sponsor performs the final fee-payer signature
 and submission. A missing or ambiguous signer therefore fails closed instead
 of producing an unusable quote.
 
-Facilitator authentication is independently configured for each operation:
+For a generic x402 v2 facilitator, authentication is independently configured
+for each operation:
 
 ```json
 {
@@ -83,16 +87,31 @@ Facilitator authentication is independently configured for each operation:
 }
 ```
 
+CDP's hosted facilitator uses endpoint-bound, short-lived API-key JWTs rather
+than a static header. Select it only with this exact URL and mode:
+
+```dotenv
+PRIORSEAL_X402_FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402
+PRIORSEAL_X402_FACILITATOR_AUTH_MODE=cdp
+```
+
+Set `PRIORSEAL_X402_CDP_API_KEY_ID` and
+`PRIORSEAL_X402_CDP_API_KEY_SECRET` as Worker secrets. CDP mode accepts only
+its official URL, requires a 64-byte Ed25519 API-key secret, and rejects
+`PRIORSEAL_X402_FACILITATOR_HEADERS_JSON` so a stale static bearer token cannot
+override dynamically generated authentication. It does not use a CDP wallet
+secret or the merchant's EVM/Solana private key.
+
 Do not commit real credentials. The parser rejects reserved transport headers,
 line breaks, and URLs containing credentials or query parameters. Production
 facilitator and public resource URLs must use HTTPS.
 
-For Cloudflare, add each secret to the intended environment with Wrangler, for
-example `wrangler secret put PRIORSEAL_X402_FACILITATOR_HEADERS_JSON --env staging`.
-Secrets are environment-specific, so configure them separately for staging and
-production. The routes JSON, origin, payee, and facilitator URL can be deployed
-as environment vars. This repository change does not run Wrangler or deploy a
-Worker.
+For Cloudflare, use the reviewed `wrangler versions secret` workflow for each
+environment, then upload and validate a new version through the normal release
+gate. `wrangler secret put` is itself an immediate deployment and is not a
+staging substitute. Secrets are environment-specific, so configure them
+separately for staging and production. The routes JSON, origin, payee, and
+facilitator URL can be deployed as environment vars.
 
 ## Request and settlement behavior
 
