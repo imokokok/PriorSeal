@@ -34,3 +34,8 @@ coverage/
 /scripts/erc4337-pilot-doctor.mjs
 /scripts/erc4337-eip7702-doctor.mjs
 .wrangler/
+
+# Filled restricted-automation pilot records are customer-controlled and must
+# never be committed. Keep the reusable templates beside the pilot example.
+examples/restricted-automated-treasury-pilot-v1/pilot-scope.private.json
+examples/restricted-automated-treasury-pilot-v1/evidence-pack-delivery.private.md
