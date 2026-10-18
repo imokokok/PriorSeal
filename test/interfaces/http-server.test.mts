@@ -277,6 +277,30 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
   assert.equal(submitted.headers['cache-control'], 'no-store');
   assert.deepEqual(submittedInput, { prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' });
 });
+
+test('guarded Jupiter preparation reports only safe non-JSON upstream diagnostics', async (t) => {
+  const guardedJupiter = {
+    async prepare() {
+      throw Object.assign(
+        new Error('Jupiter Router returned an invalid JSON response (HTTP 403, content-type text/html)'),
+        { code: 'UPSTREAM_INVALID_JSON' },
+      );
+    },
+  } as unknown as ServerOptions['guardedJupiter'];
+  const server = createHttpServer({ guardedJupiter });
+  t.after(() => server.close());
+
+  const response = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 }),
+  });
+  assert.equal(response.status, 502);
+  const body = response.json() as unknown as { error: { code: string; message: string; requestId: string } };
+  assert.equal(body.error.code, 'UPSTREAM_INVALID_JSON');
+  assert.equal(body.error.message, 'Jupiter Router returned an invalid JSON response (HTTP 403, content-type text/html)');
+  assert.match(body.error.requestId, /^[0-9a-f-]{36}$/);
+});
 test('x402 Monad mainnet is advertised, verified, and settled through the HTTP lifecycle', async (t) => {
   const originalFetch = globalThis.fetch;
   const facilitatorCalls: string[] = [];
