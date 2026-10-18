@@ -327,9 +327,11 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       } catch (error) {
         const code = error instanceof PriorSealError ? error.code : errorCode(error) || "INTERNAL_ERROR";
         const status = ERROR_STATUS[code] ?? AGENT_ACCOUNT_ERROR_STATUS[code] ?? 500;
+        const safeUpstreamDiagnostic = code === "UPSTREAM_INVALID_JSON";
+        const responseStatus = safeUpstreamDiagnostic ? 502 : status;
         if (code === "REQUEST_TIMEOUT") deadline.closeAfterResponse(res);
-        logger?.error?.({ event: "http.request_failed", requestId, method: req.method, path, code, status });
-        respond(status, errorBody(code, status === 500 ? "Internal server error" : errorMessage(error), requestId, status < 500 ? error instanceof PriorSealError ? error.details : void 0 : void 0));
+        logger?.error?.({ event: "http.request_failed", requestId, method: req.method, path, code, status: responseStatus });
+        respond(responseStatus, errorBody(code, safeUpstreamDiagnostic || responseStatus < 500 ? errorMessage(error) : "Internal server error", requestId, responseStatus < 500 ? error instanceof PriorSealError ? error.details : void 0 : void 0));
       }
     };
     try {
