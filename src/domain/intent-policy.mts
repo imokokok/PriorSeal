@@ -19,6 +19,7 @@ export type PolicyCode = (typeof POLICY_CODES)[keyof typeof POLICY_CODES];
 
 type IntentForPolicy = {
   chainId: number | string;
+  chainRef?: string | null;
   action: string;
   asset: string;
   amount: string;
@@ -44,7 +45,13 @@ export function evaluateIntentPolicy(intent: IntentForPolicy, policy: RuntimePol
   const reasonCodes: PolicyCode[] = [];
   const caseSensitiveChain = intent.chainId === 0 || intent.chainId === '0';
   if (!validRuntimePolicy(policy)) reasonCodes.push(POLICY_CODES.INVALID_POLICY);
-  if (listHas(policy.allowedChainIds, intent.chainId)) reasonCodes.push(POLICY_CODES.CHAIN_NOT_ALLOWED);
+  // Non-EVM intents (chainId 0) carry a CAIP-2 chainRef that cannot be
+  // expressed as a positive EIP-155 id, so a policy may admit the chain by
+  // its exact reference string.
+  const chainAdmitted = Array.isArray(policy.allowedChainIds)
+    && (policy.allowedChainIds.map(String).includes(String(intent.chainId))
+      || (typeof intent.chainRef === 'string' && policy.allowedChainIds.includes(intent.chainRef)));
+  if (Array.isArray(policy.allowedChainIds) && !chainAdmitted) reasonCodes.push(POLICY_CODES.CHAIN_NOT_ALLOWED);
   if (listHas(policy.allowedActions, intent.action)) reasonCodes.push(POLICY_CODES.ACTION_NOT_ALLOWED);
   if (listHas(policy.allowedAssets, intent.asset, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.ASSET_NOT_ALLOWED);
   if (listHas(policy.allowedSenders, intent.sender, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.SENDER_NOT_ALLOWED);

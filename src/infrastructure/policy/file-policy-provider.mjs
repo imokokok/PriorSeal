@@ -14,7 +14,7 @@ function parsePolicyDocument(policy) {
   policy = assertOnlyFields(policy, ["policyId", "principals", "allowedChainIds", "allowedActions", "allowedAssets", "allowedSenders", "allowedRecipients", "maxAmount", "maxValiditySeconds", "minConfirmations", "maxToleratedReorgDepth", "finalityRequirement", "requireDistinctAuthorizerAndExecutor", "witnessQuorum", "timestampPolicy"], "policy");
   const document = policy;
   const policyId = document.policyId == null ? void 0 : protocolId(document.policyId, "policy.policyId");
-  const allowedChainIds = normalizeList(document.allowedChainIds, "policy.allowedChainIds", chainId);
+  const allowedChainIds = normalizeList(document.allowedChainIds, "policy.allowedChainIds", policyChainReference);
   const allowedActions = normalizeList(document.allowedActions, "policy.allowedActions", (value) => protocolId(value, "policy.allowedActions entry"));
   const allowedAssets = normalizeList(document.allowedAssets, "policy.allowedAssets", assetId);
   const allowedSenders = normalizeList(document.allowedSenders, "policy.allowedSenders", (value) => evmAddress(value, "policy.allowedSenders entry"));
@@ -66,6 +66,12 @@ function normalizeList(value, field, normalize) {
 function assetId(value) {
   if (typeof value !== "string" || !/^eip155:[1-9][0-9]*\/(native|erc20:0x[0-9a-fA-F]{40})$/.test(value)) throw new TypeError("policy.allowedAssets entries must be canonical EIP-155 asset identifiers");
   return value.toLowerCase();
+}
+function policyChainReference(value) {
+  if (typeof value === "string" && !/^eip155:[1-9][0-9]*$/.test(value)) {
+    if (/^[a-z][-a-z0-9]{2,7}:[a-zA-Z0-9][a-zA-Z0-9._-]{0,40}$/.test(value)) return value;
+  }
+  return chainId(value);
 }
 export {
   parsePolicyDocument,
