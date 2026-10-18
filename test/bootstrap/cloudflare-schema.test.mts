@@ -59,3 +59,23 @@ test('missing schema never enters the in-isolate or edge cache', async () => {
   assert.equal(matches, 2);
   assert.equal(puts, 0);
 });
+
+test('x402 schema readiness requires the durable payment ledger', async () => {
+  const fixture = testD1();
+  const guard = createSchemaGuard();
+  const cache = { async match() { return undefined; }, async put() {} } as unknown as Cache;
+  const context = { waitUntil(promise: Promise<unknown>) { void promise; } } as ExecutionContext;
+  const config = loadRuntimeConfig({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://x402.org/facilitator',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://priorseal.xyz',
+    PRIORSEAL_X402_PAY_TO: `0x${'a'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'eip155:8453',
+    PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a portable PriorSeal receipt bundle","price":"$0.02"}]',
+  });
+  try {
+    await guard(fixture.database, config, context, cache);
+    fixture.sqlite.exec('DROP TABLE x402_payment_ledger_events');
+    const freshGuard = createSchemaGuard();
+    await assert.rejects(() => freshGuard(fixture.database, config, context, cache), /Required D1 production tables are missing/);
+  } finally { fixture.sqlite.close(); }
+});

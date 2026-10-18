@@ -28,11 +28,12 @@ import { createArchiveAccess, archiveEntry, archiveQuery } from "../../applicati
 import { deploymentCapabilities } from "../../application/capabilities.mjs";
 import { createRequestDeadline } from "./request-deadline.mjs";
 import { createX402PaymentService, matchX402Route } from "../../infrastructure/payments/x402-exact-evm.mjs";
-const ERROR_STATUS = Object.freeze({ ARCHIVE_UNAUTHORIZED: 401, ARCHIVE_FORBIDDEN: 403, ARCHIVE_CONFLICT: 409, INVALID_JSON: 400, INVALID_REQUEST: 400, UNKNOWN_FIELD: 400, DANGEROUS_JSON_KEY: 400, JSON_TOO_DEEP: 400, INVALID_INTENT: 400, INVALID_AUTHORIZATION: 400, MISSING_AUTHORIZATION_SIGNATURE: 400, INVALID_AUTHORIZATION_SIGNATURE: 400, AUTHORIZATION_AUDIENCE_MISMATCH: 400, AUTHORIZATION_NOT_YET_VALID: 400, AUTHORIZATION_ISSUED_IN_FUTURE: 400, AUTHORIZATION_POLICY_MISMATCH: 409, AUTHORIZATION_EXPIRED: 410, AUTHORIZATION_ALREADY_USED: 409, AUTHORIZATION_NONCE_REUSED: 409, INVALID_TIMESTAMP_EVIDENCE: 400, INVALID_TIMESTAMP_PROFILE: 400, TIMESTAMP_POLICY_MISMATCH: 409, TIMESTAMP_AUTHORIZATION_MISMATCH: 409, TIMESTAMP_RESPONSE_HASH_MISMATCH: 409, TIMESTAMP_METADATA_MISMATCH: 409, INVALID_TIMESTAMP_POLICY: 400, TIMESTAMP_CLOCK_SKEW: 409, TIMESTAMP_AFTER_EXECUTION: 409, INVALID_TIMESTAMP_SIGNATURE: 409, INVALID_TIMESTAMP_CERTIFICATE_USAGE: 409, UNTRUSTED_TIMESTAMP_ROOT: 409, TIMESTAMP_SERVICE_UNAVAILABLE: 503, TIMESTAMP_NOT_CONFIGURED: 503, INVALID_TIMESTAMP_RESPONSE: 502, INVALID_WITNESS_POLICY: 400, INVALID_WITNESS_EVIDENCE: 400, WITNESS_POLICY_MISMATCH: 409, WITNESS_AUTHORIZATION_MISMATCH: 409, WITNESS_ACCEPTANCE_MISMATCH: 409, WITNESS_QUORUM_NOT_MET: 409, WITNESS_QUORUM_UNAVAILABLE: 503, WITNESS_NOT_CONFIGURED: 503, TRANSPARENCY_ANCHOR_REQUIRED: 409, TRANSPARENCY_AFTER_EXECUTION: 409, INVALID_CHAIN_ID: 400, INVALID_TX_HASH: 400, INVALID_ADDRESS: 400, INVALID_ASSET: 400, INVALID_UINT: 400, INVALID_TIME: 400, INVALID_IDENTIFIER: 400, INVALID_CONSTRAINT: 400, ERC4337_ENTRY_POINT_NOT_TRUSTED: 403, ERC4337_ENTRY_POINT_MISMATCH: 409, ERC4337_CODE_HASH_MISMATCH: 409, ERC4337_ACCOUNT_CALL_UNSUPPORTED: 409, ERC4337_ACCOUNT_CALL_MISMATCH: 409, ERC4337_SAFE_ACCOUNT_UNTRUSTED: 409, ERC4337_EVENT_MISMATCH: 409, ERC4337_EIP7702_UNTRUSTED: 403, ERC4337_EIP7702_AUTH_MISMATCH: 409, ERC4337_EIP7702_OPERATION_MISMATCH: 409, ERC4337_EIP7702_TRACE_UNAVAILABLE: 503, INVALID_IDEMPOTENCY_KEY: 400, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, IDEMPOTENCY_CONFLICT: 409, POLICY_REJECTED: 403, INTENT_NOT_FOUND: 404, AUTHORIZATION_NOT_FOUND: 404, RECEIPT_NOT_FOUND: 404, NOT_FOUND: 404, REQUEST_TIMEOUT: 504, ISSUER_NOT_CONFIGURED: 503, AUTHORIZATION_VERIFIER_UNAVAILABLE: 503, RATE_LIMITER_UNAVAILABLE: 503, RPC_NOT_CONFIGURED: 503, RPC_TIMEOUT: 503, RPC_FAILURE: 503 });
+const ERROR_STATUS = Object.freeze({ ARCHIVE_UNAUTHORIZED: 401, ARCHIVE_FORBIDDEN: 403, ARCHIVE_CONFLICT: 409, AGENT_CREDENTIAL_REQUIRED: 401, AGENT_CREDENTIAL_INVALID: 403, AGENT_CREDITS_EXHAUSTED: 402, INVALID_JSON: 400, INVALID_REQUEST: 400, UNKNOWN_FIELD: 400, DANGEROUS_JSON_KEY: 400, JSON_TOO_DEEP: 400, INVALID_INTENT: 400, INVALID_AUTHORIZATION: 400, MISSING_AUTHORIZATION_SIGNATURE: 400, INVALID_AUTHORIZATION_SIGNATURE: 400, AUTHORIZATION_AUDIENCE_MISMATCH: 400, AUTHORIZATION_NOT_YET_VALID: 400, AUTHORIZATION_ISSUED_IN_FUTURE: 400, AUTHORIZATION_POLICY_MISMATCH: 409, AUTHORIZATION_EXPIRED: 410, AUTHORIZATION_ALREADY_USED: 409, AUTHORIZATION_NONCE_REUSED: 409, INVALID_TIMESTAMP_EVIDENCE: 400, INVALID_TIMESTAMP_PROFILE: 400, TIMESTAMP_POLICY_MISMATCH: 409, TIMESTAMP_AUTHORIZATION_MISMATCH: 409, TIMESTAMP_RESPONSE_HASH_MISMATCH: 409, TIMESTAMP_METADATA_MISMATCH: 409, INVALID_TIMESTAMP_POLICY: 400, TIMESTAMP_CLOCK_SKEW: 409, TIMESTAMP_AFTER_EXECUTION: 409, INVALID_TIMESTAMP_SIGNATURE: 409, INVALID_TIMESTAMP_CERTIFICATE_USAGE: 409, UNTRUSTED_TIMESTAMP_ROOT: 409, TIMESTAMP_SERVICE_UNAVAILABLE: 503, TIMESTAMP_NOT_CONFIGURED: 503, INVALID_TIMESTAMP_RESPONSE: 502, INVALID_WITNESS_POLICY: 400, INVALID_WITNESS_EVIDENCE: 400, WITNESS_POLICY_MISMATCH: 409, WITNESS_AUTHORIZATION_MISMATCH: 409, WITNESS_ACCEPTANCE_MISMATCH: 409, WITNESS_QUORUM_NOT_MET: 409, WITNESS_QUORUM_UNAVAILABLE: 503, WITNESS_NOT_CONFIGURED: 503, TRANSPARENCY_ANCHOR_REQUIRED: 409, TRANSPARENCY_AFTER_EXECUTION: 409, INVALID_CHAIN_ID: 400, INVALID_TX_HASH: 400, INVALID_ADDRESS: 400, INVALID_ASSET: 400, INVALID_UINT: 400, INVALID_TIME: 400, INVALID_IDENTIFIER: 400, INVALID_CONSTRAINT: 400, ERC4337_ENTRY_POINT_NOT_TRUSTED: 403, ERC4337_ENTRY_POINT_MISMATCH: 409, ERC4337_CODE_HASH_MISMATCH: 409, ERC4337_ACCOUNT_CALL_UNSUPPORTED: 409, ERC4337_ACCOUNT_CALL_MISMATCH: 409, ERC4337_SAFE_ACCOUNT_UNTRUSTED: 409, ERC4337_EVENT_MISMATCH: 409, ERC4337_EIP7702_UNTRUSTED: 403, ERC4337_EIP7702_AUTH_MISMATCH: 409, ERC4337_EIP7702_OPERATION_MISMATCH: 409, ERC4337_EIP7702_TRACE_UNAVAILABLE: 503, INVALID_IDEMPOTENCY_KEY: 400, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, IDEMPOTENCY_CONFLICT: 409, POLICY_REJECTED: 403, INTENT_NOT_FOUND: 404, AUTHORIZATION_NOT_FOUND: 404, RECEIPT_NOT_FOUND: 404, NOT_FOUND: 404, REQUEST_TIMEOUT: 504, ISSUER_NOT_CONFIGURED: 503, AUTHORIZATION_VERIFIER_UNAVAILABLE: 503, RATE_LIMITER_UNAVAILABLE: 503, RPC_NOT_CONFIGURED: 503, RPC_TIMEOUT: 503, RPC_FAILURE: 503 });
+const AGENT_ACCOUNT_ERROR_STATUS = Object.freeze({ AGENT_OPERATOR_CREDENTIAL_INVALID: 403, AGENT_ACCOUNT_INVALID: 400, AGENT_ACCOUNT_NOT_FOUND: 404, AGENT_ACCOUNT_EXISTS: 409, AGENT_IDEMPOTENCY_REQUIRED: 400 });
 function requester(req, trustProxy) {
   return trustProxy ? String(req.headers["cf-connecting-ip"] ?? "").trim() || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress || "unknown" : req.socket.remoteAddress || "unknown";
 }
-function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, observer = observeEvm, corsOrigins = [], trustProxy = false, x402, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
+function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, observer = observeEvm, corsOrigins = [], trustProxy = false, x402, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
   if (privateKeyPem || publicKeyPem) {
     if (!privateKeyPem || !publicKeyPem) throw new TypeError("Issuer private and public keys must be configured together");
     assertEd25519KeyPair(privateKeyPem, publicKeyPem);
@@ -49,11 +50,14 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
     const path = requestPath(req);
     const paidRoute = matchX402Route(x402, req.method, path);
     const origin = req.headers.origin;
-    const cors = origin && corsOrigins.includes(origin) ? { "access-control-allow-origin": origin, vary: "Origin", "access-control-allow-headers": "content-type,idempotency-key,x-request-id,authorization,payment-signature", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-expose-headers": "payment-required,payment-response" } : {};
+    const cors = origin && corsOrigins.includes(origin) ? { "access-control-allow-origin": origin, vary: "Origin", "access-control-allow-headers": "content-type,idempotency-key,x-request-id,authorization,payment-signature,x-priorseal-agent-key,x-priorseal-operator-key", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-expose-headers": "payment-required,payment-response,x-priorseal-usage-id" } : {};
     let captureResponse = false;
     let capturedResponse;
+    let meterReservation;
+    let meterResponseStatus;
     const respond = (status, body, headers = {}) => {
-      const responseHeaders = { ...cors, ...path.startsWith("/v1/archive") ? { "cache-control": "private, no-store", vary: "Authorization, Origin" } : {}, ...headers };
+      meterResponseStatus = status;
+      const responseHeaders = { ...cors, ...meterReservation ? { "x-priorseal-usage-id": meterReservation.usageId } : {}, ...path.startsWith("/v1/archive") ? { "cache-control": "private, no-store", vary: "Authorization, Origin" } : {}, ...headers };
       if (captureResponse) {
         capturedResponse = { status, body, headers: responseHeaders };
         return;
@@ -68,7 +72,30 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       if (!paidRoute && req.method === "GET" && serveStaticAsset && await serveStaticAsset({ pathname: path, req, res })) return;
       if (!paidRoute && !await rateLimiter.allow(requester(req, trustProxy), now())) return respond(429, errorBody("RATE_LIMITED", "Too many requests", requestId), { "retry-after": "60" });
       const body = req.method === "POST" ? await readJsonBody(req, path === "/v1/archive" ? Math.max(maxBodyBytes, 1024 * 1024) : maxBodyBytes, deadline.signal) : {};
-      if (req.method === "GET" && path === "/v1/capabilities") return respond(200, await deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, now: now() }), { "cache-control": "no-store" });
+      if (req.method === "GET" && path === "/v1/capabilities") return respond(200, await deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, now: now() }), { "cache-control": "no-store" });
+      if (agentMeter && req.method === "GET" && path === "/v1/agent-accounts/self/usage") {
+        const limit = agentUsageLimit(new URL(req.url ?? "/", "http://priorseal.local").searchParams.get("limit"));
+        return respond(200, { items: await agentMeter.usage(typeof req.headers["x-priorseal-agent-key"] === "string" ? req.headers["x-priorseal-agent-key"] : void 0, limit), requestId }, { "cache-control": "private, no-store" });
+      }
+      if (agentMeter && req.method === "GET" && path === "/v1/agent-accounts/self") return respond(200, { account: await agentMeter.inspect(typeof req.headers["x-priorseal-agent-key"] === "string" ? req.headers["x-priorseal-agent-key"] : void 0), requestId }, { "cache-control": "private, no-store" });
+      if (agentMeter && req.method === "POST" && path === "/v1/agent-accounts") {
+        assertOnlyFields(body, ["accountId", "provisionedCredits"], "agent account create");
+        const result = await agentMeter.operator.issue({ operatorCredential: typeof req.headers["x-priorseal-operator-key"] === "string" ? req.headers["x-priorseal-operator-key"] : void 0, accountId: String(body.accountId ?? ""), provisionedCredits: String(body.provisionedCredits ?? "") });
+        return respond(201, { ...result, requestId }, { "cache-control": "no-store" });
+      }
+      const creditAccountMatch = agentMeter && req.method === "POST" && path.match(/^\/v1\/agent-accounts\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})\/credits$/);
+      if (creditAccountMatch) {
+        assertOnlyFields(body, ["credits", "reference"], "agent account credit");
+        if (body.reference !== void 0 && body.reference !== null && typeof body.reference !== "string") throw new PriorSealError("INVALID_REQUEST", "Agent credit reference must be a string or null");
+        const result = await agentMeter.operator.credit({ operatorCredential: typeof req.headers["x-priorseal-operator-key"] === "string" ? req.headers["x-priorseal-operator-key"] : void 0, accountId: creditAccountMatch[1], credits: String(body.credits ?? ""), requestKey: typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : void 0, reference: typeof body.reference === "string" ? body.reference : null, now: now() });
+        return respond(result.replay ? 200 : 201, { account: result.account, operation: result.operation, requestId }, { "cache-control": "no-store", ...result.replay ? { "idempotency-replayed": "true" } : {} });
+      }
+      const revokeAccountMatch = agentMeter && req.method === "POST" && path.match(/^\/v1\/agent-accounts\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})\/revoke$/);
+      if (revokeAccountMatch) {
+        assertOnlyFields(body, [], "agent account revoke");
+        const account = await agentMeter.operator.revoke({ operatorCredential: typeof req.headers["x-priorseal-operator-key"] === "string" ? req.headers["x-priorseal-operator-key"] : void 0, accountId: revokeAccountMatch[1] });
+        return respond(200, { account, requestId }, { "cache-control": "no-store" });
+      }
       if (path === "/v1/archive" || path.startsWith("/v1/archive/")) {
         if (!archiveAccess) throw new PriorSealError("NOT_FOUND", "Project archive is not enabled");
         const access = archiveAccess.authenticate(typeof req.headers.authorization === "string" ? req.headers.authorization : void 0);
@@ -180,13 +207,27 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         await deadline.run(dispatch);
       } catch (error) {
         const code = error instanceof PriorSealError ? error.code : errorCode(error) || "INTERNAL_ERROR";
-        const status = ERROR_STATUS[code] ?? 500;
+        const status = ERROR_STATUS[code] ?? AGENT_ACCOUNT_ERROR_STATUS[code] ?? 500;
         if (code === "REQUEST_TIMEOUT") deadline.closeAfterResponse(res);
         logger?.error?.({ event: "http.request_failed", requestId, method: req.method, path, code, status });
         respond(status, errorBody(code, status === 500 ? "Internal server error" : errorMessage(error), requestId, status < 500 ? error instanceof PriorSealError ? error.details : void 0 : void 0));
       }
     };
     try {
+      if (agentMeter) {
+        try {
+          const credential = typeof req.headers["x-priorseal-agent-key"] === "string" ? req.headers["x-priorseal-agent-key"] : void 0;
+          const requestKey = typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : void 0;
+          const metered = await agentMeter.authorize({ method: req.method, pathname: path, credential, requestKey, now: now() });
+          meterReservation = metered?.reservation;
+        } catch (error) {
+          const code = errorCode(error) || "INTERNAL_ERROR";
+          const status = ERROR_STATUS[code] ?? AGENT_ACCOUNT_ERROR_STATUS[code] ?? 500;
+          logger?.error?.({ event: "agent_meter.authorization_failed", requestId, method: req.method, path, code, status });
+          respond(status, errorBody(code, status === 500 ? "Internal server error" : errorMessage(error), requestId));
+          return;
+        }
+      }
       if (paidRoute && x402Payments && x402) {
         let allowed;
         try {
@@ -286,6 +327,13 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       }
       await runDispatch();
     } finally {
+      if (meterReservation) {
+        try {
+          await agentMeter?.settle(meterReservation, meterResponseStatus && meterResponseStatus >= 200 && meterResponseStatus < 300 ? "CONSUMED" : "RELEASED");
+        } catch (error) {
+          logger?.error?.({ event: "agent_meter.settlement_failed", requestId, method: req.method, path, usageId: meterReservation.usageId, code: errorCode(error) || "INTERNAL_ERROR" });
+        }
+      }
       captureResponse = false;
       cleanup();
     }
@@ -293,6 +341,11 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
 }
 function jsonSafe(value) {
   return JSON.parse(JSON.stringify(value, (_, item) => typeof item === "bigint" ? item.toString() : item));
+}
+function agentUsageLimit(value) {
+  if (value === null) return 25;
+  if (!/^[1-9][0-9]{0,2}$/.test(value) || Number(value) > 100) throw new PriorSealError("INVALID_REQUEST", "Agent usage limit must be an integer from 1 through 100");
+  return Number(value);
 }
 function bindX402PaymentEvidenceToBundle({ body, resourceUrl, status, context, settlement, issuer, keyId, privateKeyPem, issuedAt }) {
   if (!isRecord(body) || body.schema !== "priorseal.verification-bundle.v1" || typeof body.bundleHash !== "string" || !/^[0-9a-f]{64}$/.test(body.bundleHash) || !isRecord(body.receipt) || !isRecord(body.keyRegistry) || !Number.isSafeInteger(body.assembledAt)) return body;
