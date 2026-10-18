@@ -65,6 +65,49 @@ async function request(server: TestServer, path: string, { method = 'GET', heade
   const res = new EventEmitter() as MockResponse; res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
   const done = new Promise<void>((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers ?? {}, buffer: () => Buffer.from(res.body ?? ''), json: (): HttpTestResponse => JSON.parse(Buffer.from(res.body ?? '').toString('utf8')) as HttpTestResponse, text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
+
+test('guarded Jupiter routes keep preparation and submission behind the server boundary', async (t) => {
+  let preparedInput: Record<string, unknown> | undefined;
+  let submittedInput: Record<string, unknown> | undefined;
+  const guardedJupiter = {
+    async prepare(input: Record<string, unknown>) {
+      preparedInput = input;
+      return { prepared: { schema: 'priorseal.jupiter-guarded-swap.v1', request: input }, review: { schema: 'priorseal.jupiter-guarded-swap-review.v1' } };
+    },
+    async submit(input: Record<string, unknown>) {
+      submittedInput = input;
+      return { signature: '5'.repeat(64) };
+    },
+  } as unknown as ServerOptions['guardedJupiter'];
+  const server = createHttpServer({ guardedJupiter });
+  t.after(() => server.close());
+
+  const prepared = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 }),
+  });
+  assert.equal(prepared.status, 201);
+  assert.equal(prepared.headers['cache-control'], 'no-store');
+  assert.deepEqual(preparedInput, { inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 });
+
+  const unknownField = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50, jupiterApiKey: 'never-accepted' }),
+  });
+  assert.equal(unknownField.status, 400);
+
+  const submitted = await request(server, '/v1/jupiter/guarded-swaps/submit', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' }),
+  });
+  assert.equal(submitted.status, 200);
+  assert.equal(submitted.headers['cache-control'], 'no-store');
+  assert.deepEqual(submittedInput, { prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' });
+});
+
 test('x402 Monad mainnet is advertised, verified, and settled through the HTTP lifecycle', async (t) => {
   const originalFetch = globalThis.fetch;
   const facilitatorCalls: string[] = [];

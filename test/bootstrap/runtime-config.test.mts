@@ -64,6 +64,24 @@ test('runtime configuration accepts a Solana-only x402 payment rail', () => {
   }), /selects Solana/);
 });
 
+test('runtime configuration enables guarded Jupiter only with a complete server-side configuration', () => {
+  const policy = JSON.stringify({
+    maxInputAmountAtomic: '1000000', maxSlippageBps: 50,
+    allowedProgramIds: ['ComputeBudget111111111111111111111111111111'], authorizationTtlSeconds: 60,
+  });
+  const config = loadRuntimeConfig({
+    JUPITER_API_KEY: 'jupiter-secret', INSIGHT_API_KEY: 'insight-secret',
+    PRIORSEAL_JUPITER_RPC_URL: 'https://rpc.example', PRIORSEAL_JUPITER_POLICY_JSON: policy,
+  });
+  assert.deepEqual(config.guardedJupiter, {
+    jupiterApiKey: 'jupiter-secret', insightApiKey: 'insight-secret', rpcUrl: 'https://rpc.example',
+    policy: JSON.parse(policy),
+  });
+  assert.throws(() => loadRuntimeConfig({ JUPITER_API_KEY: 'jupiter-secret' }), /require JUPITER_API_KEY/);
+  assert.throws(() => loadRuntimeConfig({ JUPITER_API_KEY: 'jupiter-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_JUPITER_RPC_URL: 'http://rpc.example', PRIORSEAL_JUPITER_POLICY_JSON: policy }), /must use HTTPS/);
+  assert.throws(() => loadRuntimeConfig({ JUPITER_API_KEY: 'jupiter-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_JUPITER_RPC_URL: 'https://rpc.example', PRIORSEAL_JUPITER_POLICY_JSON: '[]' }), /must be an object/);
+});
+
 test('Base Sepolia x402 is an explicit staging-only payment rail', () => {
   const x402 = {
     PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,

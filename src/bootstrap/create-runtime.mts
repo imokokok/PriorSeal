@@ -21,6 +21,7 @@ import { assertProductionSchema } from './production-schema.mjs';
 import { createContractSignatureVerifier } from '../infrastructure/blockchain/evm/contract-signature-verifier.mjs';
 import { assertEd25519KeyPair } from '../domain/ed25519.mjs';
 import { loadRuntimeConfig } from './runtime-config.mjs';
+import { createGuardedJupiterSwapService } from '../application/jupiter/guarded-swap-service.mjs';
 import type { PoolConfig } from 'pg';
 import type { ObservationJob, ObservationWorkInput } from '../application/observations/observation-worker.mjs';
 import type { AuthorizationAcceptance } from '../domain/authorization.mjs';
@@ -97,7 +98,8 @@ async function composeRuntime({ config, environment = process.env, database, d1,
         return job;
       },
     } : baseObservationWorker;
-    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, x402: config.x402, version: config.buildVersion, staticDir, observer, rateLimiter, logger }) : undefined;
+    const guardedJupiter = config.guardedJupiter ? createGuardedJupiterSwapService(config.guardedJupiter) : undefined;
+    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, x402: config.x402, guardedJupiter, version: config.buildVersion, staticDir, observer, rateLimiter, logger }) : undefined;
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {});
