@@ -10,6 +10,10 @@ The endpoint supports the current stateless MCP protocol revision
 `2026-07-28` and the compatible `2025-11-25` handshake flow. It is listed in
 the official MCP Registry as `io.github.imokokok/priorseal`.
 
+For a public adoption guide, use [the MCP integration page](https://priorseal.xyz/integrations/mcp).
+For a reproducible, read-only transport proof that checks both protocol forms,
+see [the compatibility-proof runbook](../runbooks/mcp-compatibility-proof.md).
+
 ## Connect
 
 Configure a remote MCP server with this URL:

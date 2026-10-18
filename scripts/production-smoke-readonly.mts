@@ -93,15 +93,15 @@ export async function runReadOnlySmoke({ env = process.env, fetcher = fetch, log
   const localHtml = await readFile(htmlPath, 'utf8');
   const entry = localHtml.match(/<script\b[^>]*src=["']([^"']+)["'][^>]*>/i)?.[1];
   if (!entry?.startsWith('/assets/') || !entry.endsWith('.js')) throw new Error('Build the current console before checking its deployed asset identity');
-  const pagePaths = ['/', '/app', '/app/intents/exact-call', '/app/verify', '/app/archive', '/app/quickstart'];
+  const pagePaths = ['/', '/integrations/mcp', '/app', '/app/intents/exact-call', '/app/verify', '/app/archive', '/app/quickstart'];
   for (const path of pagePaths) {
     const page = await get(path, { text: true });
     assert(typeof page.body === 'string' && /text\/html/i.test(page.response.headers.get('content-type') ?? '') && /PriorSeal/i.test(page.body) && page.body.includes(entry), `Static page ${path} does not reference the current build`);
   }
   const javascript = await get(entry, { text: true });
   assert(typeof javascript.body === 'string' && /(?:javascript|ecmascript)/i.test(javascript.response.headers.get('content-type') ?? '') && !/^\s*<!doctype/i.test(javascript.body), 'The current JavaScript asset is not being served correctly');
-  const routeAssets = (await readdir(join(dirname(htmlPath), 'assets'))).filter((name) => /^(?:App|ExactCallPage|ArchivePage|VerifyPage|OnboardingPage)-[^/]+\.js$/.test(name));
-  assert(['App-', 'ExactCallPage-', 'ArchivePage-', 'VerifyPage-', 'OnboardingPage-'].every((prefix) => routeAssets.some((name) => name.startsWith(prefix))), 'The local release build is missing a required console route chunk');
+  const routeAssets = (await readdir(join(dirname(htmlPath), 'assets'))).filter((name) => /^(?:App|McpPage|ExactCallPage|ArchivePage|VerifyPage|OnboardingPage)-[^/]+\.js$/.test(name));
+  assert(['App-', 'McpPage-', 'ExactCallPage-', 'ArchivePage-', 'VerifyPage-', 'OnboardingPage-'].every((prefix) => routeAssets.some((name) => name.startsWith(prefix))), 'The local release build is missing a required public or console route chunk');
   for (const name of routeAssets) {
     const asset = await get(`/assets/${name}`, { text: true });
     assert(typeof asset.body === 'string' && /(?:javascript|ecmascript)/i.test(asset.response.headers.get('content-type') ?? '') && asset.body === await readFile(join(dirname(htmlPath), 'assets', name), 'utf8'), `Deployed route asset ${name} does not match the current release build`);
