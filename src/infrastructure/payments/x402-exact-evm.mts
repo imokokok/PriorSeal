@@ -151,7 +151,6 @@ export function parseX402Config(environment: X402Environment): X402Config | unde
   const timeoutMs = parseTimeout(raw.timeoutMs);
   const facilitatorHeaders = parseFacilitatorHeaders(raw.facilitatorHeadersJson);
   const facilitatorAuth = parseFacilitatorAuth(raw.facilitatorAuthMode, raw.cdpApiKeyId, raw.cdpApiKeySecret, facilitatorUrl, Boolean(raw.facilitatorHeadersJson));
-  if (facilitatorAuth && facilitatorUrls) throw new TypeError('PRIORSEAL_X402_FACILITATOR_URLS cannot be combined with CDP facilitator authentication');
   const routes = parseRoutes(raw.routesJson!);
   return { facilitatorUrl, ...(facilitatorUrls ? { facilitatorUrls } : {}), facilitatorHeaders, ...(facilitatorAuth ? { facilitatorAuth } : {}), resourceOrigin, ...(payTo ? { payTo } : {}), ...(solanaPayTo ? { solanaPayTo } : {}), ...networkSelection, testnetNetworksEnabled, timeoutMs, routes };
 }
