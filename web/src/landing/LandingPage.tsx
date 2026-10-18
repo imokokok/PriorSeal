@@ -92,6 +92,7 @@ export function LandingPage() {
         <InstitutionMark />
         <nav className={menuOpen ? 'is-open' : ''} aria-label="Homepage navigation" id="homepage-navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id} onClick={() => setMenuOpen(false)}>{label}</a>)}
+          <Link to="/integrations/mcp" onClick={() => setMenuOpen(false)}>MCP</Link>
           <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/sdk">SDK</Link>
           <a href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
@@ -212,7 +213,7 @@ export function LandingPage() {
             <p className="museum-kicker">DESIGN PARTNERS / AGENT SYSTEMS</p>
             <h2>Build one verifiable<br />agent flow.</h2>
             <p className="museum-closing__statement">Use PriorSeal to give an agent explicit, bounded authority and portable execution evidence on one EVM path. Pair it with Insight when you also need oracle transparency and risk assessments; each product remains independently usable.</p>
-            <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/sdk">Review the SDK <span>↗</span></Link></div>
+            <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/integrations/mcp">Connect MCP <span>↗</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/sdk">Review the SDK <span>↗</span></Link></div>
           </div>
           <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for EVM agents.</span><span><a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
         </section>

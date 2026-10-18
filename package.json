@@ -91,6 +91,7 @@
     "rotation:impact": "npm run core:build:operations && node --env-file=.env.local scripts/rotation-impact.mjs",
     "production:smoke": "npm run core:build:operations && node scripts/production-smoke.mjs",
     "production:smoke:pending": "npm run core:build:operations && node scripts/production-smoke.mjs --pending",
+    "mcp:compatibility:check": "npm run core:build:operations && node scripts/mcp-compatibility-proof.mjs",
     "x402:refund:record": "npm run core:build:operations && node scripts/record-x402-refund.mjs",
     "x402:production:check": "npm run core:build:operations && node scripts/x402-production-readiness.mjs",
     "x402:staging:check": "npm run core:build:operations && node scripts/x402-staging-readiness.mjs",
