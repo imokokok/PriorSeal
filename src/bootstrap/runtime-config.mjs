@@ -24,6 +24,7 @@ function loadRuntimeConfig(environment = process.env) {
   const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, "PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON"));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, "PRIORSEAL_SAFE_4337_TRUST_JSON"));
   const x402 = parseX402Config(environment);
+  const guardedJupiter = guardedJupiterConfig(environment);
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some((entry) => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
   }
@@ -75,12 +76,32 @@ function loadRuntimeConfig(environment = process.env) {
     databaseBackend: databaseBackendValue(environment.PRIORSEAL_DATABASE_BACKEND),
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
     trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, "PRIORSEAL_TRUST_PROXY", false),
-    x402
+    x402,
+    ...guardedJupiter ? { guardedJupiter } : {}
   };
   if (runtimeEnvironment === "production" || runtimeEnvironment === "staging") {
     validateDeploymentConfig(config, runtimeEnvironment);
   }
   return config;
+}
+function guardedJupiterConfig(environment) {
+  const jupiterApiKey = optionalValue(environment.JUPITER_API_KEY);
+  const insightApiKey = optionalValue(environment.INSIGHT_API_KEY);
+  const rpcUrl = optionalValue(environment.PRIORSEAL_JUPITER_RPC_URL);
+  const policy = optionalJson(environment.PRIORSEAL_JUPITER_POLICY_JSON, "PRIORSEAL_JUPITER_POLICY_JSON");
+  const configured = [jupiterApiKey, insightApiKey, rpcUrl, policy].filter(Boolean).length;
+  if (configured === 0) return void 0;
+  if (configured !== 4) throw new TypeError("Guarded Jupiter swaps require JUPITER_API_KEY, INSIGHT_API_KEY, PRIORSEAL_JUPITER_RPC_URL, and PRIORSEAL_JUPITER_POLICY_JSON together");
+  if (!rpcUrl || new URL(rpcUrl).protocol !== "https:") throw new TypeError("PRIORSEAL_JUPITER_RPC_URL must use HTTPS");
+  if (!policy || typeof policy !== "object" || Array.isArray(policy)) throw new TypeError("PRIORSEAL_JUPITER_POLICY_JSON must be an object");
+  return {
+    jupiterApiKey,
+    insightApiKey,
+    rpcUrl,
+    policy,
+    ...optionalValue(environment.PRIORSEAL_JUPITER_ROUTER_BASE_URL) ? { jupiterBaseUrl: optionalValue(environment.PRIORSEAL_JUPITER_ROUTER_BASE_URL) } : {},
+    ...optionalValue(environment.PRIORSEAL_JUPITER_INSIGHT_BASE_URL) ? { insightBaseUrl: optionalValue(environment.PRIORSEAL_JUPITER_INSIGHT_BASE_URL) } : {}
+  };
 }
 function parseSafe4337Trust(value) {
   if (value === void 0) return [];

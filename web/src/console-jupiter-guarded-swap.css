@@ -7,6 +7,9 @@
 .jupiter-import h2, .jupiter-state h2, .jupiter-review h2, .jupiter-submit h2, .jupiter-evidence h2 { margin: 10px 0 8px; font: 400 31px/1.1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
 .jupiter-import > p, .jupiter-submit > p, .jupiter-evidence > p { max-width: 760px; margin: 0 0 22px; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .jupiter-import__actions, .jupiter-review-actions { margin-top: 19px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.jupiter-prepare-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.jupiter-prepare-grid .field:last-child { grid-column: span 2; }
+.jupiter-import__or { margin: 24px 0 14px !important; padding-top: 18px; border-top: 1px solid var(--rule); color: var(--muted); font: 600 10px "JetBrains Mono", monospace !important; letter-spacing: .08em; text-transform: uppercase; }
 .jupiter-review-actions > span { max-width: 510px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .jupiter-state { background: #ebe8df; border-color: var(--ink); }
 .jupiter-state::before { background: var(--ink); }
@@ -33,4 +36,5 @@
 .jupiter-submit-check span { color: #c7c2b8; font-size: 12px; line-height: 1.5; }
 .jupiter-signature { margin-top: 22px; padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: #eeece5; border-left: 4px solid var(--wine); }
 @media (max-width: 920px) { .jupiter-flow { grid-template-columns: 1fr; } .jupiter-flow > div { min-height: 55px; grid-template-columns: 52px 1fr; align-items: center; } .jupiter-layout, .jupiter-review-grid, .jupiter-submit-grid { grid-template-columns: 1fr; } .jupiter-summary { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 650px) { .jupiter-prepare-grid { grid-template-columns: 1fr; } .jupiter-prepare-grid .field:last-child { grid-column: auto; } }
 @media (max-width: 560px) { .jupiter-summary { grid-template-columns: 1fr; } .jupiter-signature { align-items: flex-start; flex-direction: column; } }
