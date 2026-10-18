@@ -85,7 +85,7 @@ test('PriorSeal MCP exposes stateless discovery, deterministic tools, and a JSON
   });
   const listedResult = listed.json() as unknown as { result: { tools: { name: string; annotations: Record<string, unknown>; outputSchema: { required: string[] } }[] } };
   const toolNames = listedResult.result.tools.map(tool => tool.name);
-  assert.deepEqual(toolNames, ['priorseal_get_capabilities', 'priorseal_prepare_authorization', 'priorseal_accept_authorization', 'priorseal_get_authorization', 'priorseal_observe_execution', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_verify_receipt']);
+  assert.deepEqual(toolNames, ['priorseal_get_capabilities', 'priorseal_prepare_authorization', 'priorseal_prepare_controlled_execution', 'priorseal_accept_authorization', 'priorseal_get_authorization', 'priorseal_observe_execution', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_verify_receipt']);
   const byName = new Map(listedResult.result.tools.map(tool => [tool.name, tool]));
   assert.deepEqual(byName.get('priorseal_get_receipt')!.annotations, { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
   assert.deepEqual(byName.get('priorseal_accept_authorization')!.annotations, { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
@@ -105,6 +105,40 @@ test('PriorSeal MCP exposes stateless discovery, deterministic tools, and a JSON
   assert.equal(result.result.structuredContent.mayBroadcastTransaction, false);
   assert.deepEqual(result.result.structuredContent.risk, { level: 'read_only', reasonCode: 'CAPABILITIES_READ' });
   assert.equal(result.result.structuredContent.data.schema, 'priorseal.capabilities.v1');
+});
+test('PriorSeal MCP prepares a safe controlled-execution handoff without accepting or submitting an action', async (t) => {
+  const account = `0x${'c'.repeat(40)}`;
+  const input = {
+    intent,
+    principal: { type: 'user', id: 'user-test', account },
+    authorizer: { type: 'eip712', address: account },
+    delegate: { agentId: 'agent-test', executor: sender },
+    issuedAt: 1_000,
+    expiresAt: intent.validUntil,
+    authorizationNonce: `0x${'4'.repeat(64)}`,
+    maxUses: '1',
+    audience: 'priorseal',
+  };
+  const server = createHttpServer({ policy: { allowedChainIds: [8453], maxAmount: '1000000' } });
+  t.after(() => server.close());
+  const response = await request(server, '/mcp', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'priorseal_prepare_controlled_execution', arguments: { input } } }),
+  });
+  const result = response.json() as unknown as { result: { structuredContent: { status: string; nextAction: string; requiresHumanSignature: boolean; mayBroadcastTransaction: boolean; data: { authorization: { authorizationId: string }; capabilities: { schema: string }; controlledExecution: { schema: string; state: string; mayBroadcastTransaction: boolean; steps: Array<{ action?: string; tool?: string; status: string }> } } } } };
+  assert.equal(response.status, 200);
+  assert.equal(result.result.structuredContent.status, 'controlled_execution_prepared');
+  assert.equal(result.result.structuredContent.nextAction, 'request_principal_signature');
+  assert.equal(result.result.structuredContent.requiresHumanSignature, true);
+  assert.equal(result.result.structuredContent.mayBroadcastTransaction, false);
+  assert.match(result.result.structuredContent.data.authorization.authorizationId, /^auth_/);
+  assert.equal(result.result.structuredContent.data.capabilities.schema, 'priorseal.capabilities.v1');
+  assert.equal(result.result.structuredContent.data.controlledExecution.schema, 'priorseal.controlled-execution-workflow.v1');
+  assert.equal(result.result.structuredContent.data.controlledExecution.state, 'AWAITING_PRINCIPAL_SIGNATURE');
+  assert.equal(result.result.structuredContent.data.controlledExecution.mayBroadcastTransaction, false);
+  assert.deepEqual(result.result.structuredContent.data.controlledExecution.steps.map(step => [step.action ?? step.tool, step.status]), [
+    ['review_prepared_authorization', 'COMPLETE'], ['request_principal_signature', 'REQUIRED'], ['priorseal_accept_authorization', 'REQUIRED'], ['submit_exact_authorized_action', 'EXTERNAL'], ['priorseal_observe_execution', 'REQUIRED'], ['priorseal_get_evidence_bundle', 'REQUIRED'],
+  ]);
 });
 test('PriorSeal MCP maps metered mutations to the existing Agent credit route and releases failed calls', async (t) => {
   const secret = 'agent-secret-that-is-long-enough-for-a-commercial-service-boundary';

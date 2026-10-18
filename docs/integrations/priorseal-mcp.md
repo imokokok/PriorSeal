@@ -27,6 +27,7 @@ The server exposes these tools:
 | --- | --- |
 | `priorseal_get_capabilities` | Read enabled chains, proof mode, issuer and commercial capabilities. |
 | `priorseal_prepare_authorization` | Canonicalize a bounded authorization and return the exact signing payload. |
+| `priorseal_prepare_controlled_execution` | Return a prepared authorization, deployment capabilities and the safe handoff sequence for a complete controlled-execution workflow. |
 | `priorseal_accept_authorization` | Verify and accept a principal-provided signature. |
 | `priorseal_get_authorization` | Read an accepted authorization. |
 | `priorseal_observe_execution` | Compare an already-submitted transaction with an authorization. |
@@ -71,6 +72,22 @@ an execution result; `nextAction: "handoff_exact_authorized_action"` is never
 permission to submit a changed, expired, or unmatched transaction. Error
 results set `isError: true` and carry a machine-readable error code in
 `data.error.code` plus a recovery-oriented `nextAction`.
+
+## Controlled-execution quick start
+
+Use `priorseal_prepare_controlled_execution` when the agent needs the standard
+safe sequence rather than an individual primitive. It is read-only: it returns
+the prepared authorization, signing payload, live capabilities, and a
+`priorseal.controlled-execution-workflow.v1` checklist. The checklist makes
+the following boundaries explicit:
+
+1. A human-controlled principal reviews and signs the prepared authorization.
+2. The agent accepts that exact signed authorization with an idempotency key.
+3. A separate executor may submit only the exact still-valid action.
+4. The agent observes the already-submitted transaction and retrieves evidence.
+
+The helper neither accepts the authorization nor submits the transaction. See
+[the complete copy-and-adapt example](priorseal-mcp-controlled-execution-example.md).
 
 ## Authority and payment boundaries
 
