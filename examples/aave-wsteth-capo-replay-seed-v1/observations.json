@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "case": "aave-ethereum-v3-wsteth-capo-2026-03-10",
+  "capture": {
+    "capturedAtDate": "2026-10-11",
+    "method": "Public explorer pages; event topic and data values transcribed from Etherscan. This is not a raw JSON-RPC receipt export.",
+    "sources": [
+      "https://etherscan.io/tx/0x32c64151469cf2202cbc9581139c6de7b34dae2012eba9daf49311265dfe5a1e",
+      "https://etherscan.io/tx/0x7872defdef7b839d43e79797ce4c4461b9727861db6aa9e72347f8e995812f5f",
+      "https://routescan.io/address/0xe1D97bF61901B075E9626c8A2340a7De385861Ef/events"
+    ]
+  },
+  "chain": {
+    "name": "Ethereum mainnet",
+    "chainId": 1
+  },
+  "capUpdate": {
+    "transactionHash": "0x32c64151469cf2202cbc9581139c6de7b34dae2012eba9daf49311265dfe5a1e",
+    "blockNumber": 24626860,
+    "blockTimestamp": 1773143171,
+    "blockTimestampIso": "2026-03-10T11:46:11.000Z",
+    "status": "success",
+    "transactionTo": "0x6593c7de001fc8542bb1703532ee1e5aa0d458fd",
+    "event": {
+      "name": "CapParametersUpdated",
+      "emitter": "0xe1d97bf61901b075e9626c8a2340a7de385861ef",
+      "topics": [
+        "0x47f15f366dcc3684fc77c4f79eb851bb5befbc095ec7a296a53a27a622964c63"
+      ],
+      "data": "0x000000000000000000000000000000000000000000000000108a928f83995f940000000000000000000000000000000000000000000000000000000069a6bf5f00000000000000000000000000000000000000000000000000000000c63f1aca0000000000000000000000000000000000000000000000000000000000000370",
+      "decoded": {
+        "snapshotRatio": "1191926196478762900",
+        "snapshotTimestamp": "1772535647",
+        "maxRatioGrowthPerSecond": "3326024394",
+        "maxYearlyRatioGrowthPercent": "880"
+      }
+    }
+  },
+  "liquidationExample": {
+    "transactionHash": "0x7872defdef7b839d43e79797ce4c4461b9727861db6aa9e72347f8e995812f5f",
+    "blockNumber": 24626861,
+    "blockTimestamp": 1773143183,
+    "blockTimestampIso": "2026-03-10T11:46:23.000Z",
+    "status": "success",
+    "event": {
+      "name": "LiquidationCall",
+      "emitter": "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2",
+      "topics": [
+        "0xe413a321e8681d831f4dbccbca790d2952b56f977908e45be37335533e005286",
+        "0x0000000000000000000000007f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+        "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0x0000000000000000000000009a982dfcd22159a059114eca54b5abaabdd627b4"
+      ],
+      "data": "0x000000000000000000000000000000000000000000000000a4446aeae302a9f20000000000000000000000000000000000000000000000008ad256e85ed7880a00000000000000000000000095324830563c01f740eb2ac6f7cc11e4ec798dfd0000000000000000000000000000000000000000000000000000000000000000",
+      "decoded": {
+        "collateralAsset": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+        "debtAsset": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "user": "0x9a982dfcd22159a059114eca54b5abaabdd627b4",
+        "debtToCover": "11836703277700000242",
+        "liquidatedCollateralAmount": "10003153278366877706",
+        "liquidator": "0x95324830563c01f740eb2ac6f7cc11e4ec798dfd",
+        "receiveAToken": false
+      }
+    }
+  },
+  "officialIncidentContext": {
+    "reportedEffectiveExchangeRateDropPercent": "2.855",
+    "reportedLiquidatedWstEthApprox": "10938",
+    "reportedAffectedAccounts": 34,
+    "reportedProtocolBadDebt": false,
+    "source": "https://governance.aave.com/t/post-mortem-exchange-rate-misallignment-on-wsteth-core-and-prime-instances/24269"
+  },
+  "limits": [
+    "No raw eth_getTransactionReceipt response or independent RPC fetch was obtained.",
+    "No historical eth_call was made for CAPO latestAnswer, getRatio, or the base ETH/USD feed.",
+    "Only one liquidation transaction is included; the complete incident liquidation range and account set were not scanned.",
+    "The source-code formula is from the current official Aave repository; deployed bytecode equality at the incident block has not been established."
+  ]
+}

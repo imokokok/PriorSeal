@@ -4,7 +4,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { once } from "node:events";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import solc from "solc";
 import { createPublicClient, createWalletClient, custom, defineChain, encodeFunctionData, keccak256, parseAbi } from "viem";
@@ -12,8 +12,9 @@ import { privateKeyToAccount } from "viem/accounts";
 import { createDefiExecutionGateway, createDefiViemSubmitter, createPostgresDefiAttemptStore } from "priorseal-sdk/defi";
 import { buildVerificationBundle, createHttpServer, createPostgresRwaAttemptStore, createPostgresStore } from "../src/index.mjs";
 import { observeEvm } from "../src/infrastructure/blockchain/evm/observer.mjs";
-import { assertV3SwapAuthorization, buildV3SwapIntent, createPriorSealClient, createV3SwapApproval, generateAuthorizationNonce, V3_SINGLE_SWAP_ABI } from "../sdk/dist/index.js";
+import { assertV3SwapAuthorization, createPriorSealClient, createV3SwapApproval, generateAuthorizationNonce, swapApprovalCommitment, V3_SINGLE_SWAP_ABI } from "../sdk/dist/index.js";
 import { verifyReceiptLocally, verifyVerificationBundleLocally } from "../sdk/dist/verifier.js";
+import { createInsightLocalDecisionInputFixture } from "./insight-local-decision-input-fixture.mjs";
 if (!process.env.GANACHE_MODULE) throw new Error("Set GANACHE_MODULE to a local ganache@7.9.2/dist/node/core.js path");
 const { default: ganache } = await import(pathToFileURL(process.env.GANACHE_MODULE).href);
 const now = Math.floor(Date.now() / 1e3);
@@ -23,6 +24,9 @@ if (outputDirectoryPath) {
   await mkdir(outputDirectoryPath, { recursive: true, mode: 448 });
   if ((await readdir(outputDirectoryPath)).length > 0) throw new Error(`PILOT_OUTPUT_DIRECTORY_NOT_EMPTY:${outputDirectoryPath}`);
 }
+let authorizationClockMs = now * 1e3;
+const insightModulePath = process.env.INSIGHT_SDK_MODULE ?? resolve(fileURLToPath(new URL(".", import.meta.url)), "../../insight/sdk/dist/index.js");
+const insightSdk = await import(pathToFileURL(insightModulePath).href);
 const provider = ganache.provider({ chain: { chainId: 8453, time: new Date(now * 1e3), hardfork: "shanghai" }, logging: { quiet: true }, wallet: { totalAccounts: 3 } });
 const db = new PGlite();
 let server;
@@ -41,6 +45,7 @@ contract Token {
   mapping(address=>uint) public balanceOf; mapping(address=>mapping(address=>uint)) public allowance;
   event Transfer(address indexed from,address indexed to,uint amount);
   constructor(address owner){balanceOf[owner]=1000000000;}
+  function decimals() external pure returns(uint8){return 6;}
   function approve(address spender,uint amount) external returns(bool){allowance[msg.sender][spender]=amount;return true;}
   function transfer(address to,uint amount) external returns(bool){move(msg.sender,to,amount);return true;}
   function transferFrom(address from,address to,uint amount) external returns(bool){require(allowance[from][msg.sender]>=amount);allowance[from][msg.sender]-=amount;move(from,to,amount);return true;}
@@ -68,10 +73,10 @@ contract Router {
   await publicClient.waitForTransactionReceipt({ hash: await senderWallet.writeContract({ address: inputToken, abi: contracts.Token.abi, functionName: "approve", args: [router, 1000000n] }) });
   const bytecode = await publicClient.getCode({ address: router });
   assert.ok(bytecode);
-  const params = { tokenIn: inputToken, tokenOut: outputToken, fee: 3e3, recipient: receiver, deadline: BigInt(now + 300), amountIn: 1000000n, amountOutMinimum: 900000n, sqrtPriceLimitX96: 0n };
-  const transaction = { chainId: 8453, from: sender, to: router, nonce: String(await publicClient.getTransactionCount({ address: sender })), value: "0", data: encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: "exactInputSingle", args: [params] }) };
-  const approval = createV3SwapApproval(transaction, keccak256(bytecode));
-  const intent = buildV3SwapIntent({ approval, transaction, intentId: "local-swap-approval", validUntil: now + 240, constraints: { minConfirmations: 1 }, now });
+  const params = { tokenIn: inputToken, tokenOut: outputToken, fee: 3e3, recipient: receiver, deadline: BigInt(now + 300), amountIn: 1000000n, amountOutMinimum: 995000n, sqrtPriceLimitX96: 0n };
+  const gatewayTransaction = { chainId: 8453, from: sender, to: router, nonce: String(await publicClient.getTransactionCount({ address: sender })), value: "0", data: encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: "exactInputSingle", args: [params] }) };
+  const transaction = { ...gatewayTransaction, sourceAmount: 1000000n };
+  const approval = createV3SwapApproval(gatewayTransaction, keccak256(bytecode));
   for (const file of (await readdir(new URL("../migrations/", import.meta.url))).filter((name) => name.endsWith(".sql")).sort()) await db.exec(await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8"));
   const pool = { query: (sql, values) => db.query(sql, values), connect: async () => ({ query: (sql, values) => db.query(sql, values), release() {
   } }) };
@@ -86,6 +91,7 @@ contract Router {
     issuer,
     keyId,
     authorizationAudience: audience,
+    now: () => authorizationClockMs,
     observer: (input) => observeEvm({ ...input, rpcUrls: ["in-process-evm"], rpcClient: { call: async (_url, method, args) => await provider.request({ method, params: args }) } })
   });
   server.listen(0, "127.0.0.1");
@@ -98,45 +104,85 @@ contract Router {
   const submit = createDefiViemSubmitter(senderWallet);
   const deps = { authorizationStore, attempts, chainReader, submit, clock: () => now + 2 };
   const gateway = createDefiExecutionGateway(client, deps);
-  const prepared = await gateway.prepare({
+  authorizationClockMs = Number((await publicClient.getBlock({ blockTag: "latest" })).timestamp) * 1e3;
+  const fixture = await createInsightLocalDecisionInputFixture({ chainId: 8453, inputToken, outputToken, tradeAmountUsd: 1e6, now });
+  const insightGuard = new insightSdk.InsightGuard({ apiKey: "local-chain-drill", fetch: fixture.fetch, decisionInputTrust: fixture.decisionInputTrust });
+  const submitThroughPriorSeal = insightSdk.createPriorSealDefiSubmitter({
+    gateway,
     approval,
-    transaction,
-    intentId: intent.intentId,
-    validUntil: intent.validUntil,
-    constraints: intent.constraints,
-    authorization: {
-      principal: { type: "user", id: "local-swap-user", account: sender },
-      authorizer: { type: "eip712", address: sender },
-      delegate: { agentId: "local-swap-agent", executor: sender },
-      issuedAt: now,
-      notBefore: now,
-      expiresAt: now + 240,
-      authorizationNonce: generateAuthorizationNonce(),
-      maxUses: "1",
-      audience
-    }
+    routerAddress: router,
+    routerCodeHash: keccak256(bytecode),
+    acceptanceKey: { issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }
   });
-  const { intentHash: _intentHash, ...preparedIntent } = prepared.authorization.intent;
-  assert.deepEqual(preparedIntent, intent);
-  const signature = await senderAccount.signTypedData(prepared.typedData);
-  const authorized = await gateway.authorize({ ...prepared.authorization, signature });
+  const insightPriorSealClient = {
+    prepareAuthorization: async (input, signal) => {
+      const result = await client.prepareAuthorization(input, { signal });
+      if (result.authorization.schema !== "priorseal.authorization.v2") throw new Error("PriorSeal returned an unsupported authorization schema");
+      return result;
+    },
+    acceptAuthorization: async (authorization, signal) => {
+      const result = await client.acceptAuthorization(authorization, { signal });
+      if (result.authorization.schema !== "priorseal.authorization.v2") throw new Error("PriorSeal accepted an unsupported authorization schema");
+      return result;
+    },
+    observeExecution: (input, signal) => client.observeExecution(input, { signal }),
+    getObservationJob: (jobId, signal) => client.getObservationJob(jobId, { signal }),
+    waitForObservationJob: (jobId, options) => client.waitForObservationJob(jobId, options)
+  };
+  const joint = await insightGuard.executeTrustedV3SwapWithPriorSeal({
+    source: fixture.source,
+    destination: fixture.destination,
+    receipt: { settlementChainId: 8453, maxSlippageBps: 50 },
+    v3Risk: {
+      routerAddress: router,
+      routerCodeHash: keccak256(bytecode),
+      maxOracleDeviationBps: 100,
+      maxSlippageBps: 50,
+      maxBlockAgeSeconds: 30,
+      reader: {
+        getBlock: ({ blockTag }) => publicClient.getBlock({ blockTag }),
+        getBytecode: ({ address, blockNumber }) => publicClient.getCode({ address, blockNumber }),
+        readContract: ({ address, abi, functionName, blockNumber }) => publicClient.readContract({ address, abi, functionName, blockNumber }),
+        call: ({ account, to, data, value, blockNumber }) => publicClient.call({ account, to, data, value, blockNumber })
+      }
+    },
+    priorSeal: {
+      client: insightPriorSealClient,
+      principal: { type: "user", id: "local-swap-user", account: sender },
+      agentId: "local-swap-agent",
+      issuedAt: now,
+      confirmations: 1,
+      audience,
+      signAuthorization: ({ typedData }) => senderAccount.signTypedData(typedData)
+    },
+    prepareTransaction: async () => transaction,
+    submitTransaction: submitThroughPriorSeal
+  });
+  if (joint.status !== "executed") throw new Error(`Strict V3 flow returned ${joint.status}`);
+  if (!joint.transactionRisk) throw new Error("Strict V3 flow did not return transaction-risk evidence");
+  assert.equal(joint.evidenceStatus, "COMPLETE");
+  assert.equal(joint.assuranceValid, true);
+  assert.equal(joint.transactionCorrelation, true);
+  assert.equal(joint.independentVerificationPerformed, false);
+  const authorized = joint.priorSealAuthorization;
   assert.equal(authorized.acceptance.status, "ACCEPTED");
-  assertV3SwapAuthorization({ approval, transaction, intent: authorized.authorization.intent, routerBytecode: await publicClient.getCode({ address: router }), now });
+  const approvalCommitments = authorized.authorization.intent.contextCommitments?.filter((entry) => entry.namespace === "priorseal.swap-approval.v1") ?? [];
+  assert.equal(approvalCommitments.length, 1);
+  assert.deepEqual(approvalCommitments[0], swapApprovalCommitment(approval));
+  assertV3SwapAuthorization({ approval, transaction: gatewayTransaction, intent: authorized.authorization.intent, routerBytecode: await publicClient.getCode({ address: router }), now });
   const changedData = encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: "exactInputSingle", args: [{ ...params, recipient: sender }] });
-  assert.throws(() => assertV3SwapAuthorization({ approval, transaction: { ...transaction, data: changedData }, intent: authorized.authorization.intent, routerBytecode: bytecode, now }));
+  assert.throws(() => assertV3SwapAuthorization({ approval, transaction: { ...gatewayTransaction, data: changedData }, intent: authorized.authorization.intent, routerBytecode: bytecode, now }));
   const executionInput = {
     authorizationId: authorized.authorization.authorizationId,
     audience,
     intent: authorized.authorization.intent,
-    transaction,
+    transaction: gatewayTransaction,
     acceptanceKey: { issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null },
     adapter: { kind: "uniswap-v3-single", approval }
   };
-  await assert.rejects(gateway.execute({ ...executionInput, transaction: { ...transaction, data: changedData } }));
+  await assert.rejects(gateway.execute({ ...executionInput, transaction: { ...gatewayTransaction, data: changedData } }));
   await provider.request({ method: "evm_increaseTime", params: [2] });
-  const submitted = await gateway.execute(executionInput);
-  assert.equal(submitted.replay, false);
-  const txHash = submitted.attempt.txHash;
+  const txHash = joint.transaction.txHash;
   assert.ok(txHash);
   const mined = await publicClient.waitForTransactionReceipt({ hash: txHash });
   assert.equal(mined.status, "success");
@@ -145,7 +191,7 @@ contract Router {
   assert.equal((await gateway.status(executionInput.authorizationId))?.txHash, txHash);
   const crossRouteClaim = await createPostgresRwaAttemptStore(pool).reserve({
     authorizationId: `auth_${"f".repeat(32)}`,
-    transaction,
+    transaction: gatewayTransaction,
     executionDigest: `0x${"a".repeat(64)}`,
     now: now + 3
   });
@@ -153,11 +199,11 @@ contract Router {
   assert.equal(crossRouteClaim.code, "RWA_NONCE_ALREADY_RESERVED");
   const finalized = await gateway.recover(
     executionInput.authorizationId,
-    async () => ({ transaction, txHash, status: "CONFIRMED", finalized: true })
+    async () => ({ transaction: gatewayTransaction, txHash, status: "CONFIRMED", finalized: true })
   );
   assert.equal(finalized.status, "CONFIRMED");
   const observed = await client.observeExecutionUntilFinal({ authorizationId: authorized.authorization.authorizationId, chainId: 8453, txHash, confirmations: 1 }, { pollIntervalMs: 50, timeoutMs: 1e4 });
-  assert.equal(observed.receipt?.compliance?.status, "COMPLIANT");
+  assert.equal(observed.receipt?.compliance?.status, "COMPLIANT", JSON.stringify(observed.receipt?.compliance, null, 2));
   assert.equal(observed.receipt?.executionStatus, "CONFIRMED");
   assert.ok(observed.receipt);
   const trustRoot = { issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null };
@@ -170,10 +216,10 @@ contract Router {
   });
   const verifiedPack = await verifyVerificationBundleLocally(evidencePack, { expectedAudience: audience, trustedKeys: trustRoot });
   assert.equal(verifiedPack.valid, true, JSON.stringify(verifiedPack));
-  assertV3SwapAuthorization({ approval, transaction, intent: observed.receipt.authorizationEvidence.authorization.intent, routerBytecode: bytecode, now });
+  assertV3SwapAuthorization({ approval, transaction: gatewayTransaction, intent: observed.receipt.authorizationEvidence.authorization.intent, routerBytecode: bytecode, now });
   const balanceAbi = parseAbi(["function balanceOf(address) view returns(uint256)"]);
-  assert.equal(await publicClient.readContract({ address: outputToken, abi: balanceAbi, functionName: "balanceOf", args: [receiver] }), 900000n);
-  const nextTransaction = { ...transaction, nonce: String(await publicClient.getTransactionCount({ address: sender })) };
+  assert.equal(await publicClient.readContract({ address: outputToken, abi: balanceAbi, functionName: "balanceOf", args: [receiver] }), 995000n);
+  const nextTransaction = { ...gatewayTransaction, nonce: String(await publicClient.getTransactionCount({ address: sender })) };
   const nextPrepared = await gateway.prepare({
     approval,
     transaction: nextTransaction,
@@ -228,18 +274,26 @@ contract Router {
       txHash
     },
     checks: {
+      strictInsightAssessmentAccepted: true,
+      trustedDecisionInputPairVerified: true,
+      exactCallRiskAccepted: joint.transactionRisk.status === "ACCEPTABLE",
+      approvalCommitmentBound: true,
       authorizationAccepted: true,
       changedRecipientRejected: true,
       durableExecutorSubmitted: true,
-      replayBlocked: true,
+      replayBlocked: replay.replay,
       crossRouteNonceClaimBlocked: true,
       recoveredFinality: true,
       preBroadcastRouterMutationBlocked: true,
       uncertainNonceNotRetried: true,
       transactionMined: true,
-      receiptCompliant: true,
+      receiptCompliant: verified.valid,
+      priorSealReceiptCryptographicallyVerified: verified.valid,
+      insightReceiptMocked: true,
+      serviceResponseReportOnly: joint.independentVerificationPerformed === false,
+      jointEvidenceCompleteAgainstTestFixture: joint.evidenceStatus === "COMPLETE",
       evidencePackIndependentlyVerified: true,
-      outputBalance: "900000"
+      outputBalance: "995000"
     },
     limits: {
       localEvmOnly: true,

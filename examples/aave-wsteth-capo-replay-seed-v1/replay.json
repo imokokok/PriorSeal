@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "scope": "Two explorer-recorded transactions; formula replay, not complete incident reconstruction.",
+  "capUpdate": {
+    "blockNumber": 24626860,
+    "timestamp": "2026-03-10T11:46:11.000Z",
+    "snapshotRatio": "1.1919261964787629",
+    "snapshotTimestamp": "2026-03-03T11:00:47.000Z",
+    "elapsedSeconds": "607524",
+    "maxYearlyRatioGrowthPercent": "880",
+    "internalScaledGrowthPerSecond": "3326024394030033",
+    "eventRoundedGrowthPerSecond": "3326024394",
+    "reconstructedMaximumRatio": "1.193946836122721601",
+    "reconstructedMaximumRatioRaw": "1193946836122721601"
+  },
+  "liquidationExample": {
+    "blockNumber": 24626861,
+    "timestamp": "2026-03-10T11:46:23.000Z",
+    "blocksAfterUpdate": 1,
+    "secondsAfterUpdate": 12,
+    "collateralAsset": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+    "debtAsset": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "user": "0x9a982dfcd22159a059114eca54b5abaabdd627b4",
+    "debtToCoverWeth": "11.836703277700000242",
+    "liquidatedCollateralWstEth": "10.003153278366877706",
+    "liquidator": "0x95324830563c01f740eb2ac6f7cc11e4ec798dfd"
+  },
+  "officialAggregateContext": {
+    "reportedEffectiveExchangeRateDropPercent": "2.855",
+    "reportedLiquidatedWstEthApprox": "10938",
+    "reportedAffectedAccounts": 34,
+    "reportedProtocolBadDebt": false,
+    "source": "https://governance.aave.com/t/post-mortem-exchange-rate-misallignment-on-wsteth-core-and-prime-instances/24269"
+  },
+  "limitations": [
+    "No raw eth_getTransactionReceipt response or independent RPC fetch was obtained.",
+    "No historical eth_call was made for CAPO latestAnswer, getRatio, or the base ETH/USD feed.",
+    "Only one liquidation transaction is included; the complete incident liquidation range and account set were not scanned.",
+    "The source-code formula is from the current official Aave repository; deployed bytecode equality at the incident block has not been established."
+  ]
+}
