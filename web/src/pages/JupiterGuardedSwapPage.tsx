@@ -8,16 +8,17 @@ import {
   type PreparedGuardedJupiterSwap,
 } from 'priorseal-sdk'
 import { CodeValue, Field, Notice, PageHeader, Status } from '../components'
-import { api, getCapabilities } from '../lib/api'
+import { api, getCapabilities, prepareGuardedJupiterSwap, submitGuardedJupiterSwap } from '../lib/api'
 import { downloadJson } from '../lib/download'
-import { base64, decodeTransaction, installedSolanaWallet, messageBytes, sameBytes, sendExactSolanaTransaction, serializeTransaction, type BrowserSolanaWallet, walletAddress } from '../lib/solana-wallet'
+import { base64, decodeTransaction, installedSolanaWallet, messageBytes, sameBytes, serializeTransaction, type BrowserSolanaWallet, walletAddress } from '../lib/solana-wallet'
 import type { ObservationResult } from '../types'
 import '../console-jupiter-guarded-swap.css'
 
 type AuthorizationResult = Awaited<ReturnType<typeof authorizeGuardedJupiterSwap>>
 type Phase = 'IMPORT' | 'REVIEWED' | 'AUTHORIZED' | 'SUBMITTED' | 'OBSERVED'
 
-const publicRpcDefault = 'https://api.mainnet-beta.solana.com'
+const defaultInputMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+const defaultOutputMint = 'So11111111111111111111111111111111111111112'
 const shortMint = (value: string) => value.length > 17 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value
 const timestamp = (seconds: number) => new Date(seconds * 1000).toLocaleString()
 
@@ -41,7 +42,7 @@ export function JupiterGuardedSwapPage() {
   const [review, setReview] = useState<GuardedJupiterSwapReview | null>(null)
   const [wallet, setWallet] = useState<BrowserSolanaWallet | null>(null)
   const [account, setAccount] = useState('')
-  const [rpcUrl, setRpcUrl] = useState(publicRpcDefault)
+  const [swapInput, setSwapInput] = useState({ inputMint: defaultInputMint, outputMint: defaultOutputMint, amount: '', minimumOutputAmountAtomic: '', slippageBps: '50' })
   const [authorization, setAuthorization] = useState<AuthorizationResult | null>(null)
   const [signature, setSignature] = useState('')
   const [observation, setObservation] = useState<ObservationResult | null>(null)
@@ -58,7 +59,7 @@ export function JupiterGuardedSwapPage() {
     prepared,
     review,
     ...(authorization ? { authorization: authorization.accepted, authorizationPrepared: authorization.prepared } : {}),
-    ...(signature ? { submission: { signature, rpcTransport: 'browser-direct-exact-transaction.v1' } } : {}),
+    ...(signature ? { submission: { signature, rpcTransport: 'priorseal-guarded-jupiter-relay.v1' } } : {}),
     ...(observation ? { observation: observation.observation, receipt: observation.receipt, observationJob: observation.observationJob } : {}),
   } : null, [authorization, observation, prepared, review, signature])
 
@@ -71,6 +72,19 @@ export function JupiterGuardedSwapPage() {
       await assertPreparedGuardedJupiterSwap(candidate)
       const checkedReview = await reviewGuardedJupiterSwap(candidate)
       setPrepared(candidate); setReview(checkedReview); setAuthorization(null); setSignature(''); setObservation(null); setPhase('REVIEWED')
+    } catch (caught) { setError(errorText(caught)) } finally { setBusy(false) }
+  }
+
+  async function prepareFromConsole() {
+    if (!account) { setError('Connect the wallet that will pay and sign before requesting a guarded route.'); return }
+    setBusy(true); setError('')
+    try {
+      const slippageBps = Number(swapInput.slippageBps)
+      if (!/^(0|[1-9][0-9]*)$/.test(swapInput.amount)) throw new Error('Enter the input amount in atomic units (for example, USDC has 6 decimals).')
+      if (!Number.isSafeInteger(slippageBps) || slippageBps < 0 || slippageBps > 10_000) throw new Error('Slippage must be a whole number of basis points.')
+      const result = await prepareGuardedJupiterSwap({ inputMint: swapInput.inputMint.trim(), outputMint: swapInput.outputMint.trim(), amount: swapInput.amount, taker: account, slippageBps, ...(swapInput.minimumOutputAmountAtomic ? { minimumOutputAmountAtomic: swapInput.minimumOutputAmountAtomic } : {}) })
+      await assertPreparedGuardedJupiterSwap(result.prepared)
+      setPrepared(result.prepared); setReview(result.review); setAuthorization(null); setSignature(''); setObservation(null); setPhase('REVIEWED')
     } catch (caught) { setError(errorText(caught)) } finally { setBusy(false) }
   }
 
@@ -112,8 +126,8 @@ export function JupiterGuardedSwapPage() {
       const signed = await wallet.signTransaction(unsigned)
       if (!sameBytes(originalMessage, messageBytes(signed))) throw new Error('The wallet changed the prepared message. The transaction was not broadcast; prepare and review a new package.')
       const signedBase64 = base64(await serializeTransaction(signed))
-      const submitted = await sendExactSolanaTransaction(rpcUrl, signedBase64)
-      setSignature(submitted); setPhase('SUBMITTED')
+      const submitted = await submitGuardedJupiterSwap({ prepared, signedTransactionBase64: signedBase64 })
+      setSignature(submitted.signature); setPhase('SUBMITTED')
     } catch (caught) { setError(errorText(caught)) } finally { setBusy(false) }
   }
 
@@ -132,19 +146,27 @@ export function JupiterGuardedSwapPage() {
     </PageHeader>
 
     <section className="jupiter-flow" aria-label="Guarded swap workflow">
-      {['Import package', 'Review limits', 'Authorize', 'Sign & submit', 'Observe & export'].map((label, index) => <div className={phaseIndex(phase) >= index ? 'complete' : ''} key={label}><span>0{index + 1}</span><strong>{label}</strong></div>)}
+      {['Prepare route', 'Review limits', 'Authorize', 'Sign & submit', 'Observe & export'].map((label, index) => <div className={phaseIndex(phase) >= index ? 'complete' : ''} key={label}><span>0{index + 1}</span><strong>{label}</strong></div>)}
     </section>
 
     {error && <Notice tone="danger" title="Guarded swap needs attention">{error}</Notice>}
 
     <div className="jupiter-layout">
       <section className="panel jupiter-import">
-        <span className="jupiter-index">01 / PREPARED PACKAGE</span>
-        <h2>Import a reviewed route</h2>
-        <p>Packages are created by your protected integration service with Jupiter routing, Insight simulation and the exact PriorSeal transaction binding. This browser independently rejects an expired or altered package.</p>
+        <span className="jupiter-index">01 / PROTECTED ROUTE</span>
+        <h2>Prepare or import a reviewed route</h2>
+        <p>The protected service obtains Jupiter instructions, compiles one exact transaction, gets Insight simulation, and returns no upstream credentials to the browser.</p>
+        <div className="jupiter-prepare-grid">
+          <Field label="Input mint" hint="Solana mint address"><input value={swapInput.inputMint} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, inputMint: event.target.value })} /></Field>
+          <Field label="Output mint" hint="Solana mint address"><input value={swapInput.outputMint} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, outputMint: event.target.value })} /></Field>
+          <Field label="Input amount" hint="Atomic units"><input inputMode="numeric" value={swapInput.amount} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, amount: event.target.value })} /></Field>
+          <Field label="Slippage" hint="Basis points"><input inputMode="numeric" value={swapInput.slippageBps} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, slippageBps: event.target.value })} /></Field>
+          <Field label="Independent output floor" hint="Optional atomic minimum"><input inputMode="numeric" value={swapInput.minimumOutputAmountAtomic} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, minimumOutputAmountAtomic: event.target.value })} /></Field>
+        </div>
+        <div className="jupiter-import__actions"><button className="button primary" disabled={busy || !account || Boolean(prepared)} onClick={() => void prepareFromConsole()}>{busy ? 'Preparing guarded route…' : 'Get guarded Jupiter route'}</button><button className="button secondary" disabled={busy} onClick={() => void connectWallet()}>{account ? `Wallet ${shortMint(account)}` : 'Connect Solana wallet'}</button>{prepared && <button className="button secondary" onClick={() => downloadJson({ schema: 'priorseal.jupiter-guarded-swap-package.v1', prepared }, `${prepared.request.intentId}-prepared.json`)}>Download prepared package</button>}</div>
+        <p className="jupiter-import__or">or import a package produced by an approved integration service</p>
         <Field label="Guarded-swap package" hint="Accepts the prepared object itself or a priorseal.jupiter-guarded-swap-package.v1 wrapper. No keys are stored in the file."><input type="file" accept="application/json,.json" disabled={busy} onChange={(event) => void importPackage(event.target.files?.[0])} /></Field>
-        <div className="jupiter-import__actions"><button className="button secondary" disabled={busy} onClick={() => void connectWallet()}>{account ? `Wallet ${shortMint(account)}` : 'Connect Solana wallet'}</button>{prepared && <button className="button secondary" onClick={() => downloadJson({ schema: 'priorseal.jupiter-guarded-swap-package.v1', prepared }, `${prepared.request.intentId}-prepared.json`)}>Download prepared package</button>}</div>
-        <Notice tone="info" title="Why import a package?">Jupiter and Insight credentials stay in the protected service. The browser receives only the exact transaction, its reviewed route and the evidence needed to verify it.</Notice>
+        <Notice tone="info" title="Protected preparation and relay">Jupiter, Insight, and RPC credentials remain on the server. The browser receives only the exact transaction, its reviewed route, and the evidence required to verify it.</Notice>
       </section>
 
       <aside className="panel jupiter-state">
@@ -179,7 +201,7 @@ export function JupiterGuardedSwapPage() {
       {authorization && <section className="panel jupiter-submit">
         <span className="jupiter-index">03 / ONE EXACT BROADCAST</span><h2>Sign and submit unchanged bytes</h2>
         <p>Your wallet first signs the exact reviewed transaction. The browser compares its message bytes with the reviewed message and broadcasts only if they are identical. Submission has no automatic retry.</p>
-        <div className="jupiter-submit-grid"><Field label="Solana RPC endpoint" hint="Use HTTPS. The default public endpoint is rate-limited; production deployments should use a same-origin RPC proxy rather than exposing a provider credential in browser code."><input value={rpcUrl} disabled={busy || Boolean(signature)} onChange={(event) => setRpcUrl(event.target.value)} /></Field><div className="jupiter-submit-check"><strong>Single-send control</strong><span>Changing quote, blockhash, transaction bytes or route requires a brand-new package, simulation and authorization.</span></div></div>
+        <div className="jupiter-submit-grid"><div className="jupiter-submit-check"><strong>Same-origin guarded relay</strong><span>The signed bytes go to PriorSeal’s protected relay, which checks the same reviewed message and uses a deployment-owned Solana RPC. Provider credentials never enter this page.</span></div><div className="jupiter-submit-check"><strong>Single-send control</strong><span>Changing quote, blockhash, transaction bytes or route requires a brand-new package, simulation and authorization.</span></div></div>
         <div className="jupiter-review-actions"><button className="button primary" disabled={busy || !canSubmit} onClick={() => void signAndSubmit()}>{busy ? 'Waiting for wallet or RPC…' : signature ? 'Transaction submitted' : 'Sign and submit exact transaction'}</button>{signature && <button className="button secondary" disabled={busy} onClick={() => void observe()}>{busy ? 'Observing…' : observation ? 'Observation completed' : 'Observe submitted transaction'}</button>}</div>
         {signature && <div className="jupiter-signature"><Status value={observation?.observation.status ?? 'SUBMITTED'} /><CodeValue value={signature} /></div>}
       </section>}

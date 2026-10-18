@@ -49,6 +49,54 @@ into the transaction.
 - A paid x402 call, if configured, pays for a service endpoint. It never gives
   the payer permission to execute the subject swap.
 
+## Deploy the protected route service
+
+The production runtime includes an opt-in, same-origin route service. It uses
+`@solana/web3.js` to resolve Jupiter's returned address lookup tables, sets one
+fresh blockhash, compiles the exact v0 transaction, obtains the Insight
+simulation, and relays only the transaction that the wallet signed unchanged.
+The console never receives any of these values:
+
+```bash
+# Store these in the deployment secret manager, never in .env files served to Vite.
+JUPITER_API_KEY=...
+INSIGHT_API_KEY=...
+PRIORSEAL_JUPITER_RPC_URL=https://your-solana-rpc.example
+PRIORSEAL_JUPITER_POLICY_JSON='{
+  "maxInputAmountAtomic":"1000000",
+  "maxSlippageBps":50,
+  "allowedInputMints":["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"],
+  "allowedOutputMints":["So11111111111111111111111111111111111111112"],
+  "allowedProgramIds":["ComputeBudget111111111111111111111111111111"],
+  "maxComputeUnitLimit":600000,
+  "maxComputeUnitPriceMicroLamports":"100000",
+  "maxPriorityFeeLamports":"60000",
+  "authorizationTtlSeconds":60
+}'
+```
+
+All four required variables must be present or startup fails closed. The program
+list must be extended only after reviewing the programs that a live route
+actually requires; the minimal sample above is deliberately too restrictive to
+swap. `PRIORSEAL_JUPITER_ROUTER_BASE_URL` and
+`PRIORSEAL_JUPITER_INSIGHT_BASE_URL` are optional HTTPS-only overrides for a
+reviewed staging service.
+
+The server exposes two no-store routes only when this configuration is present:
+
+- `POST /v1/jupiter/guarded-swaps/prepare` accepts mint addresses, atomic
+  input, wallet and bounded slippage; it returns the prepared package and its
+  human-review record.
+- `POST /v1/jupiter/guarded-swaps/submit` accepts that package plus wallet-signed
+  base64 bytes. It revalidates expiry and exact message equality, verifies the
+  one fee-payer signature, then submits through the deployment-owned RPC with
+  no automatic retry.
+
+These routes are intentionally not a policy-editor API. Treat the policy JSON
+as reviewed deployment configuration: version it, apply change control, and
+redeploy after changing program, mint, amount or fee limits. An unauthenticated
+browser must never be able to widen a route policy or replace an RPC endpoint.
+
 ## Prepare, authorize, sign, observe
 
 The host application supplies a compiler because only it has the approved RPC,
@@ -199,9 +247,11 @@ bundle. Do not present a simulation or a test transaction as production proof.
 ## PriorSeal console
 
 The PriorSeal web console exposes this workflow at
-`/app/jupiter-guarded-swap`. It intentionally imports a prepared package
-rather than calling Jupiter or Insight from the browser. This keeps both
-upstream API keys in the protected integration service.
+`/app/jupiter-guarded-swap`. When the protected route service is enabled it can
+request a route from the same origin; it can also import a prepared package
+produced by an approved integration service. It never calls Jupiter or Insight
+directly from the browser, keeping both upstream API keys in the protected
+service.
 
 The package may be the `PreparedGuardedJupiterSwap` JSON returned by the SDK,
 or this wrapper:
@@ -218,12 +268,12 @@ full package validation and shows the atomic input, Jupiter output threshold,
 message hash, transaction-byte digest, instruction programs, compute budget
 and policy warnings. It requires the connected wallet to be the bound fee
 payer. It separately asks that wallet to sign the PriorSeal authorization and
-then the exact transaction. Before one direct RPC submission, it verifies that
+then the exact transaction. The browser and protected relay both verify that
 the wallet did not alter the serialized message bytes.
 
-The console defaults to Solana's public mainnet RPC and does not retry a
-submission automatically. A production deployment should use a same-origin
-RPC relay with operator-owned credentials; do not put a dedicated RPC API key
-in a browser environment variable. Its final evidence download includes the
-prepared route, review, authorization, signature, observation and receipt when
-available. No private key or upstream API key is included.
+The relay does not retry a submission automatically. Its final evidence
+download includes the prepared route, review, authorization, signature,
+observation and receipt when available. No private key or upstream API key is
+included. For durable organizational retention, upload that completed evidence
+package to PriorSeal's existing authenticated archive from a trusted backend;
+do not add an archive writer credential to browser code.
