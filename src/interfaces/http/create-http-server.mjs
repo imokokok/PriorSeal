@@ -34,7 +34,7 @@ const AGENT_ACCOUNT_ERROR_STATUS = Object.freeze({ AGENT_OPERATOR_CREDENTIAL_INV
 function requester(req, trustProxy) {
   return trustProxy ? String(req.headers["cf-connecting-ip"] ?? "").trim() || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress || "unknown" : req.socket.remoteAddress || "unknown";
 }
-function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, observer = observeEvm, corsOrigins = [], trustProxy = false, x402, guardedJupiter, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
+function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, guardedJupiterRequestTimeoutMs = 45e3, observer = observeEvm, corsOrigins = [], trustProxy = false, x402, guardedJupiter, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
   if (privateKeyPem || publicKeyPem) {
     if (!privateKeyPem || !publicKeyPem) throw new TypeError("Issuer private and public keys must be configured together");
     assertEd25519KeyPair(privateKeyPem, publicKeyPem);
@@ -42,13 +42,15 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
   const archiveAccess = createArchiveAccess(archiveCredentials);
   const serveStaticAsset = staticDir ? createStaticAssetHandler(staticDir) : null;
   const x402Payments = x402 ? createX402PaymentService(x402) : null;
-  return createServer({ requestTimeout: requestTimeoutMs }, async (req, res) => {
+  if (!Number.isSafeInteger(guardedJupiterRequestTimeoutMs) || guardedJupiterRequestTimeoutMs < requestTimeoutMs || guardedJupiterRequestTimeoutMs > 6e4) throw new TypeError("guardedJupiterRequestTimeoutMs must be an integer from requestTimeoutMs through 60000");
+  return createServer({ requestTimeout: guardedJupiter ? guardedJupiterRequestTimeoutMs : requestTimeoutMs }, async (req, res) => {
     const requestId = typeof req.headers["x-request-id"] === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(req.headers["x-request-id"]) ? req.headers["x-request-id"] : randomUUID();
-    const deadline = createRequestDeadline(req, requestTimeoutMs);
+    const path = requestPath(req);
+    const isGuardedJupiterRequest = guardedJupiter && req.method === "POST" && (path === "/v1/jupiter/guarded-swaps/prepare" || path === "/v1/jupiter/guarded-swaps/submit");
+    const deadline = createRequestDeadline(req, isGuardedJupiterRequest ? guardedJupiterRequestTimeoutMs : requestTimeoutMs);
     const cleanup = () => deadline.cleanup();
     res.once("close", cleanup);
     res.once("finish", cleanup);
-    const path = requestPath(req);
     const paidRoute = matchX402Route(x402, req.method, path);
     const origin = req.headers.origin;
     const cors = origin && corsOrigins.includes(origin) ? { "access-control-allow-origin": origin, vary: "Origin", "access-control-allow-headers": "content-type,idempotency-key,x-request-id,authorization,payment-signature,x-priorseal-agent-key,x-priorseal-operator-key", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-expose-headers": "payment-required,payment-response,x-priorseal-usage-id" } : {};
