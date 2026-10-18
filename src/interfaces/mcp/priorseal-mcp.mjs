@@ -3,21 +3,25 @@ import { errorCode, errorMessage } from "../../shared/error-code.mjs";
 const MCP_PROTOCOL_VERSION = "2025-11-25";
 const MCP_STATELESS_PROTOCOL_VERSION = "2026-07-28";
 const SUPPORTED_PROTOCOL_VERSIONS = /* @__PURE__ */ new Set([MCP_PROTOCOL_VERSION, "2025-06-18", "2025-03-26"]);
+const READ_ONLY_ANNOTATIONS = Object.freeze({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+const PREPARATION_ANNOTATIONS = Object.freeze({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+const STATE_CHANGE_ANNOTATIONS = Object.freeze({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
 const TOOLS = Object.freeze([
-  tool("priorseal_get_capabilities", "Read the live PriorSeal deployment capabilities before constructing a workflow.", { type: "object", additionalProperties: false }, { readOnlyHint: true }),
-  tool("priorseal_prepare_authorization", "Canonicalize a bounded authorization and return the exact EIP-712 typed data or Solana message for the principal to sign. This never signs, submits, or executes a transaction.", inputSchema("The complete PriorSeal authorization preparation request."), { readOnlyHint: true }),
-  tool("priorseal_accept_authorization", "Verify and accept a principal-signed authorization. Supply an idempotency key in the MCP HTTP request when the deployment meters this operation. Acceptance is not transaction execution.", inputSchema("The complete signed PriorSeal authorization request."), { destructiveHint: false }),
-  tool("priorseal_get_authorization", "Read an accepted authorization by its identifier.", identifierSchema("authorizationId", "PriorSeal authorization identifier."), { readOnlyHint: true }),
-  tool("priorseal_observe_execution", "Observe a submitted EVM or Solana transaction against an accepted authorization and issue evidence when the configured observer can do so. This never broadcasts a transaction.", inputSchema("The complete PriorSeal execution-observation request."), { destructiveHint: false }),
-  tool("priorseal_get_observation_job", "Read the durable status of an automatic finality-observation job.", identifierSchema("jobId", "PriorSeal observation job identifier."), { readOnlyHint: true }),
-  tool("priorseal_get_receipt", "Read a signed execution receipt by its identifier.", identifierSchema("receiptId", "PriorSeal receipt identifier."), { readOnlyHint: true }),
-  tool("priorseal_get_evidence_bundle", "Export the portable receipt evidence bundle and issuer key-discovery metadata.", identifierSchema("receiptId", "PriorSeal receipt identifier."), { readOnlyHint: true }),
+  tool("priorseal_get_capabilities", "Read the live PriorSeal deployment capabilities before constructing a workflow.", { type: "object", additionalProperties: false }, READ_ONLY_ANNOTATIONS),
+  tool("priorseal_prepare_authorization", "Canonicalize a bounded authorization and return the exact EIP-712 typed data or Solana message for a human-controlled principal to sign. This is read-only and never signs, submits, or executes a transaction.", inputSchema("The complete PriorSeal authorization preparation request."), PREPARATION_ANNOTATIONS),
+  tool("priorseal_prepare_controlled_execution", "Prepare a bounded authorization together with the deployment capabilities and a safe, explicit handoff plan. A human-controlled principal must still sign; this never accepts an authorization, signs, submits, or executes a transaction.", inputSchema("The complete controlled-execution preparation request."), PREPARATION_ANNOTATIONS),
+  tool("priorseal_accept_authorization", "Verify and persist a principal-signed authorization. This can consume configured Agent credits and changes service state; send an idempotency key. It never signs, submits, or executes a transaction.", inputSchema("The complete signed PriorSeal authorization request."), STATE_CHANGE_ANNOTATIONS),
+  tool("priorseal_get_authorization", "Read an accepted authorization by its identifier.", identifierSchema("authorizationId", "PriorSeal authorization identifier."), READ_ONLY_ANNOTATIONS),
+  tool("priorseal_observe_execution", "Persist an observation request for an already-submitted EVM or Solana transaction, then issue evidence when configured observation completes. This can consume configured Agent credits; send an idempotency key. It never broadcasts a transaction.", inputSchema("The complete PriorSeal execution-observation request."), STATE_CHANGE_ANNOTATIONS),
+  tool("priorseal_get_observation_job", "Read the durable status of an automatic finality-observation job.", identifierSchema("jobId", "PriorSeal observation job identifier."), READ_ONLY_ANNOTATIONS),
+  tool("priorseal_get_receipt", "Read a signed execution receipt by its identifier.", identifierSchema("receiptId", "PriorSeal receipt identifier."), READ_ONLY_ANNOTATIONS),
+  tool("priorseal_get_evidence_bundle", "Export the portable receipt evidence bundle and issuer key-discovery metadata.", identifierSchema("receiptId", "PriorSeal receipt identifier."), READ_ONLY_ANNOTATIONS),
   tool("priorseal_verify_receipt", "Convenience-verify a PriorSeal receipt with the deployment key registry. Independent local verification remains required for trust decisions.", {
     type: "object",
     properties: { receipt: { type: "object", description: "Receipt object to verify." } },
     required: ["receipt"],
     additionalProperties: false
-  }, { readOnlyHint: true })
+  }, READ_ONLY_ANNOTATIONS)
 ]);
 async function handlePriorSealMcpRequest(body, { version, execute, requestHeaders = {} }) {
   if (!isRecord(body) || body.jsonrpc !== "2.0" || typeof body.method !== "string") return protocolError(null, -32600, "Invalid JSON-RPC request");
@@ -56,16 +60,16 @@ async function handlePriorSealMcpRequest(body, { version, execute, requestHeader
   if (typeof name !== "string" || !TOOLS.some((toolDefinition) => toolDefinition.name === name) || !isRecord(argumentsValue)) return protocolError(id, -32602, "Invalid tool call parameters");
   try {
     const result = await execute({ name, arguments: argumentsValue });
-    return success(id, modern ? modernResult(toolResult(result), version) : toolResult(result), headers);
+    return success(id, modern ? modernResult(toolResult(name, result), version) : toolResult(name, result), headers);
   } catch (error) {
     const code = errorCode(error) || "INTERNAL_ERROR";
     const message = code === "INTERNAL_ERROR" ? "Internal server error" : errorMessage(error);
-    const result = { content: [{ type: "text", text: JSON.stringify({ error: { code, message } }) }], isError: true };
+    const result = toolErrorResult(name, code, message);
     return success(id, modern ? modernResult(result, version) : result, headers);
   }
 }
 function tool(name, description, inputSchema2, annotations) {
-  return { name, description, inputSchema: inputSchema2, annotations };
+  return { name, description, inputSchema: inputSchema2, outputSchema: toolOutputSchema(name), annotations };
 }
 function inputSchema(description) {
   return { type: "object", properties: { input: { type: "object", description } }, required: ["input"], additionalProperties: false };
@@ -73,8 +77,82 @@ function inputSchema(description) {
 function identifierSchema(name, description) {
   return { type: "object", properties: { [name]: { type: "string", minLength: 1, description } }, required: [name], additionalProperties: false };
 }
-function toolResult(result) {
-  return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+function toolOutputSchema(name) {
+  return {
+    type: "object",
+    properties: {
+      schema: { const: "priorseal.mcp.tool-result.v1" },
+      tool: { const: name },
+      status: { type: "string" },
+      nextAction: { type: "string" },
+      requiresHumanSignature: { type: "boolean" },
+      mayBroadcastTransaction: { const: false },
+      risk: {
+        type: "object",
+        properties: { level: { enum: ["read_only", "human_signature_required", "service_state_change", "verification_only", "input_or_service_error"] }, reasonCode: { type: "string" } },
+        required: ["level", "reasonCode"],
+        additionalProperties: false
+      },
+      data: {}
+    },
+    required: ["schema", "tool", "status", "nextAction", "requiresHumanSignature", "mayBroadcastTransaction", "risk", "data"],
+    additionalProperties: false
+  };
+}
+function toolResult(name, result) {
+  const structuredContent = structuredToolResult(name, result);
+  return { content: [{ type: "text", text: JSON.stringify(structuredContent) }], structuredContent };
+}
+function toolErrorResult(name, code, message) {
+  const structuredContent = {
+    schema: "priorseal.mcp.tool-result.v1",
+    tool: name,
+    status: "error",
+    nextAction: errorNextAction(code),
+    requiresHumanSignature: false,
+    mayBroadcastTransaction: false,
+    risk: { level: "input_or_service_error", reasonCode: code },
+    data: { error: { code, message } }
+  };
+  return { content: [{ type: "text", text: JSON.stringify(structuredContent) }], structuredContent, isError: true };
+}
+function structuredToolResult(name, result) {
+  const record = isRecord(result) ? result : {};
+  const response = workflowResponse(name, record);
+  return { schema: "priorseal.mcp.tool-result.v1", tool: name, ...response, mayBroadcastTransaction: false, data: result };
+}
+function workflowResponse(name, result) {
+  if (name === "priorseal_get_capabilities") return { status: "capabilities_loaded", nextAction: "select_supported_workflow", requiresHumanSignature: false, risk: { level: "read_only", reasonCode: "CAPABILITIES_READ" } };
+  if (name === "priorseal_prepare_authorization") return { status: "authorization_prepared", nextAction: "request_principal_signature", requiresHumanSignature: true, risk: { level: "human_signature_required", reasonCode: "PRINCIPAL_SIGNATURE_REQUIRED" } };
+  if (name === "priorseal_prepare_controlled_execution") return { status: "controlled_execution_prepared", nextAction: "request_principal_signature", requiresHumanSignature: true, risk: { level: "human_signature_required", reasonCode: "PRINCIPAL_SIGNATURE_REQUIRED" } };
+  if (name === "priorseal_accept_authorization") return { status: "authorization_accepted", nextAction: "handoff_exact_authorized_action", requiresHumanSignature: false, risk: { level: "service_state_change", reasonCode: "AUTHORIZATION_PERSISTED" } };
+  if (name === "priorseal_get_authorization") return { status: "authorization_loaded", nextAction: "review_authorization", requiresHumanSignature: false, risk: { level: "read_only", reasonCode: "AUTHORIZATION_READ" } };
+  if (name === "priorseal_observe_execution") {
+    const observation = isRecord(result.observation) ? result.observation : {};
+    if (isRecord(result.observationJob)) return { status: "observation_queued", nextAction: "get_observation_job", requiresHumanSignature: false, risk: { level: "service_state_change", reasonCode: "OBSERVATION_JOB_QUEUED" } };
+    if (isRecord(result.receipt)) return { status: "execution_observed", nextAction: "review_receipt", requiresHumanSignature: false, risk: { level: "service_state_change", reasonCode: "EXECUTION_EVIDENCE_ISSUED" } };
+    return { status: "observation_pending", nextAction: "get_observation_job", requiresHumanSignature: false, risk: { level: "service_state_change", reasonCode: typeof observation.status === "string" ? observation.status : "OBSERVATION_PENDING" } };
+  }
+  if (name === "priorseal_get_observation_job") {
+    const state = typeof result.state === "string" ? result.state : "UNKNOWN";
+    if (state === "COMPLETED") return { status: "observation_completed", nextAction: "review_receipt", requiresHumanSignature: false, risk: { level: "read_only", reasonCode: state } };
+    if (state === "FAILED") return { status: "observation_failed", nextAction: "review_observation_error", requiresHumanSignature: false, risk: { level: "read_only", reasonCode: state } };
+    return { status: "observation_pending", nextAction: "get_observation_job", requiresHumanSignature: false, risk: { level: "read_only", reasonCode: state } };
+  }
+  if (name === "priorseal_get_receipt") return { status: "receipt_loaded", nextAction: "verify_receipt_independently", requiresHumanSignature: false, risk: { level: "read_only", reasonCode: "RECEIPT_READ" } };
+  if (name === "priorseal_get_evidence_bundle") return { status: "evidence_bundle_loaded", nextAction: "verify_evidence_bundle_locally", requiresHumanSignature: false, risk: { level: "read_only", reasonCode: "EVIDENCE_BUNDLE_READ" } };
+  const verification = isRecord(result.result) ? result.result : {};
+  const valid = verification.valid === true;
+  return { status: valid ? "receipt_verified" : "receipt_not_verified", nextAction: "verify_receipt_independently", requiresHumanSignature: false, risk: { level: "verification_only", reasonCode: valid ? "VERIFIED" : typeof verification.code === "string" ? verification.code : "NOT_VERIFIED" } };
+}
+function errorNextAction(code) {
+  if (code === "AUTHORIZATION_EXPIRED") return "prepare_new_authorization";
+  if (code === "AUTHORIZATION_NOT_FOUND") return "check_authorization_id";
+  if (code === "RECEIPT_NOT_FOUND") return "check_receipt_id";
+  if (code === "AGENT_CREDITS_EXHAUSTED") return "fund_agent_account";
+  if (code === "AGENT_CREDENTIAL_REQUIRED") return "configure_agent_credential";
+  if (code.startsWith("INVALID_")) return "correct_input";
+  return "review_error";
 }
 function modernResult(result, version) {
   return { resultType: "complete", ...result, _meta: { "io.modelcontextprotocol/serverInfo": { name: "priorseal", version } } };

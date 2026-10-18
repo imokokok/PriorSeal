@@ -27,6 +27,7 @@ The server exposes these tools:
 | --- | --- |
 | `priorseal_get_capabilities` | Read enabled chains, proof mode, issuer and commercial capabilities. |
 | `priorseal_prepare_authorization` | Canonicalize a bounded authorization and return the exact signing payload. |
+| `priorseal_prepare_controlled_execution` | Return a prepared authorization, deployment capabilities and the safe handoff sequence for a complete controlled-execution workflow. |
 | `priorseal_accept_authorization` | Verify and accept a principal-provided signature. |
 | `priorseal_get_authorization` | Read an accepted authorization. |
 | `priorseal_observe_execution` | Compare an already-submitted transaction with an authorization. |
@@ -34,6 +35,59 @@ The server exposes these tools:
 | `priorseal_get_receipt` | Read a signed receipt. |
 | `priorseal_get_evidence_bundle` | Retrieve the receipt with key-discovery metadata. |
 | `priorseal_verify_receipt` | Run the deployment's convenience verification endpoint. |
+
+## Agent safety metadata and structured results
+
+Every tool advertises standard MCP annotations. Read-only tools are marked
+`readOnlyHint: true` and `idempotentHint: true`. Authorization acceptance and
+execution observation are deliberately marked non-read-only but
+non-destructive: they can persist a service record and consume configured Agent
+credits, yet they never sign, submit, or broadcast a transaction. Those two
+operations are not unconditionally idempotent, so callers must send an
+`idempotency-key` when their deployment requires replay safety.
+
+Every successful or failed `tools/call` includes a stable
+`structuredContent` envelope with this shape:
+
+```json
+{
+  "schema": "priorseal.mcp.tool-result.v1",
+  "tool": "priorseal_prepare_authorization",
+  "status": "authorization_prepared",
+  "nextAction": "request_principal_signature",
+  "requiresHumanSignature": true,
+  "mayBroadcastTransaction": false,
+  "risk": {
+    "level": "human_signature_required",
+    "reasonCode": "PRINCIPAL_SIGNATURE_REQUIRED"
+  },
+  "data": {}
+}
+```
+
+`data` preserves the original PriorSeal response. Callers should use the
+stable outer fields for orchestration and display, and keep the original data
+for protocol-specific verification. A successful accepted authorization is not
+an execution result; `nextAction: "handoff_exact_authorized_action"` is never
+permission to submit a changed, expired, or unmatched transaction. Error
+results set `isError: true` and carry a machine-readable error code in
+`data.error.code` plus a recovery-oriented `nextAction`.
+
+## Controlled-execution quick start
+
+Use `priorseal_prepare_controlled_execution` when the agent needs the standard
+safe sequence rather than an individual primitive. It is read-only: it returns
+the prepared authorization, signing payload, live capabilities, and a
+`priorseal.controlled-execution-workflow.v1` checklist. The checklist makes
+the following boundaries explicit:
+
+1. A human-controlled principal reviews and signs the prepared authorization.
+2. The agent accepts that exact signed authorization with an idempotency key.
+3. A separate executor may submit only the exact still-valid action.
+4. The agent observes the already-submitted transaction and retrieves evidence.
+
+The helper neither accepts the authorization nor submits the transaction. See
+[the complete copy-and-adapt example](priorseal-mcp-controlled-execution-example.md).
 
 ## Authority and payment boundaries
 

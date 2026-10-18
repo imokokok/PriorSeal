@@ -106,8 +106,8 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
               assertOnlyFields(toolArguments, [], 'PriorSeal MCP capabilities arguments');
               return deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? 'rfc3161' : requireWitnessQuorum ? 'witness-quorum' : 'issuer'), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === 'function', x402, agentMeter, now: now() });
             }
-            if (name === 'priorseal_prepare_authorization') {
-              const input = mcpInput(toolArguments, 'authorization preparation');
+            if (name === 'priorseal_prepare_authorization' || name === 'priorseal_prepare_controlled_execution') {
+              const input = mcpInput(toolArguments, name === 'priorseal_prepare_controlled_execution' ? 'controlled-execution preparation' : 'authorization preparation');
               assertIssuableIntentInput(input.intent);
               const preparedAt = Math.floor(now() / 1000);
               const authorization = assertIssuableAuthorization(buildAuthorization({ ...input, audience: authorizationAudience, policyHash: policy ? `0x${hashJson(policy)}` : `0x${'0'.repeat(64)}` }));
@@ -119,6 +119,10 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
               const policyResult = policy ? evaluateAuthorizationPolicy(authorization, policy, preparedAt) : { allowed: true, reasonCodes: [], policyId: null, evaluatedAt: preparedAt };
               if (!policyResult.allowed) throw new PriorSealError('POLICY_REJECTED', 'Authorization rejected by policy before signing', policyResult);
               const typedData = jsonSafe(authorization.authorizer.type === 'solana-ed25519' ? { profile: 'solana-ed25519', message: solanaAuthorizationMessage(authorization) } : authorizationTypedData(authorization));
+              if (name === 'priorseal_prepare_controlled_execution') {
+                const capabilities = await deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? 'rfc3161' : requireWitnessQuorum ? 'witness-quorum' : 'issuer'), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === 'function', x402, agentMeter, now: now() });
+                return { authorization, typedData, capabilities, controlledExecution: controlledExecutionWorkflow() };
+              }
               return { authorization, typedData };
             }
             if (name === 'priorseal_accept_authorization') {
@@ -498,6 +502,22 @@ function mcpIdentifier(argumentsValue: Record<string, unknown>, field: string, c
   const value = argumentsValue[field];
   if (typeof value !== 'string' || value.length === 0 || value.length > 512) throw new PriorSealError('INVALID_REQUEST', `PriorSeal MCP ${context} requires a valid ${field}`);
   return value;
+}
+
+function controlledExecutionWorkflow() {
+  return {
+    schema: 'priorseal.controlled-execution-workflow.v1',
+    state: 'AWAITING_PRINCIPAL_SIGNATURE',
+    mayBroadcastTransaction: false,
+    steps: [
+      { order: 1, action: 'review_prepared_authorization', status: 'COMPLETE', requiredActor: 'agent_or_principal', safeguard: 'Review the exact bounded intent, expiry, principal and executor before requesting a signature.' },
+      { order: 2, action: 'request_principal_signature', status: 'REQUIRED', requiredActor: 'human_controlled_principal', safeguard: 'Only the principal-controlled signer may produce the EIP-712 or Solana signature.' },
+      { order: 3, tool: 'priorseal_accept_authorization', status: 'REQUIRED', requiredActor: 'agent', requiredHeaders: ['idempotency-key'], conditionalHeaders: { 'x-priorseal-agent-key': 'Required only when the deployment meters this route.' }, safeguard: 'Acceptance persists service evidence but never signs or broadcasts a transaction.' },
+      { order: 4, action: 'submit_exact_authorized_action', status: 'EXTERNAL', requiredActor: 'separate_executor', safeguard: 'Only submit the exact, still-valid action that matches the signed authorization. PriorSeal does not submit it.' },
+      { order: 5, tool: 'priorseal_observe_execution', status: 'REQUIRED', requiredActor: 'agent', requiredHeaders: ['idempotency-key'], conditionalHeaders: { 'x-priorseal-agent-key': 'Required only when the deployment meters this route.' }, safeguard: 'Observation can persist a job or issue evidence, but never broadcasts a transaction.' },
+      { order: 6, tool: 'priorseal_get_evidence_bundle', status: 'REQUIRED', requiredActor: 'agent_or_reviewer', safeguard: 'Verify the exported evidence bundle using independently established issuer-key trust.' },
+    ],
+  };
 }
 
 function mcpOriginAllowed(origin: string, corsOrigins: string[]) {
