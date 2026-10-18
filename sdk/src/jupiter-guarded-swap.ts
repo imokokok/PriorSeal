@@ -765,7 +765,13 @@ function clonePolicy(policy: JupiterGuardPolicy): JupiterGuardPolicy {
 }
 
 function responseJson(response: Response, service: string): Promise<unknown> {
-  return response.json().catch(() => { throw new JupiterGuardedSwapError('UPSTREAM_INVALID_JSON', `${service} returned an invalid JSON response`) })
+  return response.json().catch(() => {
+    const contentType = response.headers.get('content-type') || 'unknown'
+    throw new JupiterGuardedSwapError(
+      'UPSTREAM_INVALID_JSON',
+      `${service} returned an invalid JSON response (HTTP ${response.status}, content-type ${contentType})`,
+    )
+  })
 }
 
 function readFailureMessage(value: unknown, fallback: string): string {
