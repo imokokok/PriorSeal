@@ -40,6 +40,11 @@ type HttpTestResponse = {
   keyRegistry: { keys: Array<{ keyId: string }> };
   trust: { model: string };
   bundleHash: string;
+  type: string;
+  name: string;
+  x402Support: boolean;
+  x402: { payTo: string; networks: string[] };
+  active: boolean;
 };
 type RequestOptions = {
   method?: string;
@@ -480,6 +485,22 @@ test('API rejects unknown fields and unsafe JSON keys without exposing internals
   const malformedUtf8 = await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, stream: Readable.from([Buffer.from([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d])]) }); assert.equal(malformedUtf8.status, 400); assert.equal(malformedUtf8.json().error.code, 'INVALID_JSON');
   const jsonWithCharset = await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' }, body: JSON.stringify(intent) }); assert.equal(jsonWithCharset.status, 201);
   const health = await request(server, '/health/live'); assert.equal(health.json().status, 'ok');
+});
+test('well-known agent8004 registration is served byte-stable with the x402 surface', async (t) => {
+  const server = await serverFor(t);
+  const first = await request(server, '/.well-known/agent8004.json');
+  assert.equal(first.status, 200);
+  assert.equal((first.headers['content-type'] as string).startsWith('application/json'), true);
+  const record = first.json();
+  assert.equal(record.type, 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1');
+  assert.equal(record.name, 'PriorSeal');
+  assert.equal(record.x402Support, true);
+  assert.equal(record.x402.payTo, '0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231');
+  assert.deepEqual(record.x402.networks, ['eip155:8453', 'eip155:56']);
+  assert.equal(record.active, true);
+  // No request-scoped fields: the registry agentURI points at this exact document.
+  const second = await request(server, '/.well-known/agent8004.json');
+  assert.equal(second.text() === first.text(), true);
 });
 test('authorization preparation rejects unsupported intent and exact-call policy combinations before wallet signing', async (t) => {
   const account = `0x${'c'.repeat(40)}`;
