@@ -23,7 +23,9 @@ concurrency:
 jobs:
   release-core:
     name: Release core gates
-    runs-on: ubuntu-latest
+    # Pin the runner image so an ubuntu-latest migration cannot introduce an
+    # unrelated release-gate failure.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
@@ -153,7 +155,9 @@ jobs:
 
   browser-release:
     name: Browser release gate
-    runs-on: ubuntu-latest
+    # Keep browser screenshots on the same pinned image as the core release
+    # gate; fonts and browser dependencies can otherwise change with latest.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Check out repository
@@ -192,6 +196,16 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Run browser release gate
         run: npm run test:e2e:prepared
+      - name: Retain browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-release-diagnostics
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Preserve the existing required-check name. It completes only after the
   # parallel release paths both succeed, so the faster schedule never weakens
@@ -199,7 +213,8 @@ jobs:
   release-check:
     needs: [release-core, browser-release]
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - name: Require every release path to pass
         env:
