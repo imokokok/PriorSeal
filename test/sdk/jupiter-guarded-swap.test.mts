@@ -208,10 +208,16 @@ test('Jupiter and Insight HTTP clients validate their responses and keep API key
     fetch: async (url, init) => {
       jupiterUrl = String(url)
       assert.equal(new Headers(init?.headers).get('x-api-key'), 'jupiter-secret')
-      return json(build())
+      const { addressLookupTableAddresses: _legacyTables, ...currentBuild } = build()
+      return json({
+        ...currentBuild,
+        addressesByLookupTableAddress: { [WALLET]: [USDC, USDC] },
+      })
     },
   })
-  assert.equal((await router.build({ ...request(), mode: 'standard' })).inAmount, '1000000')
+  const parsedBuild = await router.build({ ...request(), mode: 'standard' })
+  assert.equal(parsedBuild.inAmount, '1000000')
+  assert.deepEqual(parsedBuild.addressLookupTableAddresses, [WALLET])
   assert.match(jupiterUrl, /inputMint=EPjFW/)
   assert.match(jupiterUrl, /mode=default/)
   assert.doesNotMatch(jupiterUrl, /mode=standard/)
