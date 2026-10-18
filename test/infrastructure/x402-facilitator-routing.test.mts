@@ -120,8 +120,9 @@ test('BNB requirements use 18-decimal amounts and route to the override facilita
   assert.deepEqual(bnb.extra, { name: 'USD Coin', version: '2' });
   const baseEntry = accepts.find((entry) => entry.network === 'eip155:8453');
   assert.equal(baseEntry?.amount, '10000', '6-decimal rails keep the micro-USDC grid');
-  assert.ok(requested.includes('https://aeon.facilitator.test/supported'), 'BNB discovery must hit the override facilitator');
-  assert.ok(requested.includes('https://default.facilitator.test/supported'), 'Base discovery must hit the default facilitator');
+  const discovered = (expected: string): boolean => requested.some((entry) => entry === expected);
+  assert.ok(discovered('https://aeon.facilitator.test/supported'), 'BNB discovery must hit the override facilitator');
+  assert.ok(discovered('https://default.facilitator.test/supported'), 'Base discovery must hit the default facilitator');
 
   const payment = { x402Version: 2 as const, accepted: bnb as never, payload: {} };
   const header = Buffer.from(JSON.stringify(payment), 'utf8').toString('base64');
