@@ -6,7 +6,7 @@
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
 [![MIT License](https://img.shields.io/badge/license-MIT-151513.svg)](LICENSE)
 
-[Live console](https://priorseal.xyz/app) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
+[Live console](https://priorseal.xyz/app) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
 
 An agent can propose and execute a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, or whether the observed execution matched it**. PriorSeal connects a principal-signed, time-bounded authorization to an identified EVM or Solana execution in a portable receipt that another party can verify independently. Its core is the relationship between **what was authorized before action** and **what was observed afterward**.
 
@@ -29,6 +29,7 @@ PriorSeal is for teams building EVM and Solana agents, treasury automation, wall
 | Guard a Jupiter Router swap with Insight simulation, exact authorization and execution evidence | [Jupiter Guarded Swap](docs/integrations/jupiter-guarded-swap.md) |
 | Configure x402 payment for eligible read-only evidence exports | [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md) |
 | Use an eligible Base Wallet MCP call with Insight assessment and PriorSeal evidence | [Wallet MCP × Insight × PriorSeal](docs/integrations/wallet-mcp-insight-priorseal.md) · [local skill package](skills/wallet-mcp-insight-priorseal/README.md) |
+| Let an AI agent use PriorSeal's reviewed authorization and evidence workflow | [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · remote endpoint `https://priorseal.xyz/mcp` |
 | Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
 | Review the assets, limits, recipient and router in one ERC-20 swap before authorization | [Reviewed swap authorization](docs/product/swap-authorization.md) |
 | See why an agent's replanned swap needs new approval | [Offline replan demo](examples/swap-replan-demo/README.md) |
