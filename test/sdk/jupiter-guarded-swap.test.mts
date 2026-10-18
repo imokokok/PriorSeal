@@ -101,6 +101,27 @@ test('prepares a self-paying Jupiter exact-in swap bound to Insight simulation e
   assert.deepEqual(prepared.intent.contextCommitments, [prepared.simulation.contextCommitment])
 })
 
+test('derives Solana default compute units when Jupiter omits SetComputeUnitLimit', async () => {
+  const compiler = { async compile() { return { transactionBase64: 'AA==', transaction: message() } } }
+  const insight = {
+    async simulate(input: { expectedMessageHash: string }) {
+      return {
+        messageHash: input.expectedMessageHash,
+        signatureState: 'UNSIGNED' as const,
+        status: 'SIMULATED' as const,
+        contextCommitment: { namespace: 'insight.solana-simulation-receipt.v1', algorithm: 'sha256' as const, digest: `0x${'f'.repeat(64)}` },
+        receipt: {},
+      }
+    },
+  }
+  const dependencies = { router: { async build() { return build() } }, compiler, insight }
+  await prepareGuardedJupiterSwap(request(), { ...dependencies, policy: { ...policy(), maxComputeUnitLimit: 200_000 }, now: () => 1_800_000_000_000 })
+  await assert.rejects(
+    prepareGuardedJupiterSwap(request(), { ...dependencies, policy: { ...policy(), maxComputeUnitLimit: 199_999 } }),
+    (error) => error instanceof JupiterGuardedSwapError && error.code === 'COMPUTE_LIMIT_EXCEEDS_POLICY',
+  )
+})
+
 test('refuses Jupiter instructions and compiled programs outside policy before simulation', async () => {
   const unsafeBuild = build()
   unsafeBuild.swapInstruction = { ...unsafeBuild.swapInstruction, programId: WALLET }
