@@ -475,7 +475,7 @@ function parseJupiterRouterBuild(value: unknown): JupiterRouterBuild {
     cleanupInstruction: readNullableInstruction(record.cleanupInstruction, 'cleanupInstruction'),
     otherInstructions: readInstructions(record.otherInstructions, 'otherInstructions'),
     tipInstruction: readNullableInstruction(record.tipInstruction, 'tipInstruction'),
-    addressLookupTableAddresses: readPublicKeys(record.addressLookupTableAddresses, 'addressLookupTableAddresses', 32),
+    addressLookupTableAddresses: readAddressLookupTableAddresses(record),
   }
 }
 
@@ -644,6 +644,25 @@ function readInstruction(value: unknown, field: string): JupiterInstruction {
 function readPublicKeys(value: unknown, field: string, max: number): string[] {
   if (!Array.isArray(value) || value.length > max || new Set(value).size !== value.length) throw new JupiterGuardedSwapError('JUPITER_RESPONSE_INVALID', `${field} must be a unique public-key array`)
   return value.map((entry, index) => readPublicKey(entry, `${field}[${index}]`))
+}
+
+/**
+ * Router v2 originally returned a public-key array. Its current response
+ * returns a map from lookup-table address to the addresses it resolves. The
+ * table keys are what we compile and policy-check; validating the values too
+ * keeps the provider boundary strict without treating duplicate loaded
+ * addresses as an error.
+ */
+function readAddressLookupTableAddresses(record: Record<string, unknown>): string[] {
+  if (record.addressLookupTableAddresses !== undefined) return readPublicKeys(record.addressLookupTableAddresses, 'addressLookupTableAddresses', 32)
+  const tables = asRecord(record.addressesByLookupTableAddress, 'Jupiter addressesByLookupTableAddress')
+  const entries = Object.entries(tables)
+  if (entries.length > 32) throw new JupiterGuardedSwapError('JUPITER_RESPONSE_INVALID', 'addressesByLookupTableAddress has too many tables')
+  return entries.map(([address, loadedAddresses], index) => {
+    if (!Array.isArray(loadedAddresses) || loadedAddresses.length > 256) throw new JupiterGuardedSwapError('JUPITER_RESPONSE_INVALID', `addressesByLookupTableAddress.${address} must be a public-key array`)
+    loadedAddresses.forEach((entry, loadedIndex) => readPublicKey(entry, `addressesByLookupTableAddress.${address}[${loadedIndex}]`))
+    return readPublicKey(address, `addressesByLookupTableAddress key ${index}`)
+  })
 }
 
 function allInstructions(build: JupiterRouterBuild): JupiterInstruction[] {
