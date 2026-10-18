@@ -15,6 +15,15 @@ export const JUPITER_ROUTER_BUILD_URL = 'https://api.jup.ag/swap/v2/build'
 export const INSIGHT_SOLANA_SIMULATION_NAMESPACE = 'insight.solana-simulation-receipt.v1'
 export const SOLANA_NATIVE_WRAPPED_MINT = 'So11111111111111111111111111111111111111112'
 export const SOLANA_COMPUTE_BUDGET_PROGRAM = 'ComputeBudget111111111111111111111111111111'
+export const SOLANA_SYSTEM_PROGRAM = '11111111111111111111111111111111'
+
+// Solana applies these defaults when a transaction omits SetComputeUnitLimit.
+// Keep this local calculation deliberately conservative: unknown programs are
+// charged at the non-builtin rate, so a newly introduced route cannot receive
+// a lower budget merely because it is unfamiliar to this adapter.
+const SOLANA_DEFAULT_BUILTIN_COMPUTE_UNIT_LIMIT = 3_000n
+const SOLANA_DEFAULT_NON_BUILTIN_COMPUTE_UNIT_LIMIT = 200_000n
+const SOLANA_MAX_COMPUTE_UNIT_LIMIT = 1_400_000n
 
 export type JupiterInstructionAccount = {
   pubkey: string
@@ -609,13 +618,26 @@ function compiledAccountMeta(transaction: SolanaTransactionMessage, index: numbe
 }
 
 function assertComputeBudget(transaction: SolanaTransactionMessage, policy: JupiterGuardPolicy, accounts: string[]): void {
-  const { limit: computeLimit, price: computePrice, priorityFee: v1PriorityTotal } = inspectComputeBudget(transaction, accounts)
-  if (policy.maxComputeUnitLimit !== undefined && (computeLimit === null || computeLimit > BigInt(policy.maxComputeUnitLimit))) throw new JupiterGuardedSwapError('COMPUTE_LIMIT_EXCEEDS_POLICY', 'The final transaction compute-unit limit is missing or exceeds policy')
+  const { limit: explicitComputeLimit, price: computePrice, priorityFee: v1PriorityTotal } = inspectComputeBudget(transaction, accounts)
+  const computeLimit = explicitComputeLimit ?? defaultComputeUnitLimit(transaction, accounts)
+  if (policy.maxComputeUnitLimit !== undefined && computeLimit > BigInt(policy.maxComputeUnitLimit)) throw new JupiterGuardedSwapError('COMPUTE_LIMIT_EXCEEDS_POLICY', 'The final transaction compute-unit limit exceeds policy')
   if (policy.maxComputeUnitPriceMicroLamports !== undefined && (computePrice === null || computePrice > BigInt(policy.maxComputeUnitPriceMicroLamports))) throw new JupiterGuardedSwapError('COMPUTE_PRICE_EXCEEDS_POLICY', 'The final transaction compute-unit price is missing or exceeds policy')
   if (policy.maxPriorityFeeLamports !== undefined) {
     const total = v1PriorityTotal ?? (computeLimit !== null && computePrice !== null ? (computeLimit * computePrice + 999_999n) / 1_000_000n : null)
     if (total === null || total > BigInt(policy.maxPriorityFeeLamports)) throw new JupiterGuardedSwapError('PRIORITY_FEE_EXCEEDS_POLICY', 'The final transaction priority fee is missing or exceeds policy')
   }
+}
+
+function defaultComputeUnitLimit(transaction: SolanaTransactionMessage, accounts: string[]): bigint {
+  let limit = 0n
+  for (const instruction of transaction.instructions) {
+    const programId = accounts[instruction.programIdIndex]
+    if (!programId) throw new JupiterGuardedSwapError('COMPILED_PROGRAM_INDEX_INVALID', 'The compiled transaction has an invalid program index')
+    const isKnownBuiltin = programId === SOLANA_SYSTEM_PROGRAM || programId === SOLANA_COMPUTE_BUDGET_PROGRAM
+    limit += isKnownBuiltin ? SOLANA_DEFAULT_BUILTIN_COMPUTE_UNIT_LIMIT : SOLANA_DEFAULT_NON_BUILTIN_COMPUTE_UNIT_LIMIT
+    if (limit >= SOLANA_MAX_COMPUTE_UNIT_LIMIT) return SOLANA_MAX_COMPUTE_UNIT_LIMIT
+  }
+  return limit
 }
 
 function inspectComputeBudget(transaction: SolanaTransactionMessage, accounts: string[]): { limit: bigint | null; price: bigint | null; priorityFee: bigint | null } {
