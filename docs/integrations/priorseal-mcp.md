@@ -35,6 +35,43 @@ The server exposes these tools:
 | `priorseal_get_evidence_bundle` | Retrieve the receipt with key-discovery metadata. |
 | `priorseal_verify_receipt` | Run the deployment's convenience verification endpoint. |
 
+## Agent safety metadata and structured results
+
+Every tool advertises standard MCP annotations. Read-only tools are marked
+`readOnlyHint: true` and `idempotentHint: true`. Authorization acceptance and
+execution observation are deliberately marked non-read-only but
+non-destructive: they can persist a service record and consume configured Agent
+credits, yet they never sign, submit, or broadcast a transaction. Those two
+operations are not unconditionally idempotent, so callers must send an
+`idempotency-key` when their deployment requires replay safety.
+
+Every successful or failed `tools/call` includes a stable
+`structuredContent` envelope with this shape:
+
+```json
+{
+  "schema": "priorseal.mcp.tool-result.v1",
+  "tool": "priorseal_prepare_authorization",
+  "status": "authorization_prepared",
+  "nextAction": "request_principal_signature",
+  "requiresHumanSignature": true,
+  "mayBroadcastTransaction": false,
+  "risk": {
+    "level": "human_signature_required",
+    "reasonCode": "PRINCIPAL_SIGNATURE_REQUIRED"
+  },
+  "data": {}
+}
+```
+
+`data` preserves the original PriorSeal response. Callers should use the
+stable outer fields for orchestration and display, and keep the original data
+for protocol-specific verification. A successful accepted authorization is not
+an execution result; `nextAction: "handoff_exact_authorized_action"` is never
+permission to submit a changed, expired, or unmatched transaction. Error
+results set `isError: true` and carry a machine-readable error code in
+`data.error.code` plus a recovery-oriented `nextAction`.
+
 ## Authority and payment boundaries
 
 MCP is only a protocol adapter around the reviewed PriorSeal service. It does

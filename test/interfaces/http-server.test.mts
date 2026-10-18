@@ -83,16 +83,28 @@ test('PriorSeal MCP exposes stateless discovery, deterministic tools, and a JSON
     method: 'POST', headers: { ...modernHeaders, 'mcp-method': 'tools/list' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: { _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientInfo': { name: 'test', version: '1.0.0' }, 'io.modelcontextprotocol/clientCapabilities': {} } } }),
   });
-  const toolNames = (listed.json() as unknown as { result: { tools: { name: string }[] } }).result.tools.map(tool => tool.name);
+  const listedResult = listed.json() as unknown as { result: { tools: { name: string; annotations: Record<string, unknown>; outputSchema: { required: string[] } }[] } };
+  const toolNames = listedResult.result.tools.map(tool => tool.name);
   assert.deepEqual(toolNames, ['priorseal_get_capabilities', 'priorseal_prepare_authorization', 'priorseal_accept_authorization', 'priorseal_get_authorization', 'priorseal_observe_execution', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_verify_receipt']);
+  const byName = new Map(listedResult.result.tools.map(tool => [tool.name, tool]));
+  assert.deepEqual(byName.get('priorseal_get_receipt')!.annotations, { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  assert.deepEqual(byName.get('priorseal_accept_authorization')!.annotations, { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
+  assert.ok(byName.get('priorseal_observe_execution')!.outputSchema.required.includes('mayBroadcastTransaction'));
 
   const capabilities = await request(server, '/mcp', {
     method: 'POST', headers: { ...modernHeaders, 'mcp-method': 'tools/call', 'mcp-name': 'priorseal_get_capabilities' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'priorseal_get_capabilities', arguments: {}, _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientInfo': { name: 'test', version: '1.0.0' }, 'io.modelcontextprotocol/clientCapabilities': {} } } }),
   });
-  const result = capabilities.json() as unknown as { result: { resultType: string; structuredContent: { schema: string } } };
+  const result = capabilities.json() as unknown as { result: { resultType: string; structuredContent: { schema: string; tool: string; status: string; nextAction: string; requiresHumanSignature: boolean; mayBroadcastTransaction: boolean; risk: { level: string; reasonCode: string }; data: { schema: string } } } };
   assert.equal(result.result.resultType, 'complete');
-  assert.equal(result.result.structuredContent.schema, 'priorseal.capabilities.v1');
+  assert.equal(result.result.structuredContent.schema, 'priorseal.mcp.tool-result.v1');
+  assert.equal(result.result.structuredContent.tool, 'priorseal_get_capabilities');
+  assert.equal(result.result.structuredContent.status, 'capabilities_loaded');
+  assert.equal(result.result.structuredContent.nextAction, 'select_supported_workflow');
+  assert.equal(result.result.structuredContent.requiresHumanSignature, false);
+  assert.equal(result.result.structuredContent.mayBroadcastTransaction, false);
+  assert.deepEqual(result.result.structuredContent.risk, { level: 'read_only', reasonCode: 'CAPABILITIES_READ' });
+  assert.equal(result.result.structuredContent.data.schema, 'priorseal.capabilities.v1');
 });
 test('PriorSeal MCP maps metered mutations to the existing Agent credit route and releases failed calls', async (t) => {
   const secret = 'agent-secret-that-is-long-enough-for-a-commercial-service-boundary';
@@ -109,9 +121,16 @@ test('PriorSeal MCP maps metered mutations to the existing Agent credit route an
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'priorseal_accept_authorization', arguments: { input: {} } } }),
   });
   assert.equal(response.status, 200);
-  const toolResult = response.json() as unknown as { result: { isError: boolean; content: { text: string }[] } };
+  const toolResult = response.json() as unknown as { result: { isError: boolean; content: { text: string }[]; structuredContent: { schema: string; tool: string; status: string; nextAction: string; mayBroadcastTransaction: boolean; risk: { level: string }; data: { error: { code: string } } } } };
   assert.equal(toolResult.result.isError, true);
   assert.match(toolResult.result.content[0].text, /INVALID_AUTHORIZATION|INVALID_REQUEST|ISSUER_NOT_CONFIGURED/);
+  assert.equal(toolResult.result.structuredContent.schema, 'priorseal.mcp.tool-result.v1');
+  assert.equal(toolResult.result.structuredContent.tool, 'priorseal_accept_authorization');
+  assert.equal(toolResult.result.structuredContent.status, 'error');
+  assert.match(toolResult.result.structuredContent.nextAction, /^(correct_input|review_error)$/);
+  assert.equal(toolResult.result.structuredContent.mayBroadcastTransaction, false);
+  assert.equal(toolResult.result.structuredContent.risk.level, 'input_or_service_error');
+  assert.match(toolResult.result.structuredContent.data.error.code, /INVALID_AUTHORIZATION|INVALID_REQUEST|ISSUER_NOT_CONFIGURED/);
   assert.match(String(response.headers['x-priorseal-usage-id']), /^amu_[0-9a-f]{32}$/);
   assert.equal((await meter!.inspect(secret)).remainingCredits, '1');
 });
