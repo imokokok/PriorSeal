@@ -1,7 +1,7 @@
 // Generated from observer.mts by npm run core:build. Do not edit directly.
 import { PriorSealError } from "../../../domain/errors.mjs";
 import { decodeBase58, isSolanaPublicKey, SOLANA_MAINNET_CAIP2 } from "../../../domain/solana.mjs";
-const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
 async function observeSolana({ chainId, txHash, rpcUrls, confirmations = 0, finalityRequirement, expectedTransaction, signal, fetcher = fetch }) {
   if (chainId !== 0 || expectedTransaction.network !== "mainnet-beta" || expectedTransaction.feePayer === "") throw new PriorSealError("INVALID_SOLANA_OBSERVATION", "Solana observer requires a mainnet-beta transaction intent");
   if (finalityRequirement === "RPC_FINALIZED") return pending(chainId, txHash, "RPC_FINALIZED is not enabled for this Solana profile");

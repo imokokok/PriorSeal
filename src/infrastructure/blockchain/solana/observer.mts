@@ -1,7 +1,7 @@
 import { PriorSealError } from '../../../domain/errors.mjs';
 import { decodeBase58, isSolanaPublicKey, SOLANA_MAINNET_CAIP2, type SolanaTransactionMessage } from '../../../domain/solana.mjs';
 
-const MAINNET_GENESIS_HASH = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+const MAINNET_GENESIS_HASH = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d';
 
 type RpcStatus = { slot: number; confirmations: number | null; err: unknown; confirmationStatus: 'processed' | 'confirmed' | 'finalized' | null };
 type RpcMessage = {
