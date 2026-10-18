@@ -211,8 +211,10 @@ test('Jupiter and Insight HTTP clients validate their responses and keep API key
       return json(build())
     },
   })
-  assert.equal((await router.build(request())).inAmount, '1000000')
+  assert.equal((await router.build({ ...request(), mode: 'standard' })).inAmount, '1000000')
   assert.match(jupiterUrl, /inputMint=EPjFW/)
+  assert.match(jupiterUrl, /mode=default/)
+  assert.doesNotMatch(jupiterUrl, /mode=standard/)
   assert.doesNotMatch(jupiterUrl, /jupiter-secret/)
 
   const insight = createInsightSolanaSimulationClient({

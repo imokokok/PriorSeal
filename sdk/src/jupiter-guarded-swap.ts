@@ -204,7 +204,11 @@ export function createJupiterRouterClient(options: JupiterRouterClientOptions = 
         slippageBps: String(request.slippageBps),
       })
       if (request.maxAccounts !== undefined) query.set('maxAccounts', String(request.maxAccounts))
-      if (request.mode !== undefined) query.set('mode', request.mode)
+      // The guarded API intentionally exposes the product-level name
+      // `standard`; Jupiter's Router API calls that same mode `default`.
+      // Keep the boundary explicit so a provider vocabulary change cannot
+      // silently alter the reviewed request semantics.
+      if (request.mode !== undefined) query.set('mode', request.mode === 'standard' ? 'default' : request.mode)
       const response = await fetcher(`${endpoint}?${query.toString()}`, {
         headers: { accept: 'application/json', ...(apiKey ? { 'x-api-key': apiKey } : {}) },
         signal: requestOptions.signal,
