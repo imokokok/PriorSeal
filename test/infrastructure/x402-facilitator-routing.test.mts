@@ -50,21 +50,33 @@ test('per-network facilitator overrides parse and validate strictly', () => {
   assert.throws(() => parseX402Config({ ...base, PRIORSEAL_X402_FACILITATOR_URLS: 'eip155:56=http://x.facilitator.test' }), /must be HTTPS/);
 });
 
-test('per-network facilitator overrides cannot be combined with CDP authentication', () => {
+test('CDP authentication coexists with per-network overrides; the JWT stays on the CDP endpoint', async (t) => {
   const pair = generateKeyPairSync('ed25519');
   const privateJwk = pair.privateKey.export({ format: 'jwk' }) as JsonWebKey;
   const secret = Buffer.concat([Buffer.from(privateJwk.d!, 'base64url'), Buffer.from(privateJwk.x!, 'base64url')]).toString('base64');
-  assert.throws(
-    () => parseX402Config({
-      ...base,
-      PRIORSEAL_X402_FACILITATOR_URL: 'https://api.cdp.coinbase.com/platform/v2/x402',
-      PRIORSEAL_X402_FACILITATOR_AUTH_MODE: 'cdp',
-      PRIORSEAL_X402_CDP_API_KEY_ID: 'organizations/example/apiKeys/key-1',
-      PRIORSEAL_X402_CDP_API_KEY_SECRET: secret,
-      PRIORSEAL_X402_FACILITATOR_URLS: 'eip155:56=https://aeon.facilitator.test',
-    }),
-    /cannot be combined/
-  );
+  const config = parseX402Config({
+    ...base,
+    PRIORSEAL_X402_NETWORKS: 'eip155:8453,eip155:56',
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://api.cdp.coinbase.com/platform/v2/x402',
+    PRIORSEAL_X402_FACILITATOR_AUTH_MODE: 'cdp',
+    PRIORSEAL_X402_CDP_API_KEY_ID: 'organizations/example/apiKeys/key-1',
+    PRIORSEAL_X402_CDP_API_KEY_SECRET: secret,
+    PRIORSEAL_X402_FACILITATOR_URLS: 'eip155:56=https://aeon.facilitator.test',
+  })!;
+  const headersByUrl = new Map<string, Record<string, string>>();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    headersByUrl.set(url.toString(), {});
+    const network = url.toString().includes('aeon.facilitator.test') ? 'eip155:56' : 'eip155:8453';
+    return new Response(JSON.stringify({ kinds: [{ x402Version: 2, scheme: 'exact', network }] }), { headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const service = createX402PaymentService(config);
+  await service.prepare(config.routes[0], 'https://api.example.test/v1/receipts/probe/bundle', undefined);
+  assert.ok(headersByUrl.has('https://aeon.facilitator.test/supported'), 'override facilitator must be queried');
+  assert.ok(headersByUrl.has('https://api.cdp.coinbase.com/platform/v2/x402/supported'), 'CDP facilitator must be queried');
 });
 
 test('BNB requirements use 18-decimal amounts and route to the override facilitator', async (t) => {

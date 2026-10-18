@@ -31,7 +31,7 @@ secrets/vars:
 | Variable | Required | Purpose |
 |---|---:|---|
 | `PRIORSEAL_X402_FACILITATOR_URL` | Yes | Facilitator base URL; the service calls `/supported`, `/verify`, and `/settle`. |
-| `PRIORSEAL_X402_FACILITATOR_URLS` | No | Per-network facilitator overrides as comma-separated `network=url` pairs (for example `eip155:56=https://facilitator.aeon.xyz`); each entry must reference a known rail and an HTTPS URL, and CDP auth mode cannot be combined with overrides. |
+| `PRIORSEAL_X402_FACILITATOR_URLS` | No | Per-network facilitator overrides as comma-separated `network=url` pairs (for example `eip155:56=https://facilitator.aeon.xyz`); each entry must reference a known rail and an HTTPS URL. May be combined with CDP authentication — CDP bearer JWTs are only ever attached to the CDP base URL, never to an override. |
 | `PRIORSEAL_X402_FACILITATOR_HEADERS_JSON` | No | Per-operation authentication headers, stored as a secret. |
 | `PRIORSEAL_X402_FACILITATOR_AUTH_MODE` | No | Set only to `cdp` for CDP's hosted facilitator; it creates a short-lived JWT for each operation. |
 | `PRIORSEAL_X402_CDP_API_KEY_ID` | With `AUTH_MODE=cdp` | CDP API-key identifier, stored as a Worker secret. |
@@ -77,16 +77,18 @@ deployed API and facilitator before any paid rehearsal.
 Networks inherit `PRIORSEAL_X402_FACILITATOR_URL` unless
 `PRIORSEAL_X402_FACILITATOR_URLS` overrides them. `/supported` is queried per
 distinct facilitator and the exact-v2 networks are merged; `/verify` and
-`/settle` for a payment always go to the facilitator serving its network. CDP
-authentication mode cannot be combined with overrides because CDP bearer JWTs
-are bound to the CDP base URL.
+`/settle` for a payment always go to the facilitator serving its network.
+Overrides may coexist with CDP authentication: CDP bearer JWTs are bound to the
+CDP base URL, so they are attached only when the target endpoint is the CDP
+facilitator itself and are never sent to an overridden endpoint.
 
 BNB Smart Chain (`eip155:56`) settles Binance-bridged USDC (18 decimals,
 `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d`). The bridged token exposes no
 on-chain EIP-3009 domain, so this rail requires a facilitator that verifies
 its own mandate-flow authorization — the AEON facilitator advertises exact v2
 on `eip155:56` and is the validated production pairing (first exercised in
-Insight production, 2026-10-17):
+Insight production, 2026-10-17). This is the canonical CDP-plus-override
+shape: CDP serves Base, the AEON override serves BNB:
 
 ```dotenv
 PRIORSEAL_X402_NETWORKS=eip155:8453,eip155:56
