@@ -2,12 +2,12 @@
 
 PriorSeal's shared Node and Cloudflare Worker API can accept x402 v2 `exact`
 USDC payments on Ethereum, OP Mainnet, Polygon PoS, Monad, X Layer, Sei,
-Base, Arbitrum One, and Avalanche C-Chain. It can also accept Solana mainnet
-USDC (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`). The API delegates signature
-verification and settlement to a facilitator configured by the deployment
-operator. The actual `PAYMENT-REQUIRED` response contains only locally
-configured payment families that the facilitator currently advertises through
-`/supported`.
+Base, Arbitrum One, Avalanche C-Chain, and BNB Smart Chain. It can also accept
+Solana mainnet USDC (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`). The API
+delegates signature verification and settlement to a facilitator configured by
+the deployment operator. The actual `PAYMENT-REQUIRED` response contains only
+locally configured payment families that the facilitator currently advertises
+through `/supported`.
 
 Payment is disabled unless all required `PRIORSEAL_X402_*` settings are
 provided. An EVM payee is shared across every EVM option; a Solana merchant
@@ -31,6 +31,7 @@ secrets/vars:
 | Variable | Required | Purpose |
 |---|---:|---|
 | `PRIORSEAL_X402_FACILITATOR_URL` | Yes | Facilitator base URL; the service calls `/supported`, `/verify`, and `/settle`. |
+| `PRIORSEAL_X402_FACILITATOR_URLS` | No | Per-network facilitator overrides as comma-separated `network=url` pairs (for example `eip155:56=https://facilitator.aeon.xyz`); each entry must reference a known rail and an HTTPS URL. May be combined with CDP authentication — CDP bearer JWTs are only ever attached to the CDP base URL, never to an override. |
 | `PRIORSEAL_X402_FACILITATOR_HEADERS_JSON` | No | Per-operation authentication headers, stored as a secret. |
 | `PRIORSEAL_X402_FACILITATOR_AUTH_MODE` | No | Set only to `cdp` for CDP's hosted facilitator; it creates a short-lived JWT for each operation. |
 | `PRIORSEAL_X402_CDP_API_KEY_ID` | With `AUTH_MODE=cdp` | CDP API-key identifier, stored as a Worker secret. |
@@ -55,8 +56,11 @@ Example route configuration (choose the price and routes for the deployment):
 ]
 ```
 
-Prices are exact USD strings with up to six decimal places and are converted to
-USDC atomic units. Only `/v1/` GET routes are accepted. POST routes remain
+Prices are exact USD strings with up to six decimal places and are converted
+into each rail's settlement-token atomic units: the canonical micro-USDC grid
+(6 decimals) is used as-is on 6-decimal tokens and shifted losslessly on
+deviating tokens such as BNB Smart Chain's 18-decimal bridged USDC. Only
+`/v1/` GET routes are accepted. POST routes remain
 outside x402 because the default `exact` flow can settle after the resource
 handler; keeping the allowlist read-only avoids charging around a write request
 whose response later fails.
@@ -67,6 +71,35 @@ implicit all-rail configuration. Every selected EVM rail requires the EVM
 payee; selected Solana requires the Solana payee. Start with a narrow list and
 use the [staging rollout runbook](../runbooks/x402-staging.md) to verify the
 deployed API and facilitator before any paid rehearsal.
+
+### Per-network facilitator routing
+
+Networks inherit `PRIORSEAL_X402_FACILITATOR_URL` unless
+`PRIORSEAL_X402_FACILITATOR_URLS` overrides them. `/supported` is queried per
+distinct facilitator and the exact-v2 networks are merged; `/verify` and
+`/settle` for a payment always go to the facilitator serving its network.
+Overrides may coexist with CDP authentication: CDP bearer JWTs are bound to the
+CDP base URL, so they are attached only when the target endpoint is the CDP
+facilitator itself and are never sent to an overridden endpoint.
+
+BNB Smart Chain (`eip155:56`) settles Binance-bridged USDC (18 decimals,
+`0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d`). The bridged token exposes no
+on-chain EIP-3009 domain, so this rail requires a facilitator that verifies
+its own mandate-flow authorization — the AEON facilitator advertises exact v2
+on `eip155:56` and is the validated production pairing (first exercised in
+Insight production, 2026-10-17). This is the canonical CDP-plus-override
+shape: CDP serves Base, the AEON override serves BNB:
+
+```dotenv
+PRIORSEAL_X402_NETWORKS=eip155:8453,eip155:56
+PRIORSEAL_X402_FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402
+PRIORSEAL_X402_FACILITATOR_URLS=eip155:56=https://facilitator.aeon.xyz
+```
+
+Record the facilitator's live `/supported` response for `eip155:56` in the
+change record before enabling the rail, exactly as the
+[production Go/No-Go](../runbooks/x402-production-go-no-go.md) requires for a
+new mainnet rail.
 
 For Solana, the resource server obtains the sponsor's public `feePayer` from
 the facilitator's x402 v2 signer discovery metadata. PriorSeal offers a Solana

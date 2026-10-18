@@ -15,6 +15,15 @@ export const JUPITER_ROUTER_BUILD_URL = 'https://api.jup.ag/swap/v2/build'
 export const INSIGHT_SOLANA_SIMULATION_NAMESPACE = 'insight.solana-simulation-receipt.v1'
 export const SOLANA_NATIVE_WRAPPED_MINT = 'So11111111111111111111111111111111111111112'
 export const SOLANA_COMPUTE_BUDGET_PROGRAM = 'ComputeBudget111111111111111111111111111111'
+export const SOLANA_SYSTEM_PROGRAM = '11111111111111111111111111111111'
+
+// Solana applies these defaults when a transaction omits SetComputeUnitLimit.
+// Keep this local calculation deliberately conservative: unknown programs are
+// charged at the non-builtin rate, so a newly introduced route cannot receive
+// a lower budget merely because it is unfamiliar to this adapter.
+const SOLANA_DEFAULT_BUILTIN_COMPUTE_UNIT_LIMIT = 3_000n
+const SOLANA_DEFAULT_NON_BUILTIN_COMPUTE_UNIT_LIMIT = 200_000n
+const SOLANA_MAX_COMPUTE_UNIT_LIMIT = 1_400_000n
 
 export type JupiterInstructionAccount = {
   pubkey: string
@@ -204,7 +213,11 @@ export function createJupiterRouterClient(options: JupiterRouterClientOptions = 
         slippageBps: String(request.slippageBps),
       })
       if (request.maxAccounts !== undefined) query.set('maxAccounts', String(request.maxAccounts))
-      if (request.mode !== undefined) query.set('mode', request.mode)
+      // The guarded API intentionally exposes the product-level name
+      // `standard`; Jupiter's Router API calls that same mode `default`.
+      // Keep the boundary explicit so a provider vocabulary change cannot
+      // silently alter the reviewed request semantics.
+      if (request.mode !== undefined) query.set('mode', request.mode === 'standard' ? 'default' : request.mode)
       const response = await fetcher(`${endpoint}?${query.toString()}`, {
         headers: { accept: 'application/json', ...(apiKey ? { 'x-api-key': apiKey } : {}) },
         signal: requestOptions.signal,
@@ -471,7 +484,7 @@ function parseJupiterRouterBuild(value: unknown): JupiterRouterBuild {
     cleanupInstruction: readNullableInstruction(record.cleanupInstruction, 'cleanupInstruction'),
     otherInstructions: readInstructions(record.otherInstructions, 'otherInstructions'),
     tipInstruction: readNullableInstruction(record.tipInstruction, 'tipInstruction'),
-    addressLookupTableAddresses: readPublicKeys(record.addressLookupTableAddresses, 'addressLookupTableAddresses', 32),
+    addressLookupTableAddresses: readAddressLookupTableAddresses(record),
   }
 }
 
@@ -542,20 +555,51 @@ function assertCompiledTransaction(
 function assertExactInstructionSequence(transaction: SolanaTransactionMessage, build: JupiterRouterBuild, accounts: string[]): void {
   const expected = allInstructions(build)
   if (transaction.instructions.length !== expected.length) throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', 'The final transaction instruction count differs from Jupiter build')
+  const expectedPrivileges = new Map<string, { isSigner: boolean; isWritable: boolean }>()
+  // Solana always makes the fee payer a writable signer, even if an individual
+  // Router instruction refers to it as readonly.
+  addExpectedPrivilege(expectedPrivileges, transaction.feePayer, true, true)
+  const actualPrivileges = new Map<string, { isSigner: boolean; isWritable: boolean }>()
+  const compiledFeePayer = compiledAccountMeta(transaction, 0, accounts)
+  if (compiledFeePayer.pubkey !== transaction.feePayer || !compiledFeePayer.isSigner || !compiledFeePayer.isWritable) {
+    throw new JupiterGuardedSwapError('COMPILED_SIGNER_POLICY_REJECTED', 'The final transaction fee payer privileges are invalid')
+  }
+  addActualPrivilege(actualPrivileges, compiledFeePayer)
   for (let index = 0; index < expected.length; index += 1) {
     const raw = expected[index]!
     const compiled = transaction.instructions[index]!
     if (accounts[compiled.programIdIndex] !== raw.programId || encodeBase58(decodeBase64(raw.data)) !== compiled.data || compiled.accountIndexes.length !== raw.accounts.length) {
       throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', `The final transaction instruction ${index} differs from Jupiter build`)
     }
+    addExpectedPrivilege(expectedPrivileges, raw.programId, false, false)
+    addActualPrivilege(actualPrivileges, compiledAccountMeta(transaction, compiled.programIdIndex, accounts))
     for (let accountIndex = 0; accountIndex < raw.accounts.length; accountIndex += 1) {
       const expectedAccount = raw.accounts[accountIndex]!
       const compiledAccount = compiledAccountMeta(transaction, compiled.accountIndexes[accountIndex]!, accounts)
-      if (compiledAccount.pubkey !== expectedAccount.pubkey || compiledAccount.isSigner !== expectedAccount.isSigner || compiledAccount.isWritable !== expectedAccount.isWritable) {
+      if (compiledAccount.pubkey !== expectedAccount.pubkey) {
         throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', `The final transaction account ${index}:${accountIndex} differs from Jupiter build`)
       }
+      addExpectedPrivilege(expectedPrivileges, expectedAccount.pubkey, expectedAccount.isSigner, expectedAccount.isWritable)
+      addActualPrivilege(actualPrivileges, compiledAccount)
     }
   }
+  if (expectedPrivileges.size !== actualPrivileges.size) throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', 'The final transaction account set differs from Jupiter build')
+  for (const [pubkey, expectedPrivilege] of expectedPrivileges) {
+    const actualPrivilege = actualPrivileges.get(pubkey)
+    if (!actualPrivilege || actualPrivilege.isSigner !== expectedPrivilege.isSigner || actualPrivilege.isWritable !== expectedPrivilege.isWritable) {
+      throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', `The final transaction privileges differ for ${pubkey}`)
+    }
+  }
+}
+
+function addExpectedPrivilege(target: Map<string, { isSigner: boolean; isWritable: boolean }>, pubkey: string, isSigner: boolean, isWritable: boolean): void {
+  const existing = target.get(pubkey)
+  target.set(pubkey, { isSigner: Boolean(existing?.isSigner || isSigner), isWritable: Boolean(existing?.isWritable || isWritable) })
+}
+
+function addActualPrivilege(target: Map<string, { isSigner: boolean; isWritable: boolean }>, account: JupiterInstructionAccount): void {
+  const existing = target.get(account.pubkey)
+  target.set(account.pubkey, { isSigner: Boolean(existing?.isSigner || account.isSigner), isWritable: Boolean(existing?.isWritable || account.isWritable) })
 }
 
 function compiledAccountMeta(transaction: SolanaTransactionMessage, index: number, accounts: string[]): JupiterInstructionAccount {
@@ -574,13 +618,26 @@ function compiledAccountMeta(transaction: SolanaTransactionMessage, index: numbe
 }
 
 function assertComputeBudget(transaction: SolanaTransactionMessage, policy: JupiterGuardPolicy, accounts: string[]): void {
-  const { limit: computeLimit, price: computePrice, priorityFee: v1PriorityTotal } = inspectComputeBudget(transaction, accounts)
-  if (policy.maxComputeUnitLimit !== undefined && (computeLimit === null || computeLimit > BigInt(policy.maxComputeUnitLimit))) throw new JupiterGuardedSwapError('COMPUTE_LIMIT_EXCEEDS_POLICY', 'The final transaction compute-unit limit is missing or exceeds policy')
+  const { limit: explicitComputeLimit, price: computePrice, priorityFee: v1PriorityTotal } = inspectComputeBudget(transaction, accounts)
+  const computeLimit = explicitComputeLimit ?? defaultComputeUnitLimit(transaction, accounts)
+  if (policy.maxComputeUnitLimit !== undefined && computeLimit > BigInt(policy.maxComputeUnitLimit)) throw new JupiterGuardedSwapError('COMPUTE_LIMIT_EXCEEDS_POLICY', 'The final transaction compute-unit limit exceeds policy')
   if (policy.maxComputeUnitPriceMicroLamports !== undefined && (computePrice === null || computePrice > BigInt(policy.maxComputeUnitPriceMicroLamports))) throw new JupiterGuardedSwapError('COMPUTE_PRICE_EXCEEDS_POLICY', 'The final transaction compute-unit price is missing or exceeds policy')
   if (policy.maxPriorityFeeLamports !== undefined) {
     const total = v1PriorityTotal ?? (computeLimit !== null && computePrice !== null ? (computeLimit * computePrice + 999_999n) / 1_000_000n : null)
     if (total === null || total > BigInt(policy.maxPriorityFeeLamports)) throw new JupiterGuardedSwapError('PRIORITY_FEE_EXCEEDS_POLICY', 'The final transaction priority fee is missing or exceeds policy')
   }
+}
+
+function defaultComputeUnitLimit(transaction: SolanaTransactionMessage, accounts: string[]): bigint {
+  let limit = 0n
+  for (const instruction of transaction.instructions) {
+    const programId = accounts[instruction.programIdIndex]
+    if (!programId) throw new JupiterGuardedSwapError('COMPILED_PROGRAM_INDEX_INVALID', 'The compiled transaction has an invalid program index')
+    const isKnownBuiltin = programId === SOLANA_SYSTEM_PROGRAM || programId === SOLANA_COMPUTE_BUDGET_PROGRAM
+    limit += isKnownBuiltin ? SOLANA_DEFAULT_BUILTIN_COMPUTE_UNIT_LIMIT : SOLANA_DEFAULT_NON_BUILTIN_COMPUTE_UNIT_LIMIT
+    if (limit >= SOLANA_MAX_COMPUTE_UNIT_LIMIT) return SOLANA_MAX_COMPUTE_UNIT_LIMIT
+  }
+  return limit
 }
 
 function inspectComputeBudget(transaction: SolanaTransactionMessage, accounts: string[]): { limit: bigint | null; price: bigint | null; priorityFee: bigint | null } {
@@ -642,6 +699,25 @@ function readPublicKeys(value: unknown, field: string, max: number): string[] {
   return value.map((entry, index) => readPublicKey(entry, `${field}[${index}]`))
 }
 
+/**
+ * Router v2 originally returned a public-key array. Its current response
+ * returns a map from lookup-table address to the addresses it resolves. The
+ * table keys are what we compile and policy-check; validating the values too
+ * keeps the provider boundary strict without treating duplicate loaded
+ * addresses as an error.
+ */
+function readAddressLookupTableAddresses(record: Record<string, unknown>): string[] {
+  if (record.addressLookupTableAddresses !== undefined) return readPublicKeys(record.addressLookupTableAddresses, 'addressLookupTableAddresses', 32)
+  const tables = asRecord(record.addressesByLookupTableAddress, 'Jupiter addressesByLookupTableAddress')
+  const entries = Object.entries(tables)
+  if (entries.length > 32) throw new JupiterGuardedSwapError('JUPITER_RESPONSE_INVALID', 'addressesByLookupTableAddress has too many tables')
+  return entries.map(([address, loadedAddresses], index) => {
+    if (!Array.isArray(loadedAddresses) || loadedAddresses.length > 256) throw new JupiterGuardedSwapError('JUPITER_RESPONSE_INVALID', `addressesByLookupTableAddress.${address} must be a public-key array`)
+    loadedAddresses.forEach((entry, loadedIndex) => readPublicKey(entry, `addressesByLookupTableAddress.${address}[${loadedIndex}]`))
+    return readPublicKey(address, `addressesByLookupTableAddress key ${index}`)
+  })
+}
+
 function allInstructions(build: JupiterRouterBuild): JupiterInstruction[] {
   return [
     ...build.computeBudgetInstructions,
@@ -689,7 +765,13 @@ function clonePolicy(policy: JupiterGuardPolicy): JupiterGuardPolicy {
 }
 
 function responseJson(response: Response, service: string): Promise<unknown> {
-  return response.json().catch(() => { throw new JupiterGuardedSwapError('UPSTREAM_INVALID_JSON', `${service} returned an invalid JSON response`) })
+  return response.json().catch(() => {
+    const contentType = response.headers.get('content-type') || 'unknown'
+    throw new JupiterGuardedSwapError(
+      'UPSTREAM_INVALID_JSON',
+      `${service} returned an invalid JSON response (HTTP ${response.status}, content-type ${contentType})`,
+    )
+  })
 }
 
 function readFailureMessage(value: unknown, fallback: string): string {

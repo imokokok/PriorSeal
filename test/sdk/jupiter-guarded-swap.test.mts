@@ -101,6 +101,27 @@ test('prepares a self-paying Jupiter exact-in swap bound to Insight simulation e
   assert.deepEqual(prepared.intent.contextCommitments, [prepared.simulation.contextCommitment])
 })
 
+test('derives Solana default compute units when Jupiter omits SetComputeUnitLimit', async () => {
+  const compiler = { async compile() { return { transactionBase64: 'AA==', transaction: message() } } }
+  const insight = {
+    async simulate(input: { expectedMessageHash: string }) {
+      return {
+        messageHash: input.expectedMessageHash,
+        signatureState: 'UNSIGNED' as const,
+        status: 'SIMULATED' as const,
+        contextCommitment: { namespace: 'insight.solana-simulation-receipt.v1', algorithm: 'sha256' as const, digest: `0x${'f'.repeat(64)}` },
+        receipt: {},
+      }
+    },
+  }
+  const dependencies = { router: { async build() { return build() } }, compiler, insight }
+  await prepareGuardedJupiterSwap(request(), { ...dependencies, policy: { ...policy(), maxComputeUnitLimit: 200_000 }, now: () => 1_800_000_000_000 })
+  await assert.rejects(
+    prepareGuardedJupiterSwap(request(), { ...dependencies, policy: { ...policy(), maxComputeUnitLimit: 199_999 } }),
+    (error) => error instanceof JupiterGuardedSwapError && error.code === 'COMPUTE_LIMIT_EXCEEDS_POLICY',
+  )
+})
+
 test('refuses Jupiter instructions and compiled programs outside policy before simulation', async () => {
   const unsafeBuild = build()
   unsafeBuild.swapInstruction = { ...unsafeBuild.swapInstruction, programId: WALLET }
@@ -144,6 +165,26 @@ test('binds every compiled instruction to Jupiter instruction data and account m
     }),
     (error) => error instanceof JupiterGuardedSwapError && error.code === 'JUPITER_INSTRUCTION_SEQUENCE_MISMATCH',
   )
+})
+
+test('permits only the transaction-wide privilege union required by Jupiter instructions', async () => {
+  const route = build()
+  route.setupInstructions = [{ programId: TOKEN_PROGRAM, accounts: [{ pubkey: WALLET, isSigner: true, isWritable: true }], data: 'AA==' }]
+  route.swapInstruction = { programId: TOKEN_PROGRAM, accounts: [{ pubkey: WALLET, isSigner: true, isWritable: false }], data: 'AQ==' }
+  const compiled = {
+    ...message(),
+    instructions: [
+      { programIdIndex: 1, accountIndexes: [0], data: '1' },
+      { programIdIndex: 1, accountIndexes: [0], data: '2' },
+    ],
+  }
+  const prepared = await prepareGuardedJupiterSwap(request(), {
+    router: { async build() { return route } },
+    compiler: { async compile() { return { transactionBase64: 'AA==', transaction: compiled } } },
+    insight: { async simulate(input: { expectedMessageHash: string }) { return { messageHash: input.expectedMessageHash, signatureState: 'UNSIGNED' as const, status: 'SIMULATED' as const, contextCommitment: { namespace: 'insight.solana-simulation-receipt.v1', algorithm: 'sha256' as const, digest: `0x${'b'.repeat(64)}` }, receipt: {} } } },
+    policy: policy(), now: () => 1_800_000_000_000,
+  })
+  assert.equal(prepared.transaction.instructions.length, 2)
 })
 
 test('enforces output floor and durable mint admission before a route is built', async () => {
@@ -208,11 +249,19 @@ test('Jupiter and Insight HTTP clients validate their responses and keep API key
     fetch: async (url, init) => {
       jupiterUrl = String(url)
       assert.equal(new Headers(init?.headers).get('x-api-key'), 'jupiter-secret')
-      return json(build())
+      const { addressLookupTableAddresses: _legacyTables, ...currentBuild } = build()
+      return json({
+        ...currentBuild,
+        addressesByLookupTableAddress: { [WALLET]: [USDC, USDC] },
+      })
     },
   })
-  assert.equal((await router.build(request())).inAmount, '1000000')
+  const parsedBuild = await router.build({ ...request(), mode: 'standard' })
+  assert.equal(parsedBuild.inAmount, '1000000')
+  assert.deepEqual(parsedBuild.addressLookupTableAddresses, [WALLET])
   assert.match(jupiterUrl, /inputMint=EPjFW/)
+  assert.match(jupiterUrl, /mode=default/)
+  assert.doesNotMatch(jupiterUrl, /mode=standard/)
   assert.doesNotMatch(jupiterUrl, /jupiter-secret/)
 
   const insight = createInsightSolanaSimulationClient({
@@ -233,4 +282,20 @@ test('Jupiter and Insight HTTP clients validate their responses and keep API key
   })
   const result = await insight.simulate({ transactionBase64: 'AA==', expectedMessageHash: `0x${'c'.repeat(64)}` })
   assert.equal(result.messageHash, `0x${'c'.repeat(64)}`)
+})
+
+test('identifies a non-JSON Jupiter gateway response without exposing its body', async () => {
+  const router = createJupiterRouterClient({
+    baseUrl: 'https://jupiter.test/swap/v2/build',
+    fetch: async () => new Response('<html>forbidden</html>', {
+      status: 403,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    }),
+  })
+  await assert.rejects(
+    router.build(request()),
+    (error) => error instanceof JupiterGuardedSwapError
+      && error.code === 'UPSTREAM_INVALID_JSON'
+      && error.message === 'Jupiter Router returned an invalid JSON response (HTTP 403, content-type text/html; charset=utf-8)',
+  )
 })
