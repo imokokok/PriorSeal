@@ -1,9 +1,8 @@
 {
-  "policyId": "priorseal-public-beta-v1",
-  "allowedChainIds": [1, 56, 8453, 42161],
-  "allowedActions": ["TRANSFER", "CONTRACT_CALL"],
+  "policyId": "priorseal-public-beta-v2",
+  "allowedChainIds": [1, 56, 8453, 42161, 0],
+  "allowedActions": ["TRANSFER", "CONTRACT_CALL", "SOLANA_TRANSACTION"],
   "maxValiditySeconds": 86400,
-  "minConfirmations": 12,
   "timestampPolicy": {
     "schema": "priorseal.timestamp-policy.v1",
     "profile": "digicert-rfc3161-v1",
