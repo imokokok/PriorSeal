@@ -1,6 +1,6 @@
 # Cloudflare production runbook
 
-PriorSeal deploys the web console and API as one Cloudflare Worker. `wrangler.jsonc` is the reviewed production manifest: the apex and `www` hostnames are Worker Custom Domains; static assets come from `web/dist`; `/v1/*`, `/health/*`, `/.well-known/*`, and `/openapi/*` execute Worker-first; the `DB` binding points to `priorseal-production` in D1; `priorseal-observations` delivers observation jobs; and the minute cron recovers persisted jobs that need another delivery. D1 is the sole production persistence backend.
+PriorSeal deploys the web console and API as one Cloudflare Worker. `wrangler.jsonc` is the reviewed production manifest: the apex and `www` hostnames are Worker Custom Domains; static assets come from `web/dist`; `/mcp`, `/v1/*`, `/health/*`, `/.well-known/*`, and `/openapi/*` execute Worker-first; the `DB` binding points to `priorseal-production` in D1; `priorseal-observations` delivers observation jobs; and the minute cron recovers persisted jobs that need another delivery. D1 is the sole production persistence backend.
 
 ## Release
 
