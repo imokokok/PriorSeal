@@ -10,6 +10,10 @@ import { CDP_X402_FACILITATOR_URL, cdpFacilitatorAuthHeaders, parseCdpFacilitato
  * claim that its RPC observation, ERC-4337, Safe, or EIP-7702 profiles are
  * enabled for a deployment.
  */
+/**
+ * `assetDecimals` defaults to 6 (Circle USDC). Deviating tokens must declare
+ * it explicitly so requirement amounts land on the token's atomic-unit grid.
+ */
 export const X402_EVM_NETWORKS = Object.freeze([
   { family: 'evm', network: 'eip155:1', chainId: 1, name: 'Ethereum', asset: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', assetName: 'USD Coin', assetVersion: '2' },
   { family: 'evm', network: 'eip155:8453', chainId: 8453, name: 'Base', asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', assetName: 'USD Coin', assetVersion: '2' },
@@ -20,6 +24,17 @@ export const X402_EVM_NETWORKS = Object.freeze([
   { family: 'evm', network: 'eip155:1329', chainId: 1329, name: 'Sei', asset: '0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392', assetName: 'USD Coin', assetVersion: '2' },
   { family: 'evm', network: 'eip155:196', chainId: 196, name: 'X Layer', asset: '0xB6CEceAB302E2E4948951eE7843FC24E92933061', assetName: 'USD Coin', assetVersion: '2' },
   { family: 'evm', network: 'eip155:143', chainId: 143, name: 'Monad', asset: '0x754704Bc059F8C67012fEd69BC8A327a5aafb603', assetName: 'USDC', assetVersion: '2' },
+  {
+    family: 'evm',
+    network: 'eip155:56',
+    chainId: 56,
+    name: 'BNB Smart Chain',
+    /** Binance-bridged USDC (18 decimals) as listed by the AEON facilitator's exact v2 registry (verified 2026-10-17 in Insight production). */
+    asset: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+    assetName: 'USD Coin',
+    assetVersion: '2',
+    assetDecimals: 18,
+  },
 ] as const);
 
 export const X402_SOLANA_NETWORKS = Object.freeze([
@@ -64,6 +79,8 @@ export type X402PaymentPayload = {
 export type X402Route = { method: 'GET'; path: string; description: string; price: string; regex: RegExp };
 export type X402Config = {
   facilitatorUrl: string;
+  /** Per-network facilitator overrides parsed from PRIORSEAL_X402_FACILITATOR_URLS; absent when every rail shares the default facilitator. */
+  facilitatorUrls?: Readonly<Record<string, string>>;
   facilitatorHeaders: Partial<Record<'supported' | 'verify' | 'settle', Record<string, string>>>;
   facilitatorAuth?: CdpFacilitatorAuth;
   resourceOrigin: string;
@@ -81,7 +98,7 @@ export type X402Config = {
 };
 
 type X402Environment = Partial<Record<
-  'PRIORSEAL_X402_FACILITATOR_URL' | 'PRIORSEAL_X402_FACILITATOR_HEADERS_JSON' |
+  'PRIORSEAL_X402_FACILITATOR_URL' | 'PRIORSEAL_X402_FACILITATOR_URLS' | 'PRIORSEAL_X402_FACILITATOR_HEADERS_JSON' |
   'PRIORSEAL_X402_FACILITATOR_AUTH_MODE' | 'PRIORSEAL_X402_CDP_API_KEY_ID' | 'PRIORSEAL_X402_CDP_API_KEY_SECRET' |
   'PRIORSEAL_X402_RESOURCE_ORIGIN' | 'PRIORSEAL_X402_PAY_TO' |
   'PRIORSEAL_X402_SOLANA_PAY_TO' |
@@ -103,6 +120,7 @@ const capabilityCache = new Map<string, { expiresAt: number; promise: Promise<Fa
 export function parseX402Config(environment: X402Environment): X402Config | undefined {
   const raw = {
     facilitatorUrl: optional(environment.PRIORSEAL_X402_FACILITATOR_URL),
+    facilitatorUrls: optional(environment.PRIORSEAL_X402_FACILITATOR_URLS),
     facilitatorHeadersJson: optional(environment.PRIORSEAL_X402_FACILITATOR_HEADERS_JSON),
     facilitatorAuthMode: optional(environment.PRIORSEAL_X402_FACILITATOR_AUTH_MODE),
     cdpApiKeyId: optional(environment.PRIORSEAL_X402_CDP_API_KEY_ID),
@@ -122,6 +140,7 @@ export function parseX402Config(environment: X402Environment): X402Config | unde
   if (!raw.payTo && !raw.solanaPayTo) throw new TypeError('PRIORSEAL_X402_PAY_TO or PRIORSEAL_X402_SOLANA_PAY_TO is required when x402 is configured');
 
   const facilitatorUrl = parseFacilitatorUrl(raw.facilitatorUrl!);
+  const facilitatorUrls = parseFacilitatorUrls(raw.facilitatorUrls);
   const resourceOrigin = parseResourceOrigin(raw.resourceOrigin!);
   const payTo = raw.payTo ? parseEvmAddress(raw.payTo, 'PRIORSEAL_X402_PAY_TO') : undefined;
   const solanaPayTo = raw.solanaPayTo ? parseSolanaPublicKey(raw.solanaPayTo, 'PRIORSEAL_X402_SOLANA_PAY_TO') : undefined;
@@ -132,8 +151,9 @@ export function parseX402Config(environment: X402Environment): X402Config | unde
   const timeoutMs = parseTimeout(raw.timeoutMs);
   const facilitatorHeaders = parseFacilitatorHeaders(raw.facilitatorHeadersJson);
   const facilitatorAuth = parseFacilitatorAuth(raw.facilitatorAuthMode, raw.cdpApiKeyId, raw.cdpApiKeySecret, facilitatorUrl, Boolean(raw.facilitatorHeadersJson));
+  if (facilitatorAuth && facilitatorUrls) throw new TypeError('PRIORSEAL_X402_FACILITATOR_URLS cannot be combined with CDP facilitator authentication');
   const routes = parseRoutes(raw.routesJson!);
-  return { facilitatorUrl, facilitatorHeaders, ...(facilitatorAuth ? { facilitatorAuth } : {}), resourceOrigin, ...(payTo ? { payTo } : {}), ...(solanaPayTo ? { solanaPayTo } : {}), ...networkSelection, testnetNetworksEnabled, timeoutMs, routes };
+  return { facilitatorUrl, ...(facilitatorUrls ? { facilitatorUrls } : {}), facilitatorHeaders, ...(facilitatorAuth ? { facilitatorAuth } : {}), resourceOrigin, ...(payTo ? { payTo } : {}), ...(solanaPayTo ? { solanaPayTo } : {}), ...networkSelection, testnetNetworksEnabled, timeoutMs, routes };
 }
 
 export function matchX402Route(config: X402Config | undefined, method: string | undefined, path: string) {
@@ -169,7 +189,7 @@ export function createX402PaymentService(config: X402Config) {
         x402Version: payload.x402Version,
         paymentPayload: payload,
         paymentRequirements: requirement,
-      }, signal);
+      }, signal, facilitatorFor(config, requirement.network));
       if (!isRecord(verification) || typeof verification.isValid !== 'boolean') throw new Error('Configured facilitator returned an invalid verification response');
       if (!verification.isValid) {
         const invalid = paymentRequired('Payment verification failed');
@@ -185,11 +205,11 @@ export function createX402PaymentService(config: X402Config) {
         paymentRequirements: context.requirement,
       };
       let settlementAttempts = 1;
-      let settlement = parseSettlementResponse(await facilitatorJson(config, 'settle', request, signal), context.requirement);
+      let settlement = parseSettlementResponse(await facilitatorJson(config, 'settle', request, signal, facilitatorFor(config, context.requirement.network)), context.requirement);
       if (!settlement.success && settlement.errorReason === 'settlement_pending') {
         const pending = settlement;
         settlementAttempts++;
-        try { settlement = parseSettlementResponse(await facilitatorJson(config, 'settle', request, signal), context.requirement); }
+        try { settlement = parseSettlementResponse(await facilitatorJson(config, 'settle', request, signal, facilitatorFor(config, context.requirement.network)), context.requirement); }
         catch { settlement = pending; }
       }
       const buyerFacing = {
@@ -252,12 +272,28 @@ function makeRequirement(config: X402Config, route: X402Route, network: typeof X
   return {
     scheme: 'exact',
     network: network.network,
-    amount: priceToAtomicUnits(route.price),
+    amount: assetAmountForNetwork(network, priceToAtomicUnits(route.price)),
     asset: network.asset,
     payTo: config.payTo,
     maxTimeoutSeconds: 300,
     extra: { name: network.assetName, version: network.assetVersion },
   };
+}
+
+type X402NetworkEntry = (typeof X402_NETWORKS)[number] | (typeof X402_STAGING_EVM_NETWORKS)[number];
+
+function assetDecimalsFor(network: X402NetworkEntry): number {
+  return 'assetDecimals' in network ? network.assetDecimals : 6;
+}
+
+/**
+ * Convert the canonical 6-decimal micro-USDC route price into the network's
+ * settlement-token atomic units. Integer math keeps this lossless on the
+ * 18-decimal BNB Smart Chain USDC.
+ */
+function assetAmountForNetwork(network: X402NetworkEntry, microAmount: string): string {
+  const decimals = assetDecimalsFor(network);
+  return decimals === 6 ? microAmount : (BigInt(microAmount) * 10n ** BigInt(decimals - 6)).toString();
 }
 
 function parseRoutes(value: string) {
@@ -291,11 +327,40 @@ function priceToAtomicUnits(price: string) {
   return atomic.toString();
 }
 
-function parseFacilitatorUrl(value: string) {
+function parseFacilitatorUrl(value: string, name = 'PRIORSEAL_X402_FACILITATOR_URL') {
   let url: URL;
-  try { url = new URL(value); } catch { throw new TypeError('PRIORSEAL_X402_FACILITATOR_URL must be a valid URL'); }
-  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || (url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new TypeError('PRIORSEAL_X402_FACILITATOR_URL must be HTTPS (HTTP is allowed only for localhost) and must not contain credentials, query, or fragment');
+  try { url = new URL(value); } catch { throw new TypeError(`${name} must be a valid URL`); }
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || (url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new TypeError(`${name} must be HTTPS (HTTP is allowed only for localhost) and must not contain credentials, query, or fragment`);
   return url.toString().replace(/\/+$/, '');
+}
+
+/**
+ * Parse per-network facilitator overrides (e.g. routing eip155:56 to a
+ * facilitator that serves its settlement token). Entries are "network=url"
+ * pairs separated by commas; every network must be a known rail and every URL
+ * passes the same validation as the default facilitator.
+ */
+function parseFacilitatorUrls(value: string | undefined): Record<string, string> | undefined {
+  if (!value) return undefined;
+  const entries = value.split(',').map(entry => entry.trim()).filter(Boolean);
+  if (!entries.length) throw new TypeError('PRIORSEAL_X402_FACILITATOR_URLS entries must be "network=url" pairs separated by commas');
+  const known: Set<string> = new Set(X402_STAGING_NETWORKS.map(network => network.network));
+  const result: Record<string, string> = {};
+  for (const entry of entries) {
+    const separator = entry.indexOf('=');
+    const network = separator === -1 ? '' : entry.slice(0, separator).trim();
+    const url = separator === -1 ? '' : entry.slice(separator + 1).trim();
+    if (!network || !url) throw new TypeError('PRIORSEAL_X402_FACILITATOR_URLS entries must be "network=url" pairs separated by commas');
+    if (!known.has(network)) throw new TypeError(`PRIORSEAL_X402_FACILITATOR_URLS contains an unsupported payment network: ${network}`);
+    if (result[network]) throw new TypeError(`PRIORSEAL_X402_FACILITATOR_URLS has a duplicate entry for ${network}`);
+    result[network] = parseFacilitatorUrl(url, 'PRIORSEAL_X402_FACILITATOR_URLS');
+  }
+  return result;
+}
+
+/** Resolve the facilitator serving one network's exact payments. */
+function facilitatorFor(config: X402Config, network: string) {
+  return config.facilitatorUrls?.[network] ?? config.facilitatorUrl;
 }
 
 function parseResourceOrigin(value: string) {
@@ -374,20 +439,29 @@ function parseTestnetNetworkFlag(value: string | undefined, runtimeEnvironment: 
 }
 
 async function getSupportedNetworks(config: X402Config, parentSignal?: AbortSignal) {
-  const cacheKey = `${config.facilitatorUrl}\n${JSON.stringify(config.facilitatorHeaders.supported ?? {})}\n${config.facilitatorAuth?.provider ?? ''}:${config.facilitatorAuth?.apiKeyId ?? ''}`;
+  const urls = [...new Set(config.networks.map(network => facilitatorFor(config, network)))];
+  const cacheKey = JSON.stringify([urls, config.facilitatorHeaders.supported ?? {}, config.facilitatorAuth?.provider ?? '', config.facilitatorAuth?.apiKeyId ?? '']);
   const cached = capabilityCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.promise;
-  const promise = facilitatorJson(config, 'supported', undefined, parentSignal).then((value): FacilitatorSupport => {
-    if (!isRecord(value) || !Array.isArray(value.kinds)) throw new Error('Configured facilitator returned an invalid supported response');
-    const kinds = value.kinds as FacilitatorCapability['kinds'];
-    for (const kind of kinds) if (!isRecord(kind) || typeof kind.x402Version !== 'number' || typeof kind.scheme !== 'string' || typeof kind.network !== 'string') throw new Error('Configured facilitator returned an invalid supported response');
-    return {
-      networks: new Set(kinds.filter((kind) => kind.x402Version === 2 && kind.scheme === 'exact').map(kind => (kind as { network: string }).network)),
-      solanaFeePayer: solanaFeePayerFromSupported(value),
-    };
+  const promise = Promise.all(urls.map(async url => parseSupported(await facilitatorJson(config, 'supported', undefined, parentSignal, url)))).then((responses): FacilitatorSupport => {
+    const networks = new Set<string>();
+    for (const response of responses) for (const network of response.networks) networks.add(network);
+    const solanaUrl = facilitatorFor(config, SOLANA_MAINNET_CAIP2);
+    const solanaFeePayer = urls.includes(solanaUrl) ? responses[urls.indexOf(solanaUrl)].solanaFeePayer : null;
+    return { networks, solanaFeePayer };
   });
   capabilityCache.set(cacheKey, { expiresAt: Date.now() + 60_000, promise });
   try { return await promise; } catch (error) { capabilityCache.delete(cacheKey); throw error; }
+}
+
+function parseSupported(value: unknown): FacilitatorSupport {
+  if (!isRecord(value) || !Array.isArray(value.kinds)) throw new Error('Configured facilitator returned an invalid supported response');
+  const kinds = value.kinds as FacilitatorCapability['kinds'];
+  for (const kind of kinds) if (!isRecord(kind) || typeof kind.x402Version !== 'number' || typeof kind.scheme !== 'string' || typeof kind.network !== 'string') throw new Error('Configured facilitator returned an invalid supported response');
+  return {
+    networks: new Set(kinds.filter((kind) => kind.x402Version === 2 && kind.scheme === 'exact').map(kind => (kind as { network: string }).network)),
+    solanaFeePayer: solanaFeePayerFromSupported(value),
+  };
 }
 
 /**
@@ -410,16 +484,19 @@ function solanaFeePayerFromSupported(value: Record<string, unknown>): string | n
   return unique.length === 1 ? unique[0] : null;
 }
 
-async function facilitatorJson(config: X402Config, operation: 'supported' | 'verify' | 'settle', body?: unknown, parentSignal?: AbortSignal): Promise<unknown> {
-  const url = operation === 'supported' ? `${config.facilitatorUrl}/supported` : `${config.facilitatorUrl}/${operation}`;
+async function facilitatorJson(config: X402Config, operation: 'supported' | 'verify' | 'settle', body: unknown, parentSignal?: AbortSignal, urlOverride?: string): Promise<unknown> {
+  const url = urlOverride ?? config.facilitatorUrl;
+  const target = operation === 'supported' ? `${url}/supported` : `${url}/${operation}`;
   const controller = new AbortController();
   const abortFromParent = () => controller.abort(parentSignal?.reason);
   if (parentSignal?.aborted) throw parentSignal.reason;
   parentSignal?.addEventListener('abort', abortFromParent, { once: true });
   const timer = setTimeout(() => controller.abort(new Error('Facilitator request timed out')), config.timeoutMs);
   try {
-    const authHeaders = config.facilitatorAuth ? await cdpFacilitatorAuthHeaders(config.facilitatorAuth, operation) : {};
-    const response = await fetch(url, {
+    // CDP bearer JWTs are bound to the CDP base URL; never attach them to an
+    // overridden facilitator endpoint.
+    const authHeaders = url === config.facilitatorUrl && config.facilitatorAuth ? await cdpFacilitatorAuthHeaders(config.facilitatorAuth, operation) : {};
+    const response = await fetch(target, {
       method: operation === 'supported' ? 'GET' : 'POST',
       // Cloudflare Workers does not implement redirect: 'error'. Manual mode
       // preserves the same fail-closed rule across both supported runtimes.

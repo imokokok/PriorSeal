@@ -12,8 +12,9 @@ implicit claim that every other column is enabled.
 | OP Mainnet | `eip155:10` | Yes | EVM JSON-RPC, deployment RPC required. |
 | Polygon PoS | `eip155:137` | Yes | EVM JSON-RPC, deployment RPC required. |
 | Monad | `eip155:143` | Yes | Offered only when the selected facilitator supports `exact`. |
-| X Layer | `eip155:196` | Yes | EVM JSON-RPC, deployment RPC required. |
 | Sei | `eip155:1329` | Yes | EVM JSON-RPC, deployment RPC required. |
+| X Layer | `eip155:196` | Yes | EVM JSON-RPC, deployment RPC required. |
+| BNB Smart Chain | `eip155:56` | Yes | EVM JSON-RPC, deployment RPC required. x402 settles 18-decimal bridged USDC through a facilitator with a non-EIP-3009 mandate flow (AEON; set `PRIORSEAL_X402_FACILITATOR_URLS`). |
 | Base | `eip155:8453` | Yes | EVM JSON-RPC, deployment RPC required. |
 | Arbitrum One | `eip155:42161` | Yes | EVM JSON-RPC, deployment RPC required. |
 | Avalanche C-Chain | `eip155:43114` | Yes | EVM JSON-RPC, deployment RPC required. |

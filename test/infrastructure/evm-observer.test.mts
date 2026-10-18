@@ -21,7 +21,7 @@ test('Base Sepolia is an explicit optional observation network', () => {
   assert.deepEqual(getRpcUrls(84532, {}), []);
 });
 test('production EVM observation network registry tracks Insight payment rails', () => {
-  assert.deepEqual(Object.entries(SUPPORTED_CHAINS).filter(([chainId]) => !['0', '84532'].includes(chainId)).map(([chainId]) => Number(chainId)).sort((left, right) => left - right), [1, 10, 137, 143, 196, 1329, 8453, 42161, 43114]);
+  assert.deepEqual(Object.entries(SUPPORTED_CHAINS).filter(([chainId]) => !['0', '84532'].includes(chainId)).map(([chainId]) => Number(chainId)).sort((left, right) => left - right), [1, 10, 56, 137, 143, 196, 1329, 8453, 42161, 43114]);
   assert.equal(SUPPORTED_CHAINS[137].rpcEnv, 'PRIORSEAL_RPC_POLYGON');
   assert.equal(SUPPORTED_CHAINS[43114].rpcEnv, 'PRIORSEAL_RPC_AVALANCHE');
 });
