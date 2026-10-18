@@ -79,7 +79,7 @@ async function observeSolana({ chainId, txHash, rpcUrls, confirmations = 0, fina
 }
 async function rpc(url, method, params, fetcher, signal) {
   const response = await fetcher(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "priorseal-solana-observer", method, params }), signal: combineSignal(signal) });
-  if (!response.ok) throw new PriorSealError("RPC_HTTP_ERROR", "Solana RPC returned a non-success HTTP response");
+  if (!response.ok) throw new PriorSealError("RPC_HTTP_ERROR", `Solana RPC returned HTTP ${response.status} for ${method}`);
   const body = await response.json();
   if (!isRecord(body) || body.jsonrpc !== "2.0" || body.id !== "priorseal-solana-observer") throw new PriorSealError("RPC_INVALID_RESPONSE", "Solana RPC returned an invalid JSON-RPC envelope");
   if (body.error != null) throw new PriorSealError("RPC_CALL_FAILED", "Solana RPC rejected the observation request");
