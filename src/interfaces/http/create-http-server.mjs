@@ -28,6 +28,7 @@ import { createArchiveAccess, archiveEntry, archiveQuery } from "../../applicati
 import { deploymentCapabilities } from "../../application/capabilities.mjs";
 import { createRequestDeadline } from "./request-deadline.mjs";
 import { createX402PaymentService, matchX402Route } from "../../infrastructure/payments/x402-exact-evm.mjs";
+import { handlePriorSealMcpRequest } from "../mcp/priorseal-mcp.mjs";
 const ERROR_STATUS = Object.freeze({ ARCHIVE_UNAUTHORIZED: 401, ARCHIVE_FORBIDDEN: 403, ARCHIVE_CONFLICT: 409, AGENT_CREDENTIAL_REQUIRED: 401, AGENT_CREDENTIAL_INVALID: 403, AGENT_CREDITS_EXHAUSTED: 402, INVALID_JSON: 400, INVALID_REQUEST: 400, UNKNOWN_FIELD: 400, DANGEROUS_JSON_KEY: 400, JSON_TOO_DEEP: 400, INVALID_INTENT: 400, INVALID_AUTHORIZATION: 400, MISSING_AUTHORIZATION_SIGNATURE: 400, INVALID_AUTHORIZATION_SIGNATURE: 400, AUTHORIZATION_AUDIENCE_MISMATCH: 400, AUTHORIZATION_NOT_YET_VALID: 400, AUTHORIZATION_ISSUED_IN_FUTURE: 400, AUTHORIZATION_POLICY_MISMATCH: 409, AUTHORIZATION_EXPIRED: 410, AUTHORIZATION_ALREADY_USED: 409, AUTHORIZATION_NONCE_REUSED: 409, INVALID_TIMESTAMP_EVIDENCE: 400, INVALID_TIMESTAMP_PROFILE: 400, TIMESTAMP_POLICY_MISMATCH: 409, TIMESTAMP_AUTHORIZATION_MISMATCH: 409, TIMESTAMP_RESPONSE_HASH_MISMATCH: 409, TIMESTAMP_METADATA_MISMATCH: 409, INVALID_TIMESTAMP_POLICY: 400, TIMESTAMP_CLOCK_SKEW: 409, TIMESTAMP_AFTER_EXECUTION: 409, INVALID_TIMESTAMP_SIGNATURE: 409, INVALID_TIMESTAMP_CERTIFICATE_USAGE: 409, UNTRUSTED_TIMESTAMP_ROOT: 409, TIMESTAMP_SERVICE_UNAVAILABLE: 503, TIMESTAMP_NOT_CONFIGURED: 503, INVALID_TIMESTAMP_RESPONSE: 502, INVALID_WITNESS_POLICY: 400, INVALID_WITNESS_EVIDENCE: 400, WITNESS_POLICY_MISMATCH: 409, WITNESS_AUTHORIZATION_MISMATCH: 409, WITNESS_ACCEPTANCE_MISMATCH: 409, WITNESS_QUORUM_NOT_MET: 409, WITNESS_QUORUM_UNAVAILABLE: 503, WITNESS_NOT_CONFIGURED: 503, TRANSPARENCY_ANCHOR_REQUIRED: 409, TRANSPARENCY_AFTER_EXECUTION: 409, INVALID_CHAIN_ID: 400, INVALID_TX_HASH: 400, INVALID_ADDRESS: 400, INVALID_ASSET: 400, INVALID_UINT: 400, INVALID_TIME: 400, INVALID_IDENTIFIER: 400, INVALID_CONSTRAINT: 400, ERC4337_ENTRY_POINT_NOT_TRUSTED: 403, ERC4337_ENTRY_POINT_MISMATCH: 409, ERC4337_CODE_HASH_MISMATCH: 409, ERC4337_ACCOUNT_CALL_UNSUPPORTED: 409, ERC4337_ACCOUNT_CALL_MISMATCH: 409, ERC4337_SAFE_ACCOUNT_UNTRUSTED: 409, ERC4337_EVENT_MISMATCH: 409, ERC4337_EIP7702_UNTRUSTED: 403, ERC4337_EIP7702_AUTH_MISMATCH: 409, ERC4337_EIP7702_OPERATION_MISMATCH: 409, ERC4337_EIP7702_TRACE_UNAVAILABLE: 503, INVALID_IDEMPOTENCY_KEY: 400, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, IDEMPOTENCY_CONFLICT: 409, POLICY_REJECTED: 403, INTENT_NOT_FOUND: 404, AUTHORIZATION_NOT_FOUND: 404, RECEIPT_NOT_FOUND: 404, NOT_FOUND: 404, REQUEST_TIMEOUT: 504, ISSUER_NOT_CONFIGURED: 503, AUTHORIZATION_VERIFIER_UNAVAILABLE: 503, RATE_LIMITER_UNAVAILABLE: 503, RPC_NOT_CONFIGURED: 503, RPC_TIMEOUT: 503, RPC_FAILURE: 503 });
 const AGENT_ACCOUNT_ERROR_STATUS = Object.freeze({ AGENT_OPERATOR_CREDENTIAL_INVALID: 403, AGENT_ACCOUNT_INVALID: 400, AGENT_ACCOUNT_NOT_FOUND: 404, AGENT_ACCOUNT_EXISTS: 409, AGENT_IDEMPOTENCY_REQUIRED: 400 });
 function requester(req, trustProxy) {
@@ -55,6 +56,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
     let capturedResponse;
     let meterReservation;
     let meterResponseStatus;
+    let meterOutcome;
     const respond = (status, body, headers = {}) => {
       meterResponseStatus = status;
       const responseHeaders = { ...cors, ...meterReservation ? { "x-priorseal-usage-id": meterReservation.usageId } : {}, ...path.startsWith("/v1/archive") ? { "cache-control": "private, no-store", vary: "Authorization, Origin" } : {}, ...headers };
@@ -65,13 +67,110 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       return sendJson(res, status, body, requestId, responseHeaders);
     };
     const dispatch = async () => {
+      if (path === "/mcp" && typeof req.headers.origin === "string" && !mcpOriginAllowed(req.headers.origin, corsOrigins)) return respond(403, errorBody("ORIGIN_FORBIDDEN", "MCP browser origin is not allowed", requestId));
       if (req.method === "OPTIONS") return res.writeHead(204, cors).end();
       if (!["GET", "POST"].includes(req.method ?? "")) return respond(405, errorBody("METHOD_NOT_ALLOWED", "Method not allowed", requestId), { allow: "GET, POST, OPTIONS" });
+      if (path === "/mcp" && req.method !== "POST") return respond(405, errorBody("METHOD_NOT_ALLOWED", "PriorSeal MCP accepts POST requests", requestId), { allow: "POST, OPTIONS" });
       if (req.method === "GET" && path === "/health/live") return respond(200, { status: "ok", requestId });
       if (req.method === "GET" && path === "/health/ready") return respond(200, { status: "ready", storage: "health" in store ? await store.health() : "unknown", requestId });
       if (!paidRoute && req.method === "GET" && serveStaticAsset && await serveStaticAsset({ pathname: path, req, res })) return;
       if (!paidRoute && !await rateLimiter.allow(requester(req, trustProxy), now())) return respond(429, errorBody("RATE_LIMITED", "Too many requests", requestId), { "retry-after": "60" });
       const body = req.method === "POST" ? await readJsonBody(req, path === "/v1/archive" ? Math.max(maxBodyBytes, 1024 * 1024) : maxBodyBytes, deadline.signal) : {};
+      if (req.method === "POST" && path === "/mcp") {
+        const response = await handlePriorSealMcpRequest(body, {
+          version,
+          requestHeaders: {
+            protocolVersion: typeof req.headers["mcp-protocol-version"] === "string" ? req.headers["mcp-protocol-version"] : void 0,
+            method: typeof req.headers["mcp-method"] === "string" ? req.headers["mcp-method"] : void 0,
+            name: typeof req.headers["mcp-name"] === "string" ? req.headers["mcp-name"] : void 0,
+            accept: typeof req.headers.accept === "string" ? req.headers.accept : void 0
+          },
+          execute: async ({ name, arguments: toolArguments }) => {
+            const metered = async (meteredPath, operation) => {
+              if (agentMeter) {
+                const credential = typeof req.headers["x-priorseal-agent-key"] === "string" ? req.headers["x-priorseal-agent-key"] : void 0;
+                const requestKey = typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : void 0;
+                const authorized = await agentMeter.authorize({ method: "POST", pathname: meteredPath, credential, requestKey, now: now() });
+                meterReservation = authorized?.reservation;
+                meterOutcome = false;
+              }
+              const result = await operation();
+              meterOutcome = true;
+              return result;
+            };
+            if (name === "priorseal_get_capabilities") {
+              assertOnlyFields(toolArguments, [], "PriorSeal MCP capabilities arguments");
+              return deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, now: now() });
+            }
+            if (name === "priorseal_prepare_authorization") {
+              const input = mcpInput(toolArguments, "authorization preparation");
+              assertIssuableIntentInput(input.intent);
+              const preparedAt = Math.floor(now() / 1e3);
+              const authorization = assertIssuableAuthorization(buildAuthorization({ ...input, audience: authorizationAudience, policyHash: policy ? `0x${hashJson(policy)}` : `0x${"0".repeat(64)}` }));
+              if (authorization.schema !== AUTHORIZATION_SCHEMA) throw new PriorSealError("INVALID_AUTHORIZATION", "Legacy authorization schemas are verification-only");
+              if (authorization.issuedAt > preparedAt) throw new PriorSealError("AUTHORIZATION_ISSUED_IN_FUTURE", "Authorization issuedAt cannot be in the future");
+              if (preparedAt > authorization.expiresAt) throw new PriorSealError("AUTHORIZATION_EXPIRED", "Authorization has already expired");
+              const compatibility = evaluateNewIntentPolicyCompatibility(authorization.intent, policy ?? {});
+              if (!compatibility.allowed) throw new PriorSealError("POLICY_REJECTED", "Authorization policy cannot enforce descriptive exact-call semantics", compatibility);
+              const policyResult = policy ? evaluateAuthorizationPolicy(authorization, policy, preparedAt) : { allowed: true, reasonCodes: [], policyId: null, evaluatedAt: preparedAt };
+              if (!policyResult.allowed) throw new PriorSealError("POLICY_REJECTED", "Authorization rejected by policy before signing", policyResult);
+              const typedData = jsonSafe(authorization.authorizer.type === "solana-ed25519" ? { profile: "solana-ed25519", message: solanaAuthorizationMessage(authorization) } : authorizationTypedData(authorization));
+              return { authorization, typedData };
+            }
+            if (name === "priorseal_accept_authorization") {
+              const input = mcpInput(toolArguments, "authorization acceptance");
+              return metered("/v1/authorizations", async () => {
+                const result = await authorizeIntent({ input, idempotencyKey: typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : void 0, store, privateKeyPem, issuer, keyId, policy, audience: authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp, witnessProvider, requireWitnessQuorum, now });
+                return result.response;
+              });
+            }
+            if (name === "priorseal_get_authorization") {
+              const authorizationId = mcpIdentifier(toolArguments, "authorizationId", "authorization");
+              const record = await store.getAuthorization?.(authorizationId);
+              if (!record) throw new PriorSealError("AUTHORIZATION_NOT_FOUND", "Authorization not found");
+              return record;
+            }
+            if (name === "priorseal_observe_execution") {
+              const input = mcpInput(toolArguments, "execution observation");
+              return metered("/v1/executions/observe", async () => {
+                const result = await observeExecution({ input, store, observer, signal: deadline.signal, privateKeyPem, issuer, keyId, publicKeyPem, idempotencyKey: typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : void 0, transparencyProvider, authorizationAudience, verifyContractSignature, now });
+                const response2 = result.response;
+                let observationJob = null;
+                if (observationWorker && ["PENDING", "NOT_FOUND", "RPC_ERROR", "RPC_TIMEOUT"].includes(response2.observation.status)) {
+                  if (typeof input.txHash !== "string") throw new PriorSealError("INVALID_REQUEST", "Observation transaction hash is required");
+                  const observationCycle = typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : requestId;
+                  observationJob = await observationWorker.enqueuePersistent({ ...input, txHash: input.txHash, idempotencyKey: `observation:${hashJson(input)}:${observationCycle}` });
+                }
+                return { ...response2, ...observationJob ? { observationJob } : {} };
+              });
+            }
+            if (name === "priorseal_get_observation_job") {
+              const jobId = mcpIdentifier(toolArguments, "jobId", "observation job");
+              if (!observationWorker) throw new PriorSealError("NOT_FOUND", "Observation jobs are not enabled");
+              const job = await observationWorker.get(jobId);
+              if (!job) throw new PriorSealError("NOT_FOUND", "Observation job not found");
+              return job;
+            }
+            if (name === "priorseal_get_receipt" || name === "priorseal_get_evidence_bundle") {
+              const receiptId = mcpIdentifier(toolArguments, "receiptId", "receipt");
+              const receipt = await store.getReceipt(receiptId);
+              if (!receipt) throw new PriorSealError("RECEIPT_NOT_FOUND", "Receipt not found");
+              return name === "priorseal_get_evidence_bundle" ? buildVerificationBundle({ receipt, keyRegistry: keyRegistryDocument(issuer, keyRegistry), assembledAt: Math.floor(now() / 1e3) }) : receipt;
+            }
+            if (name === "priorseal_verify_receipt") {
+              assertOnlyFields(toolArguments, ["receipt"], "PriorSeal MCP receipt verification arguments");
+              const receipt = isRecord(toolArguments.receipt) ? toolArguments.receipt : null;
+              if (!receipt) throw new PriorSealError("INVALID_REQUEST", "Receipt verification requires a receipt object");
+              const entry = keyRegistry.get(typeof receipt.keyId === "string" ? receipt.keyId : "");
+              const verificationOptions = { key: entry, now: Math.floor(now() / 1e3) };
+              const result = !entry ? { valid: false, code: "UNKNOWN_KEY" } : ["priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3"].includes(String(receipt.schema)) ? await verifyAuthorizedReceipt(receipt, entry.publicKey, { ...verificationOptions, audience: authorizationAudience, verifyContractSignature }) : verifyReceipt(receipt, entry.publicKey, { ...verificationOptions, keyId: entry.keyId });
+              return { convenienceEndpoint: true, independentVerification: "Use the local verifier; do not trust this API response alone.", result };
+            }
+            throw new PriorSealError("INVALID_REQUEST", "Unknown PriorSeal MCP tool");
+          }
+        });
+        return respond(response.status, response.body, response.headers);
+      }
       if (req.method === "GET" && path === "/v1/capabilities") return respond(200, await deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, now: now() }), { "cache-control": "no-store" });
       if (agentMeter && req.method === "GET" && path === "/v1/agent-accounts/self/usage") {
         const limit = agentUsageLimit(new URL(req.url ?? "/", "http://priorseal.local").searchParams.get("limit"));
@@ -227,7 +326,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       }
     };
     try {
-      if (agentMeter) {
+      if (agentMeter && path !== "/mcp") {
         try {
           const credential = typeof req.headers["x-priorseal-agent-key"] === "string" ? req.headers["x-priorseal-agent-key"] : void 0;
           const requestKey = typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : void 0;
@@ -342,7 +441,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
     } finally {
       if (meterReservation) {
         try {
-          await agentMeter?.settle(meterReservation, meterResponseStatus && meterResponseStatus >= 200 && meterResponseStatus < 300 ? "CONSUMED" : "RELEASED");
+          await agentMeter?.settle(meterReservation, meterOutcome ?? Boolean(meterResponseStatus && meterResponseStatus >= 200 && meterResponseStatus < 300) ? "CONSUMED" : "RELEASED");
         } catch (error) {
           logger?.error?.({ event: "agent_meter.settlement_failed", requestId, method: req.method, path, usageId: meterReservation.usageId, code: errorCode(error) || "INTERNAL_ERROR" });
         }
@@ -393,6 +492,20 @@ function openApiSpec() {
 }
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function mcpInput(argumentsValue, context) {
+  assertOnlyFields(argumentsValue, ["input"], `PriorSeal MCP ${context} arguments`);
+  if (!isRecord(argumentsValue.input)) throw new PriorSealError("INVALID_REQUEST", `PriorSeal MCP ${context} requires an input object`);
+  return argumentsValue.input;
+}
+function mcpIdentifier(argumentsValue, field, context) {
+  assertOnlyFields(argumentsValue, [field], `PriorSeal MCP ${context} arguments`);
+  const value = argumentsValue[field];
+  if (typeof value !== "string" || value.length === 0 || value.length > 512) throw new PriorSealError("INVALID_REQUEST", `PriorSeal MCP ${context} requires a valid ${field}`);
+  return value;
+}
+function mcpOriginAllowed(origin, corsOrigins) {
+  return corsOrigins.includes(origin) || origin === "https://priorseal.xyz" || origin === "https://www.priorseal.xyz";
 }
 export {
   createHttpServer

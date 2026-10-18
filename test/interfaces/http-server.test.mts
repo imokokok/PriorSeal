@@ -66,6 +66,55 @@ async function request(server: TestServer, path: string, { method = 'GET', heade
   const res = new EventEmitter() as MockResponse; res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
   const done = new Promise<void>((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers ?? {}, buffer: () => Buffer.from(res.body ?? ''), json: (): HttpTestResponse => JSON.parse(Buffer.from(res.body ?? '').toString('utf8')) as HttpTestResponse, text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
+test('PriorSeal MCP exposes stateless discovery, deterministic tools, and a JSON-only capability call', async (t) => {
+  const server = await serverFor(t);
+  const modernHeaders = { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2026-07-28' };
+  const discovered = await request(server, '/mcp', {
+    method: 'POST', headers: { ...modernHeaders, 'mcp-method': 'server/discover' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'server/discover', params: { _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientInfo': { name: 'test', version: '1.0.0' }, 'io.modelcontextprotocol/clientCapabilities': {} } } }),
+  });
+  assert.equal(discovered.status, 200);
+  const discovery = discovered.json() as unknown as { result: { resultType: string; supportedVersions: string[]; capabilities: { tools: { listChanged: boolean } } } };
+  assert.equal(discovery.result.resultType, 'complete');
+  assert.deepEqual(discovery.result.supportedVersions, ['2026-07-28']);
+  assert.equal(discovery.result.capabilities.tools.listChanged, false);
+
+  const listed = await request(server, '/mcp', {
+    method: 'POST', headers: { ...modernHeaders, 'mcp-method': 'tools/list' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: { _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientInfo': { name: 'test', version: '1.0.0' }, 'io.modelcontextprotocol/clientCapabilities': {} } } }),
+  });
+  const toolNames = (listed.json() as unknown as { result: { tools: { name: string }[] } }).result.tools.map(tool => tool.name);
+  assert.deepEqual(toolNames, ['priorseal_get_capabilities', 'priorseal_prepare_authorization', 'priorseal_accept_authorization', 'priorseal_get_authorization', 'priorseal_observe_execution', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_verify_receipt']);
+
+  const capabilities = await request(server, '/mcp', {
+    method: 'POST', headers: { ...modernHeaders, 'mcp-method': 'tools/call', 'mcp-name': 'priorseal_get_capabilities' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'priorseal_get_capabilities', arguments: {}, _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientInfo': { name: 'test', version: '1.0.0' }, 'io.modelcontextprotocol/clientCapabilities': {} } } }),
+  });
+  const result = capabilities.json() as unknown as { result: { resultType: string; structuredContent: { schema: string } } };
+  assert.equal(result.result.resultType, 'complete');
+  assert.equal(result.result.structuredContent.schema, 'priorseal.capabilities.v1');
+});
+test('PriorSeal MCP maps metered mutations to the existing Agent credit route and releases failed calls', async (t) => {
+  const secret = 'agent-secret-that-is-long-enough-for-a-commercial-service-boundary';
+  const store = createMemoryStore();
+  const meter = createAgentMeter(parseAgentMeterConfig({
+    schema: 'priorseal.agent-meter.v1', creditUnitUsd: '0.01', operatorCredentialHash: agentCredentialHash('operator-secret-that-is-long-enough-for-a-commercial-service-boundary'),
+    accounts: [{ accountId: 'team:mcp', credentialHash: agentCredentialHash(secret), provisionedCredits: '1', status: 'active' }],
+    routes: [{ routeId: 'authorization-acceptance', method: 'POST', path: '/v1/authorizations', credits: '1' }],
+  }), store);
+  const server = createHttpServer({ store, agentMeter: meter });
+  t.after(() => server.close());
+  const response = await request(server, '/mcp', {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-priorseal-agent-key': secret, 'idempotency-key': 'mcp-failed-authorization' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'priorseal_accept_authorization', arguments: { input: {} } } }),
+  });
+  assert.equal(response.status, 200);
+  const toolResult = response.json() as unknown as { result: { isError: boolean; content: { text: string }[] } };
+  assert.equal(toolResult.result.isError, true);
+  assert.match(toolResult.result.content[0].text, /INVALID_AUTHORIZATION|INVALID_REQUEST|ISSUER_NOT_CONFIGURED/);
+  assert.match(String(response.headers['x-priorseal-usage-id']), /^amu_[0-9a-f]{32}$/);
+  assert.equal((await meter!.inspect(secret)).remainingCredits, '1');
+});
 test('metered agent calls require a credential, consume only successful calls and expose their usage record', async (t) => {
   const secret = 'agent-secret-that-is-long-enough-for-a-commercial-service-boundary';
   const store = createMemoryStore();

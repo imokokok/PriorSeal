@@ -23,5 +23,4 @@ The user approves two distinct Wallet MCP requests:
 Insight assessment, service payment, wallet signature and execution
 authorization remain separate facts. See the package's
 [compatibility gate](../../skills/wallet-mcp-insight-priorseal/references/compatibility-gate.md)
-and [REST handoff](../../skills/wallet-mcp-insight-priorseal/references/priorseal-rest-handoff.md)
-for the full protocol.
+and [PriorSeal MCP guide](priorseal-mcp.md) for the full protocol.

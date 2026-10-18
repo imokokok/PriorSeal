@@ -21,13 +21,13 @@ Before a workflow can reach a wallet approval, both services must be available:
 2. Insight MCP (`https://www.oracleinsight.xyz/api/mcp`) for the pre-trade
    safety check and, where applicable, execution-price evidence.
 
-PriorSeal authorization and observation requests use
-`https://priorseal.xyz` through the integration's reviewed HTTP client or
-server-side SDK. Never place an API credential, wallet key, or private key in
-the skill, a prompt, or browser-side code. Read
-[the compatibility gate](references/compatibility-gate.md) before preparing
-an authorization and [the REST handoff](references/priorseal-rest-handoff.md)
-when the current harness can make authenticated HTTP requests.
+PriorSeal authorization and observation requests use the hosted PriorSeal MCP
+at `https://priorseal.xyz/mcp`. A reviewed HTTP client or server-side SDK is a
+compatible fallback when the host cannot connect an MCP server. Never place an
+API credential, wallet key, or private key in the skill, a prompt, or
+browser-side code. Read [the compatibility gate](references/compatibility-gate.md)
+before preparing an authorization and [the PriorSeal MCP guide](../../docs/integrations/priorseal-mcp.md)
+before connecting a metered Agent account.
 
 ## Wallet MCP onboarding gate
 
