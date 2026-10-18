@@ -283,3 +283,19 @@ test('Jupiter and Insight HTTP clients validate their responses and keep API key
   const result = await insight.simulate({ transactionBase64: 'AA==', expectedMessageHash: `0x${'c'.repeat(64)}` })
   assert.equal(result.messageHash, `0x${'c'.repeat(64)}`)
 })
+
+test('identifies a non-JSON Jupiter gateway response without exposing its body', async () => {
+  const router = createJupiterRouterClient({
+    baseUrl: 'https://jupiter.test/swap/v2/build',
+    fetch: async () => new Response('<html>forbidden</html>', {
+      status: 403,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    }),
+  })
+  await assert.rejects(
+    router.build(request()),
+    (error) => error instanceof JupiterGuardedSwapError
+      && error.code === 'UPSTREAM_INVALID_JSON'
+      && error.message === 'Jupiter Router returned an invalid JSON response (HTTP 403, content-type text/html; charset=utf-8)',
+  )
+})
