@@ -302,6 +302,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
         return respond(200, { convenienceEndpoint: true, independentVerification: 'Use the local verifier; do not trust this API response alone.', result, requestId });
       }
       if (req.method === 'GET' && path === '/.well-known/priorseal-keys.json') return respond(200, { ...keyRegistryDocument(issuer, keyRegistry), requestId }, { 'cache-control': 'public, max-age=300' });
+      if (req.method === 'GET' && path === '/.well-known/agent8004.json') return respond(200, AGENT8004_REGISTRATION, { 'cache-control': 'public, max-age=300' });
       throw new PriorSealError('NOT_FOUND', 'Route not found');
     };
     let paymentContext: X402PaymentContext | undefined;
@@ -474,9 +475,35 @@ function paymentEvidenceId(body: unknown) {
   return typeof value === 'string' && /^psp_[0-9a-f]{32}$/.test(value) ? value : undefined;
 }
 
+/**
+ * ERC-8004 Trustless Agents registration record. The BNB Smart Chain Identity
+ * Registry entry (agentURI) points at this exact document, so it must stay
+ * byte-stable: no request-scoped fields, and any change here must be mirrored
+ * in the on-chain registration story recorded in docs.
+ */
+const AGENT8004_REGISTRATION = Object.freeze({
+  type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
+  name: 'PriorSeal',
+  description: 'Verifiable evidence space for AI agent work: signed authorizations and observed executions are bound into portable receipts with RFC-3161 timestamps, witness quorum, and optional on-chain anchoring, independently verifiable by third parties. Pay-per-call x402 v2 receipt-bundle export in USDC.',
+  services: [
+    { name: 'OpenAPI', endpoint: 'https://priorseal.xyz/openapi/v1.json', version: '2.0.0' },
+  ],
+  x402Support: true,
+  x402: {
+    paymentEndpoint: 'https://priorseal.xyz/v1/receipts/{receiptId}/bundle',
+    manifest: 'https://priorseal.xyz/openapi/v1.json',
+    pricePerRequest: '0.02',
+    acceptedTokens: ['USDC'],
+    networks: ['eip155:8453', 'eip155:56'],
+    payTo: '0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231',
+  },
+  active: true,
+  supportedTrust: [],
+});
+
 function keyRegistryDocument(issuer: string, keyRegistry: ReturnType<typeof createKeyRegistry>) { return { schema: 'priorseal.keys.v1', issuer, keys: keyRegistry.list(), verifierVersion: '3.0.0', schemaVersions: ['priorseal.intent.v1', 'priorseal.intent.v2', 'priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1', 'priorseal.execution-profile.solana-transaction.v2', 'priorseal.context-commitment.v1', 'priorseal.authorization.v1', 'priorseal.authorization.v2', 'priorseal.rfc3161-evidence.v1', 'priorseal.execution-receipt.v1', 'priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3', 'priorseal.temporal-evidence.v1', 'priorseal.compliance-assessment.v1', 'priorseal.x402-payment-evidence.v1', 'priorseal.verification-bundle.v1'] }; }
 
-const OPENAPI = { openapi: '3.1.0', info: { title: 'PriorSeal API', version: '2.0.0', description: 'Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts.' }, paths: { '/v1/capabilities': { get: { summary: 'Deployment configuration and workflow capabilities' } }, '/v1/archive': { get: { summary: 'List private uploaded evidence with a project bearer credential' }, post: { summary: 'Archive immutable evidence with a writer credential' } }, '/v1/archive/export': { get: { summary: 'Export a private snapshot page including raw artifacts' } }, '/v1/archive/{entryId}': { get: { summary: 'Read private project evidence' } }, '/v1/intents': { post: { summary: 'Create a legacy unsigned intent draft', deprecated: true, responses: { '201': { description: 'Created' } } } }, '/v1/authorizations/prepare': { post: { summary: 'Canonicalize an authorization and return EIP-712 typed data or a Solana message' } }, '/v1/authorizations': { post: { summary: 'Verify and accept a signed authorization' } }, '/v1/authorizations/{authorizationId}': { get: { summary: 'Read authorization state' } }, '/v1/authorizations/{authorizationId}/transparency': { get: { summary: 'Read signed transparency evidence and any verified external anchor' } }, '/v1/executions/observe': { post: { summary: 'Observe EVM or Solana execution against an authorization' } }, '/v1/observation-jobs/{jobId}': { get: { summary: 'Read automatic finality observation job' } }, '/v1/receipts/{receiptId}': { get: { summary: 'Read receipt' } }, '/v1/receipts/{receiptId}/bundle': { get: { summary: 'Export portable receipt evidence and key-discovery metadata' } }, '/v1/receipts/verify': { post: { summary: 'Convenience verification, not authority' } }, '/.well-known/priorseal-keys.json': { get: { summary: 'Read the issuer public-key registry' } }, '/v1/version': { get: { summary: 'Read service and protocol versions' } }, '/health/live': { get: { summary: 'Liveness' } }, '/health/ready': { get: { summary: 'Readiness' } } } };
+const OPENAPI = { openapi: '3.1.0', info: { title: 'PriorSeal API', version: '2.0.0', description: 'Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts.' }, paths: { '/v1/capabilities': { get: { summary: 'Deployment configuration and workflow capabilities' } }, '/v1/archive': { get: { summary: 'List private uploaded evidence with a project bearer credential' }, post: { summary: 'Archive immutable evidence with a writer credential' } }, '/v1/archive/export': { get: { summary: 'Export a private snapshot page including raw artifacts' } }, '/v1/archive/{entryId}': { get: { summary: 'Read private project evidence' } }, '/v1/intents': { post: { summary: 'Create a legacy unsigned intent draft', deprecated: true, responses: { '201': { description: 'Created' } } } }, '/v1/authorizations/prepare': { post: { summary: 'Canonicalize an authorization and return EIP-712 typed data or a Solana message' } }, '/v1/authorizations': { post: { summary: 'Verify and accept a signed authorization' } }, '/v1/authorizations/{authorizationId}': { get: { summary: 'Read authorization state' } }, '/v1/authorizations/{authorizationId}/transparency': { get: { summary: 'Read signed transparency evidence and any verified external anchor' } }, '/v1/executions/observe': { post: { summary: 'Observe EVM or Solana execution against an authorization' } }, '/v1/observation-jobs/{jobId}': { get: { summary: 'Read automatic finality observation job' } }, '/v1/receipts/{receiptId}': { get: { summary: 'Read receipt' } }, '/v1/receipts/{receiptId}/bundle': { get: { summary: 'Export portable receipt evidence and key-discovery metadata' } }, '/v1/receipts/verify': { post: { summary: 'Convenience verification, not authority' } }, '/.well-known/priorseal-keys.json': { get: { summary: 'Read the issuer public-key registry' } }, '/.well-known/agent8004.json': { get: { summary: 'Read the ERC-8004 agent registration record' } }, '/v1/version': { get: { summary: 'Read service and protocol versions' } }, '/health/live': { get: { summary: 'Liveness' } }, '/health/ready': { get: { summary: 'Readiness' } } } };
 
 function openApiSpec() {
   return {
