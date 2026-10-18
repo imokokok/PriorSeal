@@ -31,10 +31,12 @@
     "PRIORSEAL_CORS_ORIGINS": "https://priorseal.xyz,https://www.priorseal.xyz",
     "PRIORSEAL_TRUST_PROXY": "true",
     "PRIORSEAL_X402_FACILITATOR_URL": "https://api.cdp.coinbase.com/platform/v2/x402",
+    "PRIORSEAL_X402_FACILITATOR_URLS": "eip155:56=https://facilitator.aeon.xyz",
     "PRIORSEAL_X402_FACILITATOR_AUTH_MODE": "cdp",
     "PRIORSEAL_X402_RESOURCE_ORIGIN": "https://priorseal.xyz",
     "PRIORSEAL_X402_PAY_TO": "0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231",
-    "PRIORSEAL_X402_NETWORKS": "eip155:8453",
+    "PRIORSEAL_X402_SOLANA_PAY_TO": "BfVX9jcEALijnEuGPcGTjqjBgTFLTFMt6F7NrMHzGWf4",
+    "PRIORSEAL_X402_NETWORKS": "eip155:8453,eip155:56",
     "PRIORSEAL_X402_TIMEOUT_MS": "15000",
     "PRIORSEAL_X402_ROUTES_JSON": "[{\"method\":\"GET\",\"path\":\"/v1/receipts/:receiptId/bundle\",\"description\":\"Export a portable PriorSeal receipt bundle\",\"price\":\"$0.02\"}]"
   },
@@ -47,6 +49,7 @@
       "PRIORSEAL_RPC_ETHEREUM",
       "PRIORSEAL_RPC_BASE",
       "PRIORSEAL_RPC_ARBITRUM",
+      "PRIORSEAL_RPC_BNB",
       "PRIORSEAL_X402_CDP_API_KEY_ID",
       "PRIORSEAL_X402_CDP_API_KEY_SECRET"
     ]

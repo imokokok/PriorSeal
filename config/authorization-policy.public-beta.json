@@ -1,6 +1,6 @@
 {
   "policyId": "priorseal-public-beta-v1",
-  "allowedChainIds": [1, 8453, 42161],
+  "allowedChainIds": [1, 56, 8453, 42161],
   "allowedActions": ["TRANSFER", "CONTRACT_CALL"],
   "maxValiditySeconds": 86400,
   "minConfirmations": 12,
