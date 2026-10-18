@@ -54,3 +54,15 @@ test('new exact-call authorizations reject policies that imply unenforced transf
   assert.deepEqual(evaluateNewIntentPolicyCompatibility(exact, { allowedAssets: [] }), { allowed: false, reasonCodes: ['POLICY_EXACT_CALL_SEMANTICS_UNSUPPORTED'] });
   assert.deepEqual(evaluateNewIntentPolicyCompatibility(exact, { allowedRecipients: [] }), { allowed: false, reasonCodes: ['POLICY_EXACT_CALL_SEMANTICS_UNSUPPORTED'] });
 });
+
+test('solana transaction intents admit by CAIP-2 chain reference', () => {
+  const solanaIntent = { ...intent, chainId: 0, chainRef: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', action: 'SOLANA_TRANSACTION', asset: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/spl:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' };
+  const policy = { policyId: 'priorseal-public-beta-v2', allowedChainIds: ['solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'], allowedActions: ['SOLANA_TRANSACTION'] };
+  assert.deepEqual(parsePolicyDocument(policy), policy);
+  assert.deepEqual(evaluateIntentPolicy(solanaIntent, policy, 1000).reasonCodes, []);
+  assert.equal(evaluateIntentPolicy(solanaIntent, policy, 1000).allowed, true);
+  assert.deepEqual(evaluateIntentPolicy({ ...solanaIntent, chainRef: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' }, policy, 1000).reasonCodes, ['POLICY_CHAIN_NOT_ALLOWED']);
+  assert.deepEqual(evaluateIntentPolicy({ ...solanaIntent, action: 'TRANSFER' }, policy, 1000).reasonCodes, ['POLICY_ACTION_NOT_ALLOWED']);
+  assert.deepEqual(evaluateIntentPolicy({ ...solanaIntent, chainRef: undefined }, policy, 1000).reasonCodes, ['POLICY_CHAIN_NOT_ALLOWED']);
+  assert.throws(() => parsePolicyDocument({ ...policy, allowedChainIds: [0] }));
+});

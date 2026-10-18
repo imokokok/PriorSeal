@@ -20,7 +20,8 @@ function evaluateIntentPolicy(intent, policy = {}, now = Math.floor(Date.now() /
   const reasonCodes = [];
   const caseSensitiveChain = intent.chainId === 0 || intent.chainId === "0";
   if (!validRuntimePolicy(policy)) reasonCodes.push(POLICY_CODES.INVALID_POLICY);
-  if (listHas(policy.allowedChainIds, intent.chainId)) reasonCodes.push(POLICY_CODES.CHAIN_NOT_ALLOWED);
+  const chainAdmitted = Array.isArray(policy.allowedChainIds) && (policy.allowedChainIds.map(String).includes(String(intent.chainId)) || typeof intent.chainRef === "string" && policy.allowedChainIds.includes(intent.chainRef));
+  if (Array.isArray(policy.allowedChainIds) && !chainAdmitted) reasonCodes.push(POLICY_CODES.CHAIN_NOT_ALLOWED);
   if (listHas(policy.allowedActions, intent.action)) reasonCodes.push(POLICY_CODES.ACTION_NOT_ALLOWED);
   if (listHas(policy.allowedAssets, intent.asset, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.ASSET_NOT_ALLOWED);
   if (listHas(policy.allowedSenders, intent.sender, caseSensitiveChain)) reasonCodes.push(POLICY_CODES.SENDER_NOT_ALLOWED);

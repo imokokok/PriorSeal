@@ -1,7 +1,17 @@
 {
   "policyId": "priorseal-public-beta-v2",
-  "allowedChainIds": [1, 56, 8453, 42161, 0],
-  "allowedActions": ["TRANSFER", "CONTRACT_CALL", "SOLANA_TRANSACTION"],
+  "allowedChainIds": [
+    1,
+    56,
+    8453,
+    42161,
+    "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+  ],
+  "allowedActions": [
+    "TRANSFER",
+    "CONTRACT_CALL",
+    "SOLANA_TRANSACTION"
+  ],
   "maxValiditySeconds": 86400,
   "timestampPolicy": {
     "schema": "priorseal.timestamp-policy.v1",
