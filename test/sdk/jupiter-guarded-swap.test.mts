@@ -146,6 +146,26 @@ test('binds every compiled instruction to Jupiter instruction data and account m
   )
 })
 
+test('permits only the transaction-wide privilege union required by Jupiter instructions', async () => {
+  const route = build()
+  route.setupInstructions = [{ programId: TOKEN_PROGRAM, accounts: [{ pubkey: WALLET, isSigner: true, isWritable: true }], data: 'AA==' }]
+  route.swapInstruction = { programId: TOKEN_PROGRAM, accounts: [{ pubkey: WALLET, isSigner: true, isWritable: false }], data: 'AQ==' }
+  const compiled = {
+    ...message(),
+    instructions: [
+      { programIdIndex: 1, accountIndexes: [0], data: '1' },
+      { programIdIndex: 1, accountIndexes: [0], data: '2' },
+    ],
+  }
+  const prepared = await prepareGuardedJupiterSwap(request(), {
+    router: { async build() { return route } },
+    compiler: { async compile() { return { transactionBase64: 'AA==', transaction: compiled } } },
+    insight: { async simulate(input: { expectedMessageHash: string }) { return { messageHash: input.expectedMessageHash, signatureState: 'UNSIGNED' as const, status: 'SIMULATED' as const, contextCommitment: { namespace: 'insight.solana-simulation-receipt.v1', algorithm: 'sha256' as const, digest: `0x${'b'.repeat(64)}` }, receipt: {} } } },
+    policy: policy(), now: () => 1_800_000_000_000,
+  })
+  assert.equal(prepared.transaction.instructions.length, 2)
+})
+
 test('enforces output floor and durable mint admission before a route is built', async () => {
   await assert.rejects(
     prepareGuardedJupiterSwap({ ...request(), minimumOutputAmountAtomic: '990001' }, {

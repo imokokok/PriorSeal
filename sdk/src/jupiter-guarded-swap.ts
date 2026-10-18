@@ -546,20 +546,51 @@ function assertCompiledTransaction(
 function assertExactInstructionSequence(transaction: SolanaTransactionMessage, build: JupiterRouterBuild, accounts: string[]): void {
   const expected = allInstructions(build)
   if (transaction.instructions.length !== expected.length) throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', 'The final transaction instruction count differs from Jupiter build')
+  const expectedPrivileges = new Map<string, { isSigner: boolean; isWritable: boolean }>()
+  // Solana always makes the fee payer a writable signer, even if an individual
+  // Router instruction refers to it as readonly.
+  addExpectedPrivilege(expectedPrivileges, transaction.feePayer, true, true)
+  const actualPrivileges = new Map<string, { isSigner: boolean; isWritable: boolean }>()
+  const compiledFeePayer = compiledAccountMeta(transaction, 0, accounts)
+  if (compiledFeePayer.pubkey !== transaction.feePayer || !compiledFeePayer.isSigner || !compiledFeePayer.isWritable) {
+    throw new JupiterGuardedSwapError('COMPILED_SIGNER_POLICY_REJECTED', 'The final transaction fee payer privileges are invalid')
+  }
+  addActualPrivilege(actualPrivileges, compiledFeePayer)
   for (let index = 0; index < expected.length; index += 1) {
     const raw = expected[index]!
     const compiled = transaction.instructions[index]!
     if (accounts[compiled.programIdIndex] !== raw.programId || encodeBase58(decodeBase64(raw.data)) !== compiled.data || compiled.accountIndexes.length !== raw.accounts.length) {
       throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', `The final transaction instruction ${index} differs from Jupiter build`)
     }
+    addExpectedPrivilege(expectedPrivileges, raw.programId, false, false)
+    addActualPrivilege(actualPrivileges, compiledAccountMeta(transaction, compiled.programIdIndex, accounts))
     for (let accountIndex = 0; accountIndex < raw.accounts.length; accountIndex += 1) {
       const expectedAccount = raw.accounts[accountIndex]!
       const compiledAccount = compiledAccountMeta(transaction, compiled.accountIndexes[accountIndex]!, accounts)
-      if (compiledAccount.pubkey !== expectedAccount.pubkey || compiledAccount.isSigner !== expectedAccount.isSigner || compiledAccount.isWritable !== expectedAccount.isWritable) {
+      if (compiledAccount.pubkey !== expectedAccount.pubkey) {
         throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', `The final transaction account ${index}:${accountIndex} differs from Jupiter build`)
       }
+      addExpectedPrivilege(expectedPrivileges, expectedAccount.pubkey, expectedAccount.isSigner, expectedAccount.isWritable)
+      addActualPrivilege(actualPrivileges, compiledAccount)
     }
   }
+  if (expectedPrivileges.size !== actualPrivileges.size) throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', 'The final transaction account set differs from Jupiter build')
+  for (const [pubkey, expectedPrivilege] of expectedPrivileges) {
+    const actualPrivilege = actualPrivileges.get(pubkey)
+    if (!actualPrivilege || actualPrivilege.isSigner !== expectedPrivilege.isSigner || actualPrivilege.isWritable !== expectedPrivilege.isWritable) {
+      throw new JupiterGuardedSwapError('JUPITER_INSTRUCTION_SEQUENCE_MISMATCH', `The final transaction privileges differ for ${pubkey}`)
+    }
+  }
+}
+
+function addExpectedPrivilege(target: Map<string, { isSigner: boolean; isWritable: boolean }>, pubkey: string, isSigner: boolean, isWritable: boolean): void {
+  const existing = target.get(pubkey)
+  target.set(pubkey, { isSigner: Boolean(existing?.isSigner || isSigner), isWritable: Boolean(existing?.isWritable || isWritable) })
+}
+
+function addActualPrivilege(target: Map<string, { isSigner: boolean; isWritable: boolean }>, account: JupiterInstructionAccount): void {
+  const existing = target.get(account.pubkey)
+  target.set(account.pubkey, { isSigner: Boolean(existing?.isSigner || account.isSigner), isWritable: Boolean(existing?.isWritable || account.isWritable) })
 }
 
 function compiledAccountMeta(transaction: SolanaTransactionMessage, index: number, accounts: string[]): JupiterInstructionAccount {
