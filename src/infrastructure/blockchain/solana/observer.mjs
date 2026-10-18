@@ -1,7 +1,7 @@
 // Generated from observer.mts by npm run core:build. Do not edit directly.
 import { PriorSealError } from "../../../domain/errors.mjs";
 import { decodeBase58, isSolanaPublicKey, SOLANA_MAINNET_CAIP2 } from "../../../domain/solana.mjs";
-const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
 async function observeSolana({ chainId, txHash, rpcUrls, confirmations = 0, finalityRequirement, expectedTransaction, signal, fetcher = fetch }) {
   if (chainId !== 0 || expectedTransaction.network !== "mainnet-beta" || expectedTransaction.feePayer === "") throw new PriorSealError("INVALID_SOLANA_OBSERVATION", "Solana observer requires a mainnet-beta transaction intent");
   if (finalityRequirement === "RPC_FINALIZED") return pending(chainId, txHash, "RPC_FINALIZED is not enabled for this Solana profile");
@@ -19,7 +19,7 @@ async function observeSolana({ chainId, txHash, rpcUrls, confirmations = 0, fina
       if (txResult === null) return { chainId, chainRef: SOLANA_MAINNET_CAIP2, txHash, status: status ? "PENDING" : "NOT_FOUND", blockNumber: status?.slot ?? null, blockHash: null, executedAt: null, observedAt: Math.floor(Date.now() / 1e3), action: "SOLANA_TRANSACTION", nonce: expectedTransaction.recentBlockhash, sender: expectedTransaction.feePayer, recipient: expectedTransaction.feePayer, asset: null, amount: null, transfers: [], transferMatchUnique: false, gasUsed: null, fee: null, executionDataAvailable: false, observationSource: "solana-json-rpc", finalityState: status?.confirmationStatus ?? "UNKNOWN", confirmations: Number(status?.confirmations ?? 0) };
       const transaction = asRecord(txResult.transaction, "transaction");
       const messageVersion = normalizeTransactionVersion(txResult.version);
-      const signatures = stringArray(transaction.signatures, "transaction.signatures", 64, 64);
+      const signatures = stringArray(transaction.signatures, "transaction.signatures", 1, 64);
       if (!signatures.every((signature) => decodeBase58(signature).length === 64)) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC returned an invalid transaction signature");
       if (signatures[0] !== txHash) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC transaction signature does not match the requested signature");
       const message = normalizeRpcMessage(asRecord(transaction.message, "transaction.message"), messageVersion);
@@ -79,7 +79,7 @@ async function observeSolana({ chainId, txHash, rpcUrls, confirmations = 0, fina
 }
 async function rpc(url, method, params, fetcher, signal) {
   const response = await fetcher(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "priorseal-solana-observer", method, params }), signal: combineSignal(signal) });
-  if (!response.ok) throw new PriorSealError("RPC_HTTP_ERROR", "Solana RPC returned a non-success HTTP response");
+  if (!response.ok) throw new PriorSealError("RPC_HTTP_ERROR", `Solana RPC returned HTTP ${response.status} for ${method}`);
   const body = await response.json();
   if (!isRecord(body) || body.jsonrpc !== "2.0" || body.id !== "priorseal-solana-observer") throw new PriorSealError("RPC_INVALID_RESPONSE", "Solana RPC returned an invalid JSON-RPC envelope");
   if (body.error != null) throw new PriorSealError("RPC_CALL_FAILED", "Solana RPC rejected the observation request");
