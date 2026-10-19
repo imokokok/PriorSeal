@@ -10,6 +10,8 @@ export type SolanaTransactionIntentInput = {
   amount: string
   validUntil: number
   transaction: SolanaTransactionMessage
+  /** Optional reviewed counterparty represented by the exact transaction. */
+  recipient?: string
   contextCommitments?: ContextCommitment[]
   constraints?: Intent['constraints']
 }
@@ -25,6 +27,7 @@ export function buildSolanaTransactionIntent(input: SolanaTransactionIntentInput
   if (typeof input.amount !== 'string' || !/^(0|[1-9][0-9]*)$/.test(input.amount)) throw new TypeError('amount must be an unsigned decimal string')
   if (!Number.isSafeInteger(input.validUntil) || input.validUntil <= 0) throw new TypeError('validUntil must be a positive Unix timestamp')
   if (!new RegExp(`^${SOLANA_MAINNET_CAIP2.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/(?:slip44:501|spl:[1-9A-HJ-NP-Za-km-z]{32,44})$`).test(input.asset)) throw new TypeError('asset must be a Solana mainnet SOL or SPL CAIP-19 identifier')
+  if (input.recipient !== undefined) assertPublicKey(input.recipient, 'recipient')
   if (input.constraints?.finalityRequirement === 'RPC_FINALIZED') throw new TypeError('Solana transaction profile currently supports confirmed commitment only')
   return {
     schema: 'priorseal.intent.v2',
@@ -36,7 +39,7 @@ export function buildSolanaTransactionIntent(input: SolanaTransactionIntentInput
     asset: input.asset,
     amount: input.amount,
     sender: transaction.feePayer,
-    recipient: transaction.feePayer,
+    recipient: input.recipient ?? transaction.feePayer,
     validUntil: input.validUntil,
     nonce: transaction.recentBlockhash,
     solanaTransaction: transaction,

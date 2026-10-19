@@ -76,6 +76,10 @@ PRIORSEAL_JUPITER_POLICY_JSON='{
   "maxPriorityFeeLamports":"60000",
   "authorizationTtlSeconds":60
 }'
+# Optional platform pricing. Set both values in deployment configuration, not
+# in browser code or the policy JSON.
+PRIORSEAL_JUPITER_PLATFORM_FEE_BPS=10
+PRIORSEAL_JUPITER_FEE_ACCOUNT=FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq
 ```
 
 All four required variables must be present or startup fails closed. The program
@@ -84,6 +88,29 @@ actually requires; the minimal sample above is deliberately too restrictive to
 swap. `PRIORSEAL_JUPITER_ROUTER_BASE_URL` and
 `PRIORSEAL_JUPITER_INSIGHT_BASE_URL` are optional HTTPS-only overrides for a
 reviewed staging service.
+
+### USDC-in platform fee
+
+The platform fee is deployment-owned and deliberately narrow: it applies only
+to `ExactIn` swaps whose input mint is mainnet USDC
+`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`. The configured amount is
+`floor(inputAtomic × feeBps / 10_000)`, so the review record can show the exact
+USDC atomic amount before either signature. The SDK hard-caps the fee at
+20 bps; the production rollout uses 10 bps (0.10%).
+
+Configure the fee only with both
+`PRIORSEAL_JUPITER_PLATFORM_FEE_BPS` and
+`PRIORSEAL_JUPITER_FEE_ACCOUNT`. The latter must be the configured merchant's
+initialized, legacy-SPL USDC associated-token account. Before the service asks
+Jupiter for a route it derives that ATA and reads it from Solana RPC; an absent,
+wrong-mint, wrong-owner, non-token-program, or substituted account fails
+closed. The browser never supplies either value. Jupiter must include that
+account as writable in the returned instruction sequence, and the protected
+service binds it into the exact transaction review and PriorSeal intent.
+
+Creating a missing ATA is a separate owner-signed Solana transaction. Do not
+make that transaction from the application server and do not use a private key
+or fee-payer secret for it.
 
 The server exposes two no-store routes only when this configuration is present:
 
@@ -210,7 +237,8 @@ add transfers, approvals, tips, alternate recipients or a sponsor fee payer.
 
 `reviewGuardedJupiterSwap()` returns a non-secret serializable record: exact
 message hash, SHA-256 digest of the unsigned transaction bytes, wallet, atomic
-input and minimum output, expiry, all program IDs, lookup tables,
+input and minimum output, any deployment-owned platform fee and merchant
+account, expiry, all program IDs, lookup tables,
 compute-budget values, and actionable warnings. Show this to the user or keep
 it with the authorization record; it contains neither an API key nor a private
 key.

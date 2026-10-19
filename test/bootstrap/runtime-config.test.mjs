@@ -90,6 +90,33 @@ test("runtime configuration enables guarded Jupiter only with a complete server-
   assert.throws(() => loadRuntimeConfig({ JUPITER_API_KEY: "jupiter-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_JUPITER_RPC_URL: "http://rpc.example", PRIORSEAL_JUPITER_POLICY_JSON: policy }), /must use HTTPS/);
   assert.throws(() => loadRuntimeConfig({ JUPITER_API_KEY: "jupiter-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_JUPITER_RPC_URL: "https://rpc.example", PRIORSEAL_JUPITER_POLICY_JSON: "[]" }), /must be an object/);
 });
+test("runtime configuration locks a Jupiter platform fee to the merchant USDC ATA", () => {
+  const policy = JSON.stringify({ maxInputAmountAtomic: "1000000", maxSlippageBps: 50, allowedProgramIds: ["ComputeBudget111111111111111111111111111111"], authorizationTtlSeconds: 60 });
+  const environment = {
+    JUPITER_API_KEY: "jupiter-secret",
+    INSIGHT_API_KEY: "insight-secret",
+    PRIORSEAL_JUPITER_RPC_URL: "https://rpc.example",
+    PRIORSEAL_JUPITER_POLICY_JSON: policy,
+    PRIORSEAL_X402_SOLANA_PAY_TO: "BfVX9jcEALijnEuGPcGTjqjBgTFLTFMt6F7NrMHzGWf4",
+    PRIORSEAL_JUPITER_PLATFORM_FEE_BPS: "10",
+    PRIORSEAL_JUPITER_FEE_ACCOUNT: "FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq",
+    PRIORSEAL_X402_FACILITATOR_URL: "https://facilitator.example",
+    PRIORSEAL_X402_RESOURCE_ORIGIN: "https://api.example",
+    PRIORSEAL_X402_PAY_TO: `0x${"b".repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: "eip155:8453",
+    PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]'
+  };
+  const config = loadRuntimeConfig(environment);
+  assert.deepEqual(config.guardedJupiter?.policy.platformFee, {
+    feeBps: 10,
+    feeAccount: environment.PRIORSEAL_JUPITER_FEE_ACCOUNT,
+    feeMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    merchant: environment.PRIORSEAL_X402_SOLANA_PAY_TO
+  });
+  assert.throws(() => loadRuntimeConfig({ ...environment, PRIORSEAL_JUPITER_PLATFORM_FEE_BPS: "21" }), /1 through 20/);
+  assert.throws(() => loadRuntimeConfig({ ...environment, PRIORSEAL_JUPITER_FEE_ACCOUNT: "" }), /must be configured together/);
+  assert.throws(() => loadRuntimeConfig({ ...environment, PRIORSEAL_JUPITER_POLICY_JSON: JSON.stringify({ ...JSON.parse(policy), platformFee: {} }) }), /not PRIORSEAL_JUPITER_POLICY_JSON/);
+});
 test("Base Sepolia x402 is an explicit staging-only payment rail", () => {
   const x402 = {
     PRIORSEAL_X402_FACILITATOR_URL: "https://facilitator.example",
