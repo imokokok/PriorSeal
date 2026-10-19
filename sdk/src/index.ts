@@ -4,6 +4,13 @@ export type { X402ExactRequirement, X402PaymentChallenge, X402PaymentPolicy, X40
 export { parseAuthorizationCheckpoint } from './checkpoint.js'
 export { validatePriorSealResponse } from './response-validation.js'
 export { buildExactCallIntent, parseExactCallTransaction, parseContextCommitments } from './exact-call.js'
+export {
+  HEADLESS_H4_ENTRY_HASH_NAMESPACE,
+  buildHeadlessH4ExactCallIntent,
+  headlessH4EntryHashCommitment,
+  parseHeadlessH4EntryHash,
+} from './headless-h4.js'
+export type { HeadlessH4EntryHash, HeadlessH4ExactCallInput } from './headless-h4.js'
 export { buildSolanaTransactionIntent, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
 export type { SolanaTransactionIntentInput } from './solana-transaction.js'
 export {
