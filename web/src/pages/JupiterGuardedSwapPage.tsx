@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   assertPreparedGuardedJupiterSwap,
   authorizeGuardedJupiterSwap,
@@ -7,7 +8,7 @@ import {
   type GuardedJupiterSwapReview,
   type PreparedGuardedJupiterSwap,
 } from 'priorseal-sdk'
-import { CodeValue, Field, Notice, PageHeader, Status } from '../components'
+import { CodeValue, Field, LoadingState, Notice, PageHeader, Status } from '../components'
 import { api, getCapabilities, prepareGuardedJupiterSwap, submitGuardedJupiterSwap } from '../lib/api'
 import { downloadJson } from '../lib/download'
 import { base64, decodeTransaction, installedSolanaWallet, messageBytes, sameBytes, serializeTransaction, type BrowserSolanaWallet, walletAddress } from '../lib/solana-wallet'
@@ -27,6 +28,13 @@ function errorText(error: unknown): string {
   return message.replace(/https?:\/\/\S+/g, '[endpoint hidden]').slice(0, 420)
 }
 
+function unavailableMessage(reason: string | undefined) {
+  if (reason === 'SOLANA_PROFILE_UNAVAILABLE') return 'This deployment does not publish the Solana transaction authorization profile required by the guarded swap.'
+  if (reason === 'SOLANA_RPC_UNAVAILABLE') return 'This deployment does not have a configured Solana RPC source for guarded swap observation.'
+  if (reason === 'ISSUER_UNAVAILABLE' || reason === 'PRE_EXECUTION_PROOF_UNAVAILABLE' || reason === 'STORAGE_UNAVAILABLE') return 'A required evidence service is unavailable for this deployment. Do not prepare, sign or submit a route here.'
+  return 'This deployment has not enabled the protected Jupiter, Insight, Solana authorization and observation workflow.'
+}
+
 function preparedFromUpload(value: unknown): PreparedGuardedJupiterSwap {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The selected file must contain a guarded-swap preparation package.')
   const record = value as Record<string, unknown>
@@ -38,6 +46,8 @@ function preparedFromUpload(value: unknown): PreparedGuardedJupiterSwap {
 function phaseIndex(phase: Phase) { return ['IMPORT', 'REVIEWED', 'AUTHORIZED', 'SUBMITTED', 'OBSERVED'].indexOf(phase) }
 
 export function JupiterGuardedSwapPage() {
+  const [capabilities, setCapabilities] = useState<Awaited<ReturnType<typeof getCapabilities>> | null>(null)
+  const [capabilitiesError, setCapabilitiesError] = useState('')
   const [prepared, setPrepared] = useState<PreparedGuardedJupiterSwap | null>(null)
   const [review, setReview] = useState<GuardedJupiterSwapReview | null>(null)
   const [wallet, setWallet] = useState<BrowserSolanaWallet | null>(null)
@@ -50,6 +60,14 @@ export function JupiterGuardedSwapPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    let active = true
+    getCapabilities().then((value) => { if (active) setCapabilities(value) }).catch((caught) => { if (active) setCapabilitiesError(errorText(caught)) })
+    return () => { active = false }
+  }, [])
+
+  const guardedJupiter = capabilities?.integrations?.guardedJupiter
+  const workflowAvailable = guardedJupiter?.enabled === true
   const warnings = review?.warnings ?? []
   const active = authorization?.authorizationWindow.active === true
   const canSubmit = Boolean(prepared && wallet && authorization && active && !signature && phaseIndex(phase) === phaseIndex('AUTHORIZED'))
@@ -62,6 +80,10 @@ export function JupiterGuardedSwapPage() {
     ...(signature ? { submission: { signature, rpcTransport: 'priorseal-guarded-jupiter-relay.v1' } } : {}),
     ...(observation ? { observation: observation.observation, receipt: observation.receipt, observationJob: observation.observationJob } : {}),
   } : null, [authorization, observation, prepared, review, signature])
+
+  if (!capabilities && !capabilitiesError) return <><PageHeader eyebrow="SOLANA / JUPITER" title="Checking guarded swap availability">PriorSeal checks the deployment before connecting a wallet or requesting a route.</PageHeader><LoadingState label="Checking guarded swap configuration…" /></>
+
+  if (capabilitiesError || !workflowAvailable) return <><PageHeader eyebrow="SOLANA / JUPITER" title="Guarded swap unavailable">This is an opt-in integration. It becomes an execution surface only after the deployment publishes a complete Solana authorization and observation workflow.</PageHeader><Notice tone="warning" title={capabilitiesError ? 'Deployment capabilities could not be read' : 'This deployment is not configured for guarded Jupiter swaps'}>{capabilitiesError || unavailableMessage(guardedJupiter?.reason)}</Notice><div className="header-actions"><Link className="button primary" to="/app/quickstart">Review available workflow →</Link><Link className="button secondary" to="/app/sdk">Use the SDK integration →</Link></div></>
 
   async function importPackage(file: File | undefined) {
     if (!file) return
@@ -105,7 +127,7 @@ export function JupiterGuardedSwapPage() {
       await assertPreparedGuardedJupiterSwap(prepared)
       if (prepared.transaction.feePayer !== account) throw new Error('The connected wallet must be the prepared transaction fee payer. Import a package prepared for this wallet.')
       const capabilities = await getCapabilities()
-      if (!capabilities.executionProfiles.includes('priorseal.execution-profile.solana-transaction.v2') || !capabilities.authorizers.includes('solana-ed25519') || !capabilities.workflowReady) throw new Error('This PriorSeal deployment is not configured for Solana message authorization.')
+      if (!capabilities.integrations?.guardedJupiter.enabled || !capabilities.executionProfiles.includes('priorseal.execution-profile.solana-transaction.v2') || !capabilities.authorizers.includes('solana-ed25519') || !capabilities.workflowReady) throw new Error('This PriorSeal deployment is no longer configured for guarded Solana message authorization.')
       const accepted = await authorizeGuardedJupiterSwap({
         client: api, prepared, wallet: { publicKey: account, signMessage: wallet.signMessage.bind(wallet) },
         principal: { type: 'user', id: `wallet:${account}` },

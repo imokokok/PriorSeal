@@ -1,7 +1,7 @@
 import { cloneElement, createContext, isValidElement, useContext, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { PriorSealMark } from './brand'
-import { api } from './lib/api'
+import { api, type Capabilities } from './lib/api'
 import { chains, dateTime, short } from './lib/format'
 import { openStoragePreferences } from './lib/storage'
 import type { Receipt } from './types'
@@ -31,23 +31,50 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
 }
 export function PageHeader({ eyebrow, title, children, actions }: { eyebrow?: string; title: string; children?: ReactNode; actions?: ReactNode }) { return <div className="page-header"><div className="page-heading">{eyebrow && <p className="eyebrow">{eyebrow}</p>}<h1 data-route-heading tabIndex={-1}>{title}</h1>{children && <p className="lede">{children}</p>}</div>{actions && <div className="header-actions">{actions}</div>}</div> }
 
-const nav = [
-  { index: '01', key: 'overview', label: 'Overview', to: '/app', group: 'Workspace' },
-  { index: '02', key: 'intent', label: 'New authorization', to: '/app/intents/new', group: 'Operate' },
-  { index: '03', key: 'jupiter', label: 'Guarded Jupiter swap', to: '/app/jupiter-guarded-swap', group: 'Operate' },
-  { index: '04', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Operate' },
-  { index: '05', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence' },
-  { index: '06', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence' },
-  { index: '07', key: 'verify', label: 'Verify receipt', to: '/app/verify', group: 'Evidence' },
-  { index: '08', key: 'sdk', label: 'SDK integration', to: '/app/sdk', group: 'Developers' },
-  { index: '09', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Developers' },
-  { index: '10', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Developers' },
-  { index: '11', key: 'api', label: 'API reference', to: '/app/api', group: 'Developers' },
+type NavigationItem = {
+  index: string
+  key: string
+  label: string
+  to: string
+  group: string
+  visible?: (capabilities: Capabilities | null) => boolean
+  disabled?: (capabilities: Capabilities | null) => boolean
+}
+
+const nav: NavigationItem[] = [
+  { index: '01', key: 'overview', label: 'Overview', to: '/app', group: 'Start' },
+  { index: '02', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Start' },
+  { index: '03', key: 'intent', label: 'New authorization', to: '/app/intents/new', group: 'Execute' },
+  { index: '04', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Execute' },
+  { index: '05', key: 'exact-call', label: 'Exact-call authorization', to: '/app/intents/exact-call', group: 'Integrations' },
+  { index: '06', key: 'jupiter', label: 'Guarded Jupiter swap', to: '/app/jupiter-guarded-swap', group: 'Integrations', disabled: (capabilities) => !capabilities?.integrations?.guardedJupiter.enabled },
+  { index: '07', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence & trust' },
+  { index: '08', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence & trust' },
+  { index: '09', key: 'verify', label: 'Verify receipt', to: '/app/verify', group: 'Evidence & trust' },
+  { index: '10', key: 'archive', label: 'Project archive', to: '/app/archive', group: 'Evidence & trust', visible: (capabilities) => Boolean(capabilities?.archive.enabled) },
+  { index: '11', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Evidence & trust' },
+  { index: '12', key: 'sdk', label: 'SDK integration', to: '/app/sdk', group: 'Build' },
+  { index: '13', key: 'api', label: 'API reference', to: '/app/api', group: 'Build' },
+  { index: '14', key: 'mcp', label: 'MCP integration', to: '/integrations/mcp', group: 'Build' },
   ...(import.meta.env.DEV ? [
-    { index: '12', key: 'erc4337-pilot', label: 'Safe 4337 pilot', to: '/app/erc4337-pilot', group: 'Developers' },
-    { index: '13', key: 'eip7702-pilot', label: 'MetaMask 7702 pilot', to: '/app/eip7702-pilot', group: 'Developers' },
+    { index: '15', key: 'erc4337-pilot', label: 'Safe 4337 pilot', to: '/app/erc4337-pilot', group: 'Experimental' },
+    { index: '16', key: 'eip7702-pilot', label: 'MetaMask 7702 pilot', to: '/app/eip7702-pilot', group: 'Experimental' },
   ] : []),
 ]
+
+function matchesNavigation(item: NavigationItem, pathname: string) {
+  return item.to === '/app' ? pathname === '/app' : pathname === item.to || pathname.startsWith(`${item.to}/`)
+}
+
+function unavailableNavigationDetail(item: NavigationItem, capabilities: Capabilities | null) {
+  if (item.key !== 'jupiter') return ''
+  const reason = capabilities?.integrations?.guardedJupiter.reason
+  if (!capabilities) return 'Checking deployment setup'
+  if (reason === 'SOLANA_PROFILE_UNAVAILABLE') return 'Solana authorization is not configured'
+  if (reason === 'SOLANA_RPC_UNAVAILABLE') return 'Solana RPC is not configured'
+  if (reason === 'ISSUER_UNAVAILABLE' || reason === 'PRE_EXECUTION_PROOF_UNAVAILABLE' || reason === 'STORAGE_UNAVAILABLE') return 'Required evidence services are unavailable'
+  return 'Deployment setup required'
+}
 const AppShellContext = createContext(false)
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -58,11 +85,12 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [compactNavigation, setCompactNavigation] = useState(false)
   const [apiState, setApiState] = useState<'checking' | 'online' | 'offline'>('checking')
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const location = useLocation()
   const menuButton = useRef<HTMLButtonElement>(null)
   const sidebar = useRef<HTMLElement>(null)
   const restoreFocus = useRef<HTMLElement | null>(null)
-  const current = location.pathname === '/app/intents/exact-call' ? nav[1] : location.pathname === '/app/archive' ? { ...nav[4], key: 'archive', label: 'Project archive' } : [...nav].reverse().find((item) => item.to === '/app' ? location.pathname === '/app' : location.pathname === item.to || location.pathname.startsWith(item.to + '/')) ?? { ...nav[0], key: 'missing', index: '—', label: 'Page not found' }
+  const current = [...nav].reverse().find((item) => matchesNavigation(item, location.pathname)) ?? { ...nav[0], key: 'missing', index: '—', label: 'Page not found' }
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 980px)')
@@ -75,6 +103,12 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true
     api.health().then(() => { if (active) setApiState('online') }).catch(() => { if (active) setApiState('offline') })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    api.capabilities().then((value) => { if (active) setCapabilities(value) }).catch(() => { if (active) setCapabilities(null) })
     return () => { active = false }
   }, [])
 
@@ -107,14 +141,15 @@ function AppShellFrame({ children }: { children: ReactNode }) {
     setOpen(true)
   }
 
-  const groups = [...new Set(nav.map((item) => item.group))]
+  const visibleNavigation = nav.filter((item) => item.visible?.(capabilities) ?? true)
+  const groups = [...new Set(visibleNavigation.map((item) => item.group))]
   return <AppShellContext.Provider value><div className="shell">
     {compactNavigation && open && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setOpen(false)} />}
     <aside ref={sidebar} id="console-navigation" className={open ? 'sidebar open' : 'sidebar'} aria-hidden={compactNavigation && !open} inert={compactNavigation && !open ? true : undefined}>
       <div className="side-top"><Logo compact /><button type="button" className="mobile-close" onClick={() => setOpen(false)} aria-label="Close navigation">×</button></div>
       <div className="environment"><span className={`live-dot ${apiState}`} /><span>Local collection</span><small>DEVICE SCOPE</small></div>
-      <nav aria-label="Console navigation">{groups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{nav.filter((item) => item.group === group).map((item) => <NavLink end={item.to === '/app'} key={item.to} to={item.to} onClick={() => setOpen(false)}><span className="nav-index">{item.index}</span><span>{item.label}</span></NavLink>)}</div>)}</nav>
-      <div className="side-bottom"><span>Evidence archive</span><small>Records remain on this device only when local saving is allowed.</small><button type="button" className="side-privacy" onClick={() => { setOpen(false); openStoragePreferences() }}>Privacy &amp; storage</button><span className="side-accession">PRIORSEAL / LOCAL / 001</span></div>
+      <nav aria-label="Console navigation">{groups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{visibleNavigation.filter((item) => item.group === group).map((item) => item.disabled?.(capabilities) ? <span className="nav-unavailable" aria-disabled="true" key={item.to}><span className="nav-index">{item.index}</span><span>{item.label}<small>{unavailableNavigationDetail(item, capabilities)}</small></span></span> : <NavLink end={item.to === '/app'} key={item.to} to={item.to} onClick={() => setOpen(false)}><span className="nav-index">{item.index}</span><span>{item.label}</span></NavLink>)}</div>)}</nav>
+      <div className="side-bottom"><span>Local evidence collection</span><small>Browser activity remains on this device when local saving is allowed. Project archive access appears above when the deployment enables it.</small><button type="button" className="side-privacy" onClick={() => { setOpen(false); openStoragePreferences() }}>Privacy &amp; storage</button><span className="side-accession">PRIORSEAL / LOCAL / 001</span></div>
     </aside>
     <main id="main-content"><header className="app-topbar"><button ref={menuButton} type="button" className="menu" onClick={showNavigation} aria-label="Open navigation" aria-controls="console-navigation" aria-expanded={open}>☰</button><div className="top-title"><span>{current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className={`api-state ${apiState}`} aria-live="polite"><span className={`live-dot ${apiState}`} /> API {apiState}</span><Link className="text-link" to="/">Public collection ↗</Link></div></header><div key={location.pathname} className={`page page-${current.key}`}>{children}</div></main>
   </div></AppShellContext.Provider>
