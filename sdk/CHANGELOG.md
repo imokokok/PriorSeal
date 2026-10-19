@@ -1,8 +1,7 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 — 2026-10-19
 
-- Bind Insight Decision Input v1 evidence into the review manifest so a trusted-decision swap authorization can carry an independently verifiable decision-input pair next to the exact-call authorization and receipt evidence.
 - Add the Jupiter Guarded Swap adapter for self-paying Solana `ExactIn` Router
   builds. It binds an independently simulated exact message to a PriorSeal
   authorization, supports deployment-owned mint/program/ALT/fee limits and
@@ -10,6 +9,11 @@
   compiled instruction, account meta or instruction byte differs from the
   Jupiter build, and revalidates a prepared object immediately before wallet
   authorization. It never receives signing keys or broadcasts transactions.
+- Bind Insight Decision Input v1 evidence into the review manifest so a trusted-decision swap authorization can carry an independently verifiable decision-input pair next to the exact-call authorization and receipt evidence.
+- Derive the default authorization audience from the client `baseUrl` hostname
+  instead of the hardcoded `priorseal` default, matching how servers derive
+  the audience from their deployment host. An explicit `audience` input still
+  wins, and deployments without a `baseUrl` keep the `priorseal` fallback.
 
 ## 0.11.1 — 2026-10-17
 
