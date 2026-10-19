@@ -1,5 +1,6 @@
 // Generated from capabilities.mts by npm run core:build. Do not edit directly.
 import { hashJson } from "../domain/hashing.mjs";
+import { SOLANA_MAINNET_CAIP2 } from "../domain/solana.mjs";
 import { SUPPORTED_CHAINS } from "../infrastructure/blockchain/evm/chains.mjs";
 import { X402_STAGING_NETWORKS } from "../infrastructure/payments/x402-exact-evm.mjs";
 async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, x402, agentMeter = null, selfserveClaim = null, guardedJupiterConfigured = false, now }) {
@@ -9,7 +10,7 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
   } catch {
     storage = "unavailable";
   }
-  const configuredChains = Object.keys(SUPPORTED_CHAINS).map(Number).filter((id) => !policy?.allowedChainIds || policy.allowedChainIds.map(Number).includes(id));
+  const configuredChains = Object.keys(SUPPORTED_CHAINS).map(Number).filter((id) => policyAllowsChain(policy, id));
   const evmChains = configuredChains.filter((id) => id > 0);
   const actions = policy?.allowedActions === void 0 ? null : Array.isArray(policy.allowedActions) ? policy.allowedActions.map((action) => String(action).toUpperCase()) : [];
   const exactCall = evmChains.length > 0 && policy?.allowedAssets === void 0 && policy?.allowedRecipients === void 0 && policy?.maxAmount === void 0 && (!actions || actions.includes("CONTRACT_CALL"));
@@ -46,6 +47,11 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? "operator_defined", scope: "project_uploaded_evidence" },
     integrations: { guardedJupiter: { enabled: guardedJupiterReason === "READY", reason: guardedJupiterReason } }
   };
+}
+function policyAllowsChain(policy, chainId) {
+  const allowed = policy?.allowedChainIds;
+  if (allowed === void 0) return true;
+  return allowed.some((chain) => String(chain) === String(chainId) || chainId === 0 && chain === SOLANA_MAINNET_CAIP2);
 }
 export {
   deploymentCapabilities

@@ -111,7 +111,7 @@ test('capabilities never equate an active issuer with workflow readiness and sup
 });
 
 test('capabilities advertise guarded Jupiter only when its complete Solana workflow is configured', async () => {
-  const base = { issuer: 'test', audience: 'test-env', keyConfigured: true, policy: { allowedChainIds: [0], allowedActions: ['SOLANA_TRANSACTION'] }, proofMode: 'issuer', timestampConfigured: false, witnessConfigured: false, anchorConfigured: false, rpcChainIds: [0], store: createMemoryStore(), now: 1000, archiveEnabled: false, guardedJupiterConfigured: true };
+  const base = { issuer: 'test', audience: 'test-env', keyConfigured: true, policy: { allowedChainIds: ['solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'], allowedActions: ['SOLANA_TRANSACTION'] }, proofMode: 'issuer', timestampConfigured: false, witnessConfigured: false, anchorConfigured: false, rpcChainIds: [0], store: createMemoryStore(), now: 1000, archiveEnabled: false, guardedJupiterConfigured: true };
   const ready = await deploymentCapabilities(base);
   assert.deepEqual(ready.integrations.guardedJupiter, { enabled: true, reason: 'READY' });
   const noSolanaRpc = await deploymentCapabilities({ ...base, rpcChainIds: [] });
