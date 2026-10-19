@@ -333,6 +333,27 @@ test('guarded Jupiter preparation reports only safe non-JSON upstream diagnostic
   assert.equal(body.error.message, 'Jupiter Router returned an invalid JSON response (HTTP 403, content-type text/html)');
   assert.match(body.error.requestId, /^[0-9a-f-]{36}$/);
 });
+
+test('guarded Jupiter policy violations are explicit 403 responses', async (t) => {
+  const guardedJupiter = {
+    async prepare() {
+      throw Object.assign(new Error('The requested input amount exceeds the policy limit'), { code: 'INPUT_AMOUNT_EXCEEDS_POLICY' });
+    },
+  } as unknown as ServerOptions['guardedJupiter'];
+  const server = createHttpServer({ guardedJupiter });
+  t.after(() => server.close());
+
+  const response = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', outputMint: 'So11111111111111111111111111111111111111112', amount: '1', taker: '11111111111111111111111111111111', slippageBps: 50 }),
+  });
+  assert.equal(response.status, 403);
+  const body = response.json() as unknown as { error: { code: string; message: string; requestId: string } };
+  assert.equal(body.error.code, 'INPUT_AMOUNT_EXCEEDS_POLICY');
+  assert.equal(body.error.message, 'The requested input amount exceeds the policy limit');
+  assert.match(body.error.requestId, /^[0-9a-f-]{36}$/);
+});
 test('x402 Monad mainnet is advertised, verified, and settled through the HTTP lifecycle', async (t) => {
   const originalFetch = globalThis.fetch;
   const facilitatorCalls: string[] = [];
