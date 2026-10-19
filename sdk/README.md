@@ -224,6 +224,38 @@ Store this credential separately from both the principal authorization signer
 and the executor key. If it is revoked or depleted, the service rejects the
 call without granting any substitute execution authority.
 
+#### Self-serve funding with one call
+
+Where a deployment advertises `capabilities().payments.selfserveClaim`, an
+agent can fund its own credits without contacting an operator: transfer USDC
+to the deployment `payTo` on the advertised chain, prove payer-wallet ownership
+with an EIP-191 signature, and receive the account plus its one-time
+credential. `selfServeTopup()` composes the transfer, the claim signature, and
+the retry-while-unseen polling into one call; the transfer callback runs
+exactly once and its transaction hash is bound into the signature, so a retried
+claim can never be claimed by a different wallet.
+
+```ts
+import { selfServeTopup } from 'priorseal-sdk'
+
+const result = await selfServeTopup({
+  client: priorseal,
+  amountUsdc: '1.50',
+  payer: {
+    // Send exactly 1.50 USDC to request.payTo on request.chainId; resolve with
+    // the funded transaction hash. The SDK never constructs the transfer.
+    transfer: async (request) => ({ txHash: await wallet.sendUsdc(request) }),
+    // Sign with the same wallet that sent the transfer.
+    signMessage: (message) => wallet.signMessage(message),
+  },
+})
+// result.credential is shown once; store it in a secret manager immediately.
+console.log(result.accountId, result.credits, result.credential)
+```
+
+A credential obtained this way is still only a credit-spending key: it does not
+sign, broaden, or authorize any onchain action.
+
 For Solana mainnet-beta, construct an intent from the fully compiled message and resolved address lookup table addresses, then authorize it with a wallet that supports off-chain Ed25519 message signing. The transaction's `recentBlockhash` is the bound nonce; `lastValidBlockHeight` is RPC metadata and is not represented as a signed message field. `hashSolanaTransactionMessage(message)` returns the SHA-256 hash of the exact legacy, v0, or v1 message bytes and can bind a pre-sign simulation to the same message. See the [Solana integration guide](https://github.com/imokokok/PriorSeal/blob/main/docs/integrations/solana.md) for a complete flow. The Solana wallet signer may be distinct from the transaction fee payer; the delegated executor must match the fee payer.
 
 ### Jupiter Guarded Swap

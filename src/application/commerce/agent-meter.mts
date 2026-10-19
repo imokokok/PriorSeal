@@ -45,7 +45,7 @@ export type AgentCreditOperation = {
   creditedAt: number;
 };
 
-type AgentMeterAccountState = { accountId: string; provisionedCredits: string; remainingCredits: string; status: AgentMeterAccount['status'] };
+export type AgentMeterAccountState = { accountId: string; provisionedCredits: string; remainingCredits: string; status: AgentMeterAccount['status'] };
 
 export type AgentMeterStore = {
   provisionAgentMeterAccount: (input: AgentMeterAccount) => Promise<void>;

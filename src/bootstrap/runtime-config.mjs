@@ -2,6 +2,8 @@
 import { createArchiveAccess } from "../application/archive/evidence-archive.mjs";
 import { parseX402Config } from "../infrastructure/payments/x402-exact-evm.mjs";
 import { parseAgentMeterConfig } from "../application/commerce/agent-meter.mjs";
+import { SELFSEEK_BASE_MAINNET_CHAIN_ID, SELFSEEK_BASE_MAINNET_USDC } from "../application/commerce/selfserve-claim.mjs";
+import { createHash } from "node:crypto";
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 function loadRuntimeConfig(environment = process.env) {
   const runtimeEnvironment = environmentValue(environment.PRIORSEAL_ENVIRONMENT);
@@ -24,6 +26,7 @@ function loadRuntimeConfig(environment = process.env) {
   const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, "PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON"));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, "PRIORSEAL_SAFE_4337_TRUST_JSON"));
   const x402 = parseX402Config(environment);
+  const selfserveClaim = selfserveClaimConfig(environment, agentMeter, privateKeyPem);
   const guardedJupiter = guardedJupiterConfig(environment);
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some((entry) => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
@@ -77,12 +80,36 @@ function loadRuntimeConfig(environment = process.env) {
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
     trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, "PRIORSEAL_TRUST_PROXY", false),
     x402,
+    ...selfserveClaim ? { selfserveClaim } : {},
     ...guardedJupiter ? { guardedJupiter } : {}
   };
   if (runtimeEnvironment === "production" || runtimeEnvironment === "staging") {
     validateDeploymentConfig(config, runtimeEnvironment);
   }
   return config;
+}
+function selfserveClaimConfig(environment, agentMeter, privateKeyPem) {
+  if (!agentMeter || !privateKeyPem) return void 0;
+  const payTo = addressValue(environment.PRIORSEAL_X402_PAY_TO);
+  const rpcBase = optionalValue(environment.PRIORSEAL_RPC_BASE);
+  if (!payTo || !rpcBase) return void 0;
+  const fraction = agentMeter.creditUnitUsd.split(".")[1] ?? "";
+  if (fraction.length > 6) throw new TypeError("PRIORSEAL_AGENT_METER_JSON creditUnitUsd precision exceeds USDC raw units");
+  return {
+    schema: "priorseal.selfserve-claim.v1",
+    chainId: SELFSEEK_BASE_MAINNET_CHAIN_ID,
+    payTo: payTo.toLowerCase(),
+    usdcAddress: SELFSEEK_BASE_MAINNET_USDC,
+    minRawUnits: 1000000n,
+    rawUnitsPerCredit: 10n ** BigInt(6 - fraction.length),
+    credentialKeyHex: createHash("sha256").update(`priorseal-selfserve-credential-v1:${privateKeyPem}`, "utf8").digest("hex")
+  };
+}
+function addressValue(value) {
+  const address = optionalValue(value);
+  if (!address) return void 0;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address) || /^0x0{40}$/i.test(address)) throw new TypeError("PRIORSEAL_X402_PAY_TO must be a non-zero address");
+  return address;
 }
 function guardedJupiterConfig(environment) {
   const jupiterApiKey = optionalValue(environment.JUPITER_API_KEY);

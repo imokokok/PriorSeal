@@ -2,6 +2,8 @@ import { createArchiveAccess } from '../application/archive/evidence-archive.mjs
 import type { GuardedJupiterDeploymentPolicy } from '../application/jupiter/guarded-swap-service.mjs';
 import { parseX402Config } from '../infrastructure/payments/x402-exact-evm.mjs';
 import { parseAgentMeterConfig } from '../application/commerce/agent-meter.mjs';
+import { SELFSEEK_BASE_MAINNET_CHAIN_ID, SELFSEEK_BASE_MAINNET_USDC, type SelfserveClaimConfig } from '../application/commerce/selfserve-claim.mjs';
+import { createHash } from 'node:crypto';
 
 type RuntimeEnvironmentInput = Partial<Record<
   'DATABASE_URL' |
@@ -37,6 +39,7 @@ type RuntimeEnvironmentInput = Partial<Record<
   'PRIORSEAL_PUBLIC_KEY_FILE' |
   'PRIORSEAL_PUBLIC_KEY_PEM' |
   'PRIORSEAL_REQUIRE_EXTERNAL_ANCHOR' |
+  'PRIORSEAL_RPC_BASE' |
   'PRIORSEAL_RUNTIME' |
   'PRIORSEAL_TRANSPARENCY_ANCHOR_FILE' |
   'PRIORSEAL_TRANSPARENCY_ANCHOR_JSON' |
@@ -86,6 +89,7 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
   const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, 'PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON'));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, 'PRIORSEAL_SAFE_4337_TRUST_JSON'));
   const x402 = parseX402Config(environment);
+  const selfserveClaim = selfserveClaimConfig(environment, agentMeter, privateKeyPem);
   const guardedJupiter = guardedJupiterConfig(environment);
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some(entry => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
@@ -140,12 +144,43 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
     trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, 'PRIORSEAL_TRUST_PROXY', false),
     x402,
+    ...(selfserveClaim ? { selfserveClaim } : {}),
     ...(guardedJupiter ? { guardedJupiter } : {}),
   };
   if (runtimeEnvironment === 'production' || runtimeEnvironment === 'staging') {
     validateDeploymentConfig(config, runtimeEnvironment);
   }
   return config;
+}
+
+/**
+ * Self-serve funding claims piggyback on the agent meter and x402 payTo:
+ * they activate only when metered credits, an EVM payTo, Base mainnet RPC,
+ * and an issuer key (for the credential derivation secret) are all present.
+ */
+function selfserveClaimConfig(environment: RuntimeEnvironmentInput, agentMeter: ReturnType<typeof parseAgentMeterConfig>, privateKeyPem: string | undefined): SelfserveClaimConfig | undefined {
+  if (!agentMeter || !privateKeyPem) return undefined;
+  const payTo = addressValue(environment.PRIORSEAL_X402_PAY_TO);
+  const rpcBase = optionalValue(environment.PRIORSEAL_RPC_BASE);
+  if (!payTo || !rpcBase) return undefined;
+  const fraction = agentMeter.creditUnitUsd.split('.')[1] ?? '';
+  if (fraction.length > 6) throw new TypeError('PRIORSEAL_AGENT_METER_JSON creditUnitUsd precision exceeds USDC raw units');
+  return {
+    schema: 'priorseal.selfserve-claim.v1',
+    chainId: SELFSEEK_BASE_MAINNET_CHAIN_ID,
+    payTo: payTo.toLowerCase(),
+    usdcAddress: SELFSEEK_BASE_MAINNET_USDC,
+    minRawUnits: 1_000_000n,
+    rawUnitsPerCredit: 10n ** BigInt(6 - fraction.length),
+    credentialKeyHex: createHash('sha256').update(`priorseal-selfserve-credential-v1:${privateKeyPem}`, 'utf8').digest('hex'),
+  };
+}
+
+function addressValue(value: unknown) {
+  const address = optionalValue(value);
+  if (!address) return undefined;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address) || /^0x0{40}$/i.test(address)) throw new TypeError('PRIORSEAL_X402_PAY_TO must be a non-zero address');
+  return address;
 }
 
 function guardedJupiterConfig(environment: RuntimeEnvironmentInput): { jupiterApiKey: string; insightApiKey: string; rpcUrl: string; policy: GuardedJupiterDeploymentPolicy; jupiterBaseUrl?: string; insightBaseUrl?: string } | undefined {
