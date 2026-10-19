@@ -411,6 +411,13 @@ export type DeploymentCapabilities = {
   readinessScope: string
   checkedAt: number
   archive: { enabled: boolean; retention: string; scope: string }
+  /** Optional during the capability-schema transition; absent integrations are not available to the console. */
+  integrations?: {
+    guardedJupiter: {
+      enabled: boolean
+      reason: 'READY' | 'NOT_CONFIGURED' | 'SOLANA_PROFILE_UNAVAILABLE' | 'SOLANA_RPC_UNAVAILABLE' | 'ISSUER_UNAVAILABLE' | 'PRE_EXECUTION_PROOF_UNAVAILABLE' | 'STORAGE_UNAVAILABLE'
+    }
+  }
   payments?: {
     x402: { configured: boolean; networks: { family: string; network: string; chainId: number; name: string; asset: string; assetName: string }[]; routes: { method: string; path: string; description: string; price: string }[] }
     agentCredits: { configured: boolean; creditUnitUsd: string | null; credentialHeader: 'x-priorseal-agent-key' | null; accountStatusPath: '/v1/agent-accounts/self' | null; usagePath: '/v1/agent-accounts/self/usage' | null; routes: { routeId: string; method: 'GET' | 'POST'; path: string; credits: string; priceUsd: string }[] }

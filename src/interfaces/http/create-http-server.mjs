@@ -42,6 +42,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
   const archiveAccess = createArchiveAccess(archiveCredentials);
   const serveStaticAsset = staticDir ? createStaticAssetHandler(staticDir) : null;
   const x402Payments = x402 ? createX402PaymentService(x402) : null;
+  const readDeploymentCapabilities = () => deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, guardedJupiterConfigured: Boolean(guardedJupiter), now: now() });
   if (!Number.isSafeInteger(guardedJupiterRequestTimeoutMs) || guardedJupiterRequestTimeoutMs < requestTimeoutMs || guardedJupiterRequestTimeoutMs > 6e4) throw new TypeError("guardedJupiterRequestTimeoutMs must be an integer from requestTimeoutMs through 60000");
   return createServer({ requestTimeout: guardedJupiter ? guardedJupiterRequestTimeoutMs : requestTimeoutMs }, async (req, res) => {
     const requestId = typeof req.headers["x-request-id"] === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(req.headers["x-request-id"]) ? req.headers["x-request-id"] : randomUUID();
@@ -102,7 +103,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
             };
             if (name === "priorseal_get_capabilities") {
               assertOnlyFields(toolArguments, [], "PriorSeal MCP capabilities arguments");
-              return deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, now: now() });
+              return readDeploymentCapabilities();
             }
             if (name === "priorseal_prepare_authorization" || name === "priorseal_prepare_controlled_execution") {
               const input = mcpInput(toolArguments, name === "priorseal_prepare_controlled_execution" ? "controlled-execution preparation" : "authorization preparation");
@@ -118,7 +119,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
               if (!policyResult.allowed) throw new PriorSealError("POLICY_REJECTED", "Authorization rejected by policy before signing", policyResult);
               const typedData = jsonSafe(authorization.authorizer.type === "solana-ed25519" ? { profile: "solana-ed25519", message: solanaAuthorizationMessage(authorization) } : authorizationTypedData(authorization));
               if (name === "priorseal_prepare_controlled_execution") {
-                const capabilities = await deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, now: now() });
+                const capabilities = await readDeploymentCapabilities();
                 return { authorization, typedData, capabilities, controlledExecution: controlledExecutionWorkflow() };
               }
               return { authorization, typedData };
@@ -177,7 +178,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         });
         return respond(response.status, response.body, response.headers);
       }
-      if (req.method === "GET" && path === "/v1/capabilities") return respond(200, await deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, now: now() }), { "cache-control": "no-store" });
+      if (req.method === "GET" && path === "/v1/capabilities") return respond(200, await readDeploymentCapabilities(), { "cache-control": "no-store" });
       if (agentMeter && req.method === "GET" && path === "/v1/agent-accounts/self/usage") {
         const limit = agentUsageLimit(new URL(req.url ?? "/", "http://priorseal.local").searchParams.get("limit"));
         return respond(200, { items: await agentMeter.usage(typeof req.headers["x-priorseal-agent-key"] === "string" ? req.headers["x-priorseal-agent-key"] : void 0, limit), requestId }, { "cache-control": "private, no-store" });
@@ -229,7 +230,10 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         throw new PriorSealError("NOT_FOUND", "Archive route not found");
       }
       if (req.method === "GET" && path === "/v1/version") return respond(200, { service: "priorseal", version, protocol: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.witness-attestation.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1"], requestId });
-      if (req.method === "GET" && path === "/openapi/v1.json") return respond(200, openApiSpec(), { "cache-control": "public, max-age=300" });
+      if (req.method === "GET" && path === "/openapi/v1.json") {
+        const capabilities = await readDeploymentCapabilities();
+        return respond(200, openApiSpec({ guardedJupiterEnabled: capabilities.integrations.guardedJupiter.enabled }), { "cache-control": "public, max-age=300" });
+      }
       if (req.method === "POST" && path === "/v1/jupiter/guarded-swaps/prepare") {
         if (!guardedJupiter) throw new PriorSealError("NOT_FOUND", "Guarded Jupiter preparation is not enabled on this deployment");
         assertOnlyFields(body, ["intentId", "inputMint", "outputMint", "amount", "taker", "slippageBps", "maxAccounts", "mode", "minimumOutputAmountAtomic", "sourceAssetId", "contextCommitments"], "guarded Jupiter preparation");
@@ -508,13 +512,15 @@ function keyRegistryDocument(issuer, keyRegistry) {
   return { schema: "priorseal.keys.v1", issuer, keys: keyRegistry.list(), verifierVersion: "3.0.0", schemaVersions: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1"] };
 }
 const OPENAPI = { openapi: "3.1.0", info: { title: "PriorSeal API", version: "2.0.0", description: "Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts." }, paths: { "/v1/capabilities": { get: { summary: "Deployment configuration and workflow capabilities" } }, "/v1/archive": { get: { summary: "List private uploaded evidence with a project bearer credential" }, post: { summary: "Archive immutable evidence with a writer credential" } }, "/v1/archive/export": { get: { summary: "Export a private snapshot page including raw artifacts" } }, "/v1/archive/{entryId}": { get: { summary: "Read private project evidence" } }, "/v1/intents": { post: { summary: "Create a legacy unsigned intent draft", deprecated: true, responses: { "201": { description: "Created" } } } }, "/v1/authorizations/prepare": { post: { summary: "Canonicalize an authorization and return EIP-712 typed data or a Solana message" } }, "/v1/authorizations": { post: { summary: "Verify and accept a signed authorization" } }, "/v1/authorizations/{authorizationId}": { get: { summary: "Read authorization state" } }, "/v1/authorizations/{authorizationId}/transparency": { get: { summary: "Read signed transparency evidence and any verified external anchor" } }, "/v1/executions/observe": { post: { summary: "Observe EVM or Solana execution against an authorization" } }, "/v1/observation-jobs/{jobId}": { get: { summary: "Read automatic finality observation job" } }, "/v1/receipts/{receiptId}": { get: { summary: "Read receipt" } }, "/v1/receipts/{receiptId}/bundle": { get: { summary: "Export portable receipt evidence and key-discovery metadata" } }, "/v1/receipts/verify": { post: { summary: "Convenience verification, not authority" } }, "/.well-known/priorseal-keys.json": { get: { summary: "Read the issuer public-key registry" } }, "/.well-known/agent8004.json": { get: { summary: "Read the ERC-8004 agent registration record" } }, "/v1/version": { get: { summary: "Read service and protocol versions" } }, "/health/live": { get: { summary: "Liveness" } }, "/health/ready": { get: { summary: "Readiness" } } } };
-function openApiSpec() {
+function openApiSpec({ guardedJupiterEnabled = false } = {}) {
   return {
     ...OPENAPI,
     paths: {
       ...OPENAPI.paths,
-      "/v1/jupiter/guarded-swaps/prepare": { post: { summary: "Prepare a policy-guarded Jupiter Router swap through the protected integration service" } },
-      "/v1/jupiter/guarded-swaps/submit": { post: { summary: "Verify and relay wallet-signed bytes for a prepared guarded Jupiter swap" } }
+      ...guardedJupiterEnabled ? {
+        "/v1/jupiter/guarded-swaps/prepare": { post: { summary: "Prepare a policy-guarded Jupiter Router swap through the protected integration service" } },
+        "/v1/jupiter/guarded-swaps/submit": { post: { summary: "Verify and relay wallet-signed bytes for a prepared guarded Jupiter swap" } }
+      } : {}
     }
   };
 }
