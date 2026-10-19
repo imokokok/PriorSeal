@@ -3,7 +3,7 @@ import test from 'node:test'
 
 import { Keypair, VersionedTransaction } from '@solana/web3.js'
 import { JupiterGuardedSwapError } from '../../sdk/dist/index.js'
-import { createGuardedJupiterSwapService, createJupiterV0Compiler } from '../../src/application/jupiter/guarded-swap-service.mjs'
+import { createGuardedJupiterSwapService, createJupiterV0Compiler, type GuardedJupiterAuthorizationRecord } from '../../src/application/jupiter/guarded-swap-service.mjs'
 
 const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
 const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
@@ -34,7 +34,7 @@ test('guarded Jupiter relay requires and atomically consumes the exact accepted 
   const payer = await Keypair.generate()
   const payerAddress = payer.publicKey.toBase58()
   let sent = 0
-  let record: any
+  let record: GuardedJupiterAuthorizationRecord | undefined
   const connection = {
     async getLatestBlockhash() { return { blockhash: payerAddress as never, lastValidBlockHeight: 1n } },
     async getAddressLookupTable() { throw new Error('No address lookup table is expected') },
@@ -110,7 +110,7 @@ test('guarded Jupiter relay requires and atomically consumes the exact accepted 
     boundTxHash: null,
     uses: 0,
     status: 'ACCEPTED',
-  }
+  } as unknown as GuardedJupiterAuthorizationRecord
   const result = await service.submit({ authorizationId, prepared, signedTransactionBase64 })
   assert.equal(result.submission, 'SUBMITTED')
   assert.equal(sent, 1)
