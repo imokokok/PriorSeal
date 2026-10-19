@@ -24,6 +24,25 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/v1/capabilities', (route) => route.fulfill({ json: caps }))
 })
 
+test('capability-aware navigation exposes available workflows and blocks an unavailable guarded swap before wallet access', async ({ page }) => {
+  await page.goto('/app')
+  await expect(page.getByRole('link', { name: 'Quickstart' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Exact-call authorization' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Project archive' })).toBeVisible()
+  await expect(page.locator('.nav-unavailable')).toContainText('Guarded Jupiter swap')
+  await expect(page.locator('.nav-unavailable')).toContainText('Deployment setup required')
+
+  await page.goto('/app/intents/exact-call')
+  await expect(page.getByRole('link', { name: 'Exact-call authorization' })).toHaveAttribute('aria-current', 'page')
+
+  await page.goto('/app/archive')
+  await expect(page.getByRole('link', { name: 'Project archive' })).toHaveAttribute('aria-current', 'page')
+
+  await page.goto('/app/jupiter-guarded-swap')
+  await expect(page.getByRole('heading', { level: 1, name: 'Guarded swap unavailable' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Connect Solana wallet/ })).toHaveCount(0)
+})
+
 test('verification errors move focus to the actionable feedback on narrow screens', async ({ page }, testInfo) => {
   await page.goto('/app/verify')
   await page.getByRole('textbox', { name: 'Evidence JSON', exact: true }).fill('{"incomplete":')

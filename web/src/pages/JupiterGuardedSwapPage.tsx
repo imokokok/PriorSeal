@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   assertPreparedGuardedJupiterSwap,
   authorizeGuardedJupiterSwap,
@@ -7,7 +8,7 @@ import {
   type GuardedJupiterSwapReview,
   type PreparedGuardedJupiterSwap,
 } from 'priorseal-sdk'
-import { CodeValue, Field, Notice, PageHeader, Status } from '../components'
+import { CodeValue, Field, LoadingState, Notice, PageHeader, Status } from '../components'
 import { api, getCapabilities, prepareGuardedJupiterSwap, submitGuardedJupiterSwap } from '../lib/api'
 import { downloadJson } from '../lib/download'
 import { base64, decodeTransaction, installedSolanaWallet, messageBytes, sameBytes, serializeTransaction, type BrowserSolanaWallet, walletAddress } from '../lib/solana-wallet'
@@ -27,6 +28,13 @@ function errorText(error: unknown): string {
   return message.replace(/https?:\/\/\S+/g, '[endpoint hidden]').slice(0, 420)
 }
 
+function unavailableMessage(reason: string | undefined) {
+  if (reason === 'SOLANA_PROFILE_UNAVAILABLE') return 'This deployment does not publish the Solana transaction authorization profile required by the guarded swap.'
+  if (reason === 'SOLANA_RPC_UNAVAILABLE') return 'This deployment does not have a configured Solana RPC source for guarded swap observation.'
+  if (reason === 'ISSUER_UNAVAILABLE' || reason === 'PRE_EXECUTION_PROOF_UNAVAILABLE' || reason === 'STORAGE_UNAVAILABLE') return 'A required evidence service is unavailable for this deployment. Do not prepare, sign or submit a route here.'
+  return 'This deployment has not enabled the protected Jupiter, Insight, Solana authorization and observation workflow.'
+}
+
 function preparedFromUpload(value: unknown): PreparedGuardedJupiterSwap {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The selected file must contain a guarded-swap preparation package.')
   const record = value as Record<string, unknown>
@@ -38,6 +46,8 @@ function preparedFromUpload(value: unknown): PreparedGuardedJupiterSwap {
 function phaseIndex(phase: Phase) { return ['IMPORT', 'REVIEWED', 'AUTHORIZED', 'SUBMITTED', 'OBSERVED'].indexOf(phase) }
 
 export function JupiterGuardedSwapPage() {
+  const [capabilities, setCapabilities] = useState<Awaited<ReturnType<typeof getCapabilities>> | null>(null)
+  const [capabilitiesError, setCapabilitiesError] = useState('')
   const [prepared, setPrepared] = useState<PreparedGuardedJupiterSwap | null>(null)
   const [review, setReview] = useState<GuardedJupiterSwapReview | null>(null)
   const [wallet, setWallet] = useState<BrowserSolanaWallet | null>(null)
@@ -45,11 +55,20 @@ export function JupiterGuardedSwapPage() {
   const [swapInput, setSwapInput] = useState({ inputMint: defaultInputMint, outputMint: defaultOutputMint, amount: '', minimumOutputAmountAtomic: '', slippageBps: '50' })
   const [authorization, setAuthorization] = useState<AuthorizationResult | null>(null)
   const [signature, setSignature] = useState('')
+  const [submission, setSubmission] = useState<'SUBMITTED' | 'UNKNOWN' | null>(null)
   const [observation, setObservation] = useState<ObservationResult | null>(null)
   const [phase, setPhase] = useState<Phase>('IMPORT')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    let active = true
+    getCapabilities().then((value) => { if (active) setCapabilities(value) }).catch((caught) => { if (active) setCapabilitiesError(errorText(caught)) })
+    return () => { active = false }
+  }, [])
+
+  const guardedJupiter = capabilities?.integrations?.guardedJupiter
+  const workflowAvailable = guardedJupiter?.enabled === true
   const warnings = review?.warnings ?? []
   const active = authorization?.authorizationWindow.active === true
   const canSubmit = Boolean(prepared && wallet && authorization && active && !signature && phaseIndex(phase) === phaseIndex('AUTHORIZED'))
@@ -59,9 +78,13 @@ export function JupiterGuardedSwapPage() {
     prepared,
     review,
     ...(authorization ? { authorization: authorization.accepted, authorizationPrepared: authorization.prepared } : {}),
-    ...(signature ? { submission: { signature, rpcTransport: 'priorseal-guarded-jupiter-relay.v1' } } : {}),
+    ...(signature ? { submission: { signature, status: submission, rpcTransport: 'priorseal-guarded-jupiter-relay.v1' } } : {}),
     ...(observation ? { observation: observation.observation, receipt: observation.receipt, observationJob: observation.observationJob } : {}),
-  } : null, [authorization, observation, prepared, review, signature])
+  } : null, [authorization, observation, prepared, review, signature, submission])
+
+  if (!capabilities && !capabilitiesError) return <><PageHeader eyebrow="SOLANA / JUPITER" title="Checking guarded swap availability">PriorSeal checks the deployment before connecting a wallet or requesting a route.</PageHeader><LoadingState label="Checking guarded swap configuration…" /></>
+
+  if (capabilitiesError || !workflowAvailable) return <><PageHeader eyebrow="SOLANA / JUPITER" title="Guarded swap unavailable">This is an opt-in integration. It becomes an execution surface only after the deployment publishes a complete Solana authorization and observation workflow.</PageHeader><Notice tone="warning" title={capabilitiesError ? 'Deployment capabilities could not be read' : 'This deployment is not configured for guarded Jupiter swaps'}>{capabilitiesError || unavailableMessage(guardedJupiter?.reason)}</Notice><div className="header-actions"><Link className="button primary" to="/app/quickstart">Review available workflow →</Link><Link className="button secondary" to="/app/sdk">Use the SDK integration →</Link></div></>
 
   async function importPackage(file: File | undefined) {
     if (!file) return
@@ -71,7 +94,7 @@ export function JupiterGuardedSwapPage() {
       const candidate = preparedFromUpload(JSON.parse(await file.text()) as unknown)
       await assertPreparedGuardedJupiterSwap(candidate)
       const checkedReview = await reviewGuardedJupiterSwap(candidate)
-      setPrepared(candidate); setReview(checkedReview); setAuthorization(null); setSignature(''); setObservation(null); setPhase('REVIEWED')
+      setPrepared(candidate); setReview(checkedReview); setAuthorization(null); setSignature(''); setSubmission(null); setObservation(null); setPhase('REVIEWED')
     } catch (caught) { setError(errorText(caught)) } finally { setBusy(false) }
   }
 
@@ -84,7 +107,7 @@ export function JupiterGuardedSwapPage() {
       if (!Number.isSafeInteger(slippageBps) || slippageBps < 0 || slippageBps > 10_000) throw new Error('Slippage must be a whole number of basis points.')
       const result = await prepareGuardedJupiterSwap({ inputMint: swapInput.inputMint.trim(), outputMint: swapInput.outputMint.trim(), amount: swapInput.amount, taker: account, slippageBps, ...(swapInput.minimumOutputAmountAtomic ? { minimumOutputAmountAtomic: swapInput.minimumOutputAmountAtomic } : {}) })
       await assertPreparedGuardedJupiterSwap(result.prepared)
-      setPrepared(result.prepared); setReview(result.review); setAuthorization(null); setSignature(''); setObservation(null); setPhase('REVIEWED')
+      setPrepared(result.prepared); setReview(result.review); setAuthorization(null); setSignature(''); setSubmission(null); setObservation(null); setPhase('REVIEWED')
     } catch (caught) { setError(errorText(caught)) } finally { setBusy(false) }
   }
 
@@ -105,7 +128,7 @@ export function JupiterGuardedSwapPage() {
       await assertPreparedGuardedJupiterSwap(prepared)
       if (prepared.transaction.feePayer !== account) throw new Error('The connected wallet must be the prepared transaction fee payer. Import a package prepared for this wallet.')
       const capabilities = await getCapabilities()
-      if (!capabilities.executionProfiles.includes('priorseal.execution-profile.solana-transaction.v2') || !capabilities.authorizers.includes('solana-ed25519') || !capabilities.workflowReady) throw new Error('This PriorSeal deployment is not configured for Solana message authorization.')
+      if (!capabilities.integrations?.guardedJupiter.enabled || !capabilities.executionProfiles.includes('priorseal.execution-profile.solana-transaction.v2') || !capabilities.authorizers.includes('solana-ed25519') || !capabilities.workflowReady) throw new Error('This PriorSeal deployment is no longer configured for guarded Solana message authorization.')
       const accepted = await authorizeGuardedJupiterSwap({
         client: api, prepared, wallet: { publicKey: account, signMessage: wallet.signMessage.bind(wallet) },
         principal: { type: 'user', id: `wallet:${account}` },
@@ -126,8 +149,8 @@ export function JupiterGuardedSwapPage() {
       const signed = await wallet.signTransaction(unsigned)
       if (!sameBytes(originalMessage, messageBytes(signed))) throw new Error('The wallet changed the prepared message. The transaction was not broadcast; prepare and review a new package.')
       const signedBase64 = base64(await serializeTransaction(signed))
-      const submitted = await submitGuardedJupiterSwap({ prepared, signedTransactionBase64: signedBase64 })
-      setSignature(submitted.signature); setPhase('SUBMITTED')
+      const submitted = await submitGuardedJupiterSwap({ authorizationId: authorization.accepted.authorization.authorizationId, prepared, signedTransactionBase64: signedBase64 })
+      setSignature(submitted.signature); setSubmission(submitted.submission); setPhase('SUBMITTED')
     } catch (caught) { setError(errorText(caught)) } finally { setBusy(false) }
   }
 
@@ -176,7 +199,7 @@ export function JupiterGuardedSwapPage() {
           <div><dt>Wallet</dt><dd>{account ? <CodeValue value={account} /> : 'Not connected'}</dd></div>
           <div><dt>Route package</dt><dd><Status value={prepared ? 'VALIDATED' : 'REQUIRED'} small /></dd></div>
           <div><dt>Authority</dt><dd><Status value={authorization ? active ? 'AUTHORIZED' : 'EXPIRED' : 'NOT SIGNED'} small /></dd></div>
-          <div><dt>Submission</dt><dd>{signature ? <CodeValue value={signature} /> : 'Not broadcast'}</dd></div>
+          <div><dt>Submission</dt><dd>{signature ? <><Status value={submission ?? 'SUBMITTED'} small /><CodeValue value={signature} /></> : 'Not broadcast'}</dd></div>
         </dl>
       </aside>
     </div>
@@ -202,8 +225,9 @@ export function JupiterGuardedSwapPage() {
         <span className="jupiter-index">03 / ONE EXACT BROADCAST</span><h2>Sign and submit unchanged bytes</h2>
         <p>Your wallet first signs the exact reviewed transaction. The browser compares its message bytes with the reviewed message and broadcasts only if they are identical. Submission has no automatic retry.</p>
         <div className="jupiter-submit-grid"><div className="jupiter-submit-check"><strong>Same-origin guarded relay</strong><span>The signed bytes go to PriorSeal’s protected relay, which checks the same reviewed message and uses a deployment-owned Solana RPC. Provider credentials never enter this page.</span></div><div className="jupiter-submit-check"><strong>Single-send control</strong><span>Changing quote, blockhash, transaction bytes or route requires a brand-new package, simulation and authorization.</span></div></div>
-        <div className="jupiter-review-actions"><button className="button primary" disabled={busy || !canSubmit} onClick={() => void signAndSubmit()}>{busy ? 'Waiting for wallet or RPC…' : signature ? 'Transaction submitted' : 'Sign and submit exact transaction'}</button>{signature && <button className="button secondary" disabled={busy} onClick={() => void observe()}>{busy ? 'Observing…' : observation ? 'Observation completed' : 'Observe submitted transaction'}</button>}</div>
-        {signature && <div className="jupiter-signature"><Status value={observation?.observation.status ?? 'SUBMITTED'} /><CodeValue value={signature} /></div>}
+        <div className="jupiter-review-actions"><button className="button primary" disabled={busy || !canSubmit} onClick={() => void signAndSubmit()}>{busy ? 'Waiting for wallet or RPC…' : signature ? submission === 'UNKNOWN' ? 'Submission needs observation' : 'Transaction submitted' : 'Sign and submit exact transaction'}</button>{signature && <button className="button secondary" disabled={busy} onClick={() => void observe()}>{busy ? 'Observing…' : observation ? 'Observation completed' : 'Observe submitted transaction'}</button>}</div>
+        {submission === 'UNKNOWN' && <Notice tone="warning" title="Relay outcome is unknown">PriorSeal bound this one-time authorization before contacting RPC, but did not receive a trustworthy submission response. Observe this exact signature before taking any further action; do not sign or submit it again.</Notice>}
+        {signature && <div className="jupiter-signature"><Status value={observation?.observation.status ?? submission ?? 'SUBMITTED'} /><CodeValue value={signature} /></div>}
       </section>}
 
       {observation && <section className="panel jupiter-evidence">

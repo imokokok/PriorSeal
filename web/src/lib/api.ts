@@ -40,8 +40,8 @@ export function prepareGuardedJupiterSwap(input: GuardedJupiterPrepareInput) {
   })
 }
 
-export function submitGuardedJupiterSwap(input: { prepared: PreparedGuardedJupiterSwap; signedTransactionBase64: string }) {
-  return consoleRequest<{ signature: string }>('/v1/jupiter/guarded-swaps/submit', {
+export function submitGuardedJupiterSwap(input: { authorizationId: string; prepared: PreparedGuardedJupiterSwap; signedTransactionBase64: string }) {
+  return consoleRequest<{ signature: string; submission: 'SUBMITTED' | 'UNKNOWN' }>('/v1/jupiter/guarded-swaps/submit', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
   })
 }

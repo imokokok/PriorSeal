@@ -60,6 +60,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sidebar nav a:last-child { border-bottom: 1px solid rgba(255,255,255,.085); }
 .sidebar nav a:hover { color: white; background: rgba(255,255,255,.045); }
 .sidebar nav a.active { color: white; background: var(--wine-dark); }
+.nav-unavailable { min-height: 41px; padding: 7px 8px; display: grid; grid-template-columns: 31px 1fr; align-items: center; gap: 8px; color: #807d76; border-top: 1px solid rgba(255,255,255,.085); cursor: not-allowed; }
+.nav-unavailable > span:last-child { display: grid; gap: 3px; }
+.nav-unavailable small { color: #77736e; font: 500 10px/1.25 "JetBrains Mono", monospace; letter-spacing: .02em; }
 .nav-index { color: #7c7871; font: 600 12px "JetBrains Mono", monospace; }
 .sidebar nav a.active .nav-index { color: #e2aaba; }
 .side-bottom { margin: auto 5px 0; padding-top: 18px; display: grid; color: #d3d0c8; border-top: 1px solid rgba(255,255,255,.21); font-size: 13px; }

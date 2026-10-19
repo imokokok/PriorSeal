@@ -4,15 +4,18 @@ import {
   assertPreparedGuardedJupiterSwap,
   createInsightSolanaSimulationClient,
   createJupiterRouterClient,
+  hashSolanaTransactionMessage,
+  JupiterGuardedSwapError,
   prepareGuardedJupiterSwap,
   reviewGuardedJupiterSwap
 } from "priorseal-sdk";
+import { canonicalize } from "../../domain/hashing.mjs";
 function createGuardedJupiterSwapService(options) {
   const apiKey = requiredSecret(options.jupiterApiKey, "JUPITER_API_KEY");
   const insightKey = requiredSecret(options.insightApiKey, "INSIGHT_API_KEY");
   const policy = assertDeploymentPolicy(options.policy);
   const connection = options.connection ?? new Connection(assertHttpsUrl(options.rpcUrl), "confirmed");
-  const compiler = options.compiler ?? createJupiterV0Compiler({ rpcUrl: options.rpcUrl, connection });
+  const compiler = bindCompilerToWireMessage(options.compiler ?? createJupiterV0Compiler({ rpcUrl: options.rpcUrl, connection }));
   const router = createJupiterRouterClient({ apiKey, ...options.jupiterBaseUrl ? { baseUrl: options.jupiterBaseUrl } : {}, ...options.fetch ? { fetch: options.fetch } : {} });
   const insight = createInsightSolanaSimulationClient({ apiKey: insightKey, ...options.insightBaseUrl ? { baseUrl: options.insightBaseUrl } : {}, ...options.fetch ? { fetch: options.fetch } : {} });
   const now = options.now ?? (() => Date.now());
@@ -32,14 +35,34 @@ function createGuardedJupiterSwapService(options) {
     },
     async submit(input, requestOptions = {}) {
       if (requestOptions.signal?.aborted) throw requestOptions.signal.reason ?? new Error("Guarded Jupiter submission was aborted");
+      assertAuthorizationId(input.authorizationId);
       await assertPreparedGuardedJupiterSwap(input.prepared, now);
       const unsigned = decodeSolanaTransaction(input.prepared.transactionBase64);
       const signed = decodeSolanaTransaction(input.signedTransactionBase64);
-      if (!equalBytes(messageBytes(unsigned), messageBytes(signed))) throw new Error("The signed transaction message differs from the guarded prepared message");
+      await assertWireMessageMatches(unsigned, input.prepared.messageHash);
+      await assertWireMessageMatches(signed, input.prepared.messageHash);
+      if (!equalBytes(messageBytes(unsigned), messageBytes(signed))) throw new JupiterGuardedSwapError("SIGNED_TRANSACTION_MESSAGE_MISMATCH", "The signed transaction message differs from the guarded prepared message");
       await assertRequiredSignature(signed);
-      const signature = await connection.sendRawTransaction(await signed.serialize(), { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 0n });
-      if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) throw new Error("Solana RPC returned an invalid transaction signature");
-      return { signature };
+      const signature = signedTransactionSignature(signed);
+      await assertAcceptedAuthorization(options.authorizationStore, input.authorizationId, input.prepared, now);
+      const claim = await options.authorizationStore.claimAuthorization(input.authorizationId, signature);
+      if (!claim.ok) throw new JupiterGuardedSwapError(claim.code ?? "AUTHORIZATION_ALREADY_USED", "The PriorSeal authorization was already used or is unavailable");
+      try {
+        const relayedSignature = await connection.sendRawTransaction(await signed.serialize(), { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 0n });
+        if (relayedSignature !== signature) return { signature, submission: "UNKNOWN" };
+        return { signature, submission: "SUBMITTED" };
+      } catch {
+        return { signature, submission: "UNKNOWN" };
+      }
+    }
+  };
+}
+function bindCompilerToWireMessage(compiler) {
+  return {
+    async compile(input, options = {}) {
+      const compiled = await compiler.compile(input, options);
+      await assertWireMessageMatches(decodeSolanaTransaction(compiled.transactionBase64), await hashSolanaTransactionMessage(compiled.transaction));
+      return compiled;
     }
   };
 }
@@ -87,12 +110,38 @@ function decodeSolanaTransaction(value) {
 }
 async function assertRequiredSignature(transaction) {
   if (!(transaction instanceof VersionedTransaction)) {
-    if (!await transaction.verifySignatures(true)) throw new Error("The signed transaction has an invalid required signature");
+    if (!await transaction.verifySignatures(true)) throw new JupiterGuardedSwapError("SIGNED_TRANSACTION_SIGNATURE_INVALID", "The signed transaction has an invalid required signature");
     return;
   }
-  if (transaction.signatures.length !== 1 || transaction.signatures[0].every((byte) => byte === 0)) throw new Error("The signed transaction must contain exactly one fee-payer signature");
+  if (transaction.signatures.length !== 1 || transaction.signatures[0].every((byte) => byte === 0)) throw new JupiterGuardedSwapError("SIGNED_TRANSACTION_SIGNATURE_MISSING", "The signed transaction must contain exactly one fee-payer signature");
   const feePayer = transaction.message.staticAccountKeys[0];
-  if (!feePayer || !await feePayer.verifySignature(transaction.signatures[0], transaction.message.serialize())) throw new Error("The signed transaction has an invalid required signature");
+  if (!feePayer || !await feePayer.verifySignature(transaction.signatures[0], transaction.message.serialize())) throw new JupiterGuardedSwapError("SIGNED_TRANSACTION_SIGNATURE_INVALID", "The signed transaction has an invalid required signature");
+}
+async function assertWireMessageMatches(transaction, expectedMessageHash) {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", Uint8Array.from(messageBytes(transaction)));
+  const actualMessageHash = `0x${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  if (actualMessageHash !== expectedMessageHash) throw new JupiterGuardedSwapError("PREPARED_WIRE_MESSAGE_MISMATCH", "The serialized transaction bytes do not match the prepared guarded message");
+}
+function signedTransactionSignature(transaction) {
+  const signature = transaction instanceof VersionedTransaction ? transaction.signatures[0] : transaction.signature;
+  if (!signature || signature.every((byte) => byte === 0)) throw new JupiterGuardedSwapError("SIGNED_TRANSACTION_SIGNATURE_MISSING", "The signed transaction does not contain a fee-payer signature");
+  const value = encodeBase58(signature);
+  if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(value)) throw new JupiterGuardedSwapError("SIGNED_TRANSACTION_SIGNATURE_INVALID", "The signed transaction fee-payer signature is invalid");
+  return value;
+}
+async function assertAcceptedAuthorization(store, authorizationId, prepared, now) {
+  const record = await store.getAuthorization(authorizationId);
+  if (!record) throw new JupiterGuardedSwapError("AUTHORIZATION_NOT_FOUND", "The guarded swap authorization was not found");
+  const timestamp = Math.floor(now() / 1e3);
+  const { authorization, acceptance } = record;
+  if (record.status !== "ACCEPTED" || record.boundTxHash !== null || record.uses !== 0) throw new JupiterGuardedSwapError("AUTHORIZATION_ALREADY_USED", "The guarded swap authorization has already been used");
+  if (timestamp < authorization.notBefore || timestamp >= authorization.expiresAt || timestamp >= prepared.intent.validUntil) throw new JupiterGuardedSwapError("AUTHORIZATION_EXPIRED", "The guarded swap authorization has expired");
+  const expectedIntent = canonicalize(prepared.intent);
+  const accepted = acceptance.status === "ACCEPTED" && acceptance.authorizationId === authorizationId && acceptance.intentHash === prepared.intent.intentHash && authorization.authorizationId === authorizationId && authorization.intentHash === prepared.intent.intentHash && canonicalize(authorization.intent) === expectedIntent && authorization.authorizer.type === "solana-ed25519" && authorization.authorizer.address === prepared.transaction.feePayer && authorization.principal.account === prepared.transaction.feePayer && authorization.delegate.executor === prepared.transaction.feePayer;
+  if (!accepted) throw new JupiterGuardedSwapError("AUTHORIZATION_INTENT_MISMATCH", "The accepted PriorSeal authorization does not bind this exact guarded swap");
+}
+function assertAuthorizationId(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new JupiterGuardedSwapError("AUTHORIZATION_NOT_FOUND", "A valid guarded swap authorizationId is required");
 }
 function messageBytes(transaction) {
   return transaction instanceof VersionedTransaction ? transaction.message.serialize() : transaction.serializeMessage();

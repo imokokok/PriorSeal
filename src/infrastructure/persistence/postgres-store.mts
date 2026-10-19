@@ -218,6 +218,12 @@ export function createPostgresStore(pool: Pool) {
       return this.getAuthorization(value.authorizationId);
     },
     async getAuthorization(id: string) { const result = await pool.query<PgAuthorizationRow>('SELECT * FROM authorizations WHERE authorization_id=$1', [id]); return result.rows[0] && rowToAuthorization(result.rows[0]); },
+    async claimAuthorization(id: string, txHash: string) {
+      const result = await pool.query(`UPDATE authorizations SET bound_tx_hash=$2,uses=1,status='BOUND' WHERE authorization_id=$1 AND bound_tx_hash IS NULL AND uses=0 AND status='ACCEPTED' RETURNING *`, [id, txHash]);
+      if (result.rows[0]) return { ok: true, record: rowToAuthorization(result.rows[0]) };
+      const existing = await pool.query('SELECT authorization_id FROM authorizations WHERE authorization_id=$1', [id]);
+      return { ok: false, code: existing.rows[0] ? 'AUTHORIZATION_ALREADY_USED' : 'AUTHORIZATION_NOT_FOUND' };
+    },
     async bindAuthorization(id: string, txHash: string) {
       const result = await pool.query(`UPDATE authorizations SET bound_tx_hash=COALESCE(bound_tx_hash,$2),uses=CASE WHEN bound_tx_hash IS NULL THEN 1 ELSE uses END,status='BOUND' WHERE authorization_id=$1 AND (bound_tx_hash IS NULL OR bound_tx_hash=$2) RETURNING *`, [id, txHash]);
       if (result.rows[0]) return { ok: true, record: rowToAuthorization(result.rows[0]) };

@@ -37,6 +37,7 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
 
   return {
   archiveRetention: 'process_lifetime',
+  async health() { return 'memory'; },
   async appendX402PaymentLedgerEvent(value: X402PaymentLedgerEvent) {
     const event = assertX402PaymentLedgerEvent(value);
     const entries = x402PaymentLedger.get(event.ledgerId) ?? new Map<string, X402PaymentLedgerEvent>();
@@ -168,6 +169,7 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
   },
   async saveAuthorization(record: AuthorizationRecord) { if (authorizations.has(record.authorization.authorizationId)) return authorizations.get(record.authorization.authorizationId); if (usedAuthorizationNonces.has(record.authorization.authorizationNonce)) { const error: Error & { code?: string } = new Error('Authorization nonce has already been used'); error.code = 'AUTHORIZATION_NONCE_REUSED'; throw error; } authorizations.set(record.authorization.authorizationId, structuredClone(record)); usedAuthorizationNonces.add(record.authorization.authorizationNonce); return structuredClone(record); },
   async getAuthorization(id: string) { const record = authorizations.get(id); return record && structuredClone(record); },
+  async claimAuthorization(id: string, txHash: string) { const record = authorizations.get(id); if (!record) return { ok: false, code: 'AUTHORIZATION_NOT_FOUND' }; if (record.boundTxHash || record.uses !== 0 || record.status !== 'ACCEPTED') return { ok: false, code: 'AUTHORIZATION_ALREADY_USED' }; record.boundTxHash = txHash; record.uses = 1; record.status = 'BOUND'; return { ok: true, record: structuredClone(record) }; },
   async bindAuthorization(id: string, txHash: string) { const record = authorizations.get(id); if (!record) return { ok: false, code: 'AUTHORIZATION_NOT_FOUND' }; if (record.boundTxHash && record.boundTxHash !== txHash) return { ok: false, code: 'AUTHORIZATION_ALREADY_USED' }; if (!record.boundTxHash) { record.boundTxHash = txHash; record.uses = 1; record.status = 'BOUND'; } return { ok: true, record: structuredClone(record) }; },
   async saveObservationReceipt({ authorizationId, claimAuthorization, observation, receipt }: { authorizationId?: string; claimAuthorization: boolean; observation: Observation; receipt: Receipt | null }) {
     const record = authorizationId ? authorizations.get(authorizationId) : null;

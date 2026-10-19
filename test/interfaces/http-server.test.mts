@@ -71,6 +71,16 @@ async function request(server: TestServer, path: string, { method = 'GET', heade
   const res = new EventEmitter() as MockResponse; res.writableEnded = false; res.destroyed = false; res.writeHead = (status, responseHeaders) => { res.status = status; res.headers = responseHeaders; return res; }; res.end = (value) => { res.writableEnded = true; res.body = value; res.emit('finish'); res.emit('close'); };
   const done = new Promise<void>((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers ?? {}, buffer: () => Buffer.from(res.body ?? ''), json: (): HttpTestResponse => JSON.parse(Buffer.from(res.body ?? '').toString('utf8')) as HttpTestResponse, text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
+
+test('OpenAPI does not advertise a guarded Jupiter workflow when the deployment cannot complete it', async (t) => {
+  const server = await serverFor(t);
+  const openApi = await request(server, '/openapi/v1.json');
+  const paths = openApi.json() as unknown as { paths: Record<string, unknown> };
+  assert.equal(openApi.status, 200);
+  assert.equal('/v1/jupiter/guarded-swaps/prepare' in paths.paths, false);
+  assert.equal('/v1/jupiter/guarded-swaps/submit' in paths.paths, false);
+});
+
 test('PriorSeal MCP exposes stateless discovery, deterministic tools, and a JSON-only capability call', async (t) => {
   const server = await serverFor(t);
   const modernHeaders = { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2026-07-28' };
@@ -246,7 +256,7 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
     },
     async submit(input: Record<string, unknown>) {
       submittedInput = input;
-      return { signature: '5'.repeat(64) };
+      return { signature: '5'.repeat(64), submission: 'SUBMITTED' as const };
     },
   } as unknown as ServerOptions['guardedJupiter'];
   const server = createHttpServer({ guardedJupiter });
@@ -268,14 +278,21 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
   });
   assert.equal(unknownField.status, 400);
 
-  const submitted = await request(server, '/v1/jupiter/guarded-swaps/submit', {
+  const missingAuthorization = await request(server, '/v1/jupiter/guarded-swaps/submit', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' }),
   });
+  assert.equal(missingAuthorization.status, 400);
+
+  const submitted = await request(server, '/v1/jupiter/guarded-swaps/submit', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ authorizationId: 'jupiter-authorization-1', prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' }),
+  });
   assert.equal(submitted.status, 200);
   assert.equal(submitted.headers['cache-control'], 'no-store');
-  assert.deepEqual(submittedInput, { prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' });
+  assert.deepEqual(submittedInput, { authorizationId: 'jupiter-authorization-1', prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' });
 });
 
 test('guarded Jupiter preparation reports only safe non-JSON upstream diagnostics', async (t) => {

@@ -82,7 +82,7 @@ export function validatePriorSealResponse(path: string, value: unknown): void {
   } else if (route === '/v1/jupiter/guarded-swaps/prepare') {
     if (!record(value.prepared) || value.prepared.schema !== 'priorseal.jupiter-guarded-swap.v1' || !record(value.review) || value.review.schema !== 'priorseal.jupiter-guarded-swap-review.v1') invalid(path)
   } else if (route === '/v1/jupiter/guarded-swaps/submit') {
-    if (!hasString(value, 'signature')) invalid(path)
+    if (!hasString(value, 'signature') || (value.submission !== 'SUBMITTED' && value.submission !== 'UNKNOWN')) invalid(path)
   } else if (route.startsWith('/v1/observation-jobs/')) {
     if (!job(value)) invalid(path)
   } else if (route === '/v1/receipts/verify') {
