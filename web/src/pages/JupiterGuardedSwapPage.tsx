@@ -180,7 +180,7 @@ export function JupiterGuardedSwapPage() {
         <h2>Prepare or import a reviewed route</h2>
         <p>The protected service obtains Jupiter instructions, compiles one exact transaction, gets Insight simulation, and returns no upstream credentials to the browser.</p>
         <div className="jupiter-prepare-grid">
-          <Field label="Input mint" hint="Solana mint address"><input value={swapInput.inputMint} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, inputMint: event.target.value })} /></Field>
+          <Field label="Input mint" hint="USDC is required when the deployment charges a platform fee"><input value={swapInput.inputMint} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, inputMint: event.target.value })} /></Field>
           <Field label="Output mint" hint="Solana mint address"><input value={swapInput.outputMint} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, outputMint: event.target.value })} /></Field>
           <Field label="Input amount" hint="Atomic units"><input inputMode="numeric" value={swapInput.amount} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, amount: event.target.value })} /></Field>
           <Field label="Slippage" hint="Basis points"><input inputMode="numeric" value={swapInput.slippageBps} disabled={busy || Boolean(prepared)} onChange={(event) => setSwapInput({ ...swapInput, slippageBps: event.target.value })} /></Field>
@@ -211,6 +211,7 @@ export function JupiterGuardedSwapPage() {
           <div><dt>Spend</dt><dd><strong>{review.input.amountAtomic}</strong><CodeValue value={review.input.mint} /></dd></div>
           <div><dt>Receive at least</dt><dd><strong>{review.output.minimumAmountAtomic}</strong><CodeValue value={review.output.mint} /></dd></div>
           <div><dt>Max slippage</dt><dd><strong>{review.slippageBps} bps</strong><span>Route threshold is bound</span></dd></div>
+          {review.platformFee && <div><dt>Platform fee</dt><dd><strong>{review.platformFee.amountAtomic} USDC atomic units · {review.platformFee.feeBps} bps</strong><span>USDC-in fee bound to merchant account</span><CodeValue value={review.platformFee.feeAccount} /></dd></div>}
           <div><dt>Valid until</dt><dd><strong>{timestamp(review.validUntil)}</strong><span>Fresh package required after expiry</span></dd></div>
         </dl>
         <div className="jupiter-review-grid">

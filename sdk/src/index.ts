@@ -20,8 +20,10 @@ export {
   JupiterGuardedSwapError,
   INSIGHT_SOLANA_SIMULATION_NAMESPACE,
   JUPITER_ROUTER_BUILD_URL,
+  MAX_JUPITER_PLATFORM_FEE_BPS,
   SOLANA_COMPUTE_BUDGET_PROGRAM,
   SOLANA_NATIVE_WRAPPED_MINT,
+  SOLANA_USDC_MINT,
 } from './jupiter-guarded-swap.js'
 export type {
   AuthorizeGuardedJupiterSwapInput,

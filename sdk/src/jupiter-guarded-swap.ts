@@ -14,6 +14,10 @@ import type {
 export const JUPITER_ROUTER_BUILD_URL = 'https://api.jup.ag/swap/v2/build'
 export const INSIGHT_SOLANA_SIMULATION_NAMESPACE = 'insight.solana-simulation-receipt.v1'
 export const SOLANA_NATIVE_WRAPPED_MINT = 'So11111111111111111111111111111111111111112'
+/** Circle USDC on Solana mainnet-beta. The guarded platform-fee rollout is deliberately USDC-in only. */
+export const SOLANA_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+/** The public launch ceiling; a reviewed deployment may choose a lower non-zero fee. */
+export const MAX_JUPITER_PLATFORM_FEE_BPS = 20
 export const SOLANA_COMPUTE_BUDGET_PROGRAM = 'ComputeBudget111111111111111111111111111111'
 export const SOLANA_SYSTEM_PROGRAM = '11111111111111111111111111111111'
 
@@ -48,6 +52,10 @@ export type JupiterRouterBuildRequest = {
   slippageBps: number
   maxAccounts?: number
   mode?: 'standard' | 'fast'
+  /** Deployment-owned integrator fee. Browser callers must never choose these values. */
+  platformFeeBps?: number
+  /** Initialized merchant SPL token account for the deployment-owned platform fee. */
+  feeAccount?: string
 }
 
 export type JupiterRouterBuild = {
@@ -129,6 +137,13 @@ export type JupiterGuardPolicy = {
   maxComputeUnitLimit?: number
   maxComputeUnitPriceMicroLamports?: string
   maxPriorityFeeLamports?: string
+  /** Deployment-owned USDC-in platform fee bound to the exact signed transaction. */
+  platformFee?: {
+    feeBps: number
+    feeAccount: string
+    feeMint: typeof SOLANA_USDC_MINT
+    merchant: string
+  }
   /** Authorization validity, starting when the final transaction is prepared. */
   authorizationTtlSeconds: number
 }
@@ -186,6 +201,7 @@ export type GuardedJupiterSwapReview = {
   feePayer: string
   input: { mint: string; amountAtomic: string; assetId: string }
   output: { mint: string; minimumAmountAtomic: string }
+  platformFee: { feeBps: number; amountAtomic: string; mint: typeof SOLANA_USDC_MINT; feeAccount: string; merchant: string } | null
   slippageBps: number
   validUntil: number
   instructionCount: number
@@ -218,6 +234,8 @@ export function createJupiterRouterClient(options: JupiterRouterClientOptions = 
       // Keep the boundary explicit so a provider vocabulary change cannot
       // silently alter the reviewed request semantics.
       if (request.mode !== undefined) query.set('mode', request.mode === 'standard' ? 'default' : request.mode)
+      if (request.platformFeeBps !== undefined) query.set('platformFeeBps', String(request.platformFeeBps))
+      if (request.feeAccount !== undefined) query.set('feeAccount', request.feeAccount)
       const response = await fetcher(`${endpoint}?${query.toString()}`, {
         headers: { accept: 'application/json', ...(apiKey ? { 'x-api-key': apiKey } : {}) },
         signal: requestOptions.signal,
@@ -268,6 +286,7 @@ export async function prepareGuardedJupiterSwap(
   assertGuardedRequest(request)
   assertPolicy(options.policy)
   assertAssetPolicy(request, options.policy)
+  assertPlatformFeeRequest(request, options.policy)
   if (request.taker !== options.policy.feePayer) {
     throw new JupiterGuardedSwapError('FEE_PAYER_MISMATCH', 'The Jupiter taker must be the self-paying policy wallet')
   }
@@ -282,6 +301,7 @@ export async function prepareGuardedJupiterSwap(
     throw new JupiterGuardedSwapError('OUTPUT_AMOUNT_BELOW_REQUEST_MINIMUM', 'Jupiter minimum output is below the requested output floor')
   }
   assertRawBuildPrograms(build, options.policy)
+  assertPlatformFeeBuild(build, options.policy)
   const compiled = await options.compiler.compile({ build, request, policy: options.policy }, { signal: options.signal })
   assertCanonicalBase64(compiled.transactionBase64, 'compiled transactionBase64')
   const transactionDigest = await hashTransactionBytes(compiled.transactionBase64)
@@ -305,6 +325,7 @@ export async function prepareGuardedJupiterSwap(
     amount: request.amount,
     validUntil,
     transaction: compiled.transaction,
+    ...(options.policy.platformFee ? { recipient: options.policy.platformFee.feeAccount } : {}),
     contextCommitments: commitments,
   })
   return {
@@ -339,18 +360,21 @@ export async function assertPreparedGuardedJupiterSwap(prepared: PreparedGuarded
   assertGuardedRequest(prepared.request)
   assertPolicy(prepared.policy)
   assertAssetPolicy(prepared.request, prepared.policy)
+  assertPlatformFeeRequest(prepared.request, prepared.policy)
   assertBuildMatchesRequest(prepared.build, prepared.request)
   if (prepared.request.minimumOutputAmountAtomic !== undefined && BigInt(prepared.build.otherAmountThreshold) < BigInt(prepared.request.minimumOutputAmountAtomic)) {
     throw new JupiterGuardedSwapError('OUTPUT_AMOUNT_BELOW_REQUEST_MINIMUM', 'Jupiter minimum output is below the requested output floor')
   }
   assertRawBuildPrograms(prepared.build, prepared.policy)
+  assertPlatformFeeBuild(prepared.build, prepared.policy)
   assertCanonicalBase64(prepared.transactionBase64, 'prepared transactionBase64')
   assertDigest(prepared.transactionDigest, 'prepared transactionDigest')
   if (await hashTransactionBytes(prepared.transactionBase64) !== prepared.transactionDigest) throw new JupiterGuardedSwapError('PREPARED_TRANSACTION_BYTES_MISMATCH', 'The prepared transaction bytes were changed after Insight simulation')
   const messageHash = await hashSolanaTransactionMessage(prepared.transaction)
   if (messageHash !== prepared.messageHash || prepared.simulation.messageHash !== messageHash) throw new JupiterGuardedSwapError('PREPARED_MESSAGE_MISMATCH', 'The prepared transaction or simulation no longer matches its recorded message hash')
   assertCompiledTransaction(prepared.transaction, prepared.build, prepared.request, prepared.policy)
-  if (prepared.intent.intentId !== prepared.request.intentId || prepared.intent.amount !== prepared.request.amount || prepared.intent.asset !== (prepared.request.sourceAssetId ?? solanaAssetIdForMint(prepared.request.inputMint)) || prepared.intent.sender !== prepared.transaction.feePayer || prepared.intent.recipient !== prepared.transaction.feePayer || !prepared.intent.solanaTransaction) {
+  const expectedRecipient = prepared.policy.platformFee?.feeAccount ?? prepared.transaction.feePayer
+  if (prepared.intent.intentId !== prepared.request.intentId || prepared.intent.amount !== prepared.request.amount || prepared.intent.asset !== (prepared.request.sourceAssetId ?? solanaAssetIdForMint(prepared.request.inputMint)) || prepared.intent.sender !== prepared.transaction.feePayer || prepared.intent.recipient !== expectedRecipient || !prepared.intent.solanaTransaction) {
     throw new JupiterGuardedSwapError('PREPARED_INTENT_MISMATCH', 'The prepared PriorSeal intent no longer matches the guarded swap')
   }
   if (await hashSolanaTransactionMessage(prepared.intent.solanaTransaction) !== messageHash) throw new JupiterGuardedSwapError('PREPARED_INTENT_MISMATCH', 'The PriorSeal intent is not bound to the prepared transaction')
@@ -375,6 +399,13 @@ export async function reviewGuardedJupiterSwap(prepared: PreparedGuardedJupiterS
     feePayer: prepared.transaction.feePayer,
     input: { mint: prepared.request.inputMint, amountAtomic: prepared.request.amount, assetId: prepared.intent.asset },
     output: { mint: prepared.request.outputMint, minimumAmountAtomic: prepared.build.otherAmountThreshold },
+    platformFee: prepared.policy.platformFee ? {
+      feeBps: prepared.policy.platformFee.feeBps,
+      amountAtomic: platformFeeAmountAtomic(prepared.request.amount, prepared.policy.platformFee.feeBps),
+      mint: SOLANA_USDC_MINT,
+      feeAccount: prepared.policy.platformFee.feeAccount,
+      merchant: prepared.policy.platformFee.merchant,
+    } : null,
     slippageBps: prepared.build.slippageBps, validUntil: prepared.intent.validUntil,
     instructionCount: prepared.transaction.instructions.length, programIds: programs,
     addressLookupTables: prepared.transaction.addressTableLookups.map((entry) => entry.accountKey),
@@ -445,6 +476,9 @@ function assertBuildRequest(value: JupiterRouterBuildRequest): void {
   if (!Number.isSafeInteger(value.slippageBps) || value.slippageBps < 0 || value.slippageBps > 10_000) throw new TypeError('slippageBps must be an integer from 0 through 10000')
   if (value.maxAccounts !== undefined && (!Number.isSafeInteger(value.maxAccounts) || value.maxAccounts < 1 || value.maxAccounts > 64)) throw new TypeError('maxAccounts must be an integer from 1 through 64')
   if (value.mode !== undefined && value.mode !== 'standard' && value.mode !== 'fast') throw new TypeError('mode must be standard or fast')
+  if (value.platformFeeBps !== undefined && (!Number.isSafeInteger(value.platformFeeBps) || value.platformFeeBps < 1 || value.platformFeeBps > MAX_JUPITER_PLATFORM_FEE_BPS)) throw new TypeError(`platformFeeBps must be an integer from 1 through ${MAX_JUPITER_PLATFORM_FEE_BPS}`)
+  if (value.feeAccount !== undefined) assertPublicKey(value.feeAccount, 'feeAccount')
+  if ((value.platformFeeBps === undefined) !== (value.feeAccount === undefined)) throw new TypeError('platformFeeBps and feeAccount must be provided together')
 }
 
 function assertPolicy(policy: JupiterGuardPolicy): void {
@@ -465,6 +499,13 @@ function assertPolicy(policy: JupiterGuardPolicy): void {
   if (policy.maxComputeUnitLimit !== undefined && (!Number.isSafeInteger(policy.maxComputeUnitLimit) || policy.maxComputeUnitLimit < 1 || policy.maxComputeUnitLimit > 1_400_000)) throw new TypeError('policy.maxComputeUnitLimit is invalid')
   if (policy.maxComputeUnitPriceMicroLamports !== undefined) assertUnsigned(policy.maxComputeUnitPriceMicroLamports, 'policy.maxComputeUnitPriceMicroLamports')
   if (policy.maxPriorityFeeLamports !== undefined) assertUnsigned(policy.maxPriorityFeeLamports, 'policy.maxPriorityFeeLamports')
+  if (policy.platformFee !== undefined) {
+    const fee = policy.platformFee
+    if (!fee || typeof fee !== 'object' || !Number.isSafeInteger(fee.feeBps) || fee.feeBps < 1 || fee.feeBps > MAX_JUPITER_PLATFORM_FEE_BPS) throw new TypeError(`policy.platformFee.feeBps must be an integer from 1 through ${MAX_JUPITER_PLATFORM_FEE_BPS}`)
+    assertPublicKey(fee.feeAccount, 'policy.platformFee.feeAccount')
+    assertPublicKey(fee.merchant, 'policy.platformFee.merchant')
+    if (fee.feeMint !== SOLANA_USDC_MINT) throw new TypeError('policy.platformFee.feeMint must be Solana mainnet USDC')
+  }
   if (!Number.isSafeInteger(policy.authorizationTtlSeconds) || policy.authorizationTtlSeconds < 10 || policy.authorizationTtlSeconds > 120) throw new TypeError('policy.authorizationTtlSeconds must be an integer from 10 through 120')
 }
 
@@ -497,6 +538,35 @@ function assertBuildMatchesRequest(build: JupiterRouterBuild, request: JupiterRo
 function assertAssetPolicy(request: JupiterRouterBuildRequest, policy: JupiterGuardPolicy): void {
   if (policy.allowedInputMints !== undefined && !policy.allowedInputMints.includes(request.inputMint)) throw new JupiterGuardedSwapError('INPUT_MINT_NOT_ALLOWED', 'The requested input mint is outside policy')
   if (policy.allowedOutputMints !== undefined && !policy.allowedOutputMints.includes(request.outputMint)) throw new JupiterGuardedSwapError('OUTPUT_MINT_NOT_ALLOWED', 'The requested output mint is outside policy')
+}
+
+/**
+ * Fees are currently intentionally constrained to ExactIn USDC. This makes
+ * the reviewed atomic fee deterministic and prevents a quote from collecting
+ * an arbitrary output or third-token fee.
+ */
+function assertPlatformFeeRequest(request: JupiterRouterBuildRequest, policy: JupiterGuardPolicy): void {
+  const fee = policy.platformFee
+  if (!fee) {
+    if (request.platformFeeBps !== undefined || request.feeAccount !== undefined) throw new JupiterGuardedSwapError('PLATFORM_FEE_NOT_CONFIGURED', 'This guarded Jupiter deployment does not permit a platform fee')
+    return
+  }
+  if (request.inputMint !== SOLANA_USDC_MINT) throw new JupiterGuardedSwapError('PLATFORM_FEE_INPUT_MINT_REQUIRED', 'The guarded USDC platform fee requires USDC as the input mint')
+  if (request.platformFeeBps !== fee.feeBps || request.feeAccount !== fee.feeAccount) throw new JupiterGuardedSwapError('PLATFORM_FEE_POLICY_MISMATCH', 'The guarded Jupiter platform fee differs from the reviewed deployment policy')
+  if (platformFeeAmountAtomic(request.amount, fee.feeBps) === '0') throw new JupiterGuardedSwapError('PLATFORM_FEE_BELOW_MINIMUM', 'The input amount is too small to produce the configured platform fee')
+}
+
+/** Jupiter documents the Router fee as part of the returned swap instruction. */
+function assertPlatformFeeBuild(build: JupiterRouterBuild, policy: JupiterGuardPolicy): void {
+  const fee = policy.platformFee
+  if (!fee) return
+  if (!allInstructions(build).some(instruction => instruction.accounts.some(account => account.pubkey === fee.feeAccount && account.isWritable))) {
+    throw new JupiterGuardedSwapError('PLATFORM_FEE_ACCOUNT_OMITTED', 'Jupiter did not include the reviewed writable platform-fee account in the swap instructions')
+  }
+}
+
+function platformFeeAmountAtomic(inputAmount: string, feeBps: number): string {
+  return ((BigInt(inputAmount) * BigInt(feeBps)) / 10_000n).toString()
 }
 
 function assertRawBuildPrograms(build: JupiterRouterBuild, policy: JupiterGuardPolicy): void {
@@ -764,6 +834,7 @@ function clonePolicy(policy: JupiterGuardPolicy): JupiterGuardPolicy {
     ...(policy.allowedInputMints ? { allowedInputMints: [...policy.allowedInputMints] } : {}),
     ...(policy.allowedOutputMints ? { allowedOutputMints: [...policy.allowedOutputMints] } : {}),
     ...(policy.allowedAddressLookupTables ? { allowedAddressLookupTables: [...policy.allowedAddressLookupTables] } : {}),
+    ...(policy.platformFee ? { platformFee: { ...policy.platformFee } } : {}),
   }
 }
 

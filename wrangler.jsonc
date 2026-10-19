@@ -36,9 +36,11 @@
     "PRIORSEAL_X402_RESOURCE_ORIGIN": "https://priorseal.xyz",
     "PRIORSEAL_X402_PAY_TO": "0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231",
     "PRIORSEAL_X402_SOLANA_PAY_TO": "BfVX9jcEALijnEuGPcGTjqjBgTFLTFMt6F7NrMHzGWf4",
-    "PRIORSEAL_X402_NETWORKS": "eip155:8453,eip155:56",
+    "PRIORSEAL_X402_NETWORKS": "eip155:8453,eip155:56,solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
     "PRIORSEAL_X402_TIMEOUT_MS": "15000",
-    "PRIORSEAL_X402_ROUTES_JSON": "[{\"method\":\"GET\",\"path\":\"/v1/receipts/:receiptId/bundle\",\"description\":\"Export a portable PriorSeal receipt bundle\",\"price\":\"$0.02\"}]"
+    "PRIORSEAL_X402_ROUTES_JSON": "[{\"method\":\"GET\",\"path\":\"/v1/receipts/:receiptId/bundle\",\"description\":\"Export a portable PriorSeal receipt bundle\",\"price\":\"$0.02\"}]",
+    "PRIORSEAL_JUPITER_PLATFORM_FEE_BPS": "10",
+    "PRIORSEAL_JUPITER_FEE_ACCOUNT": "FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq"
   },
   "secrets": {
     "required": [
