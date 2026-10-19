@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.1 — 2026-10-20
+
+- Add deployment-owned USDC-input platform fees to the Solana Jupiter guarded
+  swap adapter. A configured fee is capped at 20 bps, is bound to the exact
+  review and authorization intent, and is accepted only when Jupiter's raw
+  build contains the configured merchant legacy-SPL USDC associated-token
+  account. The hosted preparation service validates that account against its
+  configured merchant and mint before it requests a Router build. Browser
+  inputs cannot set, raise, replace, or omit the deployment fee.
+
 ## 0.13.0 — 2026-10-19
 
 - Add self-serve funding: `selfServeTopup()` composes an on-chain USDC transfer
