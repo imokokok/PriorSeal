@@ -3,7 +3,8 @@ import { errorCode, errorMessage } from "../../shared/error-code.mjs";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { verifyReceipt } from "../../domain/receipt-verifier.mjs";
-import { solanaAuthorizationMessage } from "../../domain/solana.mjs";
+import { isSolanaPublicKey, SOLANA_MAINNET_CAIP2, solanaAuthorizationMessage } from "../../domain/solana.mjs";
+import { SOLANA_NATIVE_WRAPPED_MINT } from "priorseal-sdk";
 import { observeEvm } from "../../infrastructure/blockchain/evm/observer.mjs";
 import { createMemoryStore } from "../../infrastructure/persistence/memory-store.mjs";
 import { createKeyRegistry } from "../../domain/key-registry.mjs";
@@ -243,8 +244,8 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       }
       if (req.method === "POST" && path === "/v1/jupiter/guarded-swaps/prepare") {
         if (!guardedJupiter) throw new PriorSealError("NOT_FOUND", "Guarded Jupiter preparation is not enabled on this deployment");
-        assertOnlyFields(body, ["intentId", "inputMint", "outputMint", "amount", "taker", "slippageBps", "maxAccounts", "mode", "minimumOutputAmountAtomic", "sourceAssetId", "contextCommitments"], "guarded Jupiter preparation");
-        const result = await guardedJupiter.prepare(body, { signal: deadline.signal });
+        const input = guardedJupiterPrepareInput(body);
+        const result = await guardedJupiter.prepare(input, { signal: deadline.signal });
         return respond(201, { ...result, requestId }, { "cache-control": "no-store" });
       }
       if (req.method === "POST" && path === "/v1/jupiter/guarded-swaps/submit") {
@@ -533,6 +534,39 @@ function openApiSpec({ guardedJupiterEnabled = false } = {}) {
 }
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function guardedJupiterPrepareInput(value) {
+  const input = assertOnlyFields(value, ["intentId", "inputMint", "outputMint", "amount", "taker", "slippageBps", "maxAccounts", "mode", "minimumOutputAmountAtomic", "sourceAssetId", "contextCommitments"], "guarded Jupiter preparation");
+  const inputMint = input.inputMint;
+  const outputMint = input.outputMint;
+  const taker = input.taker;
+  if (!isSolanaPublicKey(inputMint) || !isSolanaPublicKey(outputMint) || !isSolanaPublicKey(taker)) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter preparation requires Solana public-key inputMint, outputMint, and taker");
+  if (inputMint === outputMint) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter inputMint and outputMint must differ");
+  if (!unsignedDecimal(input.amount)) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter amount must be an unsigned decimal string");
+  if (typeof input.slippageBps !== "number" || !Number.isSafeInteger(input.slippageBps) || input.slippageBps < 0 || input.slippageBps > 1e4) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter slippageBps must be an integer from 0 through 10000");
+  if (input.intentId !== void 0 && (typeof input.intentId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(input.intentId))) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter intentId is invalid");
+  if (input.maxAccounts !== void 0 && (typeof input.maxAccounts !== "number" || !Number.isSafeInteger(input.maxAccounts) || input.maxAccounts < 1 || input.maxAccounts > 64)) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter maxAccounts must be an integer from 1 through 64");
+  if (input.mode !== void 0 && input.mode !== "standard" && input.mode !== "fast") throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter mode must be standard or fast");
+  if (input.minimumOutputAmountAtomic !== void 0 && (!unsignedDecimal(input.minimumOutputAmountAtomic) || input.minimumOutputAmountAtomic === "0")) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter minimumOutputAmountAtomic must be a positive decimal string");
+  const expectedSourceAssetId = `${SOLANA_MAINNET_CAIP2}/${inputMint === SOLANA_NATIVE_WRAPPED_MINT ? "slip44:501" : `spl:${inputMint}`}`;
+  if (input.sourceAssetId !== void 0 && input.sourceAssetId !== expectedSourceAssetId) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter sourceAssetId must identify inputMint");
+  if (input.contextCommitments !== void 0) assertGuardedJupiterContextCommitments(input.contextCommitments);
+  return input;
+}
+function unsignedDecimal(value) {
+  return typeof value === "string" && /^(0|[1-9][0-9]*)$/.test(value);
+}
+function assertGuardedJupiterContextCommitments(value) {
+  if (!Array.isArray(value)) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter contextCommitments must be an array");
+  const seen = /* @__PURE__ */ new Set();
+  const namespaces = /* @__PURE__ */ new Set();
+  for (const commitment of value) {
+    if (!isRecord(commitment) || typeof commitment.namespace !== "string" || !commitment.namespace || commitment.algorithm !== "sha256" && commitment.algorithm !== "keccak256" || typeof commitment.digest !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(commitment.digest)) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter context commitment is invalid");
+    const key = `${commitment.namespace}|${commitment.algorithm}|${commitment.digest.toLowerCase()}`;
+    if (seen.has(key) || namespaces.has(commitment.namespace)) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter context commitments must be distinct");
+    seen.add(key);
+    namespaces.add(commitment.namespace);
+  }
 }
 function mcpInput(argumentsValue, context) {
   assertOnlyFields(argumentsValue, ["input"], `PriorSeal MCP ${context} arguments`);
