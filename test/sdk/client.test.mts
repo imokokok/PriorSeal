@@ -271,3 +271,14 @@ test('SDK polling remains abortable while waiting for a retry', async () => {
   setTimeout(() => controller.abort(), 10);
   await assert.rejects(waiting, { code: 'REQUEST_ABORTED' });
 });
+
+test('SDK derives the default authorization audience from the deployment host', () => {
+  const hosted = createPriorSealClient({ baseUrl: 'https://priorseal.xyz', fetch: async () => response({}) });
+  assert.equal(hosted.defaultAudience, 'priorseal.xyz');
+  const trailingSlash = createPriorSealClient({ baseUrl: 'https://api.example.com/', fetch: async () => response({}) });
+  assert.equal(trailingSlash.defaultAudience, 'api.example.com');
+  const fallback = createPriorSealClient({ fetch: async () => response({}) });
+  assert.equal(fallback.defaultAudience, 'priorseal');
+  const explicit = createPriorSealClient({ baseUrl: 'https://priorseal.xyz', fetch: async () => response({}) });
+  assert.notEqual(explicit.defaultAudience, 'priorseal');
+});
