@@ -3,10 +3,10 @@
 Typed browser and Node.js client connecting explicit authorization to observed EVM or Solana execution and independently verifiable receipts. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
-npm install priorseal-sdk@0.11.1
+npm install priorseal-sdk@0.12.0
 ```
 
-Version **0.11.1** adds the [exact-call partner reference and portable v3 verification bundle](https://github.com/imokokok/PriorSeal/tree/main/examples/exact-call-partner-reference-v1) to the SDK documentation. Its runtime APIs and dependencies are unchanged from 0.11.0. Version **0.11.0** adds Solana mainnet-beta transaction authorization and observation for legacy, v0, and v1 compiled messages, exact message-byte hashing, v0 address lookup resolution, v1 resource configuration, and offline verification. Version **0.10.0** adds ERC-8004 identity resolution and block-pinned snapshots, trust-decision bundles, reputation and validation policy evaluation, and explicit wallet-based registry writes while preserving existing PriorSeal authorization signing bytes. It also adds pinned-block replay for Insight's unsigned V3 risk report, offline verification for Insight Decision Input v1 and exact V3 swap evidence, and review-time enforcement of the signed execution-receipt slippage ceiling. Version **0.9.1** adds `compareV3SwapReplan()` to explain which approved swap fields a proposed call changes; the comparison does not authorize execution. Version 0.9.0 added signed temporal-finality constraints and offline replay checks for the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Version 0.8.0 added reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
+Version **0.12.0** adds the [Solana Jupiter guarded swap](#solana-jupiter-guarded-swap) adapter with a non-secret signing review, deployment-owned guard policy, and exact-byte revalidation before wallet authorization, and derives the default authorization audience from the client `baseUrl` hostname so non-reference deployments no longer hit checkpoint mismatches. Version **0.11.1** adds the [exact-call partner reference and portable v3 verification bundle](https://github.com/imokokok/PriorSeal/tree/main/examples/exact-call-partner-reference-v1) to the SDK documentation. Its runtime APIs and dependencies are unchanged from 0.11.0. Version **0.11.0** adds Solana mainnet-beta transaction authorization and observation for legacy, v0, and v1 compiled messages, exact message-byte hashing, v0 address lookup resolution, v1 resource configuration, and offline verification. Version **0.10.0** adds ERC-8004 identity resolution and block-pinned snapshots, trust-decision bundles, reputation and validation policy evaluation, and explicit wallet-based registry writes while preserving existing PriorSeal authorization signing bytes. It also adds pinned-block replay for Insight's unsigned V3 risk report, offline verification for Insight Decision Input v1 and exact V3 swap evidence, and review-time enforcement of the signed execution-receipt slippage ceiling. Version **0.9.1** adds `compareV3SwapReplan()` to explain which approved swap fields a proposed call changes; the comparison does not authorize execution. Version 0.9.0 added signed temporal-finality constraints and offline replay checks for the observed head, confirmation floor, reorg buffer, and RPC finalized checkpoint. Version 0.8.0 added reviewed Uniswap V3 single-pool ERC-20 swap authorization and the Node-only `priorseal-sdk/defi` execution gateway. The package also includes v2 Merkle transparency verification, optional RWA APIs, independently verified Insight coverage binding, compiled JavaScript, TypeScript declarations and third-party license notices.
 
 To require an RPC-finalized observation, set `intent.constraints.finalityRequirement` to `RPC_FINALIZED`. An optional `maxToleratedReorgDepth: N` requires at least `N + 1` confirmations. The offline verifier checks signed evidence consistency; an RPC finalized assertion remains an observation by the configured endpoint and issuer, not an embedded consensus proof. See [temporal evidence and finality](https://github.com/imokokok/PriorSeal/blob/main/docs/architecture/temporal-finality.md).
 
@@ -17,6 +17,64 @@ Import `createDefiExecutionGateway`, `createDefiViemSubmitter`, and the durable 
 The hosted PriorSeal Worker accepts authorizations and issues evidence. It does not hold funds or broadcast transactions. See [the complete gateway contract](https://github.com/imokokok/PriorSeal/blob/main/docs/product/defi-execution-gateway.md) and [swap authorization semantics](https://github.com/imokokok/PriorSeal/blob/main/docs/product/swap-authorization.md) before integrating a signer.
 
 The SDK exports `compareV3SwapReplan()` for field-level explanations. A matching comparison does not replace the signing-time authorization guard or confirm that an authorization is still active and unused.
+
+## Solana Jupiter guarded swap
+
+The package ships a fail-closed adapter for Jupiter Router `ExactIn` builds on Solana mainnet-beta. A deployment operator wires `prepareGuardedJupiterSwap` with `createJupiterRouterClient`, an Insight simulation client, a transaction compiler, and a `JupiterGuardPolicy`; integrators talk to the deployment's guarded endpoints and keep full custody of the wallet:
+
+1. `POST /v1/jupiter/guarded-swaps/prepare` returns a compiled v0 transaction bound to a `priorseal.intent.v2` intent (mints, amount, minimum output, compute budget, validity window).
+2. `reviewGuardedJupiterSwap(prepared)` produces the non-secret review shown before anything is signed: fee payer, program ids, address lookup tables, compute budget, and warnings such as unpinned lookup tables or uncapped priority fees.
+3. `authorizeGuardedJupiterSwap({ client, prepared, wallet, principal, agentId })` revalidates the prepared object immediately before the wallet signs the authorization message (Ed25519), then accepts the authorization through the metered endpoint. The wallet implements `SolanaMessageWallet` (`publicKey` plus `signMessage`); the SDK never receives signing keys.
+4. Your wallet integration signs the exact prepared transaction bytes, and the deployment verifies and relays them via `POST /v1/jupiter/guarded-swaps/submit`.
+5. `observeGuardedJupiterSwap({ client, authorizationId, signature })` reads the confirmed transaction, verifies it against the authorized intent, and returns the signed receipt with its compliance verdict.
+
+Authorization acceptance and observation are metered Agent routes: pass the deployment-issued credential via the `x-priorseal-agent-key` header with an `idempotency-key` per request (see the [agent usage model](https://github.com/imokokok/PriorSeal/blob/main/docs/product/agent-usage-model.md)).
+
+```ts
+import {
+  createPriorSealClient,
+  reviewGuardedJupiterSwap,
+  authorizeGuardedJupiterSwap,
+  observeGuardedJupiterSwap,
+} from 'priorseal-sdk'
+
+const client = createPriorSealClient({
+  baseUrl: 'https://priorseal.example', // your deployment host
+  headers: { 'x-priorseal-agent-key': process.env.PRIORSEAL_AGENT_KEY ?? '' },
+})
+
+const prepare = await fetch('https://priorseal.example/v1/jupiter/guarded-swaps/prepare', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+    outputMint: 'So11111111111111111111111111111111111111112', // wSOL
+    amount: '20000',
+    taker: wallet.publicKey,
+    slippageBps: 100,
+    minimumOutputAmountAtomic: '18000',
+  }),
+}).then((response) => response.json())
+
+await reviewGuardedJupiterSwap(prepare.prepared)
+
+const accepted = await authorizeGuardedJupiterSwap({
+  client,
+  prepared: prepare.prepared,
+  wallet, // SolanaMessageWallet: { publicKey, signMessage }
+  principal: { type: 'user', id: 'user:demo' },
+  agentId: 'agent:your-agent',
+})
+
+// Sign the exact prepared transaction bytes with your own wallet stack and
+// relay them through POST /v1/jupiter/guarded-swaps/submit, then bind the
+// on-chain signature to a signed receipt:
+const observed = await observeGuardedJupiterSwap({
+  client,
+  authorizationId: accepted.authorization.authorizationId,
+  signature: transactionSignature,
+})
+```
 
 ## Start with a local receipt
 
