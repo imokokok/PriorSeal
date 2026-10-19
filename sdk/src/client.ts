@@ -41,6 +41,16 @@ export type PriorSealClientOptions = {
   idempotencyKey?: () => string
 }
 
+function defaultAudienceForBaseUrl(baseUrl: string): string {
+  try {
+    const hostname = new URL(baseUrl).hostname
+    if (hostname) return hostname
+  } catch {
+    // fall through to protocol default
+  }
+  return 'priorseal'
+}
+
 export class PriorSealApiError extends Error {
   readonly code?: string
   readonly status?: number
@@ -58,6 +68,7 @@ export class PriorSealApiError extends Error {
 export class PriorSealClient {
   readonly baseUrl: string
   readonly timeoutMs: number
+  readonly defaultAudience: string
   private readonly fetcher: typeof fetch
   private readonly defaultHeaders: HeadersInit
   private readonly makeIdempotencyKey: () => string
@@ -67,6 +78,7 @@ export class PriorSealClient {
     if (!fetcher) throw new TypeError('PriorSealClient requires a Fetch-compatible implementation')
     this.fetcher = fetcher
     this.baseUrl = (options.baseUrl ?? '').replace(/\/$/, '')
+    this.defaultAudience = defaultAudienceForBaseUrl(this.baseUrl)
     this.timeoutMs = options.timeoutMs ?? 15_000
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs < 1) throw new TypeError('timeoutMs must be a positive integer')
     this.defaultHeaders = options.headers ?? {}
@@ -249,13 +261,13 @@ export class PriorSealClient {
       expiresAt: input.expiresAt ?? input.intent.validUntil,
       authorizationNonce: input.authorizationNonce ?? generateAuthorizationNonce(),
       maxUses: input.maxUses ?? '1',
-      audience: input.audience ?? 'priorseal',
+      audience: input.audience ?? this.defaultAudience,
     }, options)
     if (stableJson(comparableIntent(prepared.authorization.intent)) !== stableJson(comparableIntent(input.intent)) || prepared.authorization.principal.account.toLowerCase() !== account || prepared.authorization.authorizer.address.toLowerCase() !== account || prepared.authorization.principal.id !== input.principal.id || prepared.authorization.principal.type !== input.principal.type || prepared.authorization.delegate.agentId !== input.delegate.agentId || prepared.authorization.delegate.executor.toLowerCase() !== input.delegate.executor.toLowerCase()) throw new PriorSealApiError('Prepared authorization does not match the requested intent and identity', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
     const authorization = prepared.authorization
     const expectedNotBefore = input.notBefore ?? issuedAt
     const expectedExpiresAt = input.expiresAt ?? input.intent.validUntil
-    if (authorization.schema !== 'priorseal.authorization.v2' || authorization.authorizer.type !== 'eip712' || authorization.audience !== (input.audience ?? 'priorseal') || authorization.issuedAt !== issuedAt || authorization.notBefore !== expectedNotBefore || authorization.expiresAt !== expectedExpiresAt || authorization.maxUses !== (input.maxUses ?? '1') || (input.authorizationNonce !== undefined && authorization.authorizationNonce.toLowerCase() !== input.authorizationNonce.toLowerCase()) || (input.account && account !== input.account.toLowerCase()) || (checkpoint?.stage === 'PREPARED' && checkpoint.signature) || (checkpoint && checkpoint.stage !== 'PREPARED' && !checkpoint.signature)) throw new PriorSealApiError('Prepared authorization differs from requested audience, timing or permissions', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
+    if (authorization.schema !== 'priorseal.authorization.v2' || authorization.authorizer.type !== 'eip712' || authorization.audience !== (input.audience ?? this.defaultAudience) || authorization.issuedAt !== issuedAt || authorization.notBefore !== expectedNotBefore || authorization.expiresAt !== expectedExpiresAt || authorization.maxUses !== (input.maxUses ?? '1') || (input.authorizationNonce !== undefined && authorization.authorizationNonce.toLowerCase() !== input.authorizationNonce.toLowerCase()) || (input.account && account !== input.account.toLowerCase()) || (checkpoint?.stage === 'PREPARED' && checkpoint.signature) || (checkpoint && checkpoint.stage !== 'PREPARED' && !checkpoint.signature)) throw new PriorSealApiError('Prepared authorization differs from requested audience, timing or permissions', { code: 'AUTHORIZATION_CHECKPOINT_MISMATCH' })
     const { hashTypedData, recoverTypedDataAddress } = await import('./authorization-signature.js')
     let signingData: Exclude<Awaited<ReturnType<typeof import('./verifier.js')['authorizationSigningData']>>, { profile: 'solana-ed25519'; message: string }>
     try {
@@ -374,7 +386,7 @@ export class PriorSealClient {
       expiresAt: input.expiresAt ?? input.intent.validUntil,
       authorizationNonce: input.authorizationNonce ?? generateAuthorizationNonce(),
       maxUses: input.maxUses ?? '1',
-      audience: input.audience ?? 'priorseal',
+      audience: input.audience ?? this.defaultAudience,
     }, options)
     const authorization = prepared.authorization
     const expectedIntent = { ...input.intent, schema: input.intent.schema ?? 'priorseal.intent.v2' }
@@ -385,7 +397,7 @@ export class PriorSealClient {
       || authorization.authorizer.address !== account || authorization.principal.account !== account
       || authorization.delegate.executor !== input.intent.sender || authorization.principal.id !== input.principal.id
       || authorization.principal.type !== input.principal.type || authorization.delegate.agentId !== input.delegate.agentId
-      || authorization.audience !== (input.audience ?? 'priorseal') || authorization.issuedAt !== issuedAt
+      || authorization.audience !== (input.audience ?? this.defaultAudience) || authorization.issuedAt !== issuedAt
       || authorization.notBefore !== (input.notBefore ?? issuedAt) || authorization.expiresAt !== (input.expiresAt ?? input.intent.validUntil)
       || authorization.maxUses !== (input.maxUses ?? '1')
       || (input.authorizationNonce !== undefined && authorization.authorizationNonce !== input.authorizationNonce.toLowerCase())) {
