@@ -46,6 +46,10 @@ function agentUsage(value: unknown): boolean {
   return record(value) && hasString(value, 'usageId') && hasString(value, 'accountId') && hasString(value, 'routeId') && hasString(value, 'requestKey') && hasString(value, 'credits') && Number.isSafeInteger(value.reservedAt) && (value.state === 'RESERVED' || value.state === 'CONSUMED' || value.state === 'RELEASED')
 }
 
+function guardedJupiterCapability(value: unknown): boolean {
+  return record(value) && typeof value.enabled === 'boolean' && ['READY', 'NOT_CONFIGURED', 'SOLANA_PROFILE_UNAVAILABLE', 'SOLANA_RPC_UNAVAILABLE', 'ISSUER_UNAVAILABLE', 'PRE_EXECUTION_PROOF_UNAVAILABLE', 'STORAGE_UNAVAILABLE'].includes(String(value.reason))
+}
+
 /** Validate untrusted wire data before a typed client or console consumes it. */
 export function validatePriorSealResponse(path: string, value: unknown): void {
   safeJson(value, path)
@@ -56,11 +60,13 @@ export function validatePriorSealResponse(path: string, value: unknown): void {
   } else if (route === '/v1/version') {
     if (!hasString(value, 'service') || !hasString(value, 'version') || !strings(value.protocol)) invalid(path)
   } else if (route === '/v1/capabilities') {
-    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry >= 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean') invalid(path)
+    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry >= 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean' || (value.integrations !== undefined && (!record(value.integrations) || !guardedJupiterCapability(value.integrations.guardedJupiter)))) invalid(path)
   } else if (route === '/v1/agent-accounts/self/usage') {
     if (!Array.isArray(value.items) || !value.items.every(agentUsage)) invalid(path)
   } else if (route === '/v1/agent-accounts/self') {
     if (!record(value.account) || !hasString(value.account, 'accountId') || !hasString(value.account, 'provisionedCredits') || !hasString(value.account, 'remainingCredits') || (value.account.status !== 'active' && value.account.status !== 'revoked')) invalid(path)
+  } else if (route === '/v1/selfserve/claim') {
+    if (!record(value.account) || !hasString(value.account, 'accountId') || !hasString(value.account, 'provisionedCredits') || !hasString(value.account, 'remainingCredits') || (value.account.status !== 'active' && value.account.status !== 'revoked') || !hasString(value, 'credential') || !hasString(value, 'credits') || !hasString(value, 'txHash')) invalid(path)
   } else if (route === '/v1/intents') {
     if (!record(value.intent) || !hasString(value, 'intentHash') || !record(value.policy)) invalid(path)
   } else if (route === '/v1/authorizations/prepare') {

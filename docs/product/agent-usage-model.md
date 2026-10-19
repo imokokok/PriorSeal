@@ -51,7 +51,7 @@ transaction key must not itself grant principal authority.
 | Design-partner pilot | One bounded execution path, configured jointly, with portable evidence delivered for review | Fixed-scope pilot, implementation fee, or enterprise service contract | Available now |
 | Paid evidence export | A caller purchases an eligible read-only receipt bundle and receives payment-to-resource evidence | x402 `exact` USDC payment | Implemented and rehearsed in staging; production disabled pending a facilitator that actually supports the reviewed Base-mainnet rail |
 | Agent runtime orchestration | Agent calls a principal-controlled signing boundary, submits exactly one authorized action through its integrator, then observes and verifies evidence | `priorseal-sdk` `authorizeWithEip712Signer()` / `runAgentAction()` | Implemented; authority and executor infrastructure remain integrator-owned |
-| Self-serve agent usage | Agent uses configured metered authorization, observation, and evidence services without a manual commercial workflow | Prepaid service credits; x402, card, invoice, or enterprise settlement may fund them outside the authorization path | Production meter enabled; account provisioning and credit funding remain operator-controlled pending a separately reconciled self-serve funding flow |
+| Self-serve agent usage | Agent funds its own credits: transfers USDC to the deployment payTo on Base mainnet, proves payer-wallet ownership with an EIP-191 signature over the claim message, and receives the account plus its one-time deterministic credential | `POST /v1/selfserve/claim` with SDK `selfServeTopup()`; idempotency rides the credit-operation ledger, credentials are HMAC-derived per account and never persisted | Production meter and claim endpoint enabled; operator endpoints remain the fallback provisioning path |
 | Session or budget authorization | Principal defines repeatable policy boundaries for an agent | A separately specified and reviewed authorization profile | Later milestone; not implied by current single-use authorization |
 
 ## Why x402 is not the authorization protocol
@@ -139,6 +139,14 @@ non-secret optional `reference` (such as a provider invoice ID), so retries do
 not double-credit the account. Operator endpoints are deliberately
 not SDK convenience methods: they are an administrative boundary and should be
 called only from a separately protected control plane.
+
+Self-serve claims share this ledger: a funded transfer is claimed with a
+payer-wallet signature, the account is seeded at zero credits, and the credit
+operation keyed by the transaction hash is the only grant path. Because the
+credential is deterministically derived from the account, a retried claim
+returns the same credential without storing it, and an account provisioned
+through the operator flow keeps its operator-issued credential (its claim
+fails closed rather than leaking or rotating the secret).
 
 Bootstrap configuration seeds a previously absent account and may increase its
 configured credit allowance. It cannot reactivate a revoked account or replace

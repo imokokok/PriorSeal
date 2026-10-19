@@ -1,6 +1,8 @@
 export { PriorSealApiError, PriorSealClient, createPriorSealClient, generateAuthorizationNonce } from './client.js'
 export { createX402AgentFetch } from './x402-agent-fetch.js'
 export type { X402ExactRequirement, X402PaymentChallenge, X402PaymentPolicy, X402PaymentSigner } from './x402-agent-fetch.js'
+export { selfServeTopup, selfServeClaimMessage } from './selfserve-topup.js'
+export type { SelfServeTopupPayer, SelfServeTopupResult, SelfserveClaimCapabilities } from './selfserve-topup.js'
 export { parseAuthorizationCheckpoint } from './checkpoint.js'
 export { validatePriorSealResponse } from './response-validation.js'
 export { buildExactCallIntent, parseExactCallTransaction, parseContextCommitments } from './exact-call.js'

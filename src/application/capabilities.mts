@@ -2,10 +2,11 @@ import { hashJson } from '../domain/hashing.mjs';
 import { SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
 import { X402_STAGING_NETWORKS, type X402Config } from '../infrastructure/payments/x402-exact-evm.mjs';
 import type { AgentMeter } from './commerce/agent-meter.mjs';
+import type { SelfserveClaim } from './commerce/selfserve-claim.mjs';
 
 type CapabilityPolicy = { allowedChainIds?: (number | string)[]; allowedActions?: unknown; allowedAssets?: string[]; allowedRecipients?: string[]; maxAmount?: string; minConfirmations?: number; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' };
 type CapabilityStore = { health?: () => Promise<unknown> | unknown; archiveRetention?: string };
-export async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, x402, agentMeter = null, now }: { issuer: string; audience: string; keyConfigured: boolean; policy?: CapabilityPolicy | null; proofMode: string; timestampConfigured: boolean; witnessConfigured: boolean; anchorConfigured: boolean; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; store: CapabilityStore; archiveEnabled: boolean; contractSignatureConfigured?: boolean; x402?: X402Config; agentMeter?: AgentMeter | null; now: number }) {
+export async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, x402, agentMeter = null, selfserveClaim = null, guardedJupiterConfigured = false, now }: { issuer: string; audience: string; keyConfigured: boolean; policy?: CapabilityPolicy | null; proofMode: string; timestampConfigured: boolean; witnessConfigured: boolean; anchorConfigured: boolean; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; store: CapabilityStore; archiveEnabled: boolean; contractSignatureConfigured?: boolean; x402?: X402Config; agentMeter?: AgentMeter | null; selfserveClaim?: SelfserveClaim | null; guardedJupiterConfigured?: boolean; now: number }) {
   let storage = 'available';
   try { if (store.health) await store.health(); } catch { storage = 'unavailable'; }
   const configuredChains = Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => !policy?.allowedChainIds || policy.allowedChainIds.map(Number).includes(id));
@@ -24,11 +25,19 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
   const chains = [...evmChains, ...(solanaTransaction ? [0] : [])];
   const proofConfigured = proofMode === 'issuer' || (proofMode === 'rfc3161' ? timestampConfigured : proofMode === 'witness-quorum' ? witnessConfigured : anchorConfigured);
   const rpc = rpcChainIds === undefined ? 'unknown' : chains.some(id => rpcChainIds.includes(id)) ? 'configured' : 'unavailable';
+  const solanaRpcConfigured = Boolean(solanaTransaction && rpcChainIds?.includes(0));
+  const guardedJupiterReason = !guardedJupiterConfigured ? 'NOT_CONFIGURED'
+    : !solanaTransaction ? 'SOLANA_PROFILE_UNAVAILABLE'
+      : !solanaRpcConfigured ? 'SOLANA_RPC_UNAVAILABLE'
+        : !keyConfigured ? 'ISSUER_UNAVAILABLE'
+          : !proofConfigured ? 'PRE_EXECUTION_PROOF_UNAVAILABLE'
+            : storage !== 'available' ? 'STORAGE_UNAVAILABLE'
+              : 'READY';
   return {
     schema: 'priorseal.capabilities.v1', issuer, audience,
     payments: { x402: { configured: Boolean(x402), networks: x402 ? X402_STAGING_NETWORKS
       .filter(network => x402.networks.includes(network.network) && (network.family === 'evm' ? Boolean(x402.payTo) : Boolean(x402.solanaPayTo)))
-      .map(({ family, network, chainId, name, asset, assetName }) => ({ family, network, chainId, name, asset, assetName })) : [], routes: x402?.routes.map(({ method, path, description, price }) => ({ method, path, description, price })) ?? [] }, agentCredits: { configured: Boolean(agentMeter), creditUnitUsd: agentMeter?.config.creditUnitUsd ?? null, credentialHeader: agentMeter ? 'x-priorseal-agent-key' : null, accountStatusPath: agentMeter ? '/v1/agent-accounts/self' : null, usagePath: agentMeter ? '/v1/agent-accounts/self/usage' : null, routes: agentMeter?.routes.map(({ routeId, method, path, credits, priceUsd }) => ({ routeId, method, path, credits, priceUsd })) ?? [] } },
+      .map(({ family, network, chainId, name, asset, assetName }) => ({ family, network, chainId, name, asset, assetName })) : [], routes: x402?.routes.map(({ method, path, description, price }) => ({ method, path, description, price })) ?? [] }, agentCredits: { configured: Boolean(agentMeter), creditUnitUsd: agentMeter?.config.creditUnitUsd ?? null, credentialHeader: agentMeter ? 'x-priorseal-agent-key' : null, accountStatusPath: agentMeter ? '/v1/agent-accounts/self' : null, usagePath: agentMeter ? '/v1/agent-accounts/self/usage' : null, routes: agentMeter?.routes.map(({ routeId, method, path, credits, priceUsd }) => ({ routeId, method, path, credits, priceUsd })) ?? [] }, selfserveClaim: selfserveClaim ? { configured: true, method: 'POST', path: '/v1/selfserve/claim', chainId: selfserveClaim.config.chainId, asset: selfserveClaim.config.usdcAddress, payTo: selfserveClaim.config.payTo, minPayUsd: selfserveClaim.config.minPayUsd, creditUnitUsd: selfserveClaim.config.creditUnitUsd } : { configured: false } },
     executionProfiles: [...(transfer ? ['priorseal.intent.v1'] : []), ...(exactCall ? ['priorseal.execution-profile.exact-call.v1'] : []), ...(erc4337 ? ['priorseal.execution-profile.erc4337-user-operation.v1'] : []), ...(solanaTransaction ? ['priorseal.execution-profile.solana-transaction.v2'] : [])],
     erc4337EntryPoints: erc4337EntryPoints.filter(entry => chains.includes(entry.chainId)),
     safe4337Trust: safe4337Trust.filter(entry => evmChains.includes(entry.chainId)),
@@ -44,5 +53,6 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
     readinessScope: 'Configuration and storage check only; prepare evaluates the actual request policy. RPC/TSA reachability is not probed.',
     checkedAt: Math.floor(now / 1000),
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? 'operator_defined', scope: 'project_uploaded_evidence' },
+    integrations: { guardedJupiter: { enabled: guardedJupiterReason === 'READY', reason: guardedJupiterReason } },
   };
 }

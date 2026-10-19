@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.0 — 2026-10-19
+
+- Add self-serve funding: `selfServeTopup()` composes an on-chain USDC transfer
+  to the deployment payTo, an EIP-191 claim signature from the payer wallet, and
+  the new `POST /v1/selfserve/claim` endpoint into one call that returns a meter
+  account with payment-backed credits and its one-time credential. The transfer
+  callback runs exactly once; claim retries only cover an unseen transaction.
+  The deployment must enable the agent meter, an EVM payTo, and Base mainnet
+  RPC; discoverability is via `capabilities.payments.selfserveClaim`. An agent
+  key remains a credit-spending credential and never carries asset authority.
+
 ## 0.12.0 — 2026-10-19
 
 - Add the Jupiter Guarded Swap adapter for self-paying Solana `ExactIn` Router
