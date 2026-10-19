@@ -4,7 +4,6 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { verifyReceipt } from "../../domain/receipt-verifier.mjs";
 import { isSolanaPublicKey, SOLANA_MAINNET_CAIP2, solanaAuthorizationMessage } from "../../domain/solana.mjs";
-import { SOLANA_NATIVE_WRAPPED_MINT } from "priorseal-sdk";
 import { observeEvm } from "../../infrastructure/blockchain/evm/observer.mjs";
 import { createMemoryStore } from "../../infrastructure/persistence/memory-store.mjs";
 import { createKeyRegistry } from "../../domain/key-registry.mjs";
@@ -34,6 +33,7 @@ const ERROR_STATUS = Object.freeze({ ARCHIVE_UNAUTHORIZED: 401, ARCHIVE_FORBIDDE
 const AGENT_ACCOUNT_ERROR_STATUS = Object.freeze({ AGENT_OPERATOR_CREDENTIAL_INVALID: 403, AGENT_ACCOUNT_INVALID: 400, AGENT_ACCOUNT_NOT_FOUND: 404, AGENT_ACCOUNT_EXISTS: 409, AGENT_IDEMPOTENCY_REQUIRED: 400 });
 const CLAIM_ERROR_STATUS = Object.freeze({ CLAIM_INVALID_REQUEST: 400, CLAIM_SIGNATURE_INVALID: 400, CLAIM_TX_NOT_FOUND: 404, CLAIM_TX_NOT_ACCEPTED: 400, CLAIM_TX_SENDER_MISMATCH: 403, CLAIM_TX_FAILED: 400, CLAIM_BELOW_MINIMUM: 400, CLAIM_ACCOUNT_PREEXISTING: 409, CLAIM_ACCOUNT_REVOKED: 403, CLAIM_CHAIN_UNAVAILABLE: 503 });
 const JUPITER_ERROR_STATUS = Object.freeze({ PREPARED_WIRE_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_SIGNATURE_MISSING: 400, SIGNED_TRANSACTION_SIGNATURE_INVALID: 400, AUTHORIZATION_INTENT_MISMATCH: 403 });
+const WRAPPED_SOL_MINT = "So11111111111111111111111111111111111111112";
 function requester(req, trustProxy) {
   return trustProxy ? String(req.headers["cf-connecting-ip"] ?? "").trim() || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress || "unknown" : req.socket.remoteAddress || "unknown";
 }
@@ -548,7 +548,7 @@ function guardedJupiterPrepareInput(value) {
   if (input.maxAccounts !== void 0 && (typeof input.maxAccounts !== "number" || !Number.isSafeInteger(input.maxAccounts) || input.maxAccounts < 1 || input.maxAccounts > 64)) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter maxAccounts must be an integer from 1 through 64");
   if (input.mode !== void 0 && input.mode !== "standard" && input.mode !== "fast") throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter mode must be standard or fast");
   if (input.minimumOutputAmountAtomic !== void 0 && (!unsignedDecimal(input.minimumOutputAmountAtomic) || input.minimumOutputAmountAtomic === "0")) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter minimumOutputAmountAtomic must be a positive decimal string");
-  const expectedSourceAssetId = `${SOLANA_MAINNET_CAIP2}/${inputMint === SOLANA_NATIVE_WRAPPED_MINT ? "slip44:501" : `spl:${inputMint}`}`;
+  const expectedSourceAssetId = `${SOLANA_MAINNET_CAIP2}/${inputMint === WRAPPED_SOL_MINT ? "slip44:501" : `spl:${inputMint}`}`;
   if (input.sourceAssetId !== void 0 && input.sourceAssetId !== expectedSourceAssetId) throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter sourceAssetId must identify inputMint");
   if (input.contextCommitments !== void 0) assertGuardedJupiterContextCommitments(input.contextCommitments);
   return input;
