@@ -2,7 +2,7 @@
 import { hashJson } from "../domain/hashing.mjs";
 import { SUPPORTED_CHAINS } from "../infrastructure/blockchain/evm/chains.mjs";
 import { X402_STAGING_NETWORKS } from "../infrastructure/payments/x402-exact-evm.mjs";
-async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, x402, agentMeter = null, now }) {
+async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, x402, agentMeter = null, guardedJupiterConfigured = false, now }) {
   let storage = "available";
   try {
     if (store.health) await store.health();
@@ -20,6 +20,8 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
   const chains = [...evmChains, ...solanaTransaction ? [0] : []];
   const proofConfigured = proofMode === "issuer" || (proofMode === "rfc3161" ? timestampConfigured : proofMode === "witness-quorum" ? witnessConfigured : anchorConfigured);
   const rpc = rpcChainIds === void 0 ? "unknown" : chains.some((id) => rpcChainIds.includes(id)) ? "configured" : "unavailable";
+  const solanaRpcConfigured = Boolean(solanaTransaction && rpcChainIds?.includes(0));
+  const guardedJupiterReason = !guardedJupiterConfigured ? "NOT_CONFIGURED" : !solanaTransaction ? "SOLANA_PROFILE_UNAVAILABLE" : !solanaRpcConfigured ? "SOLANA_RPC_UNAVAILABLE" : !keyConfigured ? "ISSUER_UNAVAILABLE" : !proofConfigured ? "PRE_EXECUTION_PROOF_UNAVAILABLE" : storage !== "available" ? "STORAGE_UNAVAILABLE" : "READY";
   return {
     schema: "priorseal.capabilities.v1",
     issuer,
@@ -41,7 +43,8 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
     chainReadiness: chains.map((chainId) => ({ chainId, rpc: rpcChainIds === void 0 ? "unknown" : rpcChainIds.includes(chainId) ? "configured" : "unavailable" })),
     readinessScope: "Configuration and storage check only; prepare evaluates the actual request policy. RPC/TSA reachability is not probed.",
     checkedAt: Math.floor(now / 1e3),
-    archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? "operator_defined", scope: "project_uploaded_evidence" }
+    archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? "operator_defined", scope: "project_uploaded_evidence" },
+    integrations: { guardedJupiter: { enabled: guardedJupiterReason === "READY", reason: guardedJupiterReason } }
   };
 }
 export {
