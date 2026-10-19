@@ -264,6 +264,16 @@ test('Jupiter and Insight HTTP clients validate their responses and keep API key
   assert.doesNotMatch(jupiterUrl, /mode=standard/)
   assert.doesNotMatch(jupiterUrl, /jupiter-secret/)
 
+  const tableFreeRouter = createJupiterRouterClient({
+    apiKey: 'jupiter-secret',
+    baseUrl: 'https://jupiter.test/swap/v2/build',
+    fetch: async () => {
+      const { addressLookupTableAddresses: _legacyTables, ...currentBuild } = build()
+      return json({ ...currentBuild, addressesByLookupTableAddress: null })
+    },
+  })
+  assert.deepEqual((await tableFreeRouter.build(request())).addressLookupTableAddresses, [])
+
   const insight = createInsightSolanaSimulationClient({
     apiKey: 'insight-secret',
     baseUrl: 'https://insight.test',

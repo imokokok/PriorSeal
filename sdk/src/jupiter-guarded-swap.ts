@@ -708,6 +708,9 @@ function readPublicKeys(value: unknown, field: string, max: number): string[] {
  */
 function readAddressLookupTableAddresses(record: Record<string, unknown>): string[] {
   if (record.addressLookupTableAddresses !== undefined) return readPublicKeys(record.addressLookupTableAddresses, 'addressLookupTableAddresses', 32)
+  // Router v2 may explicitly return null when the compiled route needs no
+  // lookup table. Treat it as the empty set, not as a malformed map.
+  if (record.addressesByLookupTableAddress === null) return []
   const tables = asRecord(record.addressesByLookupTableAddress, 'Jupiter addressesByLookupTableAddress')
   const entries = Object.entries(tables)
   if (entries.length > 32) throw new JupiterGuardedSwapError('JUPITER_RESPONSE_INVALID', 'addressesByLookupTableAddress has too many tables')

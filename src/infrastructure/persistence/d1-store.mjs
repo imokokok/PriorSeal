@@ -316,6 +316,11 @@ function createD1Store(database) {
       const row = await first("SELECT * FROM authorizations WHERE authorization_id=?", id);
       return row ? authorizationRecord(row) : void 0;
     },
+    async claimAuthorization(id, txHash) {
+      const row = await first(`UPDATE authorizations SET bound_tx_hash=?,uses=1,status='BOUND' WHERE authorization_id=? AND bound_tx_hash IS NULL AND uses=0 AND status='ACCEPTED' RETURNING *`, txHash, id);
+      if (row) return { ok: true, record: authorizationRecord(row) };
+      return { ok: false, code: await first("SELECT 1 FROM authorizations WHERE authorization_id=?", id) ? "AUTHORIZATION_ALREADY_USED" : "AUTHORIZATION_NOT_FOUND" };
+    },
     async bindAuthorization(id, txHash) {
       const row = await first(`UPDATE authorizations SET bound_tx_hash=COALESCE(bound_tx_hash,?),uses=CASE WHEN bound_tx_hash IS NULL THEN 1 ELSE uses END,status='BOUND' WHERE authorization_id=? AND (bound_tx_hash IS NULL OR bound_tx_hash=?) RETURNING *`, txHash, id, txHash);
       if (row) return { ok: true, record: authorizationRecord(row) };

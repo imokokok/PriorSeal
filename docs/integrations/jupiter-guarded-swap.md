@@ -22,7 +22,10 @@ transaction-signing key.
 - A single `ExactIn` swap on Solana mainnet-beta.
 - A self-paying, one-required-signer transaction: taker, fee payer, PriorSeal
   principal and delegated executor are the same public key.
-- A final legacy, v0 or v1 message whose every program is explicitly allowed.
+- The SDK can validate a final legacy, v0 or v1 message from an integrator
+  compiler whose every program is explicitly allowed. The bundled protected
+  route service deliberately emits **v0 only**; v1 requires an integrator
+  compiler plus reviewed resource-limit calibration before it can be enabled.
 - Insight's `POST /api/v1/execution/solana/simulate` returns a signed,
   successful, unsigned-message simulation receipt for that exact message.
 - PriorSeal observes at confirmed commitment. It does not offer Solana
@@ -87,10 +90,18 @@ The server exposes two no-store routes only when this configuration is present:
 - `POST /v1/jupiter/guarded-swaps/prepare` accepts mint addresses, atomic
   input, wallet and bounded slippage; it returns the prepared package and its
   human-review record.
-- `POST /v1/jupiter/guarded-swaps/submit` accepts that package plus wallet-signed
-  base64 bytes. It revalidates expiry and exact message equality, verifies the
-  one fee-payer signature, then submits through the deployment-owned RPC with
-  no automatic retry.
+- `POST /v1/jupiter/guarded-swaps/submit` accepts the `authorizationId` from
+  the accepted PriorSeal authorization, that package, and wallet-signed base64
+  bytes. It revalidates expiry, binds the serialized message bytes to the
+  reviewed message hash, verifies the one fee-payer signature, then atomically
+  reserves that authorization against the transaction signature before it
+  contacts the deployment-owned RPC. It has no automatic retry.
+
+The route returns `submission: "SUBMITTED"` only when RPC returns the exact
+transaction signature. On transport failure or an inconsistent RPC response it
+returns HTTP 202 with `submission: "UNKNOWN"`; the authorization remains
+consumed and the caller must observe that signature before taking any further
+action. Reposting the same bytes is intentionally not a recovery path.
 
 These routes are intentionally not a policy-editor API. Treat the policy JSON
 as reviewed deployment configuration: version it, apply change control, and
@@ -228,6 +239,10 @@ function before displaying their final confirmation.
    PriorSeal receipt, independently provision the PriorSeal issuer key.
 7. A `PENDING`, `UNDETERMINED`, failed simulation or failed observation does
    not authorize a replacement transaction.
+8. If the protected relay reports `submission: "UNKNOWN"`, observe the exact
+   returned signature. Do not retry, re-sign or replace the transaction: the
+   one-time authorization was already reserved to make ambiguous RPC outcomes
+   fail closed.
 
 ## Testing before a customer pilot
 

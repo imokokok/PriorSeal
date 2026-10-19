@@ -256,7 +256,7 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
     },
     async submit(input: Record<string, unknown>) {
       submittedInput = input;
-      return { signature: '5'.repeat(64) };
+      return { signature: '5'.repeat(64), submission: 'SUBMITTED' as const };
     },
   } as unknown as ServerOptions['guardedJupiter'];
   const server = createHttpServer({ guardedJupiter });
@@ -278,14 +278,21 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
   });
   assert.equal(unknownField.status, 400);
 
-  const submitted = await request(server, '/v1/jupiter/guarded-swaps/submit', {
+  const missingAuthorization = await request(server, '/v1/jupiter/guarded-swaps/submit', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' }),
   });
+  assert.equal(missingAuthorization.status, 400);
+
+  const submitted = await request(server, '/v1/jupiter/guarded-swaps/submit', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ authorizationId: 'jupiter-authorization-1', prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' }),
+  });
   assert.equal(submitted.status, 200);
   assert.equal(submitted.headers['cache-control'], 'no-store');
-  assert.deepEqual(submittedInput, { prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' });
+  assert.deepEqual(submittedInput, { authorizationId: 'jupiter-authorization-1', prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' });
 });
 
 test('guarded Jupiter preparation reports only safe non-JSON upstream diagnostics', async (t) => {

@@ -6,6 +6,7 @@ import { createFileKeyProvider } from "../infrastructure/keys/file-key-provider.
 import { parseKeyRegistryDocument, readFileKeyRegistry } from "../infrastructure/keys/file-key-registry.mjs";
 import { createPostgresStore } from "../infrastructure/persistence/postgres-store.mjs";
 import { createD1Store } from "../infrastructure/persistence/d1-store.mjs";
+import { createMemoryStore } from "../infrastructure/persistence/memory-store.mjs";
 import { createRpcClient } from "../infrastructure/blockchain/evm/rpc-client.mjs";
 import { getRpcUrls, SUPPORTED_CHAINS } from "../infrastructure/blockchain/evm/chains.mjs";
 import { PriorSealError } from "../domain/errors.mjs";
@@ -38,8 +39,9 @@ async function composeRuntime({ config, environment = process.env, database, d1,
   const ownsPool = !database;
   const pool = d1 ? null : database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
   try {
+    if (config.guardedJupiter && config.environment === "production" && !d1 && !pool) throw new TypeError("Production guarded Jupiter swaps require durable authorization storage");
     if (assertSchema && config.environment === "production" && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials), x402Enabled: Boolean(config.x402), agentMeterEnabled: Boolean(config.agentMeter) });
-    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : void 0;
+    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : config.guardedJupiter ? createMemoryStore() : void 0;
     const agentMeter = store ? createAgentMeter(config.agentMeter, store) : null;
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();
@@ -85,7 +87,9 @@ async function composeRuntime({ config, environment = process.env, database, d1,
         return job;
       }
     } : baseObservationWorker;
-    const guardedJupiter = config.guardedJupiter ? createGuardedJupiterSwapService(config.guardedJupiter) : void 0;
+    const guardedJupiter = config.guardedJupiter ? createGuardedJupiterSwapService({ ...config.guardedJupiter, authorizationStore: store ?? (() => {
+      throw new TypeError("Guarded Jupiter swaps require an authorization store");
+    })() }) : void 0;
     const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter((id) => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, agentMeter, selfserveClaim, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === "rfc3161", witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === "witness-quorum", transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, x402: config.x402, guardedJupiter, version: config.buildVersion, staticDir, observer, rateLimiter, logger }) : void 0;
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {

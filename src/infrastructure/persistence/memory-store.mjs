@@ -23,6 +23,9 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
   }
   return {
     archiveRetention: "process_lifetime",
+    async health() {
+      return "memory";
+    },
     async appendX402PaymentLedgerEvent(value) {
       const event = assertX402PaymentLedgerEvent(value);
       const entries = x402PaymentLedger.get(event.ledgerId) ?? /* @__PURE__ */ new Map();
@@ -226,6 +229,15 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
     async getAuthorization(id) {
       const record = authorizations.get(id);
       return record && structuredClone(record);
+    },
+    async claimAuthorization(id, txHash) {
+      const record = authorizations.get(id);
+      if (!record) return { ok: false, code: "AUTHORIZATION_NOT_FOUND" };
+      if (record.boundTxHash || record.uses !== 0 || record.status !== "ACCEPTED") return { ok: false, code: "AUTHORIZATION_ALREADY_USED" };
+      record.boundTxHash = txHash;
+      record.uses = 1;
+      record.status = "BOUND";
+      return { ok: true, record: structuredClone(record) };
     },
     async bindAuthorization(id, txHash) {
       const record = authorizations.get(id);
