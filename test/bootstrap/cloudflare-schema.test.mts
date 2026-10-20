@@ -86,7 +86,7 @@ test('fee-bearing 0x schema readiness requires the durable commercial ledger', a
   const cache = { async match() { return undefined; }, async put() {} } as unknown as Cache;
   const context = { waitUntil(promise: Promise<unknown>) { void promise; } } as ExecutionContext;
   const config = loadRuntimeConfig({
-    ZEROEX_API_KEY: '0x-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_ZEROEX_RPC_URL: 'https://rpc.example',
+    PRIORSEAL_ZEROEX_ENABLED: 'true', ZEROEX_API_KEY: '0x-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_ZEROEX_RPC_URL: 'https://rpc.example',
     PRIORSEAL_ZEROEX_POLICY_JSON: JSON.stringify({ maxInputAmountAtomic: '1000000', maxSlippageBps: 50, allowedInputMints: ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'], allowedProgramIds: ['ComputeBudget111111111111111111111111111111'], computeUnitLimit: 200000, computeUnitPriceMicroLamports: '100', maxComputeUnitLimit: 200000, maxComputeUnitPriceMicroLamports: '100', maxPriorityFeeLamports: '20', authorizationTtlSeconds: 60 }),
     PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: JSON.stringify({ trustedKeys: [{ kty: 'OKP', crv: 'Ed25519', kid: '0x-signing-key-prod-24092026', x: '19P3C981JsyQsqwVho8Tlabx51rslvdruSH59mGuWn0' }] }),
     PRIORSEAL_ZEROEX_TENANTS_JSON: JSON.stringify({ schema: 'priorseal.zeroex-tenant-policy-set.v1', defaultTenantId: 'public', tenants: [{ tenantId: 'public' }, { tenantId: 'partner-a', agentAccountId: 'agent-partner-a', commercialFee: { profileId: 'partner-a-usdc-10bps', inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', feePpm: 1000, recipientTokenAccount: 'FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq', side: 'sell' } }] }),
