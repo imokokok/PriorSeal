@@ -1,0 +1,45 @@
+.jupiter-pilot-intake { min-height: 100vh; padding: 0 clamp(22px, 5vw, 88px); color: var(--ink); background: var(--stone); }
+.jupiter-pilot-intake__nav { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--ink); }
+.jupiter-pilot-intake__brand { display: inline-flex; align-items: center; gap: 11px; font-weight: 700; letter-spacing: -.03em; }
+.jupiter-pilot-intake__brand svg { width: 36px; height: 36px; color: var(--wine); }
+.jupiter-pilot-intake__brand span { display: grid; gap: 3px; font-size: 17px; }
+.jupiter-pilot-intake__brand small, .jupiter-pilot-intake__nav > div, .jupiter-pilot-intake__eyebrow, .jupiter-pilot-intake__form-heading span, .jupiter-pilot-intake__guide > span, .jupiter-pilot-intake__result span { color: var(--muted); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.jupiter-pilot-intake__nav > div { display: flex; gap: 18px; }
+.jupiter-pilot-intake__nav > div a:hover, .jupiter-pilot-intake__footer a:hover { color: var(--wine); }
+.jupiter-pilot-intake__hero { max-width: 990px; padding: clamp(58px, 10vw, 140px) 0 82px; border-bottom: 1px solid var(--ink); }
+.jupiter-pilot-intake__eyebrow { margin: 0 0 18px; color: var(--wine); }
+.jupiter-pilot-intake h1 { margin: 0; font: 400 clamp(48px, 7vw, 99px)/.92 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.065em; outline: none; }
+.jupiter-pilot-intake h1 em { color: var(--wine); font-weight: 400; }
+.jupiter-pilot-intake__hero > p:last-child { max-width: 740px; margin: 28px 0 0; color: var(--graphite); font-size: clamp(16px, 1.6vw, 20px); line-height: 1.58; }
+.jupiter-pilot-intake__content { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); border-bottom: 1px solid var(--ink); }
+.jupiter-pilot-intake form { padding: clamp(42px, 7vw, 88px) clamp(28px, 5vw, 76px) clamp(52px, 7vw, 88px) 0; }
+.jupiter-pilot-intake__form-heading { margin-bottom: 32px; }
+.jupiter-pilot-intake__form-heading span, .jupiter-pilot-intake__guide > span, .jupiter-pilot-intake__result span { color: var(--wine); }
+.jupiter-pilot-intake h2 { max-width: 600px; margin: 14px 0 0; font: 400 clamp(29px, 3vw, 45px)/1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.045em; }
+.jupiter-pilot-intake label { display: grid; gap: 8px; margin-top: 21px; color: var(--graphite); font: 600 11px "JetBrains Mono", monospace; letter-spacing: .05em; text-transform: uppercase; }
+.jupiter-pilot-intake input, .jupiter-pilot-intake select, .jupiter-pilot-intake textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--ink); border-radius: 0; color: var(--ink); background: var(--porcelain); font: 400 15px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: 0; text-transform: none; }
+.jupiter-pilot-intake input, .jupiter-pilot-intake select { min-height: 47px; padding: 10px 12px; }
+.jupiter-pilot-intake textarea { min-height: 132px; padding: 12px; resize: vertical; }
+.jupiter-pilot-intake input:focus, .jupiter-pilot-intake select:focus, .jupiter-pilot-intake textarea:focus { outline: 3px solid color-mix(in srgb, var(--wine) 35%, transparent); outline-offset: 2px; }
+.jupiter-pilot-intake__fields { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
+.jupiter-pilot-intake__notice { padding: 16px; margin: 27px 0 0; color: var(--graphite); background: #f3e7df; border-left: 3px solid var(--wine); font-size: 14px; line-height: 1.55; }
+.jupiter-pilot-intake__error { padding: 13px 16px; margin: 16px 0 0; color: #742e25; background: #f6ded9; border: 1px solid currentColor; font-size: 14px; line-height: 1.5; }
+.jupiter-pilot-intake button, .jupiter-pilot-intake__result-actions a { min-height: 48px; padding: 0 17px; display: inline-flex; align-items: center; justify-content: center; gap: 14px; border: 1px solid var(--wine); color: var(--porcelain); background: var(--wine); font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+.jupiter-pilot-intake form > button { margin-top: 23px; }
+.jupiter-pilot-intake button:hover { border-color: var(--wine-dark); background: var(--wine-dark); }
+.jupiter-pilot-intake__guide { padding: clamp(42px, 7vw, 88px) 0 clamp(52px, 7vw, 88px) clamp(28px, 5vw, 76px); border-left: 1px solid var(--ink); }
+.jupiter-pilot-intake__guide dl { margin: 25px 0 0; border-top: 1px solid var(--ink); }
+.jupiter-pilot-intake__guide dl div { padding: 17px 0; border-bottom: 1px solid var(--rule); }
+.jupiter-pilot-intake__guide dt { color: var(--muted); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.jupiter-pilot-intake__guide dd { margin: 9px 0 0; color: var(--graphite); font-size: 15px; line-height: 1.52; }
+.jupiter-pilot-intake__guide > p { margin: 26px 0 0; color: var(--graphite); font-size: 14px; line-height: 1.62; }
+.jupiter-pilot-intake__result { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); gap: 34px; padding: clamp(42px, 7vw, 82px) 0; border-bottom: 1px solid var(--ink); }
+.jupiter-pilot-intake__result h2 { margin-top: 14px; }
+.jupiter-pilot-intake__result p { max-width: 665px; color: var(--graphite); font-size: 15px; line-height: 1.62; }
+.jupiter-pilot-intake__result-actions { display: grid; align-content: start; gap: 12px; }
+.jupiter-pilot-intake__result-actions a { color: var(--ink); background: transparent; border-color: var(--ink); }
+.jupiter-pilot-intake__result-actions a:hover { color: var(--porcelain); background: var(--ink); }
+.jupiter-pilot-intake__result textarea { grid-column: 1 / -1; min-height: 278px; background: var(--porcelain); }
+.jupiter-pilot-intake__footer { min-height: 110px; display: flex; align-items: center; flex-wrap: wrap; gap: 22px; color: var(--muted); font: 600 11px "JetBrains Mono", monospace; letter-spacing: .05em; text-transform: uppercase; }
+@media (max-width: 780px) { .jupiter-pilot-intake__content, .jupiter-pilot-intake__result { grid-template-columns: 1fr; } .jupiter-pilot-intake form { padding-right: 0; } .jupiter-pilot-intake__guide { padding-left: 0; border-top: 1px solid var(--ink); border-left: 0; } }
+@media (max-width: 560px) { .jupiter-pilot-intake__nav { min-height: 72px; } .jupiter-pilot-intake__brand small { display: none; } .jupiter-pilot-intake__nav > div { gap: 12px; } .jupiter-pilot-intake__fields { grid-template-columns: 1fr; gap: 0; } .jupiter-pilot-intake__footer { padding: 24px 0; align-items: flex-start; flex-direction: column; gap: 16px; } }
