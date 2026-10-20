@@ -25,6 +25,7 @@ import { loadRuntimeConfig } from './runtime-config.mjs';
 import { createAgentMeter } from '../application/commerce/agent-meter.mjs';
 import { createSelfserveClaim } from '../application/commerce/selfserve-claim.mjs';
 import { createGuardedJupiterSwapService } from '../application/jupiter/guarded-swap-service.mjs';
+import { createGuardedZeroExSwapService } from '../application/zeroex/guarded-swap-service.mjs';
 import type { PoolConfig } from 'pg';
 import type { ObservationJob, ObservationWorkInput } from '../application/observations/observation-worker.mjs';
 import type { AuthorizationAcceptance } from '../domain/authorization.mjs';
@@ -49,12 +50,12 @@ async function composeRuntime({ config, environment = process.env, database, d1,
   const ownsPool = !database;
   const pool = d1 ? null : database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
   try {
-    if (config.guardedJupiter && config.environment === 'production' && !d1 && !pool) throw new TypeError('Production guarded Jupiter swaps require durable authorization storage');
+    if ((config.guardedJupiter || config.guardedZeroEx) && config.environment === 'production' && !d1 && !pool) throw new TypeError('Production guarded swaps require durable authorization storage');
     if (assertSchema && config.environment === 'production' && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials), x402Enabled: Boolean(config.x402), agentMeterEnabled: Boolean(config.agentMeter) });
     // The protected relay and HTTP authorization endpoint must share one store.
     // A non-production no-database runtime gets a single in-memory store rather
     // than silently accepting authorizations that the relay cannot read.
-    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : config.guardedJupiter ? createMemoryStore() : undefined;
+    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : (config.guardedJupiter || config.guardedZeroEx) ? createMemoryStore() : undefined;
     const agentMeter = store ? createAgentMeter(config.agentMeter, store) : null;
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();
@@ -108,7 +109,8 @@ async function composeRuntime({ config, environment = process.env, database, d1,
       },
     } : baseObservationWorker;
     const guardedJupiter = config.guardedJupiter ? createGuardedJupiterSwapService({ ...config.guardedJupiter, authorizationStore: store ?? (() => { throw new TypeError('Guarded Jupiter swaps require an authorization store'); })() }) : undefined;
-    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, agentMeter, selfserveClaim, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, x402: config.x402, guardedJupiter, version: config.buildVersion, staticDir, observer, rateLimiter, logger }) : undefined;
+    const guardedZeroEx = config.guardedZeroEx ? createGuardedZeroExSwapService({ ...config.guardedZeroEx, authorizationStore: store ?? (() => { throw new TypeError('Guarded 0x swaps require an authorization store'); })() }) : undefined;
+    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, agentMeter, selfserveClaim, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, x402: config.x402, guardedJupiter, guardedZeroEx, version: config.buildVersion, staticDir, observer, rateLimiter, logger }) : undefined;
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {});

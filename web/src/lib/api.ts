@@ -1,5 +1,5 @@
 import { createPriorSealClient, validatePriorSealResponse, type DeploymentCapabilities } from 'priorseal-sdk'
-import type { GuardedJupiterSwapReview, PreparedGuardedJupiterSwap } from 'priorseal-sdk'
+import type { GuardedJupiterSwapReview, GuardedZeroExSwapReview, PreparedGuardedJupiterSwap, PreparedGuardedZeroExSwap } from 'priorseal-sdk'
 
 export const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
@@ -42,6 +42,27 @@ export function prepareGuardedJupiterSwap(input: GuardedJupiterPrepareInput) {
 
 export function submitGuardedJupiterSwap(input: { authorizationId: string; prepared: PreparedGuardedJupiterSwap; signedTransactionBase64: string }) {
   return consoleRequest<{ signature: string; submission: 'SUBMITTED' | 'UNKNOWN' }>('/v1/jupiter/guarded-swaps/submit', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+  })
+}
+
+export type GuardedZeroExPrepareInput = {
+  inputMint: string
+  outputMint: string
+  amount: string
+  taker: string
+  slippageBps: number
+  minimumOutputAmountAtomic?: string
+}
+
+export function prepareGuardedZeroExSwap(input: GuardedZeroExPrepareInput) {
+  return consoleRequest<{ prepared: PreparedGuardedZeroExSwap; review: GuardedZeroExSwapReview }>('/v1/0x/guarded-swaps/prepare', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+  })
+}
+
+export function submitGuardedZeroExSwap(input: { authorizationId: string; prepared: PreparedGuardedZeroExSwap; signedTransactionBase64: string }) {
+  return consoleRequest<{ signature: string; submission: 'SUBMITTED' | 'UNKNOWN' }>('/v1/0x/guarded-swaps/submit', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
   })
 }

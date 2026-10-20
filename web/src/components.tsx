@@ -48,17 +48,18 @@ const nav: NavigationItem[] = [
   { index: '04', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Execute' },
   { index: '05', key: 'exact-call', label: 'Exact-call authorization', to: '/app/intents/exact-call', group: 'Integrations' },
   { index: '06', key: 'jupiter', label: 'Guarded Jupiter swap', to: '/app/jupiter-guarded-swap', group: 'Integrations', disabled: (capabilities) => !capabilities?.integrations?.guardedJupiter.enabled },
-  { index: '07', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence & trust' },
-  { index: '08', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence & trust' },
-  { index: '09', key: 'verify', label: 'Verify receipt', to: '/app/verify', group: 'Evidence & trust' },
-  { index: '10', key: 'archive', label: 'Project archive', to: '/app/archive', group: 'Evidence & trust', visible: (capabilities) => Boolean(capabilities?.archive.enabled) },
-  { index: '11', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Evidence & trust' },
-  { index: '12', key: 'sdk', label: 'SDK integration', to: '/app/sdk', group: 'Build' },
-  { index: '13', key: 'api', label: 'API reference', to: '/app/api', group: 'Build' },
-  { index: '14', key: 'mcp', label: 'MCP integration', to: '/integrations/mcp', group: 'Build' },
+  { index: '07', key: 'zeroex', label: 'Guarded 0x swap', to: '/app/0x-guarded-swap', group: 'Integrations', disabled: (capabilities) => !capabilities?.integrations?.guardedZeroEx?.enabled },
+  { index: '08', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence & trust' },
+  { index: '09', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence & trust' },
+  { index: '10', key: 'verify', label: 'Verify receipt', to: '/app/verify', group: 'Evidence & trust' },
+  { index: '11', key: 'archive', label: 'Project archive', to: '/app/archive', group: 'Evidence & trust', visible: (capabilities) => Boolean(capabilities?.archive.enabled) },
+  { index: '12', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Evidence & trust' },
+  { index: '13', key: 'sdk', label: 'SDK integration', to: '/app/sdk', group: 'Build' },
+  { index: '14', key: 'api', label: 'API reference', to: '/app/api', group: 'Build' },
+  { index: '15', key: 'mcp', label: 'MCP integration', to: '/integrations/mcp', group: 'Build' },
   ...(import.meta.env.DEV ? [
-    { index: '15', key: 'erc4337-pilot', label: 'Safe 4337 pilot', to: '/app/erc4337-pilot', group: 'Experimental' },
-    { index: '16', key: 'eip7702-pilot', label: 'MetaMask 7702 pilot', to: '/app/eip7702-pilot', group: 'Experimental' },
+    { index: '16', key: 'erc4337-pilot', label: 'Safe 4337 pilot', to: '/app/erc4337-pilot', group: 'Experimental' },
+    { index: '17', key: 'eip7702-pilot', label: 'MetaMask 7702 pilot', to: '/app/eip7702-pilot', group: 'Experimental' },
   ] : []),
 ]
 
@@ -67,8 +68,8 @@ function matchesNavigation(item: NavigationItem, pathname: string) {
 }
 
 function unavailableNavigationDetail(item: NavigationItem, capabilities: Capabilities | null) {
-  if (item.key !== 'jupiter') return ''
-  const reason = capabilities?.integrations?.guardedJupiter.reason
+  if (item.key !== 'jupiter' && item.key !== 'zeroex') return ''
+  const reason = item.key === 'jupiter' ? capabilities?.integrations?.guardedJupiter.reason : capabilities?.integrations?.guardedZeroEx?.reason
   if (!capabilities) return 'Checking deployment setup'
   if (reason === 'SOLANA_PROFILE_UNAVAILABLE') return 'Solana authorization is not configured'
   if (reason === 'SOLANA_RPC_UNAVAILABLE') return 'Solana RPC is not configured'

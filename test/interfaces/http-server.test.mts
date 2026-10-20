@@ -45,6 +45,7 @@ type HttpTestResponse = {
   x402Support: boolean;
   x402: { payTo: string; networks: string[] };
   active: boolean;
+  provider: string;
 };
 type RequestOptions = {
   method?: string;
@@ -353,6 +354,73 @@ test('guarded Jupiter policy violations are explicit 403 responses', async (t) =
   assert.equal(body.error.code, 'INPUT_AMOUNT_EXCEEDS_POLICY');
   assert.equal(body.error.message, 'The requested input amount exceeds the policy limit');
   assert.match(body.error.requestId, /^[0-9a-f-]{36}$/);
+});
+
+test('guarded 0x routes keep provider credentials and submission behind the server boundary', async (t) => {
+  let preparedInput: Record<string, unknown> | undefined;
+  let submittedInput: Record<string, unknown> | undefined;
+  const guardedZeroEx = {
+    async prepare(input: Record<string, unknown>) {
+      preparedInput = input;
+      return { prepared: { schema: 'priorseal.zeroex-guarded-swap.v1', request: input }, review: { schema: 'priorseal.zeroex-guarded-swap-review.v1' } };
+    },
+    async submit(input: Record<string, unknown>) {
+      submittedInput = input;
+      return { signature: '6'.repeat(64), submission: 'SUBMITTED' as const };
+    },
+  } as unknown as ServerOptions['guardedZeroEx'];
+  const server = createHttpServer({ guardedZeroEx });
+  t.after(() => server.close());
+
+  const prepared = await request(server, '/v1/0x/guarded-swaps/prepare', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 }),
+  });
+  assert.equal(prepared.status, 201);
+  assert.deepEqual(preparedInput, { inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 });
+  const unknownField = await request(server, '/v1/0x/guarded-swaps/prepare', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50, zeroExApiKey: 'never-accepted' }),
+  });
+  assert.equal(unknownField.status, 400);
+  const submitted = await request(server, '/v1/0x/guarded-swaps/submit', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ authorizationId: 'zeroex-authorization-1', prepared: { schema: 'priorseal.zeroex-guarded-swap.v1' }, signedTransactionBase64: 'AQID' }),
+  });
+  assert.equal(submitted.status, 200);
+  assert.deepEqual(submittedInput, { authorizationId: 'zeroex-authorization-1', prepared: { schema: 'priorseal.zeroex-guarded-swap.v1' }, signedTransactionBase64: 'AQID' });
+});
+
+test('unified guarded Solana routes bind an explicit provider at preparation and infer it from the prepared schema at submission', async (t) => {
+  const calls: Array<{ provider: string; operation: string; input: Record<string, unknown> }> = [];
+  const guardedJupiter = {
+    async prepare(input: Record<string, unknown>) { calls.push({ provider: 'jupiter', operation: 'prepare', input }); return { prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, review: {} }; },
+    async submit(input: Record<string, unknown>) { calls.push({ provider: 'jupiter', operation: 'submit', input }); return { signature: 'jupiter-signature', submission: 'SUBMITTED' as const }; },
+  } as unknown as ServerOptions['guardedJupiter'];
+  const guardedZeroEx = {
+    async prepare(input: Record<string, unknown>) { calls.push({ provider: '0x', operation: 'prepare', input }); return { prepared: { schema: 'priorseal.zeroex-guarded-swap.v1' }, review: {}, tenantId: 'public' }; },
+    async submit(input: Record<string, unknown>) { calls.push({ provider: '0x', operation: 'submit', input }); return { signature: 'zeroex-signature', submission: 'SUBMITTED' as const }; },
+  } as unknown as ServerOptions['guardedZeroEx'];
+  const server = createHttpServer({ guardedJupiter, guardedZeroEx });
+  t.after(() => server.close());
+
+  const prepared = await request(server, '/v1/solana/guarded-swaps/prepare', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ provider: '0x', inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50, maxAccounts: 12, mode: 'standard' }),
+  });
+  assert.equal(prepared.status, 201);
+  assert.equal(prepared.json().provider, '0x');
+  assert.deepEqual(calls[0], { provider: '0x', operation: 'prepare', input: { inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 } });
+
+  const submitted = await request(server, '/v1/solana/guarded-swaps/submit', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ authorizationId: 'zeroex-authorization-1', prepared: { schema: 'priorseal.zeroex-guarded-swap.v1' }, signedTransactionBase64: 'AQID' }),
+  });
+  assert.equal(submitted.status, 200);
+  assert.equal(submitted.json().provider, '0x');
+  assert.equal(calls[1]?.provider, '0x');
+  const rejected = await request(server, '/v1/solana/guarded-swaps/prepare', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'untrusted', inputMint: 'USDC', outputMint: 'SOL', amount: '1', taker: 'wallet', slippageBps: 1 }) });
+  assert.equal(rejected.status, 400);
 });
 test('x402 Monad mainnet is advertised, verified, and settled through the HTTP lifecycle', async (t) => {
   const originalFetch = globalThis.fetch;

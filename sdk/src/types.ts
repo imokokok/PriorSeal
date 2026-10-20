@@ -417,6 +417,11 @@ export type DeploymentCapabilities = {
       enabled: boolean
       reason: 'READY' | 'NOT_CONFIGURED' | 'SOLANA_PROFILE_UNAVAILABLE' | 'SOLANA_RPC_UNAVAILABLE' | 'ISSUER_UNAVAILABLE' | 'PRE_EXECUTION_PROOF_UNAVAILABLE' | 'STORAGE_UNAVAILABLE'
     }
+    /** Optional during the 0x capability-schema rollout. */
+    guardedZeroEx?: {
+      enabled: boolean
+      reason: 'READY' | 'NOT_CONFIGURED' | 'SOLANA_PROFILE_UNAVAILABLE' | 'SOLANA_RPC_UNAVAILABLE' | 'ISSUER_UNAVAILABLE' | 'PRE_EXECUTION_PROOF_UNAVAILABLE' | 'STORAGE_UNAVAILABLE'
+    }
   }
   payments?: {
     x402: { configured: boolean; networks: { family: string; network: string; chainId: number; name: string; asset: string; assetName: string }[]; routes: { method: string; path: string; description: string; price: string }[] }
