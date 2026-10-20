@@ -146,6 +146,14 @@ test("runtime configuration enables guarded 0x only after explicit activation an
     policy: JSON.parse(policy),
     responseSignature: JSON.parse(responseSigningKeys)
   });
+  assert.equal(loadRuntimeConfig({
+    PRIORSEAL_ZEROEX_ENABLED: "true",
+    ZEROEX_API_KEY: "0x-secret",
+    INSIGHT_API_KEY: "insight-secret",
+    PRIORSEAL_RPC_SOLANA_MAINNET: "https://helius.example",
+    PRIORSEAL_ZEROEX_POLICY_JSON: policy,
+    PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys
+  }).guardedZeroEx?.rpcUrl, "https://helius.example");
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret" }), /require ZEROEX_API_KEY/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "http://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys }), /must use HTTPS/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: "[]", PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys }), /must be an object/);

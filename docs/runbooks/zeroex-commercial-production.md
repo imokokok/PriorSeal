@@ -43,10 +43,13 @@ records.
    While this switch is false, the runtime ignores all staged 0x values and
    cannot expose guarded 0x routes. Then set the protected 0x configuration
    only in the deployment secret store: `ZEROEX_API_KEY`, `INSIGHT_API_KEY`,
-   `PRIORSEAL_ZEROEX_RPC_URL`, `PRIORSEAL_ZEROEX_POLICY_JSON`, and
-   `PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON`. Do not put a fee in the base
-   policy; use `PRIORSEAL_ZEROEX_TENANTS_JSON` instead. Pin the 0x response
-   signing keys from the approved provider key-rotation process.
+   `PRIORSEAL_ZEROEX_POLICY_JSON`, and
+   `PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON`. Reuse the reviewed
+   `PRIORSEAL_RPC_SOLANA_MAINNET` endpoint or set a dedicated
+   `PRIORSEAL_ZEROEX_RPC_URL`; the dedicated value takes precedence. Do not put
+   a fee in the base policy; use `PRIORSEAL_ZEROEX_TENANTS_JSON` instead. Pin
+   the 0x response signing keys from the approved provider key-rotation
+   process.
 4. In a separately reviewed release, set `PRIORSEAL_ZEROEX_ENABLED=true` only
    after the complete configuration, tenant binding, metered route, recipient
    account, and schema checks have passed. An incomplete enabled configuration

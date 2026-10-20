@@ -38,17 +38,20 @@ before it asks Insight to simulate or a wallet to sign.
 
 ## Deployment configuration
 
-The integration is disabled unless `PRIORSEAL_ZEROEX_ENABLED=true` and all five
-required server-side variables are set together. When the switch is omitted or
-`false`, the runtime intentionally ignores every 0x value, including malformed
-staged JSON; this permits safe staged configuration without making the service
-available. Do not expose either API key in `VITE_*`, browser JavaScript, logs,
-prepared packages, or agent prompts.
+The integration is disabled unless `PRIORSEAL_ZEROEX_ENABLED=true` and the
+complete protected configuration is present. The Solana RPC may be the
+dedicated `PRIORSEAL_ZEROEX_RPC_URL` or the already-configured shared
+`PRIORSEAL_RPC_SOLANA_MAINNET`; the dedicated value takes precedence. When the
+switch is omitted or `false`, the runtime intentionally ignores every 0x value,
+including malformed staged JSON; this permits safe staged configuration without
+making the service available. Do not expose either API key in `VITE_*`, browser
+JavaScript, logs, prepared packages, or agent prompts.
 
 ```bash
 PRIORSEAL_ZEROEX_ENABLED=true
 ZEROEX_API_KEY=...
 INSIGHT_API_KEY=...
+# Optional when PRIORSEAL_RPC_SOLANA_MAINNET already contains the reviewed production endpoint.
 PRIORSEAL_ZEROEX_RPC_URL=https://your-reviewed-solana-rpc.example
 PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON='{
   "trustedKeys":[{
@@ -75,7 +78,9 @@ PRIORSEAL_ZEROEX_POLICY_JSON='{
 ```
 
 `INSIGHT_API_KEY` can be shared with the guarded Jupiter integration, but
-`ZEROEX_API_KEY`, the RPC URL and the policy are independent. Optional
+`ZEROEX_API_KEY` and the policy are independent. The RPC may reuse
+`PRIORSEAL_RPC_SOLANA_MAINNET` or use a dedicated `PRIORSEAL_ZEROEX_RPC_URL`.
+Optional
 `PRIORSEAL_ZEROEX_ROUTER_BASE_URL` and
 `PRIORSEAL_ZEROEX_INSIGHT_BASE_URL` are HTTPS-only test or approved service
 overrides.

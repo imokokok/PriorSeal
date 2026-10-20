@@ -111,13 +111,13 @@ function guardedZeroExConfig(environment) {
   if (!booleanValue(environment.PRIORSEAL_ZEROEX_ENABLED, "PRIORSEAL_ZEROEX_ENABLED", false)) return void 0;
   const zeroExApiKey = optionalValue(environment.ZEROEX_API_KEY);
   const insightApiKey = optionalValue(environment.INSIGHT_API_KEY);
-  const rpcUrl = optionalValue(environment.PRIORSEAL_ZEROEX_RPC_URL);
+  const rpcUrl = optionalValue(environment.PRIORSEAL_ZEROEX_RPC_URL) ?? optionalValue(environment.PRIORSEAL_RPC_SOLANA_MAINNET);
   const policy = optionalJson(environment.PRIORSEAL_ZEROEX_POLICY_JSON, "PRIORSEAL_ZEROEX_POLICY_JSON");
   const responseSignatureConfig = optionalJson(environment.PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON, "PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON");
   const tenantPolicyConfig = optionalJson(environment.PRIORSEAL_ZEROEX_TENANTS_JSON, "PRIORSEAL_ZEROEX_TENANTS_JSON");
   if (!zeroExApiKey && !rpcUrl && !policy && !responseSignatureConfig && !tenantPolicyConfig) return void 0;
-  if (!zeroExApiKey || !insightApiKey || !rpcUrl || !policy || !responseSignatureConfig) throw new TypeError("Guarded 0x swaps require ZEROEX_API_KEY, INSIGHT_API_KEY, PRIORSEAL_ZEROEX_RPC_URL, PRIORSEAL_ZEROEX_POLICY_JSON, and PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON together");
-  if (!rpcUrl || new URL(rpcUrl).protocol !== "https:") throw new TypeError("PRIORSEAL_ZEROEX_RPC_URL must use HTTPS");
+  if (!zeroExApiKey || !insightApiKey || !rpcUrl || !policy || !responseSignatureConfig) throw new TypeError("Guarded 0x swaps require ZEROEX_API_KEY, INSIGHT_API_KEY, an HTTPS Solana RPC (PRIORSEAL_ZEROEX_RPC_URL or PRIORSEAL_RPC_SOLANA_MAINNET), PRIORSEAL_ZEROEX_POLICY_JSON, and PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON together");
+  if (!rpcUrl || new URL(rpcUrl).protocol !== "https:") throw new TypeError("The guarded 0x Solana RPC must use HTTPS");
   if (!policy || typeof policy !== "object" || Array.isArray(policy)) throw new TypeError("PRIORSEAL_ZEROEX_POLICY_JSON must be an object");
   const responseSignature = parseZeroExResponseSignatureConfiguration(responseSignatureConfig);
   const tenantPolicies = parseGuardedZeroExTenantPolicySet(tenantPolicyConfig, policy);
