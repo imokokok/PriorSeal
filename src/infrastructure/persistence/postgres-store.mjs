@@ -6,6 +6,7 @@ import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from "../../domain/merkle-log.mjs";
 import { assertReceiptIdentity } from "./receipt-identity.mjs";
 import { assertX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
+import { assertZeroExCommercialLedgerEvent } from "../../domain/zeroex-commercial-ledger.mjs";
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedTimestamp, persistedWorkerObservation } from "./persisted-records.mjs";
 function agentAccountState(row) {
   return { accountId: row.account_id, provisionedCredits: String(row.provisioned_credits), remainingCredits: String(row.remaining_credits), status: row.status };
@@ -44,6 +45,19 @@ function createPostgresStore(pool) {
       if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError("Invalid x402 payment ledger identifier");
       const result = await pool.query("SELECT event_json FROM x402_payment_ledger_events WHERE ledger_id=$1 ORDER BY occurred_at,CASE event_type WHEN 'PAYMENT_AUTHORIZED' THEN 0 WHEN 'REFUND_RECORDED' THEN 2 ELSE 1 END,event_id", [ledgerId]);
       return result.rows.map((row) => assertX402PaymentLedgerEvent(persistedJson(row.event_json, "x402 payment ledger event")));
+    },
+    async appendZeroExCommercialLedgerEvent(value) {
+      const event = assertZeroExCommercialLedgerEvent(value);
+      const result = await pool.query("INSERT INTO zeroex_commercial_ledger_events (event_id,ledger_id,tenant_id,authorization_id,intent_hash,message_hash,transaction_signature,event_type,occurred_at,fee_profile_id,fee_mint,fee_ppm,recipient_token_account,expected_fee_atomic,event_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT (event_id) DO NOTHING RETURNING event_json", [event.eventId, event.ledgerId, event.commercial.tenantId, event.authorizationId, event.intentHash, event.messageHash, event.transactionSignature, event.type, event.occurredAt, event.commercial.fee.profileId, event.commercial.fee.mint, event.commercial.fee.feePpm, event.commercial.fee.recipientTokenAccount, event.commercial.fee.expectedAmountAtomic, event]);
+      if (result.rows[0]) return assertZeroExCommercialLedgerEvent(persistedJson(result.rows[0].event_json, "0x commercial ledger event"));
+      const existing = await pool.query("SELECT event_json FROM zeroex_commercial_ledger_events WHERE event_id=$1", [event.eventId]);
+      if (!existing.rows[0]) throw new Error("0x commercial ledger event disappeared during insert");
+      return assertZeroExCommercialLedgerEvent(persistedJson(existing.rows[0].event_json, "0x commercial ledger event"));
+    },
+    async listZeroExCommercialLedgerEvents(ledgerId) {
+      if (!/^zcl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError("Invalid 0x commercial ledger identifier");
+      const result = await pool.query("SELECT event_json FROM zeroex_commercial_ledger_events WHERE ledger_id=$1 ORDER BY occurred_at,CASE event_type WHEN 'RELAY_ATTEMPTED' THEN 0 ELSE 1 END,event_id", [ledgerId]);
+      return result.rows.map((row) => assertZeroExCommercialLedgerEvent(persistedJson(row.event_json, "0x commercial ledger event")));
     },
     async provisionAgentMeterAccount(input) {
       await pool.query(`INSERT INTO agent_meter_accounts (account_id,credential_hash,provisioned_credits,remaining_credits,status) VALUES ($1,$2,$3,$3,$4) ON CONFLICT(account_id) DO UPDATE SET remaining_credits=agent_meter_accounts.remaining_credits+GREATEST(0,EXCLUDED.provisioned_credits-agent_meter_accounts.provisioned_credits),provisioned_credits=GREATEST(agent_meter_accounts.provisioned_credits,EXCLUDED.provisioned_credits)`, [input.accountId, input.credentialHash, input.provisionedCredits, input.status]);

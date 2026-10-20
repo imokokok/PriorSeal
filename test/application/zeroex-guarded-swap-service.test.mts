@@ -5,6 +5,7 @@ import { Keypair, VersionedTransaction } from '@solana/web3.js'
 import { SOLANA_COMPUTE_BUDGET_PROGRAM, ZeroExGuardedSwapError } from '../../sdk/dist/index.js'
 import { createGuardedZeroExSwapService, type GuardedZeroExAuthorizationRecord } from '../../src/application/zeroex/guarded-swap-service.mjs'
 import { createJupiterV0Compiler } from '../../src/application/jupiter/guarded-swap-service.mjs'
+import { hashJson } from '../../src/domain/hashing.mjs'
 
 const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const WRAPPED_SOL = 'So11111111111111111111111111111111111111112'
@@ -58,9 +59,11 @@ test('guarded 0x relay consumes only the exact authorization bound to the wallet
   const signing = await signingMaterial()
   let sent = 0
   let record: GuardedZeroExAuthorizationRecord | undefined
+  const commercialEvents: { type: string }[] = []
   const connection = {
     async getLatestBlockhash() { return { blockhash: payerAddress as never, lastValidBlockHeight: 1n } },
     async getAddressLookupTable() { throw new Error('No address lookup table is expected') },
+    async getParsedAccountInfo() { return { value: { data: { parsed: { type: 'account', info: { mint: USDC } } } } } },
     async sendRawTransaction(bytes: Uint8Array) { sent += 1; return base58(VersionedTransaction.deserialize(bytes).signatures[0]!) },
   }
   const service = createGuardedZeroExSwapService({
@@ -68,6 +71,7 @@ test('guarded 0x relay consumes only the exact authorization bound to the wallet
     zeroExBaseUrl: 'https://0x.test/solana/swap-instructions', insightBaseUrl: 'https://insight.test',
     responseSignature: signing.configuration,
     policy: { maxInputAmountAtomic: '2000000', maxSlippageBps: 50, allowedProgramIds: [SOLANA_COMPUTE_BUDGET_PROGRAM, SOLANA_SYSTEM_PROGRAM], computeUnitLimit: 200_000, computeUnitPriceMicroLamports: '100', maxComputeUnitLimit: 200_000, maxComputeUnitPriceMicroLamports: '100', maxPriorityFeeLamports: '20', authorizationTtlSeconds: 60 },
+    tenantPolicies: { schema: 'priorseal.zeroex-tenant-policy-set.v1', defaultTenantId: 'public', tenants: [{ tenantId: 'public', commercialFee: { profileId: 'public-usdc-10bps', inputMint: USDC, feePpm: 1_000, recipientTokenAccount: USDC, side: 'sell' } }] },
     compiler: createJupiterV0Compiler({ rpcUrl: 'https://rpc.test', connection: connection as never }), connection: connection as never,
     now: () => 1_800_000_000_000,
     authorizationStore: {
@@ -78,6 +82,9 @@ test('guarded 0x relay consumes only the exact authorization bound to the wallet
         record = { ...record, boundTxHash: txHash, uses: 1, status: 'BOUND' }
         return { ok: true, record }
       },
+    },
+    commercialLedger: {
+      async appendZeroExCommercialLedgerEvent(event) { commercialEvents.push(event); return event },
     },
     fetch: async (url, init) => {
       if (String(url).startsWith('https://0x.test/')) return signedZeroExJson({ amount_out: 1_000_000, min_amount_out: 990_000, instructions: [{ program_id: Array(32).fill(0), accounts: [], data: [0] }], address_lookup_tables: [], route_plan: [], zid: 'a'.repeat(24) }, { url: String(url), requestBody: String(init?.body), privateKey: signing.privateKey })
@@ -94,13 +101,14 @@ test('guarded 0x relay consumes only the exact authorization bound to the wallet
   assert.equal(sent, 0)
 
   record = {
-    authorization: { authorizationId, intentHash: prepared.intent.intentHash, intent: prepared.intent, authorizer: { type: 'solana-ed25519', address: payerAddress }, principal: { account: payerAddress }, delegate: { executor: payerAddress }, notBefore: 1_799_999_999, expiresAt: prepared.intent.validUntil },
+    authorization: { authorizationId, intentHash: hashJson(prepared.intent), intent: prepared.intent, authorizer: { type: 'solana-ed25519', address: payerAddress }, principal: { account: payerAddress }, delegate: { executor: payerAddress }, notBefore: 1_799_999_999, expiresAt: prepared.intent.validUntil },
     acceptance: { status: 'ACCEPTED', authorizationId, intentHash: prepared.intent.intentHash }, boundTxHash: null, uses: 0, status: 'ACCEPTED',
   } as unknown as GuardedZeroExAuthorizationRecord
   const result = await service.submit({ authorizationId, prepared, signedTransactionBase64 })
   assert.equal(result.submission, 'SUBMITTED')
   assert.equal(sent, 1)
   assert.equal(record.boundTxHash, result.signature)
+  assert.deepEqual(commercialEvents.map(event => event.type), ['RELAY_ATTEMPTED', 'RELAY_SUBMITTED'])
 })
 
 test('guarded 0x verifies a tenant fee recipient before forwarding server-owned commercial terms', async () => {
