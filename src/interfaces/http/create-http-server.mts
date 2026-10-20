@@ -2,7 +2,7 @@ import { errorCode, errorMessage } from '../../shared/error-code.mjs';
 import { createServer, type IncomingMessage, type OutgoingHttpHeaders } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { verifyReceipt } from '../../domain/receipt-verifier.mjs';
-import { solanaAuthorizationMessage } from '../../domain/solana.mjs';
+import { isSolanaPublicKey, SOLANA_MAINNET_CAIP2, solanaAuthorizationMessage } from '../../domain/solana.mjs';
 import { observeEvm } from '../../infrastructure/blockchain/evm/observer.mjs';
 import { createMemoryStore } from '../../infrastructure/persistence/memory-store.mjs';
 import type { createPostgresStore } from '../../infrastructure/persistence/postgres-store.mjs';
@@ -42,7 +42,8 @@ import { handlePriorSealMcpRequest } from '../mcp/priorseal-mcp.mjs';
 const ERROR_STATUS = Object.freeze({ ARCHIVE_UNAUTHORIZED: 401, ARCHIVE_FORBIDDEN: 403, ARCHIVE_CONFLICT: 409, AGENT_CREDENTIAL_REQUIRED: 401, AGENT_CREDENTIAL_INVALID: 403, AGENT_CREDITS_EXHAUSTED: 402, INVALID_JSON: 400, INVALID_REQUEST: 400, UNKNOWN_FIELD: 400, DANGEROUS_JSON_KEY: 400, JSON_TOO_DEEP: 400, INVALID_INTENT: 400, INVALID_AUTHORIZATION: 400, MISSING_AUTHORIZATION_SIGNATURE: 400, INVALID_AUTHORIZATION_SIGNATURE: 400, AUTHORIZATION_AUDIENCE_MISMATCH: 400, AUTHORIZATION_NOT_YET_VALID: 400, AUTHORIZATION_ISSUED_IN_FUTURE: 400, AUTHORIZATION_POLICY_MISMATCH: 409, AUTHORIZATION_EXPIRED: 410, AUTHORIZATION_ALREADY_USED: 409, AUTHORIZATION_NONCE_REUSED: 409, INVALID_TIMESTAMP_EVIDENCE: 400, INVALID_TIMESTAMP_PROFILE: 400, TIMESTAMP_POLICY_MISMATCH: 409, TIMESTAMP_AUTHORIZATION_MISMATCH: 409, TIMESTAMP_RESPONSE_HASH_MISMATCH: 409, TIMESTAMP_METADATA_MISMATCH: 409, INVALID_TIMESTAMP_POLICY: 400, TIMESTAMP_CLOCK_SKEW: 409, TIMESTAMP_AFTER_EXECUTION: 409, INVALID_TIMESTAMP_SIGNATURE: 409, INVALID_TIMESTAMP_CERTIFICATE_USAGE: 409, UNTRUSTED_TIMESTAMP_ROOT: 409, TIMESTAMP_SERVICE_UNAVAILABLE: 503, TIMESTAMP_NOT_CONFIGURED: 503, INVALID_TIMESTAMP_RESPONSE: 502, INVALID_WITNESS_POLICY: 400, INVALID_WITNESS_EVIDENCE: 400, WITNESS_POLICY_MISMATCH: 409, WITNESS_AUTHORIZATION_MISMATCH: 409, WITNESS_ACCEPTANCE_MISMATCH: 409, WITNESS_QUORUM_NOT_MET: 409, WITNESS_QUORUM_UNAVAILABLE: 503, WITNESS_NOT_CONFIGURED: 503, TRANSPARENCY_ANCHOR_REQUIRED: 409, TRANSPARENCY_AFTER_EXECUTION: 409, INVALID_CHAIN_ID: 400, INVALID_TX_HASH: 400, INVALID_ADDRESS: 400, INVALID_ASSET: 400, INVALID_UINT: 400, INVALID_TIME: 400, INVALID_IDENTIFIER: 400, INVALID_CONSTRAINT: 400, ERC4337_ENTRY_POINT_NOT_TRUSTED: 403, ERC4337_ENTRY_POINT_MISMATCH: 409, ERC4337_CODE_HASH_MISMATCH: 409, ERC4337_ACCOUNT_CALL_UNSUPPORTED: 409, ERC4337_ACCOUNT_CALL_MISMATCH: 409, ERC4337_SAFE_ACCOUNT_UNTRUSTED: 409, ERC4337_EVENT_MISMATCH: 409, ERC4337_EIP7702_UNTRUSTED: 403, ERC4337_EIP7702_AUTH_MISMATCH: 409, ERC4337_EIP7702_OPERATION_MISMATCH: 409, ERC4337_EIP7702_TRACE_UNAVAILABLE: 503, INVALID_IDEMPOTENCY_KEY: 400, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, IDEMPOTENCY_CONFLICT: 409, POLICY_REJECTED: 403, INTENT_NOT_FOUND: 404, AUTHORIZATION_NOT_FOUND: 404, RECEIPT_NOT_FOUND: 404, NOT_FOUND: 404, REQUEST_TIMEOUT: 504, ISSUER_NOT_CONFIGURED: 503, AUTHORIZATION_VERIFIER_UNAVAILABLE: 503, RATE_LIMITER_UNAVAILABLE: 503, RPC_NOT_CONFIGURED: 503, RPC_TIMEOUT: 503, RPC_FAILURE: 503, RPC_UNAVAILABLE: 503, RPC_HTTP_ERROR: 502, RPC_CALL_FAILED: 502, RPC_INVALID_RESPONSE: 502, SOLANA_CLUSTER_MISMATCH: 502 });
 const AGENT_ACCOUNT_ERROR_STATUS = Object.freeze({ AGENT_OPERATOR_CREDENTIAL_INVALID: 403, AGENT_ACCOUNT_INVALID: 400, AGENT_ACCOUNT_NOT_FOUND: 404, AGENT_ACCOUNT_EXISTS: 409, AGENT_IDEMPOTENCY_REQUIRED: 400 });
 const CLAIM_ERROR_STATUS = Object.freeze({ CLAIM_INVALID_REQUEST: 400, CLAIM_SIGNATURE_INVALID: 400, CLAIM_TX_NOT_FOUND: 404, CLAIM_TX_NOT_ACCEPTED: 400, CLAIM_TX_SENDER_MISMATCH: 403, CLAIM_TX_FAILED: 400, CLAIM_BELOW_MINIMUM: 400, CLAIM_ACCOUNT_PREEXISTING: 409, CLAIM_ACCOUNT_REVOKED: 403, CLAIM_CHAIN_UNAVAILABLE: 503 });
-const JUPITER_ERROR_STATUS = Object.freeze({ PREPARED_WIRE_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_SIGNATURE_MISSING: 400, SIGNED_TRANSACTION_SIGNATURE_INVALID: 400, AUTHORIZATION_INTENT_MISMATCH: 403 });
+const JUPITER_ERROR_STATUS = Object.freeze({ FEE_PAYER_MISMATCH: 403, INPUT_AMOUNT_EXCEEDS_POLICY: 403, SLIPPAGE_EXCEEDS_POLICY: 403, INPUT_MINT_NOT_ALLOWED: 403, OUTPUT_MINT_NOT_ALLOWED: 403, TIP_INSTRUCTION_FORBIDDEN: 403, PROGRAM_NOT_ALLOWED: 403, LOOKUP_TABLE_NOT_ALLOWED: 403, COMPILED_SIGNER_POLICY_REJECTED: 403, COMPILED_PROGRAM_NOT_ALLOWED: 403, JUPITER_INSTRUCTION_OMITTED: 403, UNEXPECTED_LOOKUP_TABLE: 403, COMPUTE_LIMIT_EXCEEDS_POLICY: 403, COMPUTE_PRICE_EXCEEDS_POLICY: 403, PRIORITY_FEE_EXCEEDS_POLICY: 403, PLATFORM_FEE_NOT_CONFIGURED: 403, PLATFORM_FEE_INPUT_MINT_REQUIRED: 403, PLATFORM_FEE_POLICY_MISMATCH: 403, PLATFORM_FEE_BELOW_MINIMUM: 400, PLATFORM_FEE_ACCOUNT_OMITTED: 502, FEE_ACCOUNT_UNAVAILABLE: 503, FEE_ACCOUNT_MISMATCH: 503, PREPARED_WIRE_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_SIGNATURE_MISSING: 400, SIGNED_TRANSACTION_SIGNATURE_INVALID: 400, AUTHORIZATION_INTENT_MISMATCH: 403 });
+const WRAPPED_SOL_MINT = 'So11111111111111111111111111111111111111112';
 
 function requester(req: IncomingMessage, trustProxy: boolean) { return trustProxy ? String(req.headers['cf-connecting-ip'] ?? '').trim() || String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown' : req.socket.remoteAddress || 'unknown'; }
 
@@ -248,8 +249,8 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
       }
       if (req.method === 'POST' && path === '/v1/jupiter/guarded-swaps/prepare') {
         if (!guardedJupiter) throw new PriorSealError('NOT_FOUND', 'Guarded Jupiter preparation is not enabled on this deployment');
-        assertOnlyFields(body, ['intentId', 'inputMint', 'outputMint', 'amount', 'taker', 'slippageBps', 'maxAccounts', 'mode', 'minimumOutputAmountAtomic', 'sourceAssetId', 'contextCommitments'], 'guarded Jupiter preparation');
-        const result = await guardedJupiter.prepare(body as Parameters<GuardedJupiterSwapService['prepare']>[0], { signal: deadline.signal });
+        const input = guardedJupiterPrepareInput(body);
+        const result = await guardedJupiter.prepare(input as Parameters<GuardedJupiterSwapService['prepare']>[0], { signal: deadline.signal });
         return respond(201, { ...result, requestId }, { 'cache-control': 'no-store' });
       }
       if (req.method === 'POST' && path === '/v1/jupiter/guarded-swaps/submit') {
@@ -536,6 +537,40 @@ function openApiSpec({ guardedJupiterEnabled = false }: { guardedJupiterEnabled?
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+
+function guardedJupiterPrepareInput(value: unknown): Record<string, unknown> {
+  const input = assertOnlyFields(value, ['intentId', 'inputMint', 'outputMint', 'amount', 'taker', 'slippageBps', 'maxAccounts', 'mode', 'minimumOutputAmountAtomic', 'sourceAssetId', 'contextCommitments'], 'guarded Jupiter preparation');
+  const inputMint = input.inputMint;
+  const outputMint = input.outputMint;
+  const taker = input.taker;
+  if (!isSolanaPublicKey(inputMint) || !isSolanaPublicKey(outputMint) || !isSolanaPublicKey(taker)) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter preparation requires Solana public-key inputMint, outputMint, and taker');
+  if (inputMint === outputMint) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter inputMint and outputMint must differ');
+  if (!unsignedDecimal(input.amount)) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter amount must be an unsigned decimal string');
+  if (typeof input.slippageBps !== 'number' || !Number.isSafeInteger(input.slippageBps) || input.slippageBps < 0 || input.slippageBps > 10_000) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter slippageBps must be an integer from 0 through 10000');
+  if (input.intentId !== undefined && (typeof input.intentId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(input.intentId))) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter intentId is invalid');
+  if (input.maxAccounts !== undefined && (typeof input.maxAccounts !== 'number' || !Number.isSafeInteger(input.maxAccounts) || input.maxAccounts < 1 || input.maxAccounts > 64)) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter maxAccounts must be an integer from 1 through 64');
+  if (input.mode !== undefined && input.mode !== 'standard' && input.mode !== 'fast') throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter mode must be standard or fast');
+  if (input.minimumOutputAmountAtomic !== undefined && (!unsignedDecimal(input.minimumOutputAmountAtomic) || input.minimumOutputAmountAtomic === '0')) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter minimumOutputAmountAtomic must be a positive decimal string');
+  const expectedSourceAssetId = `${SOLANA_MAINNET_CAIP2}/${inputMint === WRAPPED_SOL_MINT ? 'slip44:501' : `spl:${inputMint}`}`;
+  if (input.sourceAssetId !== undefined && input.sourceAssetId !== expectedSourceAssetId) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter sourceAssetId must identify inputMint');
+  if (input.contextCommitments !== undefined) assertGuardedJupiterContextCommitments(input.contextCommitments);
+  return input;
+}
+
+function unsignedDecimal(value: unknown): value is string { return typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value); }
+
+function assertGuardedJupiterContextCommitments(value: unknown): void {
+  if (!Array.isArray(value)) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter contextCommitments must be an array');
+  const seen = new Set<string>();
+  const namespaces = new Set<string>();
+  for (const commitment of value) {
+    if (!isRecord(commitment) || typeof commitment.namespace !== 'string' || !commitment.namespace || (commitment.algorithm !== 'sha256' && commitment.algorithm !== 'keccak256') || typeof commitment.digest !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(commitment.digest)) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter context commitment is invalid');
+    const key = `${commitment.namespace}|${commitment.algorithm}|${commitment.digest.toLowerCase()}`;
+    if (seen.has(key) || namespaces.has(commitment.namespace)) throw new PriorSealError('INVALID_REQUEST', 'Guarded Jupiter context commitments must be distinct');
+    seen.add(key);
+    namespaces.add(commitment.namespace);
+  }
+}
 
 function mcpInput(argumentsValue: Record<string, unknown>, context: string) {
   assertOnlyFields(argumentsValue, ['input'], `PriorSeal MCP ${context} arguments`);

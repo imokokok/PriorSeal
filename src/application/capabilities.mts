@@ -1,4 +1,5 @@
 import { hashJson } from '../domain/hashing.mjs';
+import { SOLANA_MAINNET_CAIP2 } from '../domain/solana.mjs';
 import { SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
 import { X402_STAGING_NETWORKS, type X402Config } from '../infrastructure/payments/x402-exact-evm.mjs';
 import type { AgentMeter } from './commerce/agent-meter.mjs';
@@ -9,7 +10,10 @@ type CapabilityStore = { health?: () => Promise<unknown> | unknown; archiveReten
 export async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, x402, agentMeter = null, selfserveClaim = null, guardedJupiterConfigured = false, now }: { issuer: string; audience: string; keyConfigured: boolean; policy?: CapabilityPolicy | null; proofMode: string; timestampConfigured: boolean; witnessConfigured: boolean; anchorConfigured: boolean; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; store: CapabilityStore; archiveEnabled: boolean; contractSignatureConfigured?: boolean; x402?: X402Config; agentMeter?: AgentMeter | null; selfserveClaim?: SelfserveClaim | null; guardedJupiterConfigured?: boolean; now: number }) {
   let storage = 'available';
   try { if (store.health) await store.health(); } catch { storage = 'unavailable'; }
-  const configuredChains = Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => !policy?.allowedChainIds || policy.allowedChainIds.map(Number).includes(id));
+  // Policy documents represent non-EVM networks by CAIP-2 (rather than a
+  // numeric EIP-155 id). Keep discovery aligned with the policy evaluator,
+  // which accepts either `"0"` or the exact Solana mainnet reference.
+  const configuredChains = Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => policyAllowsChain(policy, id));
   const evmChains = configuredChains.filter(id => id > 0);
   // Runtime policy matching is case-insensitive; capability discovery must use the same semantics.
   const actions = policy?.allowedActions === undefined ? null : Array.isArray(policy.allowedActions) ? policy.allowedActions.map((action) => String(action).toUpperCase()) : [];
@@ -55,4 +59,10 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? 'operator_defined', scope: 'project_uploaded_evidence' },
     integrations: { guardedJupiter: { enabled: guardedJupiterReason === 'READY', reason: guardedJupiterReason } },
   };
+}
+
+function policyAllowsChain(policy: CapabilityPolicy | null | undefined, chainId: number): boolean {
+  const allowed = policy?.allowedChainIds;
+  if (allowed === undefined) return true;
+  return allowed.some(chain => String(chain) === String(chainId) || (chainId === 0 && chain === SOLANA_MAINNET_CAIP2));
 }

@@ -7,6 +7,7 @@ import {
   JupiterGuardedSwapError,
   prepareGuardedJupiterSwap,
   reviewGuardedJupiterSwap,
+  SOLANA_USDC_MINT,
   type GuardedJupiterSwapRequest,
   type JupiterGuardPolicy,
   type JupiterTransactionCompiler,
@@ -19,7 +20,7 @@ import type { Authorization, AuthorizationAcceptance } from '../../domain/author
 /** Deployment-owned controls. The wallet is intentionally assigned per request. */
 export type GuardedJupiterDeploymentPolicy = Omit<JupiterGuardPolicy, 'feePayer'>;
 
-export type GuardedJupiterPrepareInput = Omit<GuardedJupiterSwapRequest, 'intentId'> & {
+export type GuardedJupiterPrepareInput = Omit<GuardedJupiterSwapRequest, 'intentId' | 'platformFeeBps' | 'feeAccount'> & {
   /** A client may supply a traceable id; otherwise the protected service creates one. */
   intentId?: string;
 };
@@ -57,7 +58,7 @@ export type GuardedJupiterSwapServiceOptions = {
   fetch?: typeof fetch;
   now?: () => number;
   compiler?: JupiterTransactionCompiler;
-  connection?: Pick<Connection, 'getLatestBlockhash' | 'getAddressLookupTable' | 'sendRawTransaction'>;
+  connection?: Pick<Connection, 'getAccountInfo' | 'getLatestBlockhash' | 'getAddressLookupTable' | 'sendRawTransaction'>;
   authorizationStore: GuardedJupiterAuthorizationStore;
 };
 
@@ -78,7 +79,12 @@ export function createGuardedJupiterSwapService(options: GuardedJupiterSwapServi
   return {
     async prepare(input, requestOptions = {}) {
       const intentId = input.intentId ?? `jps_${crypto.randomUUID().replaceAll('-', '')}`;
-      const request: GuardedJupiterSwapRequest = { ...input, intentId };
+      const request: GuardedJupiterSwapRequest = {
+        ...input,
+        intentId,
+        ...(policy.platformFee ? { platformFeeBps: policy.platformFee.feeBps, feeAccount: policy.platformFee.feeAccount } : {}),
+      };
+      if (policy.platformFee) await assertPlatformFeeAccount(connection, policy.platformFee);
       const prepared = await prepareGuardedJupiterSwap(request, {
         router,
         compiler,
@@ -244,7 +250,43 @@ function assertDeploymentPolicy(value: GuardedJupiterDeploymentPolicy): GuardedJ
   if (typeof value.maxInputAmountAtomic !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value.maxInputAmountAtomic) || BigInt(value.maxInputAmountAtomic) === 0n) throw new TypeError('Guarded Jupiter policy maxInputAmountAtomic is invalid');
   if (!Number.isSafeInteger(value.maxSlippageBps) || value.maxSlippageBps < 0 || value.maxSlippageBps > 10_000) throw new TypeError('Guarded Jupiter policy maxSlippageBps is invalid');
   if (!Number.isSafeInteger(value.authorizationTtlSeconds) || value.authorizationTtlSeconds < 15 || value.authorizationTtlSeconds > 300) throw new TypeError('Guarded Jupiter policy authorizationTtlSeconds must be 15 through 300 seconds');
+  if (value.platformFee) {
+    if (!Number.isSafeInteger(value.platformFee.feeBps) || value.platformFee.feeBps < 1 || value.platformFee.feeBps > 20 || value.platformFee.feeMint !== SOLANA_USDC_MINT) throw new TypeError('Guarded Jupiter platform fee is invalid');
+    try { new PublicKey(value.platformFee.feeAccount); new PublicKey(value.platformFee.merchant); } catch { throw new TypeError('Guarded Jupiter platform-fee account and merchant must be Solana public keys'); }
+  }
   return structuredClone(value);
+}
+
+const SPL_TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const ASSOCIATED_TOKEN_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
+
+/**
+ * A platform-fee account must be the merchant's initialized legacy-SPL USDC
+ * ATA. Validate it against the configured RPC before asking Jupiter to build
+ * a transaction, so an uninitialized or substituted account fails closed.
+ */
+async function assertPlatformFeeAccount(
+  connection: Pick<Connection, 'getAccountInfo'>,
+  fee: NonNullable<GuardedJupiterDeploymentPolicy['platformFee']>,
+): Promise<void> {
+  let account: Awaited<ReturnType<Connection['getAccountInfo']>>;
+  try {
+    account = await connection.getAccountInfo(new PublicKey(fee.feeAccount), 'confirmed');
+  } catch {
+    throw new JupiterGuardedSwapError('FEE_ACCOUNT_UNAVAILABLE', 'The configured USDC platform-fee account could not be read from Solana RPC');
+  }
+  if (!account) throw new JupiterGuardedSwapError('FEE_ACCOUNT_UNAVAILABLE', 'The configured USDC platform-fee account does not exist on Solana');
+  const merchant = new PublicKey(fee.merchant);
+  const mint = new PublicKey(SOLANA_USDC_MINT);
+  const tokenProgram = new PublicKey(SPL_TOKEN_PROGRAM);
+  const associatedTokenProgram = new PublicKey(ASSOCIATED_TOKEN_PROGRAM);
+  const [expectedAccount] = await PublicKey.findProgramAddress([merchant.toBytes(), tokenProgram.toBytes(), mint.toBytes()], associatedTokenProgram);
+  const data = new Uint8Array(account.data);
+  const mintMatches = equalBytes(data.slice(0, 32), mint.toBytes());
+  const ownerMatches = equalBytes(data.slice(32, 64), merchant.toBytes());
+  if (!expectedAccount.equals(new PublicKey(fee.feeAccount)) || account.owner.toBase58() !== SPL_TOKEN_PROGRAM || data.length !== 165 || !mintMatches || !ownerMatches || data[108] !== 1) {
+    throw new JupiterGuardedSwapError('FEE_ACCOUNT_MISMATCH', 'The configured platform-fee account is not the merchant\'s initialized Solana USDC ATA');
+  }
 }
 
 function requiredSecret(value: string, name: string): string {

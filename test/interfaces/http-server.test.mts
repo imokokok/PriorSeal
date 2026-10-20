@@ -247,6 +247,9 @@ test('operator endpoints issue, inspect, credit, and revoke a narrowly scoped Ag
   assert.equal(rejectedSelf.status, 403);
 });
 test('guarded Jupiter routes keep preparation and submission behind the server boundary', async (t) => {
+  const inputMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+  const outputMint = 'So11111111111111111111111111111111111111112';
+  const taker = '11111111111111111111111111111111';
   let preparedInput: Record<string, unknown> | undefined;
   let submittedInput: Record<string, unknown> | undefined;
   const guardedJupiter = {
@@ -262,19 +265,28 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
   const server = createHttpServer({ guardedJupiter });
   t.after(() => server.close());
 
+  const malformed = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  assert.equal(malformed.status, 400);
+  assert.equal((malformed.json() as unknown as { error: { code: string } }).error.code, 'INVALID_REQUEST');
+  assert.equal(preparedInput, undefined);
+
   const prepared = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 }),
+    body: JSON.stringify({ inputMint, outputMint, amount: '1000000', taker, slippageBps: 50 }),
   });
   assert.equal(prepared.status, 201);
   assert.equal(prepared.headers['cache-control'], 'no-store');
-  assert.deepEqual(preparedInput, { inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 });
+  assert.deepEqual(preparedInput, { inputMint, outputMint, amount: '1000000', taker, slippageBps: 50 });
 
   const unknownField = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50, jupiterApiKey: 'never-accepted' }),
+    body: JSON.stringify({ inputMint, outputMint, amount: '1000000', taker, slippageBps: 50, jupiterApiKey: 'never-accepted' }),
   });
   assert.equal(unknownField.status, 400);
 
@@ -296,6 +308,9 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
 });
 
 test('guarded Jupiter preparation reports only safe non-JSON upstream diagnostics', async (t) => {
+  const inputMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+  const outputMint = 'So11111111111111111111111111111111111111112';
+  const taker = '11111111111111111111111111111111';
   const guardedJupiter = {
     async prepare() {
       throw Object.assign(
@@ -310,12 +325,33 @@ test('guarded Jupiter preparation reports only safe non-JSON upstream diagnostic
   const response = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 }),
+    body: JSON.stringify({ inputMint, outputMint, amount: '1000000', taker, slippageBps: 50 }),
   });
   assert.equal(response.status, 502);
   const body = response.json() as unknown as { error: { code: string; message: string; requestId: string } };
   assert.equal(body.error.code, 'UPSTREAM_INVALID_JSON');
   assert.equal(body.error.message, 'Jupiter Router returned an invalid JSON response (HTTP 403, content-type text/html)');
+  assert.match(body.error.requestId, /^[0-9a-f-]{36}$/);
+});
+
+test('guarded Jupiter policy violations are explicit 403 responses', async (t) => {
+  const guardedJupiter = {
+    async prepare() {
+      throw Object.assign(new Error('The requested input amount exceeds the policy limit'), { code: 'INPUT_AMOUNT_EXCEEDS_POLICY' });
+    },
+  } as unknown as ServerOptions['guardedJupiter'];
+  const server = createHttpServer({ guardedJupiter });
+  t.after(() => server.close());
+
+  const response = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', outputMint: 'So11111111111111111111111111111111111111112', amount: '1', taker: '11111111111111111111111111111111', slippageBps: 50 }),
+  });
+  assert.equal(response.status, 403);
+  const body = response.json() as unknown as { error: { code: string; message: string; requestId: string } };
+  assert.equal(body.error.code, 'INPUT_AMOUNT_EXCEEDS_POLICY');
+  assert.equal(body.error.message, 'The requested input amount exceeds the policy limit');
   assert.match(body.error.requestId, /^[0-9a-f-]{36}$/);
 });
 test('x402 Monad mainnet is advertised, verified, and settled through the HTTP lifecycle', async (t) => {

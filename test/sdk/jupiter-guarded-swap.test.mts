@@ -17,6 +17,8 @@ import {
 const WALLET = '11111111111111111111111111111111'
 const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
 const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+const MERCHANT = 'BfVX9jcEALijnEuGPcGTjqjBgTFLTFMt6F7NrMHzGWf4'
+const FEE_ACCOUNT = 'FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq'
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -75,6 +77,25 @@ function policy() {
   }
 }
 
+function platformFeePolicy() {
+  return { ...policy(), platformFee: { feeBps: 10, feeAccount: FEE_ACCOUNT, feeMint: USDC as 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', merchant: MERCHANT } }
+}
+
+function buildWithPlatformFee(): JupiterRouterBuild {
+  const route = build()
+  route.swapInstruction = { ...route.swapInstruction, accounts: [{ pubkey: FEE_ACCOUNT, isSigner: false, isWritable: true }] }
+  return route
+}
+
+function messageWithPlatformFee(): SolanaTransactionMessage {
+  return {
+    ...message(),
+    header: { numRequiredSignatures: 1, numReadonlySignedAccounts: 0, numReadonlyUnsignedAccounts: 1 },
+    accountKeys: [WALLET, FEE_ACCOUNT, TOKEN_PROGRAM],
+    instructions: [{ programIdIndex: 2, accountIndexes: [1], data: '1' }],
+  }
+}
+
 test('prepares a self-paying Jupiter exact-in swap bound to Insight simulation evidence', async () => {
   const router = { async build() { return build() } }
   const compiler = { async compile() { return { transactionBase64: 'AA==', transaction: message() } } }
@@ -99,6 +120,35 @@ test('prepares a self-paying Jupiter exact-in swap bound to Insight simulation e
   assert.equal(prepared.intent.asset, 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/spl:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
   assert.equal(prepared.intent.validUntil, 1_800_000_060)
   assert.deepEqual(prepared.intent.contextCommitments, [prepared.simulation.contextCommitment])
+})
+
+test('binds a deployment-owned 10 bps USDC platform fee to the exact review and intent', async () => {
+  let builtRequest: JupiterRouterBuildRequest | undefined
+  const feeBearingRequest = { ...request(), platformFeeBps: 10, feeAccount: FEE_ACCOUNT }
+  const prepared = await prepareGuardedJupiterSwap(feeBearingRequest, {
+    router: { async build(value) { builtRequest = value; return buildWithPlatformFee() } },
+    compiler: { async compile() { return { transactionBase64: 'AA==', transaction: messageWithPlatformFee() } } },
+    insight: { async simulate(input: { expectedMessageHash: string }) { return { messageHash: input.expectedMessageHash, signatureState: 'UNSIGNED' as const, status: 'SIMULATED' as const, contextCommitment: { namespace: 'insight.solana-simulation-receipt.v1', algorithm: 'sha256' as const, digest: `0x${'c'.repeat(64)}` }, receipt: {} } } },
+    policy: platformFeePolicy(), now: () => 1_800_000_000_000,
+  })
+  assert.equal(builtRequest?.platformFeeBps, 10)
+  assert.equal(builtRequest?.feeAccount, FEE_ACCOUNT)
+  assert.equal(prepared.intent.recipient, FEE_ACCOUNT)
+  assert.deepEqual((await reviewGuardedJupiterSwap(prepared, () => 1_800_000_010_000)).platformFee, {
+    feeBps: 10, amountAtomic: '1000', mint: USDC, feeAccount: FEE_ACCOUNT, merchant: MERCHANT,
+  })
+  await assert.rejects(
+    prepareGuardedJupiterSwap({ ...feeBearingRequest, inputMint: WALLET }, {
+      router: { async build() { throw new Error('must not build') } }, compiler: { async compile() { throw new Error('must not compile') } }, insight: { async simulate() { throw new Error('must not simulate') } }, policy: platformFeePolicy(),
+    }),
+    (error) => error instanceof JupiterGuardedSwapError && error.code === 'PLATFORM_FEE_INPUT_MINT_REQUIRED',
+  )
+  await assert.rejects(
+    prepareGuardedJupiterSwap({ ...request(), feeAccount: WALLET, platformFeeBps: 10 }, {
+      router: { async build() { throw new Error('must not build') } }, compiler: { async compile() { throw new Error('must not compile') } }, insight: { async simulate() { throw new Error('must not simulate') } }, policy: platformFeePolicy(),
+    }),
+    (error) => error instanceof JupiterGuardedSwapError && error.code === 'PLATFORM_FEE_POLICY_MISMATCH',
+  )
 })
 
 test('derives Solana default compute units when Jupiter omits SetComputeUnitLimit', async () => {
@@ -256,11 +306,13 @@ test('Jupiter and Insight HTTP clients validate their responses and keep API key
       })
     },
   })
-  const parsedBuild = await router.build({ ...request(), mode: 'standard' })
+  const parsedBuild = await router.build({ ...request(), mode: 'standard', platformFeeBps: 10, feeAccount: FEE_ACCOUNT })
   assert.equal(parsedBuild.inAmount, '1000000')
   assert.deepEqual(parsedBuild.addressLookupTableAddresses, [WALLET])
   assert.match(jupiterUrl, /inputMint=EPjFW/)
   assert.match(jupiterUrl, /mode=default/)
+  assert.match(jupiterUrl, /platformFeeBps=10/)
+  assert.match(jupiterUrl, /feeAccount=FYj2K9vJ/)
   assert.doesNotMatch(jupiterUrl, /mode=standard/)
   assert.doesNotMatch(jupiterUrl, /jupiter-secret/)
 

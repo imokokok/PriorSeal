@@ -1,5 +1,7 @@
 // Generated from runtime-config.mts by npm run core:build. Do not edit directly.
 import { createArchiveAccess } from "../application/archive/evidence-archive.mjs";
+import { MAX_JUPITER_PLATFORM_FEE_BPS, SOLANA_USDC_MINT } from "priorseal-sdk";
+import { isSolanaPublicKey } from "../domain/solana.mjs";
 import { parseX402Config } from "../infrastructure/payments/x402-exact-evm.mjs";
 import { parseAgentMeterConfig } from "../application/commerce/agent-meter.mjs";
 import { SELFSEEK_BASE_MAINNET_CHAIN_ID, SELFSEEK_BASE_MAINNET_USDC } from "../application/commerce/selfserve-claim.mjs";
@@ -116,16 +118,29 @@ function guardedJupiterConfig(environment) {
   const insightApiKey = optionalValue(environment.INSIGHT_API_KEY);
   const rpcUrl = optionalValue(environment.PRIORSEAL_JUPITER_RPC_URL);
   const policy = optionalJson(environment.PRIORSEAL_JUPITER_POLICY_JSON, "PRIORSEAL_JUPITER_POLICY_JSON");
+  const platformFeeBps = optionalValue(environment.PRIORSEAL_JUPITER_PLATFORM_FEE_BPS);
+  const feeAccount = optionalValue(environment.PRIORSEAL_JUPITER_FEE_ACCOUNT);
   const configured = [jupiterApiKey, insightApiKey, rpcUrl, policy].filter(Boolean).length;
+  if (Boolean(platformFeeBps) !== Boolean(feeAccount)) throw new TypeError("PRIORSEAL_JUPITER_PLATFORM_FEE_BPS and PRIORSEAL_JUPITER_FEE_ACCOUNT must be configured together");
+  if ((platformFeeBps || feeAccount) && configured === 0) throw new TypeError("Jupiter platform fees require the complete guarded Jupiter configuration");
   if (configured === 0) return void 0;
   if (configured !== 4) throw new TypeError("Guarded Jupiter swaps require JUPITER_API_KEY, INSIGHT_API_KEY, PRIORSEAL_JUPITER_RPC_URL, and PRIORSEAL_JUPITER_POLICY_JSON together");
   if (!rpcUrl || new URL(rpcUrl).protocol !== "https:") throw new TypeError("PRIORSEAL_JUPITER_RPC_URL must use HTTPS");
   if (!policy || typeof policy !== "object" || Array.isArray(policy)) throw new TypeError("PRIORSEAL_JUPITER_POLICY_JSON must be an object");
+  if ("platformFee" in policy) throw new TypeError("Configure the guarded Jupiter platform fee with PRIORSEAL_JUPITER_PLATFORM_FEE_BPS and PRIORSEAL_JUPITER_FEE_ACCOUNT, not PRIORSEAL_JUPITER_POLICY_JSON");
+  let platformFee;
+  if (platformFeeBps && feeAccount) {
+    if (!/^(?:[1-9]|1[0-9]|20)$/.test(platformFeeBps)) throw new TypeError(`PRIORSEAL_JUPITER_PLATFORM_FEE_BPS must be an integer from 1 through ${MAX_JUPITER_PLATFORM_FEE_BPS}`);
+    if (!isSolanaPublicKey(feeAccount)) throw new TypeError("PRIORSEAL_JUPITER_FEE_ACCOUNT must be a Solana public key");
+    const merchant = optionalValue(environment.PRIORSEAL_X402_SOLANA_PAY_TO);
+    if (!isSolanaPublicKey(merchant)) throw new TypeError("PRIORSEAL_X402_SOLANA_PAY_TO must be a Solana public key when a Jupiter platform fee is enabled");
+    platformFee = { feeBps: Number(platformFeeBps), feeAccount, feeMint: SOLANA_USDC_MINT, merchant };
+  }
   return {
     jupiterApiKey,
     insightApiKey,
     rpcUrl,
-    policy,
+    policy: { ...policy, ...platformFee ? { platformFee } : {} },
     ...optionalValue(environment.PRIORSEAL_JUPITER_ROUTER_BASE_URL) ? { jupiterBaseUrl: optionalValue(environment.PRIORSEAL_JUPITER_ROUTER_BASE_URL) } : {},
     ...optionalValue(environment.PRIORSEAL_JUPITER_INSIGHT_BASE_URL) ? { insightBaseUrl: optionalValue(environment.PRIORSEAL_JUPITER_INSIGHT_BASE_URL) } : {}
   };
