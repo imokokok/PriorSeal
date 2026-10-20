@@ -72,6 +72,17 @@ test('unknown paths and unavailable receipts offer a route back to evidence', as
   await expect(page.getByRole('heading', { level: 1, name: 'Receipts' })).toBeVisible()
 })
 
+test('Jupiter pilot uses the public design language and keeps its operating boundary legible', async ({ page }) => {
+  await page.goto('/jupiter')
+  await expect(page.getByRole('heading', { level: 1, name: 'One exact swap. Evidence before execution.' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Open guarded console →' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Propose a pilot ↗' })).toBeVisible()
+  await expect(page.locator('.jupiter-pilot__scope')).toContainText('Solana mainnet-beta')
+  await expect(page.locator('.jupiter-pilot__limits')).toContainText('WHAT THIS DOES NOT DO')
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+})
+
 test('damaged saved activity cannot become a typed local receipt or authorization', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Allow local saving' }).click()
