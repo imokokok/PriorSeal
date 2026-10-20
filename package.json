@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Explicit authorization linked to observed EVM execution through independently verifiable evidence.",
+  "description": "Explicit authorization linked to observed EVM and Solana execution through independently verifiable evidence.",
   "homepage": "https://priorseal.xyz",
   "repository": {
     "type": "git",
@@ -53,6 +53,7 @@
     "rwa:execution:check:online": "npm run sdk:build && npm run core:build:tools && node scripts/verify-rwa-execution-profiles.mjs --online",
     "swap:execution:check": "npm run sdk:build && npm run core:build && node scripts/swap-authorization-local-drill.mjs",
     "pilot:restricted-automation": "npm run sdk:build && npm run core:build && node scripts/swap-authorization-local-drill.mjs",
+    "jupiter:pilot:metrics": "npm run core:build && node scripts/summarize-guarded-jupiter-events.mjs",
     "verify:restricted-automation-pilot": "npm run sdk:build && npm run core:build && node scripts/verify-restricted-automation-pilot.mjs",
     "validate:restricted-automation-pilot-pack": "npm run sdk:build && npm run core:build && node scripts/validate-restricted-pilot-pack.mjs",
     "verify:wak-base-sepolia:router": "npm run core:build:tools && node scripts/verify-wak-base-sepolia-router.mjs",

@@ -46,7 +46,7 @@ export function JupiterPilotPage() {
         <p className={`jupiter-pilot__status ${availability}`}>{status}</p>
         <h1>One exact swap.<br /><em>Evidence before execution.</em></h1>
         <p className="jupiter-pilot__lede">PriorSeal combines Jupiter routing, an Insight simulation commitment, a wallet’s explicit authorization, and a one-time guarded relay. It is for teams that need to prove what a wallet approved—not a general-purpose trading interface.</p>
-        <div className="jupiter-pilot__actions"><Link className="jupiter-pilot__primary" to="/app/jupiter-guarded-swap">Open guarded console <span>→</span></Link><a className="jupiter-pilot__secondary" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a></div>
+        <div className="jupiter-pilot__actions"><Link className="jupiter-pilot__primary" to="/jupiter/pilot-intake">Plan a pilot <span>→</span></Link><Link className="jupiter-pilot__secondary" to="/app/jupiter-guarded-swap">Open guarded console <span>→</span></Link></div>
       </div>
       <aside className="jupiter-pilot__scope" aria-label="Current guarded Jupiter scope">
         <span>CURRENT BOUNDARY</span>
@@ -66,7 +66,7 @@ export function JupiterPilotPage() {
     </section>
 
     <section className="jupiter-pilot__commercial">
-      <div><p className="jupiter-pilot__eyebrow">COMMERCIAL TERMS / DISCLOSED BEFORE SIGNATURE</p><h2>Start with a bounded pilot, not a blank trading mandate.</h2><p>Each pilot names the route boundary, review owner, evidence consumer, support contact and success criterion. PriorSeal is non-custodial: it does not hold a wallet key, select a trade or guarantee token safety, price, profit or settlement.</p></div>
+      <div><p className="jupiter-pilot__eyebrow">COMMERCIAL TERMS / DISCLOSED BEFORE SIGNATURE</p><h2>Start with a bounded pilot, not a blank trading mandate.</h2><p>Each pilot names the route boundary, review owner, evidence consumer, support contact and success criterion. PriorSeal is non-custodial: it does not hold a wallet key, select a trade or guarantee token safety, price, profit or settlement.</p><p className="jupiter-pilot__commercial-link"><Link to="/jupiter/pilot-intake">Create a non-sensitive pilot brief →</Link></p></div>
       <dl>
         <div><dt>Hosted route fee</dt><dd>{fee}</dd></div>
         <div><dt>Minimum fee mint</dt><dd>{terms?.inputMint === USDC_MINT ? 'Solana USDC' : terms ? terms.inputMint : 'Shown in exact review'}</dd></div>

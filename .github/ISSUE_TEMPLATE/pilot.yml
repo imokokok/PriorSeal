@@ -1,5 +1,5 @@
 name: Design-partner pilot
-description: Propose a focused PriorSeal integration around one EVM execution path.
+description: Propose a bounded, non-sensitive PriorSeal, Insight, or combined design-partner pilot.
 title: "pilot: "
 labels:
   - pilot
@@ -7,39 +7,86 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for exploring PriorSeal. Describe the workflow without including private keys, credentials, confidential transaction metadata, or production database information.
-  - type: textarea
-    id: workflow
+        Thanks for exploring a design-partner pilot. This public issue is only for redacted technical collaboration. Do not include wallet addresses, token mints, transaction or signature data, private keys, credentials, customer personal data, confidential counterparties, or commercial terms.
+  - type: dropdown
+    id: offer
     attributes:
-      label: Execution workflow
-      description: What does the agent execute, and which system constructs and submits the transaction?
+      label: Offer to evaluate
+      options:
+        - PriorSeal — explicit authority and execution evidence
+        - Insight — simulation and decision input
+        - Insight + PriorSeal — decision input, authority, execution and evidence
+    validations:
+      required: true
+  - type: dropdown
+    id: workflow_type
+    attributes:
+      label: Workflow type
+      options:
+        - Solana Jupiter ExactIn guarded swap
+        - EVM exact-call authorization and observation
+        - EVM treasury or agent automation
+        - Wallet or transaction-infrastructure integration
+        - Other bounded execution path
     validations:
       required: true
   - type: input
-    id: chain
+    id: network
     attributes:
-      label: EVM chain
-      placeholder: Base / Ethereum / Arbitrum / chain ID
+      label: Network
+      placeholder: "Solana mainnet-beta / Base / Ethereum / chain ID"
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow and decision boundary
+      description: Describe who proposes, who reviews, and what is constructed and submitted. Use roles, not account addresses or transaction data.
     validations:
       required: true
   - type: textarea
     id: authority
     attributes:
       label: Authorization boundary
-      description: Which account authorizes the action, and which exact fields must be bound before execution?
+      description: Which role authorizes the action, which fields must be bound before execution, and which cases must require a new approval?
     validations:
       required: true
   - type: textarea
-    id: consumer
+    id: evidence_consumer
     attributes:
-      label: Evidence consumer and success criteria
-      description: Who will verify or retain the receipt, and what should a successful pilot demonstrate?
+      label: Evidence consumer and success criterion
+      description: Who independently reviews the evidence, and what concrete pilot outcome would demonstrate value?
+    validations:
+      required: true
+  - type: dropdown
+    id: scale
+    attributes:
+      label: Indicative pilot scale
+      options:
+        - One small, separately approved mainnet transaction
+        - 1–10 guarded executions per month
+        - 11–100 guarded executions per month
+        - More than 100 guarded executions per month
+    validations:
+      required: true
+  - type: dropdown
+    id: timeline
+    attributes:
+      label: Decision timeline
+      options:
+        - Exploring scope
+        - Pilot decision within 30 days
+        - Pilot decision within this quarter
     validations:
       required: true
   - type: checkboxes
-    id: scope
+    id: acknowledgements
     attributes:
       label: Scope acknowledgement
       options:
-        - label: I understand that PriorSeal does not construct, sign or submit transactions and does not provide an economic-safety guarantee.
+        - label: I understand this public issue must contain only non-sensitive, redacted information.
+          required: true
+        - label: I understand PriorSeal does not custody keys or funds, make an investment recommendation, guarantee economic safety, or turn a pilot request into permission to execute a transaction.
+          required: true
+        - label: I understand that any funded transaction needs a separate, explicit approval with its exact wallet role, route boundary, maximum amount, fees, expiry, support owner and evidence viewers.
           required: true

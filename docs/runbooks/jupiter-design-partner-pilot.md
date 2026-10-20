@@ -3,13 +3,29 @@
 This runbook scopes one bounded Solana Jupiter ExactIn design-partner pilot.
 It does not authorize a payment, deployment, or transaction.
 
+Use the public [pilot-brief page](https://priorseal.xyz/jupiter/pilot-intake) to
+structure a non-sensitive request. The page is client-side only: it does not
+collect a lead, transmit fields, or replace an agreed private business channel.
+Use the public GitHub Issue form only for redacted developer collaboration.
+
 ## 1. Agree the scope before preparing anything
 
 Record the partner, input and output mints, maximum input, maximum slippage,
 allowed programs and lookup tables, authorization expiry, reviewer, support
-owner, fee, and success criterion. Disclose any USDC platform fee, its basis
-points, recipient, and floor rounding before a signer authorizes the swap. Do
-not make an economic, execution, or asset-safety claim.
+owner, fee, evidence consumer, and success criterion. Disclose any USDC
+platform fee, its basis points, recipient, and floor rounding before a signer
+authorizes the swap. Do not make an economic, execution, or asset-safety
+claim.
+
+Choose the offer deliberately:
+
+- **PriorSeal** when the buyer needs exact authorization, a one-time relay
+  boundary, and portable execution evidence.
+- **Insight** when the buyer needs a simulation or decision input, without
+  treating it as a price, asset-safety, or investment verdict.
+- **Insight + PriorSeal** when the buyer needs the decision input, exact
+  authority, execution attempt, and evidence connected but independently
+  reviewable.
 
 ## 2. Validate the route without funds
 
@@ -37,14 +53,23 @@ Deployment logs may export only these structured protected-route events:
 - `guarded_jupiter.submit_completed` with its submission outcome
 - `http.request_failed`, filtered by route and reason
 
-Configure the deployment logger/exporter and review aggregate counts. These
-events contain the route, request ID, and outcome only; they exclude request
-bodies, wallet addresses, transaction bytes, and provider credentials. They
-are operational logs, not browser analytics, and do not prove settlement or
-customer satisfaction.
+Configure the deployment logger/exporter and review aggregate counts with
+`npm run jupiter:pilot:metrics -- /absolute/path/to/events.ndjson`. The tool
+rejects records outside the permitted event schema and emits aggregate counts
+only. These events contain the route, request ID, and outcome only; they
+exclude request bodies, wallet addresses, transaction bytes, and provider
+credentials. They are operational logs, not browser analytics, and do not
+prove settlement or customer satisfaction.
+
+Record the following only in the private closeout record, not in public
+analytics: authorization-to-signature conversion, independent-verification
+completion, partner-confirmed value, and support response time. The existing
+server events cannot establish those facts by themselves.
 
 ## 5. Close before expanding
 
 Independently verify the resulting evidence, record the outcome against the
 agreed success criterion, and resolve every failure or unknown submission.
-Expand the pilot only under a newly approved scope.
+Use [the closeout template](../templates/jupiter-pilot-closeout.md) to keep
+the funded GO, evidence result, exceptions, metrics, and expansion decision
+separate. Expand the pilot only under a newly approved scope.
