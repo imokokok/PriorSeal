@@ -1,9 +1,11 @@
 // Generated from cloudflare-schema.mts by npm run core:build. Do not edit directly.
+import { hasGuardedZeroExCommercialFees } from "../application/zeroex/tenant-policy.mjs";
 const SCHEMA_CACHE_TTL_MS = 3e5;
 function createSchemaGuard(now = Date.now) {
   const readyUntil = /* @__PURE__ */ new Map();
   return async (database, config, context, cache) => {
-    const cacheUrl = `https://priorseal.internal/schema/d1-0004/${config.preExecutionProofMode}/${config.archiveCredentials ? "archive" : "public"}/${config.x402 ? "x402" : "unpaid"}/${config.agentMeter ? "agent-meter" : "unmetered"}`;
+    const zeroExCommercial = hasGuardedZeroExCommercialFees(config.guardedZeroEx?.tenantPolicies);
+    const cacheUrl = `https://priorseal.internal/schema/d1-0007/${config.preExecutionProofMode}/${config.archiveCredentials ? "archive" : "public"}/${config.x402 ? "x402" : "unpaid"}/${config.agentMeter ? "agent-meter" : "unmetered"}/${zeroExCommercial ? "zeroex-commercial" : "zeroex-free"}`;
     const currentTime = now();
     if ((readyUntil.get(cacheUrl) ?? 0) > currentTime) return;
     const cacheKey = new Request(cacheUrl);
@@ -19,6 +21,7 @@ function createSchemaGuard(now = Date.now) {
     if (config.archiveCredentials) required.push("project_evidence_archive");
     if (config.x402) required.push("x402_payment_ledger_events");
     if (config.agentMeter) required.push("agent_meter_accounts", "agent_meter_usage", "agent_meter_credit_operations");
+    if (zeroExCommercial) required.push("zeroex_commercial_ledger_events");
     if (config.preExecutionProofMode === "witness-quorum") required.push("witness_attestations");
     const rows = await database.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${required.map(() => "?").join(",")})`).bind(...required).all();
     if (rows.results.length !== required.length) throw new TypeError("Required D1 production tables are missing");

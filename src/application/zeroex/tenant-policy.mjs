@@ -2,6 +2,9 @@
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const ATOMIC = /^(0|[1-9][0-9]*)$/;
 const BASE58_PUBLIC_KEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+function hasGuardedZeroExCommercialFees(policies) {
+  return Boolean(policies?.tenants.some((tenant) => tenant.commercialFee));
+}
 function parseGuardedZeroExTenantPolicySet(value, deploymentPolicy) {
   if (value === void 0 || value === null || value === "") return void 0;
   const root = record(value, "PRIORSEAL_ZEROEX_TENANTS_JSON");
@@ -89,6 +92,7 @@ function commercialError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 export {
+  hasGuardedZeroExCommercialFees,
   parseGuardedZeroExTenantPolicySet,
   resolveGuardedZeroExTenantPolicy
 };

@@ -137,9 +137,12 @@ inside the exact authorization.
 configured Agent tenant is selected only when the prepare route is also
 metered by `PRIORSEAL_AGENT_METER_JSON` and its authenticated account ID
 matches `agentAccountId`; callers never submit a tenant ID. The default tenant
-must not require an Agent account. Start with the public tenant fee-free until
-the disclosed recipient account, jurisdiction, terms, and support process are
-reviewed.
+must not require an Agent account. In a deployment configuration, every
+fee-bearing tenant must bind an active configured Agent account and at least
+one of `POST /v1/0x/guarded-swaps/prepare` or
+`POST /v1/solana/guarded-swaps/prepare` must be a metered route. This keeps
+the public/default tenant fee-free and makes a commercial fee attributable to
+an eligible partner account before any quote is prepared.
 
 ## Protected HTTP contract
 
@@ -159,9 +162,15 @@ returns a `PreparedGuardedZeroExSwap` and a non-secret review.
 Submission accepts a fresh accepted authorization ID, that exact prepared
 package, and a wallet-signed transaction. The relay verifies the unsigned and
 signed message hashes, verifies the payer signature, atomically consumes the
-authorization, and sends the bytes once with no automatic retry. An uncertain
-RPC outcome is returned as `UNKNOWN`; observe that exact signature before any
-further action.
+authorization, and sends the bytes once with no automatic retry. For a
+fee-bearing transaction it first writes an immutable
+`priorseal.zeroex-commercial-ledger.v1` `RELAY_ATTEMPTED` event. If that write
+is unavailable, it does not consume the authorization or broadcast the swap.
+It then records `RELAY_SUBMITTED`, `RELAY_UNKNOWN`, or `RELAY_NOT_CLAIMED` as
+applicable. The ledger contains the tenant, disclosed fee terms, authorization
+and signature—but never wallet keys or signed transaction bytes. A submitted
+relay is still *unconfirmed*: observe that exact Solana signature before
+reporting execution or recognising any fee as settled.
 
 The service has no endpoint that signs for the wallet, rebuilds a quote after
 authorization, accepts an arbitrary raw transaction, or accepts caller-provided
@@ -222,3 +231,7 @@ applicable 0x and Solana rules, token permissions, licensing, consumer terms,
 and jurisdictional obligations have been reviewed. Do not represent the
 simulation, 0x route, or PriorSeal receipt as execution, price, or regulatory
 guarantee.
+
+For migrations, production gating, reconciliation states, and the explicit
+human decisions still needed before charging users, follow
+[the 0x commercial production runbook](../runbooks/zeroex-commercial-production.md).

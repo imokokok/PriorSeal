@@ -6,7 +6,7 @@ import type { GuardedZeroExDeploymentPolicy } from '../application/zeroex/guarde
 import { parseGuardedZeroExTenantPolicySet, type GuardedZeroExTenantPolicySet } from '../application/zeroex/tenant-policy.mjs';
 import { parseZeroExResponseSignatureConfiguration, type ZeroExResponseSignatureConfiguration } from 'priorseal-sdk';
 import { parseX402Config } from '../infrastructure/payments/x402-exact-evm.mjs';
-import { parseAgentMeterConfig } from '../application/commerce/agent-meter.mjs';
+import { parseAgentMeterConfig, type AgentMeterConfig } from '../application/commerce/agent-meter.mjs';
 import { SELFSEEK_BASE_MAINNET_CHAIN_ID, SELFSEEK_BASE_MAINNET_USDC, type SelfserveClaimConfig } from '../application/commerce/selfserve-claim.mjs';
 import { createHash } from 'node:crypto';
 
@@ -106,6 +106,7 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
   const selfserveClaim = selfserveClaimConfig(environment, agentMeter, privateKeyPem);
   const guardedJupiter = guardedJupiterConfig(environment);
   const guardedZeroEx = guardedZeroExConfig(environment);
+  assertGuardedZeroExCommercialReadiness(guardedZeroEx, agentMeter);
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some(entry => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
   }
@@ -167,6 +168,19 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
     validateDeploymentConfig(config, runtimeEnvironment);
   }
   return config;
+}
+
+function assertGuardedZeroExCommercialReadiness(guardedZeroEx: ReturnType<typeof guardedZeroExConfig>, agentMeter: AgentMeterConfig | undefined): void {
+  const feeTenants = guardedZeroEx?.tenantPolicies?.tenants.filter(tenant => tenant.commercialFee) ?? [];
+  if (feeTenants.length === 0) return;
+  if (!agentMeter) throw new TypeError('Fee-bearing guarded 0x tenants require PRIORSEAL_AGENT_METER_JSON');
+  if (!agentMeter.routes.some(route => route.method === 'POST' && (route.path === '/v1/0x/guarded-swaps/prepare' || route.path === '/v1/solana/guarded-swaps/prepare'))) {
+    throw new TypeError('Fee-bearing guarded 0x tenants require a metered guarded 0x prepare route');
+  }
+  for (const tenant of feeTenants) {
+    if (!tenant.agentAccountId) throw new TypeError(`Fee-bearing guarded 0x tenant ${tenant.tenantId} must bind an active Agent account`);
+    if (!agentMeter.accounts.some(account => account.accountId === tenant.agentAccountId && account.status === 'active')) throw new TypeError(`Fee-bearing guarded 0x tenant ${tenant.tenantId} must name an active configured Agent account`);
+  }
 }
 
 function guardedZeroExConfig(environment: RuntimeEnvironmentInput): { zeroExApiKey: string; insightApiKey: string; rpcUrl: string; policy: GuardedZeroExDeploymentPolicy; responseSignature: ZeroExResponseSignatureConfiguration; tenantPolicies?: GuardedZeroExTenantPolicySet; zeroExBaseUrl?: string; insightBaseUrl?: string } | undefined {
