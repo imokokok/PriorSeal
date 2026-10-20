@@ -3,6 +3,7 @@ import { archiveEntry, archivePage, type ArchiveAccess, type ArchiveQuery } from
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from '../../domain/merkle-log.mjs';
 import { assertReceiptIdentity } from './receipt-identity.mjs';
 import { assertX402PaymentLedgerEvent, type X402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
+import { assertZeroExCommercialLedgerEvent, type ZeroExCommercialLedgerEvent } from '../../domain/zeroex-commercial-ledger.mjs';
 import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation } from '../../application/commerce/agent-meter.mjs';
 import type { Authorization, AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { ObservationJob, WorkerObservation } from '../../application/observations/observation-worker.mjs';
@@ -18,12 +19,14 @@ type IdempotencyRecord = { requestHash: string; response: unknown; expiresAt: nu
 type MerkleAcceptance = Pick<AuthorizationAcceptance, 'sequence' | 'entryHash'>;
 
 function paymentLedgerEventOrder(type: X402PaymentLedgerEvent['type']) { return type === 'PAYMENT_AUTHORIZED' ? 0 : type === 'REFUND_RECORDED' ? 2 : 1; }
+function zeroExCommercialLedgerEventOrder(type: ZeroExCommercialLedgerEvent['type']) { return type === 'RELAY_ATTEMPTED' ? 0 : 1; }
 
 export function createMemoryStore({ clock = () => Date.now() } = {}) {
   const intents = new Map<string, Intent>(), receipts = new Map<string, Receipt>(), observations = new Map<string, Observation[]>(), idempotency = new Map<string, IdempotencyRecord>(), jobs = new Map<string, ObservationJob>(), authorizations = new Map<string, AuthorizationRecord>(), archive = new Map<string, ArchiveEntry>();
   const archiveEntries: ArchiveEntry[] = [], authorizationLog: LogEntry[] = [];
   const logByAuthorizationHash = new Map<string, LogEntry>(), merkleNodes = new Map<string, string>(), usedAuthorizationNonces = new Set<string>();
   const x402PaymentLedger = new Map<string, Map<string, X402PaymentLedgerEvent>>();
+  const zeroExCommercialLedger = new Map<string, Map<string, ZeroExCommercialLedgerEvent>>();
   const agentMeterAccounts = new Map<string, { credentialHash: string; provisionedCredits: bigint; remainingCredits: bigint; status: AgentMeterAccount['status'] }>();
   const agentMeterUsage = new Map<string, AgentUsageReservation>();
   const agentMeterCreditOperations = new Map<string, AgentCreditOperation>();
@@ -50,6 +53,19 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
   async listX402PaymentLedgerEvents(ledgerId: string) {
     if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError('Invalid x402 payment ledger identifier');
     return [...(x402PaymentLedger.get(ledgerId)?.values() ?? [])].sort((left, right) => left.occurredAt - right.occurredAt || paymentLedgerEventOrder(left.type) - paymentLedgerEventOrder(right.type) || left.eventId.localeCompare(right.eventId)).map(value => structuredClone(value));
+  },
+  async appendZeroExCommercialLedgerEvent(value: ZeroExCommercialLedgerEvent) {
+    const event = assertZeroExCommercialLedgerEvent(value);
+    const entries = zeroExCommercialLedger.get(event.ledgerId) ?? new Map<string, ZeroExCommercialLedgerEvent>();
+    zeroExCommercialLedger.set(event.ledgerId, entries);
+    const existing = entries.get(event.eventId);
+    if (existing) return structuredClone(existing);
+    entries.set(event.eventId, structuredClone(event));
+    return structuredClone(event);
+  },
+  async listZeroExCommercialLedgerEvents(ledgerId: string) {
+    if (!/^zcl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError('Invalid 0x commercial ledger identifier');
+    return [...(zeroExCommercialLedger.get(ledgerId)?.values() ?? [])].sort((left, right) => left.occurredAt - right.occurredAt || zeroExCommercialLedgerEventOrder(left.type) - zeroExCommercialLedgerEventOrder(right.type) || left.eventId.localeCompare(right.eventId)).map(value => structuredClone(value));
   },
   async provisionAgentMeterAccount(input: AgentMeterAccount) {
     const provisionedCredits = BigInt(input.provisionedCredits);

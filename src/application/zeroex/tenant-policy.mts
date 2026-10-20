@@ -26,6 +26,11 @@ export type ResolvedGuardedZeroExTenantPolicy = {
   policy: Omit<ZeroExGuardPolicy, 'feePayer'>
 }
 
+/** True only when a server-owned tenant policy actually collects a 0x fee. */
+export function hasGuardedZeroExCommercialFees(policies: GuardedZeroExTenantPolicySet | undefined): boolean {
+  return Boolean(policies?.tenants.some(tenant => tenant.commercialFee));
+}
+
 /**
  * Parse the server-only tenant policy set. Each entry may only narrow the
  * deployment policy; it can never expand assets, amount, or slippage limits.

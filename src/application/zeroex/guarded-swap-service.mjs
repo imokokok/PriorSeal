@@ -11,7 +11,8 @@ import {
 } from "priorseal-sdk";
 import { createJupiterV0Compiler } from "../jupiter/guarded-swap-service.mjs";
 import { resolveGuardedZeroExTenantPolicy } from "./tenant-policy.mjs";
-import { canonicalize } from "../../domain/hashing.mjs";
+import { canonicalize, hashJson } from "../../domain/hashing.mjs";
+import { buildZeroExCommercialLedgerEvent } from "../../domain/zeroex-commercial-ledger.mjs";
 function createGuardedZeroExSwapService(options) {
   const apiKey = requiredSecret(options.zeroExApiKey, "ZEROEX_API_KEY");
   const insightKey = requiredSecret(options.insightApiKey, "INSIGHT_API_KEY");
@@ -50,15 +51,47 @@ function createGuardedZeroExSwapService(options) {
       if (!equalBytes(messageBytes(unsigned), messageBytes(signed))) throw new ZeroExGuardedSwapError("SIGNED_TRANSACTION_MESSAGE_MISMATCH", "The signed transaction message differs from the guarded prepared message");
       await assertRequiredSignature(signed);
       const signature = signedTransactionSignature(signed);
-      await assertAcceptedAuthorization(options.authorizationStore, input.authorizationId, input.prepared, now);
+      const acceptedAuthorization = await assertAcceptedAuthorization(options.authorizationStore, input.authorizationId, input.prepared, now);
+      const intentHash = acceptedAuthorization.authorization.intentHash;
+      const commercialLedger = input.prepared.commercial.fee ? options.commercialLedger : void 0;
+      const commercialEvent = (type) => buildZeroExCommercialLedgerEvent({
+        type,
+        occurredAt: now(),
+        authorizationId: input.authorizationId,
+        intentHash,
+        messageHash: input.prepared.messageHash,
+        transactionSignature: signature,
+        commercial: input.prepared.commercial
+      });
+      if (input.prepared.commercial.fee) {
+        if (!commercialLedger) throw new ZeroExGuardedSwapError("ZEROEX_COMMERCIAL_LEDGER_UNAVAILABLE", "A durable 0x commercial ledger is required before broadcasting a fee-bearing transaction");
+        try {
+          await commercialLedger.appendZeroExCommercialLedgerEvent(commercialEvent("RELAY_ATTEMPTED"));
+        } catch {
+          throw new ZeroExGuardedSwapError("ZEROEX_COMMERCIAL_LEDGER_UNAVAILABLE", "Unable to record the fee-bearing 0x relay attempt");
+        }
+      }
       const claim = await options.authorizationStore.claimAuthorization(input.authorizationId, signature);
-      if (!claim.ok) throw new ZeroExGuardedSwapError(claim.code ?? "AUTHORIZATION_ALREADY_USED", "The PriorSeal authorization was already used or is unavailable");
+      if (!claim.ok) {
+        if (commercialLedger) await commercialLedger.appendZeroExCommercialLedgerEvent(commercialEvent("RELAY_NOT_CLAIMED")).catch(() => {
+        });
+        throw new ZeroExGuardedSwapError(claim.code ?? "AUTHORIZATION_ALREADY_USED", "The PriorSeal authorization was already used or is unavailable");
+      }
+      let result;
       try {
         const relayedSignature = await connection.sendRawTransaction(await signed.serialize(), { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 0n });
-        return relayedSignature === signature ? { signature, submission: "SUBMITTED" } : { signature, submission: "UNKNOWN" };
+        result = relayedSignature === signature ? { signature, submission: "SUBMITTED" } : { signature, submission: "UNKNOWN" };
       } catch {
-        return { signature, submission: "UNKNOWN" };
+        result = { signature, submission: "UNKNOWN" };
       }
+      if (commercialLedger) {
+        try {
+          await commercialLedger.appendZeroExCommercialLedgerEvent(commercialEvent(result.submission === "SUBMITTED" ? "RELAY_SUBMITTED" : "RELAY_UNKNOWN"));
+        } catch {
+          return { signature, submission: "UNKNOWN" };
+        }
+      }
+      return result;
     }
   };
 }
@@ -122,7 +155,18 @@ function equalBytes(left, right) {
 async function assertAcceptedAuthorization(store, authorizationId, prepared, now) {
   const record = await store.getAuthorization(authorizationId);
   if (!record || record.status !== "ACCEPTED" || record.uses !== 0 || record.boundTxHash !== null) throw new ZeroExGuardedSwapError("AUTHORIZATION_NOT_FOUND", "A fresh accepted PriorSeal authorization is required");
-  if (record.authorization.intentHash !== prepared.intent.intentHash || record.authorization.expiresAt < Math.floor(now() / 1e3) || record.authorization.delegate.executor !== prepared.transaction.feePayer || canonicalize(record.authorization.intent) !== canonicalize(prepared.intent)) throw new ZeroExGuardedSwapError("AUTHORIZATION_INTENT_MISMATCH", "The accepted authorization does not bind this guarded 0x transaction");
+  if (record.authorization.intentHash !== preparedIntentHash(prepared) || record.authorization.expiresAt < Math.floor(now() / 1e3) || record.authorization.delegate.executor !== prepared.transaction.feePayer || canonicalize(unsignedIntent(record.authorization.intent)) !== canonicalize(unsignedIntent(prepared.intent))) throw new ZeroExGuardedSwapError("AUTHORIZATION_INTENT_MISMATCH", "The accepted authorization does not bind this guarded 0x transaction");
+  return record;
+}
+function preparedIntentHash(prepared) {
+  const { intentHash, ...intent } = prepared.intent;
+  const expected = hashJson(intent);
+  if (intentHash !== void 0 && intentHash !== expected) throw new ZeroExGuardedSwapError("AUTHORIZATION_INTENT_MISMATCH", "The prepared 0x intent hash does not match the exact prepared intent");
+  return expected;
+}
+function unsignedIntent(value) {
+  const { intentHash: _intentHash, ...intent } = value;
+  return intent;
 }
 function assertAuthorizationId(value) {
   if (typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(value)) throw new TypeError("authorizationId is invalid");
