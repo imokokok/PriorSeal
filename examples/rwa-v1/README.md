@@ -57,5 +57,4 @@ The sample's `0x1234` call is an arbitrary simulated exact call, **not a stock
 purchase contract ABI**. CONFIRMED execution in the example is a synthetic observer
 assertion used to test signatures and binding. No live execution is claimed.
 
-See [implementation plan](../../docs/rwa-adaptation-plan.md) and
-[validation record](../../docs/rwa-validation.md).
+This archived v1 example remains an isolated local verification fixture.
