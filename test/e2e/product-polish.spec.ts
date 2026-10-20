@@ -29,8 +29,8 @@ test('capability-aware navigation exposes available workflows and blocks an unav
   await expect(page.getByRole('link', { name: 'Quickstart' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Exact-call authorization' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Project archive' })).toBeVisible()
-  await expect(page.locator('.nav-unavailable')).toContainText('Guarded Jupiter swap')
-  await expect(page.locator('.nav-unavailable')).toContainText('Deployment setup required')
+  const guardedJupiter = page.locator('.nav-unavailable').filter({ hasText: 'Guarded Jupiter swap' })
+  await expect(guardedJupiter).toContainText('Deployment setup required')
 
   await page.goto('/app/intents/exact-call')
   await expect(page.getByRole('link', { name: 'Exact-call authorization' })).toHaveAttribute('aria-current', 'page')
