@@ -15,6 +15,7 @@ const SELECTOR_EXACT_INPUT_SINGLE_7W = "0x04e45aaf";
 const ENVELOPE_NAMESPACE = "agent-call-envelope.v1";
 const POLICY_NAMESPACE = "web3-agent-kit.policy-decision.v1";
 const DEADLINE_OFFSET = 3000n;
+const DEADLINE_SOURCE = "block.timestamp + 3000 at freeze";
 const sheetPath = process.argv[2];
 if (!sheetPath) {
   console.error("Usage: node scripts/verify-wak-frozen-multicall-sheet.mjs <path/to/run-sheet.json>");
@@ -78,14 +79,27 @@ async function main() {
   const innerWords = innerHex.slice(8).match(/.{64}/g);
   const reEncoded = encodeFunctionData({ abi: multicallAbi, functionName: "multicall", args: [deadline, [`0x${innerHex}`]] });
   console.log("re-encode round-trip byte-identical:", reEncoded === data ? "YES" : "NO");
-  console.log("multicall deadline:", deadline.toString(), "| deadlineSource:", sheet.routerCall.deadlineSource);
-  const deadlineConsistent = BigInt(sheet.routerCall.deadline) === deadline;
+  const routerCall = sheet.routerCall;
+  const deadlineValue = routerCall.deadline;
+  const declaredDeadline = typeof deadlineValue === "string" ? deadlineValue : typeof deadlineValue === "number" && Number.isSafeInteger(deadlineValue) && deadlineValue >= 0 ? String(deadlineValue) : null;
+  const deadlineSource = routerCall.deadlineSource;
+  if (declaredDeadline === null || !/^[0-9]+$/.test(declaredDeadline)) {
+    throw new Error("routerCall.deadline must be a non-negative safe integer or decimal-string timestamp");
+  }
+  if (typeof deadlineSource !== "string") throw new Error("routerCall.deadlineSource must be present");
+  console.log("multicall deadline:", deadline.toString(), "| deadlineSource:", deadlineSource);
+  const deadlineConsistent = BigInt(declaredDeadline) === deadline;
   const deadlineOffsetOk = deadline === BigInt(sheet.generatedAt) + DEADLINE_OFFSET;
+  const deadlineSourceOk = deadlineSource === DEADLINE_SOURCE;
   console.log(`calldata deadline == routerCall.deadline: ${deadlineConsistent ? "YES" : "NO"}`);
   console.log(`deadline == generatedAt + ${DEADLINE_OFFSET}: ${deadlineOffsetOk ? "YES" : "NO"} (GO clause, v3 hard check)`);
+  console.log(`deadlineSource == ${JSON.stringify(DEADLINE_SOURCE)}: ${deadlineSourceOk ? "YES" : "NO"}`);
   if (!deadlineConsistent) throw new Error("calldata deadline != routerCall.deadline");
   if (!deadlineOffsetOk) {
     throw new Error(`deadline ${deadline} != generatedAt(${sheet.generatedAt}) + ${DEADLINE_OFFSET}: OUT-09 locked deadline=generatedAt+3000 for the 1800s GO window (+600 would revert Transaction too old)`);
+  }
+  if (!deadlineSourceOk) {
+    throw new Error(`routerCall.deadlineSource must be ${JSON.stringify(DEADLINE_SOURCE)} for the locked +3000 deadline clause`);
   }
   console.log("inner selector:", innerSelector, "| inner words:", innerWords.length);
   if (innerSelector !== SELECTOR_EXACT_INPUT_SINGLE_7W) throw new Error("inner selector is not the 7-word exactInputSingle");
