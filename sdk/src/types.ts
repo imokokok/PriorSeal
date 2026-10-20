@@ -416,6 +416,8 @@ export type DeploymentCapabilities = {
     guardedJupiter: {
       enabled: boolean
       reason: 'READY' | 'NOT_CONFIGURED' | 'SOLANA_PROFILE_UNAVAILABLE' | 'SOLANA_RPC_UNAVAILABLE' | 'ISSUER_UNAVAILABLE' | 'PRE_EXECUTION_PROOF_UNAVAILABLE' | 'STORAGE_UNAVAILABLE'
+      /** Server-owned terms only; absent when this deployment has no Jupiter platform fee. */
+      commercial?: { platformFee: { feeBps: number; inputMint: string; rounding: 'FLOOR' } }
     }
     /** Optional during the 0x capability-schema rollout. */
     guardedZeroEx?: {

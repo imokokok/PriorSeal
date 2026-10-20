@@ -81,11 +81,19 @@ test('SDK rejects malformed capability claims instead of exposing them as typed 
   const solana = { ...valid, chains: [0] };
   const solanaClient = createPriorSealClient({ fetch: async () => response(solana) });
   assert.deepEqual(await solanaClient.capabilities(), solana);
+  const commercialJupiter = {
+    ...solana,
+    integrations: { guardedJupiter: { enabled: true, reason: 'READY', commercial: { platformFee: { feeBps: 10, inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', rounding: 'FLOOR' } } } },
+  };
+  const commercialJupiterClient = createPriorSealClient({ fetch: async () => response(commercialJupiter) });
+  assert.deepEqual(await commercialJupiterClient.capabilities(), commercialJupiter);
   for (const malformed of [
     { ...valid, executionProfiles: [42] },
     { ...valid, chains: ['8453'] },
     { ...valid, chains: [-1] },
     { ...valid, authorizers: [null] },
+    { ...commercialJupiter, integrations: { guardedJupiter: { enabled: true, reason: 'READY', commercial: { platformFee: { feeBps: 0, inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', rounding: 'FLOOR' } } } } },
+    { ...commercialJupiter, integrations: { guardedJupiter: { enabled: true, reason: 'READY', commercial: { platformFee: { feeBps: 10, inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', rounding: 'CEILING' } } } } },
   ]) {
     const badClient = createPriorSealClient({ fetch: async () => response(malformed) });
     await assert.rejects(badClient.capabilities(), { code: 'INVALID_RESPONSE' });

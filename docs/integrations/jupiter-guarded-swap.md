@@ -112,6 +112,17 @@ Creating a missing ATA is a separate owner-signed Solana transaction. Do not
 make that transaction from the application server and do not use a private key
 or fee-payer secret for it.
 
+### Discover fee terms before preparation
+
+`GET /v1/capabilities` publishes a configured deployment-owned Jupiter fee at
+`integrations.guardedJupiter.commercial.platformFee`. It contains only
+`feeBps`, `inputMint`, and `rounding: "FLOOR"`; it is absent when the protected
+Jupiter service has no platform-fee configuration. Treat it as an early
+disclosure for a UI or integration, not as a transaction commitment: the exact
+fee account and atomic fee remain part of the prepared review record that the
+wallet approves. The absence of this field does not waive separately disclosed
+service usage charges.
+
 The server exposes two no-store routes only when this configuration is present:
 
 - `POST /v1/jupiter/guarded-swaps/prepare` accepts mint addresses, atomic
