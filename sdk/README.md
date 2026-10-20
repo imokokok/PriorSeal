@@ -30,6 +30,22 @@ The package ships a fail-closed adapter for Jupiter Router `ExactIn` builds on S
 
 Authorization acceptance and observation are metered Agent routes: pass the deployment-issued credential via the `x-priorseal-agent-key` header with an `idempotency-key` per request (see the [agent usage model](https://github.com/imokokok/PriorSeal/blob/main/docs/product/agent-usage-model.md)).
 
+## Solana 0x guarded swap
+
+`createZeroExRouterClient`, `prepareGuardedZeroExSwap`,
+`reviewGuardedZeroExSwap`, `authorizeGuardedZeroExSwap`, and
+`observeGuardedZeroExSwap` provide the same self-custodial guardrail for 0x's
+Solana raw-instruction API. The deployment fixes the compute budget, rejects
+sponsored routes, binds all returned instructions to the final message, and
+uses `POST /v1/0x/guarded-swaps/prepare` plus
+`POST /v1/0x/guarded-swaps/submit` for protected preparation and one relay
+attempt. Read the [0x guarded-swap integration guide](https://github.com/imokokok/PriorSeal/blob/main/docs/integrations/zeroex-guarded-swap.md) before enabling it; 0x Solana is beta and neither a route nor a receipt guarantees price or settlement.
+
+Deployments can optionally attach a tenant-bound `ZeroExCommercialFeePolicy`.
+The fee terms are server-owned, verified against the recipient's Solana token
+account, exposed before authorization, and committed into the resulting
+PriorSeal evidence; client requests cannot set or replace them.
+
 ```ts
 import {
   createPriorSealClient,

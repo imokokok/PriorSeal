@@ -34,10 +34,11 @@ const AGENT_ACCOUNT_ERROR_STATUS = Object.freeze({ AGENT_OPERATOR_CREDENTIAL_INV
 const CLAIM_ERROR_STATUS = Object.freeze({ CLAIM_INVALID_REQUEST: 400, CLAIM_SIGNATURE_INVALID: 400, CLAIM_TX_NOT_FOUND: 404, CLAIM_TX_NOT_ACCEPTED: 400, CLAIM_TX_SENDER_MISMATCH: 403, CLAIM_TX_FAILED: 400, CLAIM_BELOW_MINIMUM: 400, CLAIM_ACCOUNT_PREEXISTING: 409, CLAIM_ACCOUNT_REVOKED: 403, CLAIM_CHAIN_UNAVAILABLE: 503 });
 const JUPITER_ERROR_STATUS = Object.freeze({ FEE_PAYER_MISMATCH: 403, INPUT_AMOUNT_EXCEEDS_POLICY: 403, SLIPPAGE_EXCEEDS_POLICY: 403, INPUT_MINT_NOT_ALLOWED: 403, OUTPUT_MINT_NOT_ALLOWED: 403, TIP_INSTRUCTION_FORBIDDEN: 403, PROGRAM_NOT_ALLOWED: 403, LOOKUP_TABLE_NOT_ALLOWED: 403, COMPILED_SIGNER_POLICY_REJECTED: 403, COMPILED_PROGRAM_NOT_ALLOWED: 403, JUPITER_INSTRUCTION_OMITTED: 403, UNEXPECTED_LOOKUP_TABLE: 403, COMPUTE_LIMIT_EXCEEDS_POLICY: 403, COMPUTE_PRICE_EXCEEDS_POLICY: 403, PRIORITY_FEE_EXCEEDS_POLICY: 403, PLATFORM_FEE_NOT_CONFIGURED: 403, PLATFORM_FEE_INPUT_MINT_REQUIRED: 403, PLATFORM_FEE_POLICY_MISMATCH: 403, PLATFORM_FEE_BELOW_MINIMUM: 400, PLATFORM_FEE_ACCOUNT_OMITTED: 502, FEE_ACCOUNT_UNAVAILABLE: 503, FEE_ACCOUNT_MISMATCH: 503, PREPARED_WIRE_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_SIGNATURE_MISSING: 400, SIGNED_TRANSACTION_SIGNATURE_INVALID: 400, AUTHORIZATION_INTENT_MISMATCH: 403 });
 const WRAPPED_SOL_MINT = "So11111111111111111111111111111111111111112";
+const GUARDED_SWAP_ERROR_STATUS = Object.freeze({ PREPARED_WIRE_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_MESSAGE_MISMATCH: 409, SIGNED_TRANSACTION_SIGNATURE_MISSING: 400, SIGNED_TRANSACTION_SIGNATURE_INVALID: 400, AUTHORIZATION_INTENT_MISMATCH: 403, INPUT_AMOUNT_EXCEEDS_POLICY: 403, SLIPPAGE_EXCEEDS_POLICY: 403, OUTPUT_AMOUNT_BELOW_REQUEST_MINIMUM: 403, OUTPUT_MINT_NOT_ALLOWED: 403, INPUT_MINT_NOT_ALLOWED: 403, PROGRAM_NOT_ALLOWED: 403, COMPILED_PROGRAM_NOT_ALLOWED: 403, COMPUTE_LIMIT_EXCEEDS_POLICY: 403, COMPUTE_PRICE_EXCEEDS_POLICY: 403, PRIORITY_FEE_EXCEEDS_POLICY: 403, ZEROEX_AMOUNT_UNSAFE: 400, ZEROEX_BUILD_INVALID: 502, ZEROEX_BUILD_REJECTED: 502, ZEROEX_RESPONSE_INVALID: 502, ZEROEX_RESPONSE_TOO_LARGE: 502, ZEROEX_BUILD_MISMATCH: 409, ZEROEX_SPONSOR_FORBIDDEN: 403, ZEROEX_COMPUTE_BUDGET_MISMATCH: 409, ZEROEX_TENANT_UNAUTHORIZED: 403, ZEROEX_COMMERCIAL_FEE_ASSET_MISMATCH: 403, ZEROEX_COMMERCIAL_COMMITMENT_RESERVED: 400, ZEROEX_COMMERCIAL_COMMITMENT_MISMATCH: 409, ZEROEX_COMMERCIAL_FEE_MISMATCH: 409 });
 function requester(req, trustProxy) {
   return trustProxy ? String(req.headers["cf-connecting-ip"] ?? "").trim() || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress || "unknown" : req.socket.remoteAddress || "unknown";
 }
-function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, guardedJupiterRequestTimeoutMs = 45e3, observer = observeEvm, corsOrigins = [], trustProxy = false, x402, guardedJupiter, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
+function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, guardedJupiterRequestTimeoutMs = 45e3, observer = observeEvm, corsOrigins = [], trustProxy = false, x402, guardedJupiter, guardedZeroEx, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
   if (privateKeyPem || publicKeyPem) {
     if (!privateKeyPem || !publicKeyPem) throw new TypeError("Issuer private and public keys must be configured together");
     assertEd25519KeyPair(privateKeyPem, publicKeyPem);
@@ -45,13 +46,13 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
   const archiveAccess = createArchiveAccess(archiveCredentials);
   const serveStaticAsset = staticDir ? createStaticAssetHandler(staticDir) : null;
   const x402Payments = x402 ? createX402PaymentService(x402) : null;
-  const readDeploymentCapabilities = () => deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, selfserveClaim, guardedJupiterConfigured: Boolean(guardedJupiter), now: now() });
+  const readDeploymentCapabilities = () => deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, selfserveClaim, guardedJupiterConfigured: Boolean(guardedJupiter), guardedZeroExConfigured: Boolean(guardedZeroEx), now: now() });
   if (!Number.isSafeInteger(guardedJupiterRequestTimeoutMs) || guardedJupiterRequestTimeoutMs < requestTimeoutMs || guardedJupiterRequestTimeoutMs > 6e4) throw new TypeError("guardedJupiterRequestTimeoutMs must be an integer from requestTimeoutMs through 60000");
-  return createServer({ requestTimeout: guardedJupiter ? guardedJupiterRequestTimeoutMs : requestTimeoutMs }, async (req, res) => {
+  return createServer({ requestTimeout: guardedJupiter || guardedZeroEx ? guardedJupiterRequestTimeoutMs : requestTimeoutMs }, async (req, res) => {
     const requestId = typeof req.headers["x-request-id"] === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(req.headers["x-request-id"]) ? req.headers["x-request-id"] : randomUUID();
     const path = requestPath(req);
-    const isGuardedJupiterRequest = guardedJupiter && req.method === "POST" && (path === "/v1/jupiter/guarded-swaps/prepare" || path === "/v1/jupiter/guarded-swaps/submit");
-    const deadline = createRequestDeadline(req, isGuardedJupiterRequest ? guardedJupiterRequestTimeoutMs : requestTimeoutMs);
+    const isGuardedSwapRequest = (guardedJupiter || guardedZeroEx) && req.method === "POST" && (path === "/v1/jupiter/guarded-swaps/prepare" || path === "/v1/jupiter/guarded-swaps/submit" || path === "/v1/0x/guarded-swaps/prepare" || path === "/v1/0x/guarded-swaps/submit" || path === "/v1/solana/guarded-swaps/prepare" || path === "/v1/solana/guarded-swaps/submit");
+    const deadline = createRequestDeadline(req, isGuardedSwapRequest ? guardedJupiterRequestTimeoutMs : requestTimeoutMs);
     const cleanup = () => deadline.cleanup();
     res.once("close", cleanup);
     res.once("finish", cleanup);
@@ -61,6 +62,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
     let captureResponse = false;
     let capturedResponse;
     let meterReservation;
+    let meterAccountId;
     let meterResponseStatus;
     let meterOutcome;
     const respond = (status, body, headers = {}) => {
@@ -240,7 +242,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       if (req.method === "GET" && path === "/v1/version") return respond(200, { service: "priorseal", version, protocol: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.witness-attestation.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1"], requestId });
       if (req.method === "GET" && path === "/openapi/v1.json") {
         const capabilities = await readDeploymentCapabilities();
-        return respond(200, openApiSpec({ guardedJupiterEnabled: capabilities.integrations.guardedJupiter.enabled }), { "cache-control": "public, max-age=300" });
+        return respond(200, openApiSpec({ guardedJupiterEnabled: capabilities.integrations.guardedJupiter.enabled, guardedZeroExEnabled: capabilities.integrations.guardedZeroEx.enabled }), { "cache-control": "public, max-age=300" });
       }
       if (req.method === "POST" && path === "/v1/jupiter/guarded-swaps/prepare") {
         if (!guardedJupiter) throw new PriorSealError("NOT_FOUND", "Guarded Jupiter preparation is not enabled on this deployment");
@@ -254,6 +256,50 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         if (!isRecord(body) || !isRecord(body.prepared) || typeof body.authorizationId !== "string" || typeof body.signedTransactionBase64 !== "string") throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter submission requires authorizationId, prepared and signedTransactionBase64");
         const result = await guardedJupiter.submit({ authorizationId: body.authorizationId, prepared: body.prepared, signedTransactionBase64: body.signedTransactionBase64 }, { signal: deadline.signal });
         return respond(result.submission === "UNKNOWN" ? 202 : 200, { ...result, requestId }, { "cache-control": "no-store" });
+      }
+      if (req.method === "POST" && path === "/v1/0x/guarded-swaps/prepare") {
+        if (!guardedZeroEx) throw new PriorSealError("NOT_FOUND", "Guarded 0x preparation is not enabled on this deployment");
+        assertOnlyFields(body, ["intentId", "inputMint", "outputMint", "amount", "taker", "slippageBps", "minimumOutputAmountAtomic", "sourceAssetId", "contextCommitments"], "guarded 0x preparation");
+        const result = await guardedZeroEx.prepare(body, { signal: deadline.signal, ...meterAccountId ? { agentAccountId: meterAccountId } : {} });
+        return respond(201, { ...result, requestId }, { "cache-control": "no-store" });
+      }
+      if (req.method === "POST" && path === "/v1/0x/guarded-swaps/submit") {
+        if (!guardedZeroEx) throw new PriorSealError("NOT_FOUND", "Guarded 0x submission is not enabled on this deployment");
+        assertOnlyFields(body, ["authorizationId", "prepared", "signedTransactionBase64"], "guarded 0x submission");
+        if (!isRecord(body) || !isRecord(body.prepared) || typeof body.authorizationId !== "string" || typeof body.signedTransactionBase64 !== "string") throw new PriorSealError("INVALID_REQUEST", "Guarded 0x submission requires authorizationId, prepared and signedTransactionBase64");
+        const result = await guardedZeroEx.submit({ authorizationId: body.authorizationId, prepared: body.prepared, signedTransactionBase64: body.signedTransactionBase64 }, { signal: deadline.signal });
+        return respond(result.submission === "UNKNOWN" ? 202 : 200, { ...result, requestId }, { "cache-control": "no-store" });
+      }
+      if (req.method === "POST" && path === "/v1/solana/guarded-swaps/prepare") {
+        assertOnlyFields(body, ["provider", "intentId", "inputMint", "outputMint", "amount", "taker", "slippageBps", "maxAccounts", "mode", "minimumOutputAmountAtomic", "sourceAssetId", "contextCommitments"], "guarded Solana preparation");
+        if (body.provider === "jupiter") {
+          if (!guardedJupiter) throw new PriorSealError("NOT_FOUND", "Guarded Jupiter preparation is not enabled on this deployment");
+          const { provider: _provider, ...request } = body;
+          const result = await guardedJupiter.prepare(request, { signal: deadline.signal });
+          return respond(201, { provider: "jupiter", ...result, requestId }, { "cache-control": "no-store" });
+        }
+        if (body.provider === "0x") {
+          if (!guardedZeroEx) throw new PriorSealError("NOT_FOUND", "Guarded 0x preparation is not enabled on this deployment");
+          const { provider: _provider, maxAccounts: _maxAccounts, mode: _mode, ...request } = body;
+          const result = await guardedZeroEx.prepare(request, { signal: deadline.signal, ...meterAccountId ? { agentAccountId: meterAccountId } : {} });
+          return respond(201, { provider: "0x", ...result, requestId }, { "cache-control": "no-store" });
+        }
+        throw new PriorSealError("INVALID_REQUEST", "Guarded Solana preparation provider must be jupiter or 0x");
+      }
+      if (req.method === "POST" && path === "/v1/solana/guarded-swaps/submit") {
+        assertOnlyFields(body, ["authorizationId", "prepared", "signedTransactionBase64"], "guarded Solana submission");
+        if (!isRecord(body) || !isRecord(body.prepared) || typeof body.authorizationId !== "string" || typeof body.signedTransactionBase64 !== "string") throw new PriorSealError("INVALID_REQUEST", "Guarded Solana submission requires authorizationId, prepared and signedTransactionBase64");
+        if (body.prepared.schema === "priorseal.jupiter-guarded-swap.v1") {
+          if (!guardedJupiter) throw new PriorSealError("NOT_FOUND", "Guarded Jupiter submission is not enabled on this deployment");
+          const result = await guardedJupiter.submit({ authorizationId: body.authorizationId, prepared: body.prepared, signedTransactionBase64: body.signedTransactionBase64 }, { signal: deadline.signal });
+          return respond(result.submission === "UNKNOWN" ? 202 : 200, { provider: "jupiter", ...result, requestId }, { "cache-control": "no-store" });
+        }
+        if (body.prepared.schema === "priorseal.zeroex-guarded-swap.v1") {
+          if (!guardedZeroEx) throw new PriorSealError("NOT_FOUND", "Guarded 0x submission is not enabled on this deployment");
+          const result = await guardedZeroEx.submit({ authorizationId: body.authorizationId, prepared: body.prepared, signedTransactionBase64: body.signedTransactionBase64 }, { signal: deadline.signal });
+          return respond(result.submission === "UNKNOWN" ? 202 : 200, { provider: "0x", ...result, requestId }, { "cache-control": "no-store" });
+        }
+        throw new PriorSealError("INVALID_REQUEST", "Guarded Solana submission has an unsupported prepared schema");
       }
       if (req.method === "POST" && path === "/v1/intents") {
         const result = await createIntent({ input: body, idempotencyKey: typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : void 0, store, policy, now });
@@ -338,7 +384,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         await deadline.run(dispatch);
       } catch (error) {
         const code = error instanceof PriorSealError ? error.code : errorCode(error) || "INTERNAL_ERROR";
-        const status = ERROR_STATUS[code] ?? AGENT_ACCOUNT_ERROR_STATUS[code] ?? CLAIM_ERROR_STATUS[code] ?? JUPITER_ERROR_STATUS[code] ?? 500;
+        const status = ERROR_STATUS[code] ?? AGENT_ACCOUNT_ERROR_STATUS[code] ?? CLAIM_ERROR_STATUS[code] ?? JUPITER_ERROR_STATUS[code] ?? GUARDED_SWAP_ERROR_STATUS[code] ?? 500;
         const safeUpstreamDiagnostic = code === "UPSTREAM_INVALID_JSON";
         const responseStatus = safeUpstreamDiagnostic ? 502 : status;
         if (code === "REQUEST_TIMEOUT") deadline.closeAfterResponse(res);
@@ -353,6 +399,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
           const requestKey = typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : void 0;
           const metered = await agentMeter.authorize({ method: req.method, pathname: path, credential, requestKey, now: now() });
           meterReservation = metered?.reservation;
+          meterAccountId = metered?.accountId;
         } catch (error) {
           const code = errorCode(error) || "INTERNAL_ERROR";
           const status = ERROR_STATUS[code] ?? AGENT_ACCOUNT_ERROR_STATUS[code] ?? CLAIM_ERROR_STATUS[code] ?? 500;
@@ -520,7 +567,7 @@ function keyRegistryDocument(issuer, keyRegistry) {
   return { schema: "priorseal.keys.v1", issuer, keys: keyRegistry.list(), verifierVersion: "3.0.0", schemaVersions: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1"] };
 }
 const OPENAPI = { openapi: "3.1.0", info: { title: "PriorSeal API", version: "2.0.0", description: "Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts." }, paths: { "/v1/capabilities": { get: { summary: "Deployment configuration and workflow capabilities" } }, "/v1/archive": { get: { summary: "List private uploaded evidence with a project bearer credential" }, post: { summary: "Archive immutable evidence with a writer credential" } }, "/v1/archive/export": { get: { summary: "Export a private snapshot page including raw artifacts" } }, "/v1/archive/{entryId}": { get: { summary: "Read private project evidence" } }, "/v1/intents": { post: { summary: "Create a legacy unsigned intent draft", deprecated: true, responses: { "201": { description: "Created" } } } }, "/v1/authorizations/prepare": { post: { summary: "Canonicalize an authorization and return EIP-712 typed data or a Solana message" } }, "/v1/authorizations": { post: { summary: "Verify and accept a signed authorization" } }, "/v1/authorizations/{authorizationId}": { get: { summary: "Read authorization state" } }, "/v1/authorizations/{authorizationId}/transparency": { get: { summary: "Read signed transparency evidence and any verified external anchor" } }, "/v1/executions/observe": { post: { summary: "Observe EVM or Solana execution against an authorization" } }, "/v1/observation-jobs/{jobId}": { get: { summary: "Read automatic finality observation job" } }, "/v1/receipts/{receiptId}": { get: { summary: "Read receipt" } }, "/v1/receipts/{receiptId}/bundle": { get: { summary: "Export portable receipt evidence and key-discovery metadata" } }, "/v1/receipts/verify": { post: { summary: "Convenience verification, not authority" } }, "/.well-known/priorseal-keys.json": { get: { summary: "Read the issuer public-key registry" } }, "/.well-known/agent8004.json": { get: { summary: "Read the ERC-8004 agent registration record" } }, "/v1/version": { get: { summary: "Read service and protocol versions" } }, "/health/live": { get: { summary: "Liveness" } }, "/health/ready": { get: { summary: "Readiness" } } } };
-function openApiSpec({ guardedJupiterEnabled = false } = {}) {
+function openApiSpec({ guardedJupiterEnabled = false, guardedZeroExEnabled = false } = {}) {
   return {
     ...OPENAPI,
     paths: {
@@ -528,6 +575,14 @@ function openApiSpec({ guardedJupiterEnabled = false } = {}) {
       ...guardedJupiterEnabled ? {
         "/v1/jupiter/guarded-swaps/prepare": { post: { summary: "Prepare a policy-guarded Jupiter Router swap through the protected integration service" } },
         "/v1/jupiter/guarded-swaps/submit": { post: { summary: "Verify and relay wallet-signed bytes for a prepared guarded Jupiter swap" } }
+      } : {},
+      ...guardedZeroExEnabled ? {
+        "/v1/0x/guarded-swaps/prepare": { post: { summary: "Prepare a policy-guarded 0x Solana swap through the protected integration service" } },
+        "/v1/0x/guarded-swaps/submit": { post: { summary: "Verify and relay wallet-signed bytes for a prepared guarded 0x swap" } }
+      } : {},
+      ...guardedJupiterEnabled || guardedZeroExEnabled ? {
+        "/v1/solana/guarded-swaps/prepare": { post: { summary: "Prepare a guarded Solana swap with an explicitly selected provider; provider selection is bound before authorization" } },
+        "/v1/solana/guarded-swaps/submit": { post: { summary: "Submit a guarded Solana swap using the provider encoded by its prepared schema" } }
       } : {}
     }
   };

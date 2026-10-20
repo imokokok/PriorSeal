@@ -7,7 +7,7 @@ import type { SelfserveClaim } from './commerce/selfserve-claim.mjs';
 
 type CapabilityPolicy = { allowedChainIds?: (number | string)[]; allowedActions?: unknown; allowedAssets?: string[]; allowedRecipients?: string[]; maxAmount?: string; minConfirmations?: number; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' };
 type CapabilityStore = { health?: () => Promise<unknown> | unknown; archiveRetention?: string };
-export async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, x402, agentMeter = null, selfserveClaim = null, guardedJupiterConfigured = false, now }: { issuer: string; audience: string; keyConfigured: boolean; policy?: CapabilityPolicy | null; proofMode: string; timestampConfigured: boolean; witnessConfigured: boolean; anchorConfigured: boolean; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; store: CapabilityStore; archiveEnabled: boolean; contractSignatureConfigured?: boolean; x402?: X402Config; agentMeter?: AgentMeter | null; selfserveClaim?: SelfserveClaim | null; guardedJupiterConfigured?: boolean; now: number }) {
+export async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, x402, agentMeter = null, selfserveClaim = null, guardedJupiterConfigured = false, guardedZeroExConfigured = false, now }: { issuer: string; audience: string; keyConfigured: boolean; policy?: CapabilityPolicy | null; proofMode: string; timestampConfigured: boolean; witnessConfigured: boolean; anchorConfigured: boolean; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; store: CapabilityStore; archiveEnabled: boolean; contractSignatureConfigured?: boolean; x402?: X402Config; agentMeter?: AgentMeter | null; selfserveClaim?: SelfserveClaim | null; guardedJupiterConfigured?: boolean; guardedZeroExConfigured?: boolean; now: number }) {
   let storage = 'available';
   try { if (store.health) await store.health(); } catch { storage = 'unavailable'; }
   // Policy documents represent non-EVM networks by CAIP-2 (rather than a
@@ -37,6 +37,13 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
           : !proofConfigured ? 'PRE_EXECUTION_PROOF_UNAVAILABLE'
             : storage !== 'available' ? 'STORAGE_UNAVAILABLE'
               : 'READY';
+  const guardedZeroExReason = !guardedZeroExConfigured ? 'NOT_CONFIGURED'
+    : !solanaTransaction ? 'SOLANA_PROFILE_UNAVAILABLE'
+      : !solanaRpcConfigured ? 'SOLANA_RPC_UNAVAILABLE'
+        : !keyConfigured ? 'ISSUER_UNAVAILABLE'
+          : !proofConfigured ? 'PRE_EXECUTION_PROOF_UNAVAILABLE'
+            : storage !== 'available' ? 'STORAGE_UNAVAILABLE'
+              : 'READY';
   return {
     schema: 'priorseal.capabilities.v1', issuer, audience,
     payments: { x402: { configured: Boolean(x402), networks: x402 ? X402_STAGING_NETWORKS
@@ -57,7 +64,7 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
     readinessScope: 'Configuration and storage check only; prepare evaluates the actual request policy. RPC/TSA reachability is not probed.',
     checkedAt: Math.floor(now / 1000),
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? 'operator_defined', scope: 'project_uploaded_evidence' },
-    integrations: { guardedJupiter: { enabled: guardedJupiterReason === 'READY', reason: guardedJupiterReason } },
+    integrations: { guardedJupiter: { enabled: guardedJupiterReason === 'READY', reason: guardedJupiterReason }, guardedZeroEx: { enabled: guardedZeroExReason === 'READY', reason: guardedZeroExReason } },
   };
 }
 

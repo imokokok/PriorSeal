@@ -2,6 +2,8 @@
 import { createArchiveAccess } from "../application/archive/evidence-archive.mjs";
 import { MAX_JUPITER_PLATFORM_FEE_BPS, SOLANA_USDC_MINT } from "priorseal-sdk";
 import { isSolanaPublicKey } from "../domain/solana.mjs";
+import { parseGuardedZeroExTenantPolicySet } from "../application/zeroex/tenant-policy.mjs";
+import { parseZeroExResponseSignatureConfiguration } from "priorseal-sdk";
 import { parseX402Config } from "../infrastructure/payments/x402-exact-evm.mjs";
 import { parseAgentMeterConfig } from "../application/commerce/agent-meter.mjs";
 import { SELFSEEK_BASE_MAINNET_CHAIN_ID, SELFSEEK_BASE_MAINNET_USDC } from "../application/commerce/selfserve-claim.mjs";
@@ -30,6 +32,7 @@ function loadRuntimeConfig(environment = process.env) {
   const x402 = parseX402Config(environment);
   const selfserveClaim = selfserveClaimConfig(environment, agentMeter, privateKeyPem);
   const guardedJupiter = guardedJupiterConfig(environment);
+  const guardedZeroEx = guardedZeroExConfig(environment);
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some((entry) => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
   }
@@ -83,12 +86,37 @@ function loadRuntimeConfig(environment = process.env) {
     trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, "PRIORSEAL_TRUST_PROXY", false),
     x402,
     ...selfserveClaim ? { selfserveClaim } : {},
-    ...guardedJupiter ? { guardedJupiter } : {}
+    ...guardedJupiter ? { guardedJupiter } : {},
+    ...guardedZeroEx ? { guardedZeroEx } : {}
   };
   if (runtimeEnvironment === "production" || runtimeEnvironment === "staging") {
     validateDeploymentConfig(config, runtimeEnvironment);
   }
   return config;
+}
+function guardedZeroExConfig(environment) {
+  const zeroExApiKey = optionalValue(environment.ZEROEX_API_KEY);
+  const insightApiKey = optionalValue(environment.INSIGHT_API_KEY);
+  const rpcUrl = optionalValue(environment.PRIORSEAL_ZEROEX_RPC_URL);
+  const policy = optionalJson(environment.PRIORSEAL_ZEROEX_POLICY_JSON, "PRIORSEAL_ZEROEX_POLICY_JSON");
+  const responseSignatureConfig = optionalJson(environment.PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON, "PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON");
+  const tenantPolicyConfig = optionalJson(environment.PRIORSEAL_ZEROEX_TENANTS_JSON, "PRIORSEAL_ZEROEX_TENANTS_JSON");
+  if (!zeroExApiKey && !rpcUrl && !policy && !responseSignatureConfig && !tenantPolicyConfig) return void 0;
+  if (!zeroExApiKey || !insightApiKey || !rpcUrl || !policy || !responseSignatureConfig) throw new TypeError("Guarded 0x swaps require ZEROEX_API_KEY, INSIGHT_API_KEY, PRIORSEAL_ZEROEX_RPC_URL, PRIORSEAL_ZEROEX_POLICY_JSON, and PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON together");
+  if (!rpcUrl || new URL(rpcUrl).protocol !== "https:") throw new TypeError("PRIORSEAL_ZEROEX_RPC_URL must use HTTPS");
+  if (!policy || typeof policy !== "object" || Array.isArray(policy)) throw new TypeError("PRIORSEAL_ZEROEX_POLICY_JSON must be an object");
+  const responseSignature = parseZeroExResponseSignatureConfiguration(responseSignatureConfig);
+  const tenantPolicies = parseGuardedZeroExTenantPolicySet(tenantPolicyConfig, policy);
+  return {
+    zeroExApiKey,
+    insightApiKey,
+    rpcUrl,
+    policy,
+    responseSignature,
+    ...tenantPolicies ? { tenantPolicies } : {},
+    ...optionalValue(environment.PRIORSEAL_ZEROEX_ROUTER_BASE_URL) ? { zeroExBaseUrl: optionalValue(environment.PRIORSEAL_ZEROEX_ROUTER_BASE_URL) } : {},
+    ...optionalValue(environment.PRIORSEAL_ZEROEX_INSIGHT_BASE_URL) ? { insightBaseUrl: optionalValue(environment.PRIORSEAL_ZEROEX_INSIGHT_BASE_URL) } : {}
+  };
 }
 function selfserveClaimConfig(environment, agentMeter, privateKeyPem) {
   if (!agentMeter || !privateKeyPem) return void 0;
@@ -120,11 +148,11 @@ function guardedJupiterConfig(environment) {
   const policy = optionalJson(environment.PRIORSEAL_JUPITER_POLICY_JSON, "PRIORSEAL_JUPITER_POLICY_JSON");
   const platformFeeBps = optionalValue(environment.PRIORSEAL_JUPITER_PLATFORM_FEE_BPS);
   const feeAccount = optionalValue(environment.PRIORSEAL_JUPITER_FEE_ACCOUNT);
-  const configured = [jupiterApiKey, insightApiKey, rpcUrl, policy].filter(Boolean).length;
+  const jupiterConfigured = [jupiterApiKey, rpcUrl, policy].filter(Boolean).length;
   if (Boolean(platformFeeBps) !== Boolean(feeAccount)) throw new TypeError("PRIORSEAL_JUPITER_PLATFORM_FEE_BPS and PRIORSEAL_JUPITER_FEE_ACCOUNT must be configured together");
-  if ((platformFeeBps || feeAccount) && configured === 0) throw new TypeError("Jupiter platform fees require the complete guarded Jupiter configuration");
-  if (configured === 0) return void 0;
-  if (configured !== 4) throw new TypeError("Guarded Jupiter swaps require JUPITER_API_KEY, INSIGHT_API_KEY, PRIORSEAL_JUPITER_RPC_URL, and PRIORSEAL_JUPITER_POLICY_JSON together");
+  if ((platformFeeBps || feeAccount) && jupiterConfigured === 0) throw new TypeError("Jupiter platform fees require the complete guarded Jupiter configuration");
+  if (jupiterConfigured === 0) return void 0;
+  if (!jupiterApiKey || !insightApiKey || !rpcUrl || !policy) throw new TypeError("Guarded Jupiter swaps require JUPITER_API_KEY, INSIGHT_API_KEY, PRIORSEAL_JUPITER_RPC_URL, and PRIORSEAL_JUPITER_POLICY_JSON together");
   if (!rpcUrl || new URL(rpcUrl).protocol !== "https:") throw new TypeError("PRIORSEAL_JUPITER_RPC_URL must use HTTPS");
   if (!policy || typeof policy !== "object" || Array.isArray(policy)) throw new TypeError("PRIORSEAL_JUPITER_POLICY_JSON must be an object");
   if ("platformFee" in policy) throw new TypeError("Configure the guarded Jupiter platform fee with PRIORSEAL_JUPITER_PLATFORM_FEE_BPS and PRIORSEAL_JUPITER_FEE_ACCOUNT, not PRIORSEAL_JUPITER_POLICY_JSON");
