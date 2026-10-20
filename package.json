@@ -90,6 +90,7 @@
     "anchor:record": "npm run core:build:operations && node --env-file=.env.local scripts/record-transparency-anchor.mjs",
     "production:check": "npm run core:build:operations && node --env-file=.env.local scripts/production-readiness.mjs",
     "rotation:impact": "npm run core:build:operations && node --env-file=.env.local scripts/rotation-impact.mjs",
+    "zeroex:production:quote": "npm run sdk:build && npm run core:build:operations && node scripts/zeroex-production-quote.mjs",
     "agent8004:register": "npm run core:build:tools && node --env-file=.env.local scripts/register-erc8004-agent.mjs",
     "production:smoke": "npm run core:build:operations && node scripts/production-smoke.mjs",
     "production:smoke:pending": "npm run core:build:operations && node scripts/production-smoke.mjs --pending",

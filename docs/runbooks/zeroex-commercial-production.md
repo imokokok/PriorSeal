@@ -49,6 +49,30 @@ records.
    creates newly authorised transactions; it must not be treated as an edit to
    old records.
 
+## Capture the first route baseline while the integration is off
+
+Before adding any 0x program ID or address lookup table to the production
+allowlist, request one small, fee-bearing route with the integration gate still
+off. The repository command is intentionally quote-only: it verifies the 0x
+RFC 9421 response signature, creates no authorization, does not use wallet
+signer material, does not broadcast a transaction, and refuses to run if
+`PRIORSEAL_ZEROEX_ENABLED=true`.
+
+```sh
+PRIORSEAL_ENVIRONMENT=production \
+PRIORSEAL_ZEROEX_ENABLED=false \
+ZEROEX_API_KEY="<ephemeral secret from the deployment secret store>" \
+npm run zeroex:production:quote
+```
+
+Review the emitted public JSON artifact and preserve it with release evidence.
+Its `programIds`, `addressLookupTables`, `route`, `zid`, fee terms, and
+`fingerprint` describe exactly the signed provider response that was reviewed.
+Do not treat this one quote as a blanket approval for new routes: add only the
+reviewed IDs to `PRIORSEAL_ZEROEX_POLICY_JSON`, repeat the baseline after a
+route/provider key change, and keep `PRIORSEAL_ZEROEX_ENABLED=false` until the
+resulting policy and release check have been approved.
+
 ## Apply the durable schema before code
 
 For the Cloudflare D1 production deployment, apply the new migration and make
