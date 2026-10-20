@@ -6,10 +6,8 @@ Synthetic, offline matrix for the **first shared case** in
 
 The published interface is `INPUT-CONTRACT.md`, contract **version 1.0.1**
 (its changelog lists what changed against the pinned 1.0.0 delivery and why).
-The v1.0.1 pin has a fresh-clone run and a separately written Python reader;
-see the [review disposition](../../docs/runs/priorseal-exact-call-matrix-v1.0.1-cold-run/INDEPENDENT-REVIEW-DISPOSITION.md),
-[case-study record](../../docs/case-studies/open-evidence-lab-priorseal-exact-call-reproduction-2026-10.md)
-and the [public collaboration thread](https://github.com/probityai/agent-evidence-atlas/issues/64).
+The v1.0.1 pin is accompanied by the public
+[collaboration thread](https://github.com/probityai/agent-evidence-atlas/issues/64).
 
 Answering that for a signed transaction envelope is what
 `priorseal.execution-profile.exact-call.v1` does. This directory freezes one
@@ -86,9 +84,8 @@ node examples/open-evidence-lab-exact-call-matrix-v1/generate-fixture.mjs
 A passing local run establishes: both signature schemes verify under the
 published test keys, the submission reader and the PriorSeal profile agree on
 the v1.0.1-partitioned envelope binding for all six inputs, and the profile's
-compliance and outcome labels match the declared expectations. The published-run
-and independent-reader evidence for v1.0.1, with its limits, is summarized in
-the [review disposition](../../docs/runs/priorseal-exact-call-matrix-v1.0.1-cold-run/INDEPENDENT-REVIEW-DISPOSITION.md).
+compliance and outcome labels match the declared expectations. Local verification
+of v1.0.1 only establishes the limits stated here.
 
 It does not establish the business meaning of the calldata, any economic
 outcome, real-chain behaviour or finality, that the reader or its checks are
