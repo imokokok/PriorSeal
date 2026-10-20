@@ -6,6 +6,7 @@ import { LandingPage } from './landing/LandingPage'
 
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((module) => ({ default: module.PrivacyPage })))
 const McpPage = lazy(() => import('./pages/McpPage').then((module) => ({ default: module.McpPage })))
+const JupiterPilotPage = lazy(() => import('./pages/JupiterPilotPage').then((module) => ({ default: module.JupiterPilotPage })))
 const PublicNotFoundPage = lazy(() => import('./pages/OutcomePages').then((module) => ({ default: module.PublicNotFoundPage })))
 const Console = lazy(loadConsole)
 
@@ -90,5 +91,5 @@ function RouteFallback() {
 }
 
 export default function RootApp() {
-  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
+  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/jupiter" element={<JupiterPilotPage />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
 }

@@ -516,3 +516,13 @@
 @media (prefers-reduced-motion: reduce) {
   .evidence-illustration__seal, .museum-chain__detail { animation: none; }
 }
+
+.landing-jupiter { padding: clamp(72px, 10vw, 148px) var(--gutter); display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, .8fr); gap: clamp(36px, 10vw, 170px); color: var(--porcelain); background: var(--wine-dark); }
+.landing-jupiter h2 { margin: 16px 0 0; font: 400 clamp(48px, 6vw, 88px)/.94 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.06em; }
+.landing-jupiter h2 em { color: #e7b9c2; font-weight: 400; }
+.landing-jupiter > div:last-child { max-width: 560px; align-self: end; }
+.landing-jupiter > div:last-child p { margin: 0; color: #e0c5ca; font-size: 16px; line-height: 1.65; }
+.landing-jupiter > div:last-child p + p { margin-top: 15px; }
+.landing-jupiter .museum-text-link { margin-top: 29px; color: var(--porcelain); border-color: #d8a5af; }
+.landing-jupiter .museum-text-link:hover { color: #e9b9c2; }
+@media (max-width: 760px) { .landing-jupiter { grid-template-columns: 1fr; gap: 34px; } }

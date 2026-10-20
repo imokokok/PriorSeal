@@ -47,7 +47,11 @@ function agentUsage(value: unknown): boolean {
 }
 
 function guardedSwapCapability(value: unknown): boolean {
-  return record(value) && typeof value.enabled === 'boolean' && ['READY', 'NOT_CONFIGURED', 'SOLANA_PROFILE_UNAVAILABLE', 'SOLANA_RPC_UNAVAILABLE', 'ISSUER_UNAVAILABLE', 'PRE_EXECUTION_PROOF_UNAVAILABLE', 'STORAGE_UNAVAILABLE'].includes(String(value.reason))
+  if (!record(value) || typeof value.enabled !== 'boolean' || !['READY', 'NOT_CONFIGURED', 'SOLANA_PROFILE_UNAVAILABLE', 'SOLANA_RPC_UNAVAILABLE', 'ISSUER_UNAVAILABLE', 'PRE_EXECUTION_PROOF_UNAVAILABLE', 'STORAGE_UNAVAILABLE'].includes(String(value.reason))) return false
+  if (value.commercial === undefined) return true
+  if (!record(value.commercial) || !record(value.commercial.platformFee)) return false
+  const feeBps = value.commercial.platformFee.feeBps
+  return typeof feeBps === 'number' && Number.isSafeInteger(feeBps) && feeBps > 0 && hasString(value.commercial.platformFee, 'inputMint') && value.commercial.platformFee.rounding === 'FLOOR'
 }
 
 /** Validate untrusted wire data before a typed client or console consumes it. */

@@ -92,6 +92,7 @@ export function LandingPage() {
         <InstitutionMark />
         <nav className={menuOpen ? 'is-open' : ''} aria-label="Homepage navigation" id="homepage-navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id} onClick={() => setMenuOpen(false)}>{label}</a>)}
+          <Link to="/jupiter" onClick={() => setMenuOpen(false)}>Jupiter</Link>
           <Link to="/integrations/mcp" onClick={() => setMenuOpen(false)}>MCP</Link>
           <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/sdk">SDK</Link>
           <a href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">GitHub</a>
@@ -103,14 +104,14 @@ export function LandingPage() {
       <main id="main-content">
         <section className="museum-hero">
           <div className="museum-hero__copy">
-            <div className="museum-hero__eyebrow"><p className="museum-kicker"><span>PRIORSEAL</span> / EVIDENCE INFRASTRUCTURE</p><span className="museum-hero__edition">EDITION 001 — EVM AGENTS</span></div>
+            <div className="museum-hero__eyebrow"><p className="museum-kicker"><span>PRIORSEAL</span> / EVIDENCE INFRASTRUCTURE</p><span className="museum-hero__edition">EDITION 001 — ONCHAIN AGENTS</span></div>
             <h1 data-route-heading tabIndex={-1}>Authority,<br /><em>before action.</em></h1>
-            <p className="museum-hero__statement">Give an agent a bounded, principal-signed action—not a blank check. Connect what a person or organization explicitly authorized before action to an agent’s observed EVM execution, with a signed receipt others can verify independently.</p>
+            <p className="museum-hero__statement">Give an agent a bounded, principal-signed action—not a blank check. Connect what a person or organization explicitly authorized before action to an observed EVM or Solana execution, with a signed receipt others can verify independently.</p>
             <div className="museum-actions">
-              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Authorize an intent <span>→</span></Link>
+              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Authorize an intent <span>→</span></Link><Link className="museum-text-link" to="/jupiter">Guard a Jupiter swap <span>↗</span></Link>
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
             </div>
-            <div className="museum-hero__foot"><span>01 / 06</span><p>Bounded authority and portable evidence for EVM agents.<br />No custody. No transaction-signing keys.</p><a href="#system" aria-label="Explore the PriorSeal system">↓</a></div>
+            <div className="museum-hero__foot"><span>01 / 06</span><p>Bounded authority and portable evidence for onchain agents.<br />No custody. No transaction-signing keys.</p><a href="#system" aria-label="Explore the PriorSeal system">↓</a></div>
           </div>
           <EvidenceIllustration />
         </section>
@@ -135,6 +136,11 @@ export function LandingPage() {
             <div><dt>Evidence format</dt><dd>Canonical JSON<br />Ed25519 issuer signature</dd></div>
             <div><dt>Custody boundary</dt><dd>No assets<br />No transaction-signing keys</dd></div>
           </dl>
+        </section>
+
+        <section className="landing-jupiter" data-reveal>
+          <div><p className="museum-kicker">SOLANA / JUPITER / DESIGN PARTNER</p><h2>Guard one exact<br /><em>Jupiter swap.</em></h2></div>
+          <div><p>For Solana teams that need an auditable route, PriorSeal keeps upstream credentials on the server, binds one simulation and one wallet authorization to exact transaction bytes, relays the unchanged signed message once, and preserves portable evidence afterward.</p><p>It is a constrained integration pilot, not a custody product, execution bot, or economic-safety claim.</p><Link className="museum-text-link" to="/jupiter">Explore the guarded Jupiter pilot <span>↗</span></Link></div>
         </section>
 
         <section className="museum-chain" id="chain">

@@ -38,7 +38,7 @@ const GUARDED_SWAP_ERROR_STATUS = Object.freeze({ PREPARED_WIRE_MESSAGE_MISMATCH
 function requester(req, trustProxy) {
   return trustProxy ? String(req.headers["cf-connecting-ip"] ?? "").trim() || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress || "unknown" : req.socket.remoteAddress || "unknown";
 }
-function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, guardedJupiterRequestTimeoutMs = 45e3, observer = observeEvm, corsOrigins = [], trustProxy = false, x402, guardedJupiter, guardedZeroEx, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
+function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, guardedJupiterRequestTimeoutMs = 45e3, observer = observeEvm, corsOrigins = [], trustProxy = false, x402, guardedJupiter, guardedJupiterCommercial, guardedZeroEx, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
   if (privateKeyPem || publicKeyPem) {
     if (!privateKeyPem || !publicKeyPem) throw new TypeError("Issuer private and public keys must be configured together");
     assertEd25519KeyPair(privateKeyPem, publicKeyPem);
@@ -46,7 +46,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
   const archiveAccess = createArchiveAccess(archiveCredentials);
   const serveStaticAsset = staticDir ? createStaticAssetHandler(staticDir) : null;
   const x402Payments = x402 ? createX402PaymentService(x402) : null;
-  const readDeploymentCapabilities = () => deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, selfserveClaim, guardedJupiterConfigured: Boolean(guardedJupiter), guardedZeroExConfigured: Boolean(guardedZeroEx), now: now() });
+  const readDeploymentCapabilities = () => deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", x402, agentMeter, selfserveClaim, guardedJupiterConfigured: Boolean(guardedJupiter), guardedJupiterCommercial, guardedZeroExConfigured: Boolean(guardedZeroEx), now: now() });
   if (!Number.isSafeInteger(guardedJupiterRequestTimeoutMs) || guardedJupiterRequestTimeoutMs < requestTimeoutMs || guardedJupiterRequestTimeoutMs > 6e4) throw new TypeError("guardedJupiterRequestTimeoutMs must be an integer from requestTimeoutMs through 60000");
   return createServer({ requestTimeout: guardedJupiter || guardedZeroEx ? guardedJupiterRequestTimeoutMs : requestTimeoutMs }, async (req, res) => {
     const requestId = typeof req.headers["x-request-id"] === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(req.headers["x-request-id"]) ? req.headers["x-request-id"] : randomUUID();
@@ -248,6 +248,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         if (!guardedJupiter) throw new PriorSealError("NOT_FOUND", "Guarded Jupiter preparation is not enabled on this deployment");
         const input = guardedJupiterPrepareInput(body);
         const result = await guardedJupiter.prepare(input, { signal: deadline.signal });
+        logger?.info?.({ event: "guarded_jupiter.prepare_succeeded", requestId, method: req.method, path });
         return respond(201, { ...result, requestId }, { "cache-control": "no-store" });
       }
       if (req.method === "POST" && path === "/v1/jupiter/guarded-swaps/submit") {
@@ -255,6 +256,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         assertOnlyFields(body, ["authorizationId", "prepared", "signedTransactionBase64"], "guarded Jupiter submission");
         if (!isRecord(body) || !isRecord(body.prepared) || typeof body.authorizationId !== "string" || typeof body.signedTransactionBase64 !== "string") throw new PriorSealError("INVALID_REQUEST", "Guarded Jupiter submission requires authorizationId, prepared and signedTransactionBase64");
         const result = await guardedJupiter.submit({ authorizationId: body.authorizationId, prepared: body.prepared, signedTransactionBase64: body.signedTransactionBase64 }, { signal: deadline.signal });
+        logger?.info?.({ event: "guarded_jupiter.submit_completed", requestId, method: req.method, path, submission: result.submission });
         return respond(result.submission === "UNKNOWN" ? 202 : 200, { ...result, requestId }, { "cache-control": "no-store" });
       }
       if (req.method === "POST" && path === "/v1/0x/guarded-swaps/prepare") {
@@ -276,6 +278,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
           if (!guardedJupiter) throw new PriorSealError("NOT_FOUND", "Guarded Jupiter preparation is not enabled on this deployment");
           const { provider: _provider, ...request } = body;
           const result = await guardedJupiter.prepare(request, { signal: deadline.signal });
+          logger?.info?.({ event: "guarded_jupiter.prepare_succeeded", requestId, method: req.method, path });
           return respond(201, { provider: "jupiter", ...result, requestId }, { "cache-control": "no-store" });
         }
         if (body.provider === "0x") {
@@ -292,6 +295,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         if (body.prepared.schema === "priorseal.jupiter-guarded-swap.v1") {
           if (!guardedJupiter) throw new PriorSealError("NOT_FOUND", "Guarded Jupiter submission is not enabled on this deployment");
           const result = await guardedJupiter.submit({ authorizationId: body.authorizationId, prepared: body.prepared, signedTransactionBase64: body.signedTransactionBase64 }, { signal: deadline.signal });
+          logger?.info?.({ event: "guarded_jupiter.submit_completed", requestId, method: req.method, path, submission: result.submission });
           return respond(result.submission === "UNKNOWN" ? 202 : 200, { provider: "jupiter", ...result, requestId }, { "cache-control": "no-store" });
         }
         if (body.prepared.schema === "priorseal.zeroex-guarded-swap.v1") {
