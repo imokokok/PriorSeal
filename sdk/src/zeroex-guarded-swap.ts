@@ -205,7 +205,10 @@ export function createZeroExRouterClient(options: ZeroExRouterClientOptions): Ze
       const commercial = await commercialRecord(request, commercialFee)
       const requestBody = JSON.stringify({
         token_in: request.inputMint, token_out: request.outputMint, amount_in: amountIn, taker: request.taker, slippage_bps: request.slippageBps, transaction_version: 'v0',
-        ...(commercialFee ? { swap_fee_ppm: commercialFee.feePpm, swap_fee_recipient: commercialFee.recipientTokenAccount, swap_fee_side: commercialFee.side } : {}),
+        // 0x Solana v2 accepts the fee rate as a decimal string; keep the
+        // deployment-owned integer in our policy/evidence and serialize only
+        // at the provider boundary.
+        ...(commercialFee ? { swap_fee_ppm: String(commercialFee.feePpm), swap_fee_recipient: commercialFee.recipientTokenAccount, swap_fee_side: commercialFee.side } : {}),
       })
       const requestBytes = new TextEncoder().encode(requestBody)
       const requestContentDigest = responseSignature ? await contentDigest(requestBytes) : undefined
@@ -337,7 +340,9 @@ function parseZeroExBuild(value: unknown, request: JupiterRouterBuildRequest, co
   const instructions = instructionList(record.instructions, '0x instructions')
   const addressLookupTableAddresses = publicKeyList(record.address_lookup_tables, '0x address_lookup_tables', 32)
   const routePlan = routeList(record.route_plan)
-  const zid = typeof record.zid === 'string' && /^[0-9a-fA-F]{24}$/.test(record.zid) ? record.zid.toLowerCase() : fail('ZEROEX_BUILD_INVALID', '0x zid is invalid')
+  // Current Solana Swap API responses prefix the 12-byte hexadecimal zid with
+  // `0x`; retain a canonical bare lowercase ID inside prepared evidence.
+  const zid = normalizeZeroExZid(record.zid)
   if (record.sponsor !== undefined && record.sponsor !== null) throw new ZeroExGuardedSwapError('ZEROEX_SPONSOR_FORBIDDEN', '0x-sponsored transactions are outside the single-wallet guarded-swap profile')
   return {
     inputMint: request.inputMint,
@@ -353,6 +358,13 @@ function parseZeroExBuild(value: unknown, request: JupiterRouterBuildRequest, co
     zid,
     commercial,
   }
+}
+
+function normalizeZeroExZid(value: unknown): string {
+  if (typeof value !== 'string') return fail('ZEROEX_BUILD_INVALID', '0x zid is invalid')
+  const match = /^(?:0x)?([0-9a-fA-F]{24})$/.exec(value)
+  if (!match) return fail('ZEROEX_BUILD_INVALID', '0x zid is invalid')
+  return match[1]!.toLowerCase()
 }
 
 function assertZeroExBuild(build: ZeroExRouterBuild, request: GuardedZeroExSwapRequest, policy: ZeroExGuardPolicy, commercial: ZeroExCommercialRecord): void {
@@ -633,10 +645,14 @@ function signatureBase(input: ParsedZeroExSignatureInput, response: Response, re
 
 function requestComponent(component: string, request: { method: 'POST'; url: string; body: Uint8Array; contentDigest: string }, url: URL): string {
   switch (component) {
-    case '@method': return request.method.toLowerCase()
+    // RFC 9421 derived components use the HTTP method token as sent. 0x's
+    // official verifier canonicalizes it to uppercase for its signatures.
+    case '@method': return request.method.toUpperCase()
     case '@authority': return url.host.toLowerCase()
     case '@path': return url.pathname || '/'
-    case '@query': return url.search
+    // 0x canonicalizes a request without a query string as `?`, rather than
+    // an empty string (see its signed-response verifier example).
+    case '@query': return url.search || '?'
     case 'content-digest': return request.contentDigest
     default: throw new ZeroExGuardedSwapError('ZEROEX_RESPONSE_SIGNATURE_INVALID', '0x Signature-Input requests an unsupported request component')
   }

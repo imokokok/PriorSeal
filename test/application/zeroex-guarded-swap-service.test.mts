@@ -31,7 +31,7 @@ async function signedZeroExJson(body: unknown, input: { url: string; requestBody
   const parsed = new URL(input.url)
   const signatureBase = [
     '"@status": 200', '"content-type": application/json', `"content-digest": ${responseDigest}`,
-    '"@method";req: post', `"@authority";req: ${parsed.host}`, `"@path";req: ${parsed.pathname}`, `"@query";req: ${parsed.search}`,
+    '"@method";req: POST', `"@authority";req: ${parsed.host}`, `"@path";req: ${parsed.pathname}`, `"@query";req: ${parsed.search || '?'}`,
     `"content-digest";req: ${requestDigest}`, `"@signature-params": ${signatureInput.slice('sig='.length)}`,
   ].join('\n')
   const signature = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, input.privateKey, new TextEncoder().encode(signatureBase)))
@@ -143,6 +143,6 @@ test('guarded 0x verifies a tenant fee recipient before forwarding server-owned 
   const result = await service.prepare({ inputMint: USDC, outputMint: WRAPPED_SOL, amount: '1000000', taker: payerAddress, slippageBps: 50 })
   assert.equal(result.tenantId, 'public')
   assert.equal(feeAccountReads, 1)
-  assert.deepEqual({ ppm: zeroExRequest?.swap_fee_ppm, recipient: zeroExRequest?.swap_fee_recipient, side: zeroExRequest?.swap_fee_side }, { ppm: 1_000, recipient: USDC, side: 'sell' })
+  assert.deepEqual({ ppm: zeroExRequest?.swap_fee_ppm, recipient: zeroExRequest?.swap_fee_recipient, side: zeroExRequest?.swap_fee_side }, { ppm: '1000', recipient: USDC, side: 'sell' })
   assert.equal(result.review.commercial.fee?.expectedAmountAtomic, '1000')
 })
