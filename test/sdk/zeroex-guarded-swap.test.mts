@@ -39,10 +39,10 @@ async function signedJson(body: unknown, input: { url: string; requestBody: stri
     `"@status": ${status}`,
     '"content-type": application/json',
     `"content-digest": ${responseDigest}`,
-    '"@method";req: post',
+    '"@method";req: POST',
     `"@authority";req: ${parsed.host}`,
     `"@path";req: ${parsed.pathname}`,
-    `"@query";req: ${parsed.search}`,
+    `"@query";req: ${parsed.search || '?'}`,
     `"content-digest";req: ${requestDigest}`,
     `"@signature-params": ${signatureInput.slice('sig='.length)}`,
   ].join('\n')
@@ -103,7 +103,7 @@ function response(overrides: Record<string, unknown> = {}) {
     instructions: [{ program_id: Array(32).fill(0), accounts: [], data: [0] }],
     address_lookup_tables: [],
     route_plan: [],
-    zid: 'a'.repeat(24),
+    zid: `0x${'a'.repeat(24)}`,
     ...overrides,
   }
 }
@@ -215,7 +215,7 @@ test('0x commercial fee is server-owned, transparent in review, and bound into t
     insight: { async simulate(input: { expectedMessageHash: string }) { return { messageHash: input.expectedMessageHash, signatureState: 'UNSIGNED' as const, status: 'SIMULATED' as const, contextCommitment: { namespace: 'insight.solana-simulation-receipt.v1', algorithm: 'sha256' as const, digest: `0x${'b'.repeat(64)}` }, receipt: {} } } },
     policy: { ...policy(), commercialFee }, now: () => 1_800_000_000_000,
   })
-  assert.deepEqual({ ppm: requestBody?.swap_fee_ppm, recipient: requestBody?.swap_fee_recipient, side: requestBody?.swap_fee_side }, { ppm: 1_000, recipient: USDC, side: 'sell' })
+  assert.deepEqual({ ppm: requestBody?.swap_fee_ppm, recipient: requestBody?.swap_fee_recipient, side: requestBody?.swap_fee_side }, { ppm: '1000', recipient: USDC, side: 'sell' })
   assert.deepEqual(prepared.commercial.fee, { profileId: 'retail-usdc-10bps', side: 'sell', mint: USDC, feePpm: 1_000, recipientTokenAccount: USDC, expectedAmountAtomic: '1000' })
   assert.ok(prepared.intent.contextCommitments?.some(commitment => commitment.namespace === 'priorseal.zeroex-commercial-record.v1' && commitment.digest === prepared.commercial.commitment.digest))
   assert.deepEqual((await reviewGuardedZeroExSwap(prepared)).commercial, prepared.commercial)
