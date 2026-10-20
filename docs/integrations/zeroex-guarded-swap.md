@@ -38,11 +38,15 @@ before it asks Insight to simulate or a wallet to sign.
 
 ## Deployment configuration
 
-The integration is disabled unless all five required server-side variables are
-set together. Do not expose either API key in `VITE_*`, browser JavaScript,
-logs, prepared packages, or agent prompts.
+The integration is disabled unless `PRIORSEAL_ZEROEX_ENABLED=true` and all five
+required server-side variables are set together. When the switch is omitted or
+`false`, the runtime intentionally ignores every 0x value, including malformed
+staged JSON; this permits safe staged configuration without making the service
+available. Do not expose either API key in `VITE_*`, browser JavaScript, logs,
+prepared packages, or agent prompts.
 
 ```bash
+PRIORSEAL_ZEROEX_ENABLED=true
 ZEROEX_API_KEY=...
 INSIGHT_API_KEY=...
 PRIORSEAL_ZEROEX_RPC_URL=https://your-reviewed-solana-rpc.example

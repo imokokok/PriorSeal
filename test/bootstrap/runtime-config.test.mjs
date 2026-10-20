@@ -117,7 +117,7 @@ test("runtime configuration locks a Jupiter platform fee to the merchant USDC AT
   assert.throws(() => loadRuntimeConfig({ ...environment, PRIORSEAL_JUPITER_FEE_ACCOUNT: "" }), /must be configured together/);
   assert.throws(() => loadRuntimeConfig({ ...environment, PRIORSEAL_JUPITER_POLICY_JSON: JSON.stringify({ ...JSON.parse(policy), platformFee: {} }) }), /not PRIORSEAL_JUPITER_POLICY_JSON/);
 });
-test("runtime configuration enables guarded 0x only with a complete server-side configuration", () => {
+test("runtime configuration enables guarded 0x only after explicit activation and a complete server-side configuration", () => {
   const policy = JSON.stringify({
     maxInputAmountAtomic: "1000000",
     maxSlippageBps: 50,
@@ -130,7 +130,9 @@ test("runtime configuration enables guarded 0x only with a complete server-side 
     authorizationTtlSeconds: 60
   });
   const responseSigningKeys = JSON.stringify({ trustedKeys: [{ kty: "OKP", crv: "Ed25519", kid: "0x-signing-key-prod-24092026", x: "19P3C981JsyQsqwVho8Tlabx51rslvdruSH59mGuWn0" }] });
+  assert.equal(loadRuntimeConfig({ ZEROEX_API_KEY: "staged-only", PRIORSEAL_ZEROEX_POLICY_JSON: "{not-json" }).guardedZeroEx, void 0);
   const config = loadRuntimeConfig({
+    PRIORSEAL_ZEROEX_ENABLED: "true",
     ZEROEX_API_KEY: "0x-secret",
     INSIGHT_API_KEY: "insight-secret",
     PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example",
@@ -144,21 +146,22 @@ test("runtime configuration enables guarded 0x only with a complete server-side 
     policy: JSON.parse(policy),
     responseSignature: JSON.parse(responseSigningKeys)
   });
-  assert.throws(() => loadRuntimeConfig({ ZEROEX_API_KEY: "0x-secret" }), /require ZEROEX_API_KEY/);
-  assert.throws(() => loadRuntimeConfig({ ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "http://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys }), /must use HTTPS/);
-  assert.throws(() => loadRuntimeConfig({ ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: "[]", PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys }), /must be an object/);
-  assert.throws(() => loadRuntimeConfig({ ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy }), /RESPONSE_SIGNING_KEYS/);
-  assert.throws(() => loadRuntimeConfig({ ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: '{"trustedKeys":[]}' }), /trustedKeys/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret" }), /require ZEROEX_API_KEY/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "http://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys }), /must use HTTPS/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: "[]", PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys }), /must be an object/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy }), /RESPONSE_SIGNING_KEYS/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: '{"trustedKeys":[]}' }), /trustedKeys/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "not-a-boolean" }), /PRIORSEAL_ZEROEX_ENABLED/);
 });
 test("runtime configuration accepts a server-owned guarded 0x tenant policy set only with the protected integration", () => {
   const policy = JSON.stringify({ maxInputAmountAtomic: "1000000", maxSlippageBps: 50, allowedInputMints: ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"], allowedProgramIds: ["ComputeBudget111111111111111111111111111111"], computeUnitLimit: 2e5, computeUnitPriceMicroLamports: "100", maxComputeUnitLimit: 2e5, maxComputeUnitPriceMicroLamports: "100", maxPriorityFeeLamports: "20", authorizationTtlSeconds: 60 });
   const responseSigningKeys = JSON.stringify({ trustedKeys: [{ kty: "OKP", crv: "Ed25519", kid: "0x-signing-key-prod-24092026", x: "19P3C981JsyQsqwVho8Tlabx51rslvdruSH59mGuWn0" }] });
   const tenants = JSON.stringify({ schema: "priorseal.zeroex-tenant-policy-set.v1", defaultTenantId: "public", tenants: [{ tenantId: "public" }, { tenantId: "partner-a", agentAccountId: "agent-partner-a", commercialFee: { profileId: "partner-a-usdc-10bps", inputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", feePpm: 1e3, recipientTokenAccount: "FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq", side: "sell" } }] });
   const agentMeter = JSON.stringify({ schema: "priorseal.agent-meter.v1", creditUnitUsd: "0.01", operatorCredentialHash: "a".repeat(64), accounts: [{ accountId: "agent-partner-a", credentialHash: "b".repeat(64), provisionedCredits: "10", status: "active" }], routes: [{ routeId: "zeroex-prepare", method: "POST", path: "/v1/0x/guarded-swaps/prepare", credits: "1" }] });
-  const config = loadRuntimeConfig({ ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys, PRIORSEAL_ZEROEX_TENANTS_JSON: tenants, PRIORSEAL_AGENT_METER_JSON: agentMeter });
+  const config = loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys, PRIORSEAL_ZEROEX_TENANTS_JSON: tenants, PRIORSEAL_AGENT_METER_JSON: agentMeter });
   assert.equal(config.guardedZeroEx?.tenantPolicies?.tenants[1]?.commercialFee?.feePpm, 1e3);
-  assert.throws(() => loadRuntimeConfig({ ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys, PRIORSEAL_ZEROEX_TENANTS_JSON: tenants }), /require PRIORSEAL_AGENT_METER_JSON/);
-  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_TENANTS_JSON: tenants }), /require ZEROEX_API_KEY/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", ZEROEX_API_KEY: "0x-secret", INSIGHT_API_KEY: "insight-secret", PRIORSEAL_ZEROEX_RPC_URL: "https://rpc.example", PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys, PRIORSEAL_ZEROEX_TENANTS_JSON: tenants }), /require PRIORSEAL_AGENT_METER_JSON/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: "true", PRIORSEAL_ZEROEX_TENANTS_JSON: tenants }), /require ZEROEX_API_KEY/);
 });
 test("Base Sepolia x402 is an explicit staging-only payment rail", () => {
   const x402 = {

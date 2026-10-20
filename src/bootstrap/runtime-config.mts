@@ -37,6 +37,7 @@ type RuntimeEnvironmentInput = Partial<Record<
   'PRIORSEAL_JUPITER_ROUTER_BASE_URL' |
   'PRIORSEAL_JUPITER_RPC_URL' |
   'PRIORSEAL_ZEROEX_INSIGHT_BASE_URL' |
+  'PRIORSEAL_ZEROEX_ENABLED' |
   'PRIORSEAL_ZEROEX_POLICY_JSON' |
   'PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON' |
   'PRIORSEAL_ZEROEX_TENANTS_JSON' |
@@ -184,6 +185,10 @@ function assertGuardedZeroExCommercialReadiness(guardedZeroEx: ReturnType<typeof
 }
 
 function guardedZeroExConfig(environment: RuntimeEnvironmentInput): { zeroExApiKey: string; insightApiKey: string; rpcUrl: string; policy: GuardedZeroExDeploymentPolicy; responseSignature: ZeroExResponseSignatureConfiguration; tenantPolicies?: GuardedZeroExTenantPolicySet; zeroExBaseUrl?: string; insightBaseUrl?: string } | undefined {
+  // An explicit deployment switch keeps the integration inert while secrets and
+  // policy are staged. Parse it before any optional 0x JSON so a malformed or
+  // partial disabled configuration cannot prevent the unrelated service from starting.
+  if (!booleanValue(environment.PRIORSEAL_ZEROEX_ENABLED, 'PRIORSEAL_ZEROEX_ENABLED', false)) return undefined;
   const zeroExApiKey = optionalValue(environment.ZEROEX_API_KEY);
   const insightApiKey = optionalValue(environment.INSIGHT_API_KEY);
   const rpcUrl = optionalValue(environment.PRIORSEAL_ZEROEX_RPC_URL);

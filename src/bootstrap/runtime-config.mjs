@@ -108,6 +108,7 @@ function assertGuardedZeroExCommercialReadiness(guardedZeroEx, agentMeter) {
   }
 }
 function guardedZeroExConfig(environment) {
+  if (!booleanValue(environment.PRIORSEAL_ZEROEX_ENABLED, "PRIORSEAL_ZEROEX_ENABLED", false)) return void 0;
   const zeroExApiKey = optionalValue(environment.ZEROEX_API_KEY);
   const insightApiKey = optionalValue(environment.INSIGHT_API_KEY);
   const rpcUrl = optionalValue(environment.PRIORSEAL_ZEROEX_RPC_URL);
