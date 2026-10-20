@@ -31,7 +31,7 @@ const RESPONSE_SIGNATURE_KEYS: ZeroExResponseSignatureConfiguration = parseZeroE
 });
 
 export type ZeroExProductionQuoteOptions = {
-  environment?: Partial<NodeJS.ProcessEnv>
+  environment?: Record<string, string | undefined>
   fetcher?: typeof fetch
   now?: () => number
   log?: (line: string) => void
