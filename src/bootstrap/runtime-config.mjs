@@ -1,9 +1,5 @@
 // Generated from runtime-config.mts by npm run core:build. Do not edit directly.
 import { createArchiveAccess } from "../application/archive/evidence-archive.mjs";
-import { MAX_JUPITER_PLATFORM_FEE_BPS, SOLANA_USDC_MINT } from "priorseal-sdk";
-import { isSolanaPublicKey } from "../domain/solana.mjs";
-import { parseGuardedZeroExTenantPolicySet } from "../application/zeroex/tenant-policy.mjs";
-import { parseZeroExResponseSignatureConfiguration } from "priorseal-sdk";
 import { parseX402Config } from "../infrastructure/payments/x402-exact-evm.mjs";
 import { parseAgentMeterConfig } from "../application/commerce/agent-meter.mjs";
 import { SELFSEEK_BASE_MAINNET_CHAIN_ID, SELFSEEK_BASE_MAINNET_USDC } from "../application/commerce/selfserve-claim.mjs";
@@ -32,9 +28,6 @@ function loadRuntimeConfig(environment = process.env) {
   const publicPaidCommerceEnabled = booleanValue(environment.PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED, "PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED", runtimeEnvironment !== "production");
   const x402 = publicPaidCommerceEnabled ? parseX402Config(environment) : void 0;
   const selfserveClaim = publicPaidCommerceEnabled ? selfserveClaimConfig(environment, agentMeter, privateKeyPem) : void 0;
-  const guardedJupiter = guardedJupiterConfig(environment, publicPaidCommerceEnabled);
-  const guardedZeroEx = guardedZeroExConfig(environment, publicPaidCommerceEnabled);
-  assertGuardedZeroExCommercialReadiness(guardedZeroEx, agentMeter);
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some((entry) => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
   }
@@ -88,55 +81,12 @@ function loadRuntimeConfig(environment = process.env) {
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
     trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, "PRIORSEAL_TRUST_PROXY", false),
     x402,
-    ...selfserveClaim ? { selfserveClaim } : {},
-    ...guardedJupiter ? { guardedJupiter } : {},
-    ...guardedZeroEx ? { guardedZeroEx } : {}
+    ...selfserveClaim ? { selfserveClaim } : {}
   };
   if (runtimeEnvironment === "production" || runtimeEnvironment === "staging") {
     validateDeploymentConfig(config, runtimeEnvironment);
   }
   return config;
-}
-function assertGuardedZeroExCommercialReadiness(guardedZeroEx, agentMeter) {
-  const feeTenants = guardedZeroEx?.tenantPolicies?.tenants.filter((tenant) => tenant.commercialFee) ?? [];
-  if (feeTenants.length === 0) return;
-  if (!agentMeter) throw new TypeError("Fee-bearing guarded 0x tenants require PRIORSEAL_AGENT_METER_JSON");
-  if (!agentMeter.routes.some((route) => route.method === "POST" && (route.path === "/v1/0x/guarded-swaps/prepare" || route.path === "/v1/solana/guarded-swaps/prepare"))) {
-    throw new TypeError("Fee-bearing guarded 0x tenants require a metered guarded 0x prepare route");
-  }
-  for (const tenant of feeTenants) {
-    if (!tenant.agentAccountId) throw new TypeError(`Fee-bearing guarded 0x tenant ${tenant.tenantId} must bind an active Agent account`);
-    if (!agentMeter.accounts.some((account) => account.accountId === tenant.agentAccountId && account.status === "active")) throw new TypeError(`Fee-bearing guarded 0x tenant ${tenant.tenantId} must name an active configured Agent account`);
-  }
-}
-function guardedZeroExConfig(environment, publicPaidCommerceEnabled) {
-  if (!booleanValue(environment.PRIORSEAL_ZEROEX_ENABLED, "PRIORSEAL_ZEROEX_ENABLED", false)) return void 0;
-  const zeroExApiKey = optionalValue(environment.ZEROEX_API_KEY);
-  const insightApiKey = optionalValue(environment.INSIGHT_API_KEY);
-  const rpcUrl = optionalValue(environment.PRIORSEAL_ZEROEX_RPC_URL) ?? optionalValue(environment.PRIORSEAL_RPC_SOLANA_MAINNET);
-  const policy = optionalJson(environment.PRIORSEAL_ZEROEX_POLICY_JSON, "PRIORSEAL_ZEROEX_POLICY_JSON");
-  const responseSignatureConfig = optionalJson(environment.PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON, "PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON");
-  const tenantPolicyConfig = optionalJson(environment.PRIORSEAL_ZEROEX_TENANTS_JSON, "PRIORSEAL_ZEROEX_TENANTS_JSON");
-  if (!zeroExApiKey && !rpcUrl && !policy && !responseSignatureConfig && !tenantPolicyConfig) return void 0;
-  if (!zeroExApiKey || !insightApiKey || !rpcUrl || !policy || !responseSignatureConfig) throw new TypeError("Guarded 0x swaps require ZEROEX_API_KEY, INSIGHT_API_KEY, an HTTPS Solana RPC (PRIORSEAL_ZEROEX_RPC_URL or PRIORSEAL_RPC_SOLANA_MAINNET), PRIORSEAL_ZEROEX_POLICY_JSON, and PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON together");
-  if (!rpcUrl || new URL(rpcUrl).protocol !== "https:") throw new TypeError("The guarded 0x Solana RPC must use HTTPS");
-  if (!policy || typeof policy !== "object" || Array.isArray(policy)) throw new TypeError("PRIORSEAL_ZEROEX_POLICY_JSON must be an object");
-  const responseSignature = parseZeroExResponseSignatureConfiguration(responseSignatureConfig);
-  const parsedTenantPolicies = parseGuardedZeroExTenantPolicySet(tenantPolicyConfig, policy);
-  const tenantPolicies = publicPaidCommerceEnabled || !parsedTenantPolicies ? parsedTenantPolicies : {
-    ...parsedTenantPolicies,
-    tenants: parsedTenantPolicies.tenants.map(({ commercialFee: _commercialFee, ...tenant }) => tenant)
-  };
-  return {
-    zeroExApiKey,
-    insightApiKey,
-    rpcUrl,
-    policy,
-    responseSignature,
-    ...tenantPolicies ? { tenantPolicies } : {},
-    ...optionalValue(environment.PRIORSEAL_ZEROEX_ROUTER_BASE_URL) ? { zeroExBaseUrl: optionalValue(environment.PRIORSEAL_ZEROEX_ROUTER_BASE_URL) } : {},
-    ...optionalValue(environment.PRIORSEAL_ZEROEX_INSIGHT_BASE_URL) ? { insightBaseUrl: optionalValue(environment.PRIORSEAL_ZEROEX_INSIGHT_BASE_URL) } : {}
-  };
 }
 function selfserveClaimConfig(environment, agentMeter, privateKeyPem) {
   if (!agentMeter || !privateKeyPem) return void 0;
@@ -160,38 +110,6 @@ function addressValue(value) {
   if (!address) return void 0;
   if (!/^0x[0-9a-fA-F]{40}$/.test(address) || /^0x0{40}$/i.test(address)) throw new TypeError("PRIORSEAL_X402_PAY_TO must be a non-zero address");
   return address;
-}
-function guardedJupiterConfig(environment, publicPaidCommerceEnabled) {
-  const jupiterApiKey = optionalValue(environment.JUPITER_API_KEY);
-  const insightApiKey = optionalValue(environment.INSIGHT_API_KEY);
-  const rpcUrl = optionalValue(environment.PRIORSEAL_JUPITER_RPC_URL);
-  const policy = optionalJson(environment.PRIORSEAL_JUPITER_POLICY_JSON, "PRIORSEAL_JUPITER_POLICY_JSON");
-  const platformFeeBps = publicPaidCommerceEnabled ? optionalValue(environment.PRIORSEAL_JUPITER_PLATFORM_FEE_BPS) : void 0;
-  const feeAccount = publicPaidCommerceEnabled ? optionalValue(environment.PRIORSEAL_JUPITER_FEE_ACCOUNT) : void 0;
-  const jupiterConfigured = [jupiterApiKey, rpcUrl, policy].filter(Boolean).length;
-  if (Boolean(platformFeeBps) !== Boolean(feeAccount)) throw new TypeError("PRIORSEAL_JUPITER_PLATFORM_FEE_BPS and PRIORSEAL_JUPITER_FEE_ACCOUNT must be configured together");
-  if ((platformFeeBps || feeAccount) && jupiterConfigured === 0) throw new TypeError("Jupiter platform fees require the complete guarded Jupiter configuration");
-  if (jupiterConfigured === 0) return void 0;
-  if (!jupiterApiKey || !insightApiKey || !rpcUrl || !policy) throw new TypeError("Guarded Jupiter swaps require JUPITER_API_KEY, INSIGHT_API_KEY, PRIORSEAL_JUPITER_RPC_URL, and PRIORSEAL_JUPITER_POLICY_JSON together");
-  if (!rpcUrl || new URL(rpcUrl).protocol !== "https:") throw new TypeError("PRIORSEAL_JUPITER_RPC_URL must use HTTPS");
-  if (!policy || typeof policy !== "object" || Array.isArray(policy)) throw new TypeError("PRIORSEAL_JUPITER_POLICY_JSON must be an object");
-  if ("platformFee" in policy) throw new TypeError("Configure the guarded Jupiter platform fee with PRIORSEAL_JUPITER_PLATFORM_FEE_BPS and PRIORSEAL_JUPITER_FEE_ACCOUNT, not PRIORSEAL_JUPITER_POLICY_JSON");
-  let platformFee;
-  if (platformFeeBps && feeAccount) {
-    if (!/^(?:[1-9]|1[0-9]|20)$/.test(platformFeeBps)) throw new TypeError(`PRIORSEAL_JUPITER_PLATFORM_FEE_BPS must be an integer from 1 through ${MAX_JUPITER_PLATFORM_FEE_BPS}`);
-    if (!isSolanaPublicKey(feeAccount)) throw new TypeError("PRIORSEAL_JUPITER_FEE_ACCOUNT must be a Solana public key");
-    const merchant = optionalValue(environment.PRIORSEAL_X402_SOLANA_PAY_TO);
-    if (!isSolanaPublicKey(merchant)) throw new TypeError("PRIORSEAL_X402_SOLANA_PAY_TO must be a Solana public key when a Jupiter platform fee is enabled");
-    platformFee = { feeBps: Number(platformFeeBps), feeAccount, feeMint: SOLANA_USDC_MINT, merchant };
-  }
-  return {
-    jupiterApiKey,
-    insightApiKey,
-    rpcUrl,
-    policy: { ...policy, ...platformFee ? { platformFee } : {} },
-    ...optionalValue(environment.PRIORSEAL_JUPITER_ROUTER_BASE_URL) ? { jupiterBaseUrl: optionalValue(environment.PRIORSEAL_JUPITER_ROUTER_BASE_URL) } : {},
-    ...optionalValue(environment.PRIORSEAL_JUPITER_INSIGHT_BASE_URL) ? { insightBaseUrl: optionalValue(environment.PRIORSEAL_JUPITER_INSIGHT_BASE_URL) } : {}
-  };
 }
 function parseSafe4337Trust(value) {
   if (value === void 0) return [];

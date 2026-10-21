@@ -25,11 +25,7 @@ Configure a remote MCP server with this URL:
 }
 ```
 
-For an Agent host that also needs the protected Jupiter integration, read
-`https://priorseal.xyz/.well-known/priorseal-agent.json` before presenting a
-swap. It identifies the live capability and OpenAPI endpoints, the retained
-Agent-proposal record format, and the non-negotiable principal-confirmation
-boundary. It does not make MCP a transaction signer or an automatic trading
+MCP does not make an Agent a transaction signer or grant an automatic-trading
 permission.
 
 The server exposes these tools:

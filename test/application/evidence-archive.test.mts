@@ -110,30 +110,6 @@ test('capabilities never equate an active issuer with workflow readiness and sup
   assert.equal((await deploymentCapabilities({ ...base, timestampConfigured: true, store: { health: async () => { throw new Error('down'); } } })).dependencies.storage, 'unavailable');
 });
 
-test('capabilities advertise guarded Jupiter only when its complete Solana workflow is configured', async () => {
-  const base = { issuer: 'test', audience: 'test-env', keyConfigured: true, policy: { allowedChainIds: ['solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'], allowedActions: ['SOLANA_TRANSACTION'] }, proofMode: 'issuer', timestampConfigured: false, witnessConfigured: false, anchorConfigured: false, rpcChainIds: [0], store: createMemoryStore(), now: 1000, archiveEnabled: false, guardedJupiterConfigured: true };
-  const ready = await deploymentCapabilities(base);
-  assert.deepEqual(ready.integrations.guardedJupiter, { enabled: true, reason: 'READY' });
-  const commercial = await deploymentCapabilities({ ...base, guardedJupiterCommercial: { platformFee: { feeBps: 10, inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', rounding: 'FLOOR' } } });
-  assert.deepEqual(commercial.integrations.guardedJupiter, { enabled: true, reason: 'READY', commercial: { platformFee: { feeBps: 10, inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', rounding: 'FLOOR' } } });
-  const noSolanaRpc = await deploymentCapabilities({ ...base, rpcChainIds: [] });
-  assert.deepEqual(noSolanaRpc.integrations.guardedJupiter, { enabled: false, reason: 'SOLANA_RPC_UNAVAILABLE' });
-  const unavailableProfile = await deploymentCapabilities({ ...base, policy: { allowedChainIds: [8453], allowedActions: ['TRANSFER'] } });
-  assert.deepEqual(unavailableProfile.integrations.guardedJupiter, { enabled: false, reason: 'SOLANA_PROFILE_UNAVAILABLE' });
-  const notConfigured = await deploymentCapabilities({ ...base, guardedJupiterConfigured: false });
-  assert.deepEqual(notConfigured.integrations.guardedJupiter, { enabled: false, reason: 'NOT_CONFIGURED' });
-});
-
-test('capabilities advertise guarded 0x with the same verified Solana prerequisites', async () => {
-  const base = { issuer: 'test', audience: 'test-env', keyConfigured: true, policy: { allowedChainIds: [0], allowedActions: ['SOLANA_TRANSACTION'] }, proofMode: 'issuer', timestampConfigured: false, witnessConfigured: false, anchorConfigured: false, rpcChainIds: [0], store: createMemoryStore(), now: 1000, archiveEnabled: false, guardedZeroExConfigured: true };
-  const ready = await deploymentCapabilities(base);
-  assert.deepEqual(ready.integrations.guardedZeroEx, { enabled: true, reason: 'READY' });
-  const noSolanaRpc = await deploymentCapabilities({ ...base, rpcChainIds: [] });
-  assert.deepEqual(noSolanaRpc.integrations.guardedZeroEx, { enabled: false, reason: 'SOLANA_RPC_UNAVAILABLE' });
-  const notConfigured = await deploymentCapabilities({ ...base, guardedZeroExConfigured: false });
-  assert.deepEqual(notConfigured.integrations.guardedZeroEx, { enabled: false, reason: 'NOT_CONFIGURED' });
-});
-
 test('capability action matching follows the case-insensitive policy evaluator', async () => {
   const base = { issuer: 'test', audience: 'test-env', keyConfigured: true, proofMode: 'issuer', timestampConfigured: false, witnessConfigured: false, anchorConfigured: false, rpcChainIds: [8453], store: createMemoryStore(), now: 1000, archiveEnabled: false };
   const lower = await deploymentCapabilities({ ...base, policy: { allowedChainIds: [8453], allowedActions: ['transfer', 'contract_call'] } });

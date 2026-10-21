@@ -46,14 +46,6 @@ function agentUsage(value: unknown): boolean {
   return record(value) && hasString(value, 'usageId') && hasString(value, 'accountId') && hasString(value, 'routeId') && hasString(value, 'requestKey') && hasString(value, 'credits') && Number.isSafeInteger(value.reservedAt) && (value.state === 'RESERVED' || value.state === 'CONSUMED' || value.state === 'RELEASED')
 }
 
-function guardedSwapCapability(value: unknown): boolean {
-  if (!record(value) || typeof value.enabled !== 'boolean' || !['READY', 'NOT_CONFIGURED', 'SOLANA_PROFILE_UNAVAILABLE', 'SOLANA_RPC_UNAVAILABLE', 'ISSUER_UNAVAILABLE', 'PRE_EXECUTION_PROOF_UNAVAILABLE', 'STORAGE_UNAVAILABLE'].includes(String(value.reason))) return false
-  if (value.commercial === undefined) return true
-  if (!record(value.commercial) || !record(value.commercial.platformFee)) return false
-  const feeBps = value.commercial.platformFee.feeBps
-  return typeof feeBps === 'number' && Number.isSafeInteger(feeBps) && feeBps > 0 && hasString(value.commercial.platformFee, 'inputMint') && value.commercial.platformFee.rounding === 'FLOOR'
-}
-
 /** Validate untrusted wire data before a typed client or console consumes it. */
 export function validatePriorSealResponse(path: string, value: unknown): void {
   safeJson(value, path)
@@ -64,7 +56,7 @@ export function validatePriorSealResponse(path: string, value: unknown): void {
   } else if (route === '/v1/version') {
     if (!hasString(value, 'service') || !hasString(value, 'version') || !strings(value.protocol)) invalid(path)
   } else if (route === '/v1/capabilities') {
-    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry >= 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean' || (value.integrations !== undefined && (!record(value.integrations) || !guardedSwapCapability(value.integrations.guardedJupiter) || (value.integrations.guardedZeroEx !== undefined && !guardedSwapCapability(value.integrations.guardedZeroEx))))) invalid(path)
+    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry >= 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean') invalid(path)
   } else if (route === '/v1/agent-accounts/self/usage') {
     if (!Array.isArray(value.items) || !value.items.every(agentUsage)) invalid(path)
   } else if (route === '/v1/agent-accounts/self') {
@@ -83,10 +75,6 @@ export function validatePriorSealResponse(path: string, value: unknown): void {
     } else if (!record(value.authorization) || !record(value.acceptance)) invalid(path)
   } else if (route === '/v1/executions/observe') {
     if (!observation(value.observation) || (value.receipt != null && !receipt(value.receipt)) || (value.observationJob != null && !job(value.observationJob))) invalid(path)
-  } else if (route === '/v1/jupiter/guarded-swaps/prepare') {
-    if (!record(value.prepared) || value.prepared.schema !== 'priorseal.jupiter-guarded-swap.v1' || !record(value.review) || value.review.schema !== 'priorseal.jupiter-guarded-swap-review.v1') invalid(path)
-  } else if (route === '/v1/jupiter/guarded-swaps/submit') {
-    if (!hasString(value, 'signature') || (value.submission !== 'SUBMITTED' && value.submission !== 'UNKNOWN')) invalid(path)
   } else if (route.startsWith('/v1/observation-jobs/')) {
     if (!job(value)) invalid(path)
   } else if (route === '/v1/receipts/verify') {

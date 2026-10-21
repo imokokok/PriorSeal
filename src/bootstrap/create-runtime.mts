@@ -5,7 +5,6 @@ import { createFileKeyProvider } from '../infrastructure/keys/file-key-provider.
 import { parseKeyRegistryDocument, readFileKeyRegistry } from '../infrastructure/keys/file-key-registry.mjs';
 import { createPostgresStore } from '../infrastructure/persistence/postgres-store.mjs';
 import { createD1Store } from '../infrastructure/persistence/d1-store.mjs';
-import { createMemoryStore } from '../infrastructure/persistence/memory-store.mjs';
 import { createRpcClient } from '../infrastructure/blockchain/evm/rpc-client.mjs';
 import { getRpcUrls, SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
 import { PriorSealError } from '../domain/errors.mjs';
@@ -24,9 +23,6 @@ import { assertEd25519KeyPair } from '../domain/ed25519.mjs';
 import { loadRuntimeConfig } from './runtime-config.mjs';
 import { createAgentMeter } from '../application/commerce/agent-meter.mjs';
 import { createSelfserveClaim } from '../application/commerce/selfserve-claim.mjs';
-import { createGuardedJupiterSwapService } from '../application/jupiter/guarded-swap-service.mjs';
-import { hasGuardedZeroExCommercialFees } from '../application/zeroex/tenant-policy.mjs';
-import { createGuardedZeroExSwapService } from '../application/zeroex/guarded-swap-service.mjs';
 import type { PoolConfig } from 'pg';
 import type { ObservationJob, ObservationWorkInput } from '../application/observations/observation-worker.mjs';
 import type { AuthorizationAcceptance } from '../domain/authorization.mjs';
@@ -51,12 +47,8 @@ async function composeRuntime({ config, environment = process.env, database, d1,
   const ownsPool = !database;
   const pool = d1 ? null : database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
   try {
-    if ((config.guardedJupiter || config.guardedZeroEx) && config.environment === 'production' && !d1 && !pool) throw new TypeError('Production guarded swaps require durable authorization storage');
-    if (assertSchema && config.environment === 'production' && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials), x402Enabled: Boolean(config.x402), agentMeterEnabled: Boolean(config.agentMeter), zeroExCommercialLedgerEnabled: hasGuardedZeroExCommercialFees(config.guardedZeroEx?.tenantPolicies) });
-    // The protected relay and HTTP authorization endpoint must share one store.
-    // A non-production no-database runtime gets a single in-memory store rather
-    // than silently accepting authorizations that the relay cannot read.
-    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : (config.guardedJupiter || config.guardedZeroEx) ? createMemoryStore() : undefined;
+    if (assertSchema && config.environment === 'production' && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials), x402Enabled: Boolean(config.x402), agentMeterEnabled: Boolean(config.agentMeter) });
+    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : undefined;
     const agentMeter = store ? createAgentMeter(config.agentMeter, store) : null;
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();
@@ -109,9 +101,7 @@ async function composeRuntime({ config, environment = process.env, database, d1,
         return job;
       },
     } : baseObservationWorker;
-    const guardedJupiter = config.guardedJupiter ? createGuardedJupiterSwapService({ ...config.guardedJupiter, authorizationStore: store ?? (() => { throw new TypeError('Guarded Jupiter swaps require an authorization store'); })() }) : undefined;
-    const guardedZeroEx = config.guardedZeroEx ? createGuardedZeroExSwapService({ ...config.guardedZeroEx, authorizationStore: store ?? (() => { throw new TypeError('Guarded 0x swaps require an authorization store'); })(), commercialLedger: store }) : undefined;
-    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, agentMeter, selfserveClaim, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, publicPaidCommerceEnabled: config.publicPaidCommerceEnabled, x402: config.x402, guardedJupiter, guardedJupiterCommercial: config.guardedJupiter?.policy.platformFee ? { platformFee: { feeBps: config.guardedJupiter.policy.platformFee.feeBps, inputMint: config.guardedJupiter.policy.platformFee.feeMint, rounding: 'FLOOR' } } : undefined, guardedZeroEx, version: config.buildVersion, staticDir, observer, rateLimiter, logger }) : undefined;
+    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, agentMeter, selfserveClaim, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, publicPaidCommerceEnabled: config.publicPaidCommerceEnabled, x402: config.x402, version: config.buildVersion, staticDir, observer, rateLimiter, logger }) : undefined;
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {});

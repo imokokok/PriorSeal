@@ -52,14 +52,6 @@ the readable record. It proves only that this record was linked to that action;
 it does not validate the rationale, establish Agent identity, or make a
 performance rating unless a separately reviewed identity source is present.
 
-The first retail-facing Jupiter and 0x Solana surfaces use one exact
-authorization per swap. They show a countdown to the signed route expiry and
-permit a user to discard an unsigned proposal locally. A v2 package retains the
-readable proposal record alongside the committed exact route; a package that
-commits a proposal without retaining its record is refused before signing. They
-do not support unattended execution, recurring trades, a trading budget, or a
-reusable session. Those are separate product profiles, not UI toggles.
-
 ## Account and trust separation
 
 | Account or role | Permitted purpose | Explicit boundary |
