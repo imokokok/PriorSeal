@@ -1,0 +1,24 @@
+{
+  "schema": "monad.agent-safety-gate-live-intent.v1",
+  "agentId": "monad-agent-safety-gate-example",
+  "principal": {
+    "id": "example-principal",
+    "account": "0x1111111111111111111111111111111111111111"
+  },
+  "executor": "0x2222222222222222222222222222222222222222",
+  "call": {
+    "target": "0x3333333333333333333333333333333333333333",
+    "calldata": "0x1234",
+    "valueWei": "0",
+    "nonce": "0"
+  },
+  "safetyCheck": {
+    "asset": "ETH",
+    "destinationAsset": "USDC",
+    "action": "swap",
+    "tradeAmountUsd": 5
+  },
+  "authorization": {
+    "validForSeconds": 300
+  }
+}
