@@ -136,9 +136,9 @@ jobs:
         run: |
           # The example imports the HTTP boundary, which resolves the local
           # workspace priorseal-sdk package from its generated dist output.
-          # CI starts from a clean checkout, so build it explicitly instead of
-          # relying on a prior release-gate step or a developer's local build.
-          npm run core:build
+          # CI starts from a clean checkout, so build that package explicitly
+          # instead of relying on a prior release-gate step or local artifacts.
+          npm run sdk:build
           npm run example:receipt
           npm run verify:receipt
       - name: Run non-browser release gates
