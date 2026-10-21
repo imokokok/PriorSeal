@@ -23,12 +23,12 @@ The command sends no Agent credential, payment signature, wallet signature, or
 write request. It does not call a facilitator's verification or settlement
 endpoint and cannot move funds.
 
-The scheduled **Public service health** GitHub workflow runs this check beside
-the existing portfolio health diagnostic every fifteen minutes. It retries
-after one minute before marking a failure and preserves redacted JSON output
-for fourteen days. Delivery uses the repository owner's existing GitHub
-Actions notifications; do not add an email address, webhook, or chat recipient
-until its owner has explicitly approved it.
+The scheduled **Public service health** GitHub workflow runs this check in its
+own job beside the existing portfolio diagnostic every fifteen minutes. Each
+job retries after one minute before marking its own failure and preserves
+redacted JSON output for fourteen days. Delivery uses the repository owner's
+existing GitHub Actions notifications; do not add an email address, webhook,
+or chat recipient until its owner has explicitly approved it.
 
 ## Before public promotion
 
