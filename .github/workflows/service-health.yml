@@ -22,14 +22,21 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Check both public services; confirm failures after one minute
+      - name: Check portfolio and Agent-retail public surfaces; confirm failures after one minute
         shell: bash
         run: |
-          if node scripts/integration-doctor.mjs > health-first.json; then
+          if node scripts/integration-doctor.mjs > health-portfolio-first.json \
+            && node scripts/agent-retail-readiness.mjs > health-agent-retail-first.json; then
             exit 0
           fi
           sleep 60
-          node scripts/integration-doctor.mjs > health-confirmation.json
+          portfolio_status=0
+          agent_retail_status=0
+          node scripts/integration-doctor.mjs > health-portfolio-confirmation.json || portfolio_status=$?
+          node scripts/agent-retail-readiness.mjs > health-agent-retail-confirmation.json || agent_retail_status=$?
+          if [ "$portfolio_status" -ne 0 ] || [ "$agent_retail_status" -ne 0 ]; then
+            exit 1
+          fi
       - name: Retain diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
