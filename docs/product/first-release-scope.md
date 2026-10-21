@@ -1,6 +1,6 @@
 # PriorSeal first-release product scope
 
-PriorSeal’s core is the independently verifiable relationship between explicit authorization before action and observed EVM execution afterward. It can be used independently. Insight supplies separate oracle transparency, risk assessments, and price/fill evidence when the two products are combined. See [product positioning](positioning.md).
+PriorSeal’s core is the independently verifiable relationship between explicit authorization before action and observed EVM or Solana execution afterward. It can be used independently. Insight supplies separate oracle transparency, simulation and risk inputs when the two products are combined. See [product positioning](positioning.md).
 
 PriorSeal 当前可作为受限自动化的付费设计伙伴试点独立交付；公开自助付费
 仍受生产 x402 Go/No-Go 约束。详见
@@ -12,16 +12,16 @@ PriorSeal 的长期商业方向是 Agent 按调用使用的授权与证据层；
 
 ## Primary user
 
-The first release serves agent builders and treasury engineering teams that need a portable, independently verifiable statement connecting a pre-authorized intent to an observed EVM execution.
+The first release serves agent builders and treasury engineering teams that need a portable, independently verifiable statement connecting a pre-authorized intent to an observed EVM or Solana execution.
 
 Auditors are the primary evidence consumer. They do not need wallet access and should be able to inspect a downloaded receipt or evidence bundle without trusting the PriorSeal HTTP verification endpoint.
 
 ## Core journey
 
-1. Define a bounded draft intent before execution.
-2. Have the controlling EVM account sign the canonical EIP-712 authorization.
+1. Define a bounded EVM intent or compile the bounded Solana transaction message before execution.
+2. Have the controlling account sign the canonical EIP-712 authorization or Solana Ed25519 message authorization.
 3. Register the authorization and receive a signed acceptance plus independent RFC 3161 timestamp.
-4. Observe an explicitly identified EVM transaction against the single-use authorization.
+4. Observe an explicitly identified EVM transaction or Solana signature against the single-use authorization.
 5. Download the v3 receipt and independently recompute authorization, execution status, compliance and signatures.
 
 ## Product vocabulary
@@ -39,6 +39,7 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 ## Implemented workflow polish
 
 - The browser imports an already constructed exact EVM call using the SDK's canonical intent builder; transfer and exact-call reports show their different verification scopes.
+- The guarded Jupiter profile prepares one Solana ExactIn route, compiles and simulates an exact message, requires a wallet authorization, and relays the unchanged signed bytes only once. A new route, message, blockhash or authorized boundary requires a new preparation and authorization.
 - Deployment capability discovery reports profiles, chain configuration, audience, proof mode, and dependencies before wallet signing. Its readiness result describes configuration and storage, not a live RPC/TSA availability guarantee.
 - Reviewers can import native bundles or composite manifests and independently confirm reusable trust profiles. Embedded discovery keys cannot approve themselves. Custom audiences and historical key windows are checked.
 - SDK authorization checkpoints preserve prepared/signed bytes and an acceptance idempotency key. Observation timeouts return job and transaction recovery handles. Recovery does not broadcast another transaction.

@@ -1,0 +1,46 @@
+.jupiter-pilot { min-height: 100vh; padding: 0 clamp(22px, 5vw, 88px); color: var(--ink); background: var(--stone); }
+.jupiter-pilot__nav { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--ink); }
+.jupiter-pilot__brand { display: inline-flex; align-items: center; gap: 11px; font-weight: 700; letter-spacing: -.03em; }
+.jupiter-pilot__brand svg { width: 36px; height: 36px; color: var(--wine); }
+.jupiter-pilot__brand span { display: grid; gap: 3px; font-size: 17px; }
+.jupiter-pilot__brand small, .jupiter-pilot__nav > div { color: var(--muted); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.jupiter-pilot__nav > div { display: flex; gap: 18px; }
+.jupiter-pilot__nav > div a:hover, .jupiter-pilot__footer a:hover { color: var(--wine); }
+.jupiter-pilot__hero { min-height: min(720px, calc(100vh - 88px)); padding: clamp(58px, 10vw, 140px) 0 72px; display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .55fr); gap: clamp(36px, 8vw, 140px); align-items: end; border-bottom: 1px solid var(--ink); }
+.jupiter-pilot__eyebrow { margin: 0 0 14px; color: var(--wine); font: 600 11px "JetBrains Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
+.jupiter-pilot__status { width: max-content; margin: 0 0 21px; padding: 6px 9px; color: var(--amber); border: 1px solid currentColor; font: 600 10px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.jupiter-pilot__status.available { color: var(--green); }
+.jupiter-pilot__status.unavailable { color: var(--wine); }
+.jupiter-pilot h1 { max-width: 900px; margin: 0; font: 400 clamp(50px, 7.2vw, 104px)/.9 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.065em; }
+.jupiter-pilot h1 em { color: var(--wine); font-weight: 400; }
+.jupiter-pilot__lede { max-width: 730px; margin: 27px 0 0; color: var(--graphite); font-size: clamp(16px, 1.6vw, 20px); line-height: 1.58; }
+.jupiter-pilot__actions { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 12px; }
+.jupiter-pilot__primary, .jupiter-pilot__secondary { min-height: 48px; padding: 0 17px; display: inline-flex; align-items: center; gap: 15px; border: 1px solid var(--ink); font-size: 14px; font-weight: 700; }
+.jupiter-pilot__primary { color: var(--porcelain); background: var(--wine); border-color: var(--wine); }
+.jupiter-pilot__primary:hover { background: var(--wine-dark); border-color: var(--wine-dark); }
+.jupiter-pilot__secondary:hover { color: var(--porcelain); background: var(--ink); }
+.jupiter-pilot__scope { padding: 20px; background: var(--porcelain); border: 1px solid var(--ink); box-shadow: -7px 7px 0 var(--wine); }
+.jupiter-pilot__scope > span, .jupiter-pilot__sequence span, .jupiter-pilot__limits span { color: var(--wine); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.jupiter-pilot__scope dl { margin: 18px 0 0; border-top: 1px solid var(--ink); }
+.jupiter-pilot__scope dl div { padding: 12px 0; display: grid; gap: 4px; border-bottom: 1px solid var(--rule); }
+.jupiter-pilot__scope dt { color: var(--muted); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .07em; text-transform: uppercase; }
+.jupiter-pilot__scope dd { margin: 0; font: 400 20px/1.12 "Iowan Old Style", Baskerville, Georgia, serif; }
+.jupiter-pilot__sequence { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--ink); }
+.jupiter-pilot__sequence article { min-height: 306px; padding: 34px clamp(20px, 3vw, 48px) 38px; border-right: 1px solid var(--ink); }
+.jupiter-pilot__sequence article:last-child { border-right: 0; }
+.jupiter-pilot__sequence h2, .jupiter-pilot__commercial h2 { margin: 49px 0 13px; font: 400 clamp(27px, 2.6vw, 42px)/1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.045em; }
+.jupiter-pilot__sequence p, .jupiter-pilot__commercial p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.62; }
+.jupiter-pilot__commercial { padding: clamp(60px, 9vw, 132px) 0; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, .7fr); gap: clamp(36px, 10vw, 170px); border-bottom: 1px solid var(--ink); }
+.jupiter-pilot__commercial h2 { max-width: 700px; margin-top: 12px; }
+.jupiter-pilot__commercial > div > p:last-child { max-width: 710px; }
+.jupiter-pilot__commercial dl { margin: 0; border-top: 1px solid var(--ink); }
+.jupiter-pilot__commercial dl div { padding: 17px 0; border-bottom: 1px solid var(--rule); }
+.jupiter-pilot__commercial dt { color: var(--muted); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.jupiter-pilot__commercial dd { margin: 8px 0 0; font-size: 15px; line-height: 1.45; }
+.jupiter-pilot__limits { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--ink); }
+.jupiter-pilot__limits div { padding: 34px 4vw 42px 0; display: grid; gap: 18px; }
+.jupiter-pilot__limits div + div { padding-left: 4vw; border-left: 1px solid var(--ink); }
+.jupiter-pilot__limits strong { max-width: 510px; font: 400 clamp(22px, 2.4vw, 36px)/1.12 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.jupiter-pilot__footer { min-height: 110px; display: flex; align-items: center; flex-wrap: wrap; gap: 22px; color: var(--muted); font: 600 11px "JetBrains Mono", monospace; letter-spacing: .05em; text-transform: uppercase; }
+@media (max-width: 780px) { .jupiter-pilot__hero, .jupiter-pilot__commercial { min-height: 0; grid-template-columns: 1fr; } .jupiter-pilot__sequence { grid-template-columns: 1fr; } .jupiter-pilot__sequence article { min-height: 0; border-right: 0; border-bottom: 1px solid var(--ink); } .jupiter-pilot__sequence article:last-child { border-bottom: 0; } .jupiter-pilot__limits { grid-template-columns: 1fr; } .jupiter-pilot__limits div + div { padding: 34px 0 42px; border-top: 1px solid var(--ink); border-left: 0; } }
+@media (max-width: 520px) { .jupiter-pilot__nav { min-height: 72px; } .jupiter-pilot__nav > div { gap: 12px; } .jupiter-pilot__brand small { display: none; } .jupiter-pilot__footer { padding: 24px 0; align-items: flex-start; flex-direction: column; gap: 16px; } }

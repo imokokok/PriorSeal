@@ -263,7 +263,8 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
       return { signature: '5'.repeat(64), submission: 'SUBMITTED' as const };
     },
   } as unknown as ServerOptions['guardedJupiter'];
-  const server = createHttpServer({ guardedJupiter });
+  const operationalEvents: Record<string, unknown>[] = [];
+  const server = createHttpServer({ guardedJupiter, logger: { info: (entry) => operationalEvents.push(entry) } });
   t.after(() => server.close());
 
   const malformed = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
@@ -283,6 +284,9 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
   assert.equal(prepared.status, 201);
   assert.equal(prepared.headers['cache-control'], 'no-store');
   assert.deepEqual(preparedInput, { inputMint, outputMint, amount: '1000000', taker, slippageBps: 50 });
+  assert.deepEqual(operationalEvents[0] && { event: operationalEvents[0].event, method: operationalEvents[0].method, path: operationalEvents[0].path }, { event: 'guarded_jupiter.prepare_succeeded', method: 'POST', path: '/v1/jupiter/guarded-swaps/prepare' });
+  assert.equal(JSON.stringify(operationalEvents[0]).includes(inputMint), false);
+  assert.equal(JSON.stringify(operationalEvents[0]).includes(taker), false);
 
   const unknownField = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
     method: 'POST',
@@ -306,6 +310,9 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
   assert.equal(submitted.status, 200);
   assert.equal(submitted.headers['cache-control'], 'no-store');
   assert.deepEqual(submittedInput, { authorizationId: 'jupiter-authorization-1', prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' });
+  assert.deepEqual(operationalEvents[1] && { event: operationalEvents[1].event, method: operationalEvents[1].method, path: operationalEvents[1].path, submission: operationalEvents[1].submission }, { event: 'guarded_jupiter.submit_completed', method: 'POST', path: '/v1/jupiter/guarded-swaps/submit', submission: 'SUBMITTED' });
+  assert.equal(JSON.stringify(operationalEvents[1]).includes('jupiter-authorization-1'), false);
+  assert.equal(JSON.stringify(operationalEvents[1]).includes('AQID'), false);
 });
 
 test('guarded Jupiter preparation reports only safe non-JSON upstream diagnostics', async (t) => {
