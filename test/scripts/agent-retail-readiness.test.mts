@@ -15,8 +15,9 @@ function capabilities() {
     dependencies: { issuer: 'configured', storage: 'available' },
     integrations: { guardedJupiter: { enabled: true, reason: 'READY' }, guardedZeroEx: { enabled: true, reason: 'READY' } },
     payments: {
-      agentCredits: { configured: true }, selfserveClaim: { configured: true },
-      x402: { configured: true, routes: [{ method: 'GET', path: '/v1/receipts/:receiptId/bundle' }] },
+      publicPaidCommerce: { enabled: false, mode: 'PILOT_OPERATOR_MANAGED' },
+      agentCredits: { configured: true }, selfserveClaim: { configured: false },
+      x402: { configured: false, routes: [] },
     },
   };
 }
@@ -34,7 +35,7 @@ function discovery() {
   };
 }
 
-test('public Agent-and-retail readiness checks only public GET surfaces and an unpaid challenge', async () => {
+test('public Agent-and-retail readiness checks only public GET surfaces while paid commerce is locked', async () => {
   const requests: Request[] = [];
   const result = await runAgentRetailReadiness({
     env: { ...process.env, PRIORSEAL_BASE_URL: origin },
@@ -48,12 +49,11 @@ test('public Agent-and-retail readiness checks only public GET surfaces and an u
       if (url.pathname === '/v1/version') return json({ service: 'priorseal', version });
       if (url.pathname === '/v1/capabilities') return json(capabilities());
       if (url.pathname === '/.well-known/priorseal-agent.json') return json(discovery());
-      if (url.pathname === '/v1/receipts/agent-retail-health-probe/bundle') return json({ error: 'Payment required' }, 402, { 'payment-required': 'fixture', 'cache-control': 'no-store' });
       throw new Error(`Unexpected request ${request.url}`);
     },
   });
   assert.equal(result.ok, true);
-  assert.equal(result.getRequests, 6);
+  assert.equal(result.getRequests, 5);
   assert.equal(result.writesPerformed, 0);
   assert.ok(requests.every((request) => request.method === 'GET' && !request.headers.has('payment-signature')));
 });

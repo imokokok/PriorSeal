@@ -1,13 +1,13 @@
 # Agent and retail public operations
 
 This runbook covers PriorSeal's public **proposal-and-confirmation** surfaces:
-the Agent discovery document, self-serve service credits, and guarded Jupiter
+the Agent discovery document, operator-issued Agent credits, and guarded Jupiter
 and 0x Solana swap preparation. It does not authorize a trade, a payment, a
 refund, a production configuration change, or a rollback.
 
 ## What is monitored
 
-`npm run agent-retail:check` makes six public `GET` requests only. It verifies:
+`npm run agent-retail:check` makes five public `GET` requests only. It verifies:
 
 - process and D1 readiness, immutable release version, and the absence of the
   retired-origin headers;
@@ -15,13 +15,12 @@ refund, a production configuration change, or a rollback.
 - `guardedJupiter` and `guardedZeroEx` are both explicitly `READY`;
 - the public Agent discovery document has the same release version and still
   requires a principal signature for each exact action;
-- Agent credits and self-serve claims are configured; and
-- one unpaid request to the configured read-only x402 route returns a
-  non-cacheable `402` with `PAYMENT-REQUIRED`, never `PAYMENT-RESPONSE`.
+- operator-issued Agent credits are configured; and
+- public paid commerce is explicitly locked: x402 acceptance and self-serve
+  credit claims are both unavailable.
 
 The command sends no Agent credential, payment signature, wallet signature, or
-write request. It does not call a facilitator's verification or settlement
-endpoint and cannot move funds.
+write request. It does not call a payment facilitator and cannot move funds.
 
 The scheduled **Public service health** GitHub workflow runs this check in its
 own job beside the existing portfolio diagnostic every fifteen minutes. Each
@@ -49,12 +48,15 @@ The release owner must confirm all of the following:
    policy remains the source of truth; a webpage cannot widen it.
 4. The payee and any refund/chargeback owner have separately confirmed control
    of their accounts. A capability response is not evidence of ownership.
-5. Customer-facing x402 purchase language remains disabled until the separate
+5. Customer-facing x402 purchase language and acceptance remain disabled until the separate
    [production x402 Go/No-Go](x402-production-go-no-go.md) record and an
    explicitly authorized paid rehearsal are complete.
 
-Use a phased rollout: observe the public health workflow, then allow a small
-reviewed cohort under the existing server limits. Widening wallets, assets,
+The current pilot is invitation-only. YuTao Peng issues and revokes Agent
+credentials manually after reviewing requests sent to `contact@priorseal.xyz`;
+YuTao Peng also owns the pilot's manual refund and chargeback decisions. Observe
+the public health workflow, then allow only a small reviewed cohort under the
+existing server limits. Widening wallets, assets,
 limits, fees, supported networks, or payment rails is a new reviewed release,
 not a flag change made during an incident.
 
@@ -68,10 +70,9 @@ not a flag change made during an incident.
    discovery-version drift, or an unavailable guarded integration, stop
    promoting the affected route. Do not redirect an authorized action to a
    different provider or resubmit a swap.
-3. If the unpaid x402 assertion fails, stop advertising the paid route and use
+3. If public paid-commerce capability appears enabled, stop promotion and use
    [the x402 production Go/No-Go rollback procedure](x402-production-go-no-go.md).
-   `SETTLEMENT_UNKNOWN` is a reconciliation state, never a reason to retry a
-   buyer payment.
+   Do not accept a buyer payment until that separate record is approved.
 4. If a user reports a swap with an unknown outcome, retain the exact package,
    authorization ID and transaction signature privately, then observe that
    signature. Never make a second submission from a timeout or support ticket.

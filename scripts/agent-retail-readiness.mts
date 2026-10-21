@@ -36,12 +36,6 @@ function nested(value: JsonObject, path: string[], label: string): JsonObject {
   return record(current, label);
 }
 
-function routePath(value: unknown): string {
-  const path = string(value, 'Paid route path');
-  assert(path.startsWith('/') && !path.includes('?') && !path.includes('#'), 'Paid route path must be an origin-relative path');
-  return path.replace(/:[A-Za-z][A-Za-z0-9_]*/g, 'agent-retail-health-probe');
-}
-
 async function readLimitedJson(response: Response, label: string): Promise<JsonObject> {
   const length = response.headers.get('content-length');
   assert(!length || (/^\d+$/.test(length) && Number(length) <= MAX_RESPONSE_BYTES), `${label} exceeds the response size limit`);
@@ -117,12 +111,13 @@ export async function runAgentRetailReadiness({ env = process.env, fetcher = fet
   assert(guardedJupiter.enabled === true && guardedJupiter.reason === 'READY', 'Guarded Jupiter is unavailable');
   assert(guardedZeroEx.enabled === true && guardedZeroEx.reason === 'READY', 'Guarded 0x is unavailable');
   const agentCredits = nested(capabilities.body, ['payments', 'agentCredits'], 'Agent credits capability');
+  assert(agentCredits.configured === true, 'Operator-issued Agent service credits are unavailable');
+  const publicPaidCommerce = nested(capabilities.body, ['payments', 'publicPaidCommerce'], 'Public paid-commerce capability');
+  assert(publicPaidCommerce.enabled === false && publicPaidCommerce.mode === 'PILOT_OPERATOR_MANAGED', 'Public paid commerce is unexpectedly enabled during the pilot');
   const selfserveClaim = nested(capabilities.body, ['payments', 'selfserveClaim'], 'Self-serve claim capability');
-  assert(agentCredits.configured === true && selfserveClaim.configured === true, 'Agent service credits are unavailable');
+  assert(selfserveClaim.configured === false, 'Self-serve paid credit claims are unexpectedly enabled during the pilot');
   const x402 = nested(capabilities.body, ['payments', 'x402'], 'x402 capability');
-  assert(x402.configured === true && Array.isArray(x402.routes) && x402.routes.length > 0, 'Read-only x402 route is unavailable');
-  const configuredRoute = record(x402.routes[0], 'First x402 route');
-  assert(configuredRoute.method === 'GET', 'x402 readiness only supports a read-only GET route');
+  assert(x402.configured === false && Array.isArray(x402.routes) && x402.routes.length === 0, 'x402 payment acceptance is unexpectedly enabled during the pilot');
 
   assert(agent.body.schema === 'priorseal.agent-integration.v1' && agent.body.service === 'PriorSeal', 'Agent discovery document is unavailable');
   assert(agent.body.version === releaseVersion, 'Agent discovery document version differs from the deployed release');
@@ -139,11 +134,6 @@ export async function runAgentRetailReadiness({ env = process.env, fetcher = fet
     assert(authorization.requirement === 'REVIEW_EXACT_SPEND_MINIMUM_OUTPUT_FEES_EXPIRY_AND_AGENT_PROPOSAL', `${integration} does not require a complete user review`);
   }
 
-  const unpaid = await get(routePath(configuredRoute.path), 402);
-  assert(!unpaid.headers.has('payment-response'), 'Unpaid readiness probe unexpectedly received a payment response');
-  assert(typeof unpaid.headers.get('payment-required') === 'string', 'Unpaid readiness probe is missing PAYMENT-REQUIRED');
-  assert(/no-store/i.test(unpaid.headers.get('cache-control') ?? ''), 'Payment challenge must not be cached');
-
   const result = {
     ok: true,
     schema: 'priorseal.agent-retail-readiness.v1',
@@ -152,8 +142,8 @@ export async function runAgentRetailReadiness({ env = process.env, fetcher = fet
     version: releaseVersion,
     integrations: ['guardedJupiter', 'guardedZeroEx'],
     agentCredits: 'CONFIGURED',
-    selfserveClaim: 'CONFIGURED',
-    x402: 'UNPAID_CHALLENGE_VERIFIED',
+    selfserveClaim: 'OPERATOR_MANAGED_ONLY',
+    x402: 'DISABLED_FOR_PILOT',
     getRequests,
     writesPerformed: 0,
     walletOrTransactionSignatures: 0,
