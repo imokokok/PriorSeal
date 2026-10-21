@@ -1,0 +1,50 @@
+name: Swap experience feedback
+description: Share a redacted usability, clarity, or documentation observation about PriorSeal Swap.
+title: "swap feedback: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for trying PriorSeal Swap. This is a public issue, so keep the report redacted. Do not include wallet addresses, token mints, transaction signatures or payloads, private keys, credentials, customer data, confidential counterparties, or commercial terms.
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where did this happen?
+      options:
+        - Understanding the Swap page
+        - Connecting a wallet
+        - Preparing an exact route
+        - Reviewing authorization
+        - Signing or submitting
+        - Observing or exporting evidence
+        - Documentation
+        - Another part of the experience
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: What was the result?
+      options:
+        - I could not understand the next step
+        - A required safeguard or explanation was missing
+        - The flow stopped or showed an error
+        - The flow worked and a detail was especially clear
+        - Another result
+    validations:
+      required: true
+  - type: textarea
+    id: observation
+    attributes:
+      label: What did you expect, and what should change?
+      description: Describe the screen, stage, wording, or control in general terms. Do not paste any wallet, transaction, token, or credential data.
+      placeholder: "I expected …; instead …; a clearer or safer next step would be …"
+    validations:
+      required: true
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: Redaction check
+      options:
+        - label: I confirm that this public report contains no wallet, transaction, token mint, credential, personal, or confidential business data.
+          required: true

@@ -93,6 +93,6 @@ export function PriorSealSwapPage() {
       <article><span>WHAT PRIORSEAL DOES NOT DO</span><strong>Hold wallet keys, select assets for you, provide investment advice, guarantee a quote or retry an uncertain broadcast.</strong></article>
     </section>
 
-    <footer className="priorseal-swap__footer"><Link to="/">← PriorSeal product</Link><Link to="/jupiter">Guarded Jupiter pilot →</Link><Link to="/app/sdk">Developer integration →</Link><Link to="/privacy">Privacy and storage →</Link></footer>
+    <footer className="priorseal-swap__footer"><Link to="/">← PriorSeal product</Link><Link to="/jupiter">Guarded Jupiter pilot →</Link><Link to="/support#feedback">Support and feedback →</Link><Link to="/app/sdk">Developer integration →</Link><Link to="/privacy">Privacy and storage →</Link></footer>
   </main>
 }

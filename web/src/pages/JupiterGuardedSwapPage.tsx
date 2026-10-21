@@ -229,7 +229,7 @@ export function JupiterGuardedSwapPage() {
   }
 
   return <>
-    <PageHeader eyebrow="SOLANA / VERIFIED AGENT SWAP" title="Verify an agent swap" actions={evidence ? <button className="button secondary" onClick={() => downloadJson(evidence, `${prepared!.request.intentId}-evidence.json`)}>Export evidence</button> : undefined}>
+    <PageHeader eyebrow="SOLANA / VERIFIED AGENT SWAP" title="Verify an agent swap" actions={<><Link className="button secondary" to="/support#feedback">Share feedback</Link>{evidence && <button className="button secondary" onClick={() => downloadJson(evidence, `${prepared!.request.intentId}-evidence.json`)}>Export evidence</button>}</>}>
       Let an agent prepare one Jupiter route while you keep the final say. Review the exact simulated transaction, authorize it once, submit unchanged bytes once, and retain portable evidence. This page never receives a signing key or an upstream API key.
     </PageHeader>
 
