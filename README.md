@@ -6,7 +6,7 @@
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
 [![MIT License](https://img.shields.io/badge/license-MIT-151513.svg)](LICENSE)
 
-[Live console](https://priorseal.xyz/app) · [Agent-swap pilot brief](https://priorseal.xyz/jupiter/pilot-intake) · [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
+[Live console](https://priorseal.xyz/app) · [PriorSeal Swap](https://priorseal.xyz/swap) · [Agent-swap pilot brief](https://priorseal.xyz/swap/pilot-intake) · [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
 
 An Agent can propose a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, whether the observed execution matched it, or whether the user still had a final say**. PriorSeal connects a principal-signed, time-bounded authorization to an identified EVM or Solana execution in a portable receipt that another party can verify independently. Its core is the relationship between **what an Agent proposed, what was authorized before action, and what was observed afterward**.
 
@@ -173,6 +173,6 @@ Run `npm run check` for the repository checks, or `npm run release:check` for th
 
 ## Work with PriorSeal
 
-For a pilot, choose one bounded EVM or Solana execution path and ask an independent reviewer to reproduce the Agent proposal boundary, authorization, timing, observation, and compliance result from its exported evidence. A Jupiter application can prepare a non-sensitive [Agent-swap pilot brief](https://priorseal.xyz/jupiter/pilot-intake); public Issues are only for redacted developer collaboration. See the [collaboration guide](COLLABORATING.md) or [open a redacted pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Code contributions follow [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow [SECURITY.md](SECURITY.md).
+For a pilot, choose one bounded EVM or Solana execution path and ask an independent reviewer to reproduce the Agent proposal boundary, authorization, timing, observation, and compliance result from its exported evidence. [PriorSeal Swap](https://priorseal.xyz/swap) is the public entry point for the guarded Jupiter flow; an application can prepare a non-sensitive [Agent-swap pilot brief](https://priorseal.xyz/swap/pilot-intake). Public Issues are only for redacted developer collaboration. See the [collaboration guide](COLLABORATING.md) or [open a redacted pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Code contributions follow [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow [SECURITY.md](SECURITY.md).
 
 MIT licensed. See [LICENSE](LICENSE).

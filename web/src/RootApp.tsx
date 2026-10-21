@@ -1,13 +1,13 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { BrowserRouter, Route, Routes, useLocation, useNavigationType } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigationType } from 'react-router-dom'
 import { PrivacyPreferences } from './PrivacyPreferences'
 import { loadConsole } from './route-loaders'
 import { LandingPage } from './landing/LandingPage'
 
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((module) => ({ default: module.PrivacyPage })))
 const McpPage = lazy(() => import('./pages/McpPage').then((module) => ({ default: module.McpPage })))
-const JupiterPilotPage = lazy(() => import('./pages/JupiterPilotPage').then((module) => ({ default: module.JupiterPilotPage })))
-const JupiterPilotIntakePage = lazy(() => import('./pages/JupiterPilotIntakePage').then((module) => ({ default: module.JupiterPilotIntakePage })))
+const SwapPage = lazy(() => import('./pages/SwapPage').then((module) => ({ default: module.SwapPage })))
+const SwapPilotIntakePage = lazy(() => import('./pages/SwapPilotIntakePage').then((module) => ({ default: module.SwapPilotIntakePage })))
 const PublicNotFoundPage = lazy(() => import('./pages/OutcomePages').then((module) => ({ default: module.PublicNotFoundPage })))
 const Console = lazy(loadConsole)
 
@@ -92,5 +92,5 @@ function RouteFallback() {
 }
 
 export default function RootApp() {
-  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/jupiter" element={<JupiterPilotPage />} /><Route path="/jupiter/pilot-intake" element={<JupiterPilotIntakePage />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
+  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/swap" element={<SwapPage />} /><Route path="/swap/pilot-intake" element={<SwapPilotIntakePage />} /><Route path="/jupiter" element={<Navigate replace to="/swap" />} /><Route path="/jupiter/pilot-intake" element={<Navigate replace to="/swap/pilot-intake" />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
 }

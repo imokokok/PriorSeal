@@ -50,7 +50,7 @@ PriorSeal 设计伙伴试点：Insight 提供可审阅的决策输入，PriorSea
 这可以按固定范围的付费试点、实施费或企业服务合同收费。PriorSeal 不持有
 客户钱包私钥、不替客户广播交易，也不承诺交易的经济安全、盈利性或业务结果。
 
-Jupiter 试点可从[本地试点简报页](https://priorseal.xyz/jupiter/pilot-intake)
+Jupiter 试点可从 [PriorSeal Swap](https://priorseal.xyz/swap) 或[本地试点简报页](https://priorseal.xyz/swap/pilot-intake)
 开始：该页面只在浏览器内生成非敏感范围简报，不上传、存储或分析填写内容。
 公开 GitHub Issue 仅用于已脱敏的开发协作；私密商业线索、合同和资金 GO 必须在
 双方同意的私有渠道中处理，不能由该页面或代码擅自收集。

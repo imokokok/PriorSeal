@@ -4,8 +4,9 @@ This runbook scopes one bounded, user-controlled Solana Jupiter ExactIn
 design-partner pilot for an Agent or trading application. It does not authorize
 a payment, deployment, or transaction.
 
-Use the public [pilot-brief page](https://priorseal.xyz/jupiter/pilot-intake) to
-structure a non-sensitive request. The page is client-side only: it does not
+Use [PriorSeal Swap](https://priorseal.xyz/swap) as the public product entry,
+then use the public [pilot-brief page](https://priorseal.xyz/swap/pilot-intake) to
+structure a non-sensitive request. The brief page is client-side only: it does not
 collect a lead, transmit fields, or replace an agreed private business channel.
 Use the public GitHub Issue form only for redacted developer collaboration.
 
@@ -42,7 +43,7 @@ Choose the offer deliberately:
 
 Check the deployed health, readiness, capabilities, Agent integration manifest,
 and OpenAPI endpoints; confirm guarded Jupiter is ready, Solana authorization
-is enabled, and the displayed fee matches the reviewed scope. Open `/jupiter` and
+is enabled, and the displayed fee matches the reviewed scope. Open `/swap` and
 `/app/jupiter-guarded-swap` in a fresh browser profile, then run the focused
 guarded-Jupiter test suite. Configuration readiness proves only configuration
 and storage; it does not prove live RPC, TSA, Jupiter, or Insight reachability.
