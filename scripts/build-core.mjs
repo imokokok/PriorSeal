@@ -63,7 +63,6 @@ const onDemandOperationSources = [
   "scripts/agent-retail-readiness.mts",
   "scripts/mcp-compatibility-proof.mts",
   "scripts/rotation-impact.mts",
-  "scripts/zeroex-production-quote.mts",
   "scripts/x402-production-readiness.mts",
   "scripts/x402-evidence-pack.mts",
   "scripts/x402-staging-bundle-rehearsal.mts",

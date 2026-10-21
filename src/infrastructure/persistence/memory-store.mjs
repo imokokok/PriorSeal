@@ -4,19 +4,14 @@ import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from "../../domain/merkle-log.mjs";
 import { assertReceiptIdentity } from "./receipt-identity.mjs";
 import { assertX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
-import { assertZeroExCommercialLedgerEvent } from "../../domain/zeroex-commercial-ledger.mjs";
 function paymentLedgerEventOrder(type) {
   return type === "PAYMENT_AUTHORIZED" ? 0 : type === "REFUND_RECORDED" ? 2 : 1;
-}
-function zeroExCommercialLedgerEventOrder(type) {
-  return type === "RELAY_ATTEMPTED" ? 0 : 1;
 }
 function createMemoryStore({ clock = () => Date.now() } = {}) {
   const intents = /* @__PURE__ */ new Map(), receipts = /* @__PURE__ */ new Map(), observations = /* @__PURE__ */ new Map(), idempotency = /* @__PURE__ */ new Map(), jobs = /* @__PURE__ */ new Map(), authorizations = /* @__PURE__ */ new Map(), archive = /* @__PURE__ */ new Map();
   const archiveEntries = [], authorizationLog = [];
   const logByAuthorizationHash = /* @__PURE__ */ new Map(), merkleNodes = /* @__PURE__ */ new Map(), usedAuthorizationNonces = /* @__PURE__ */ new Set();
   const x402PaymentLedger = /* @__PURE__ */ new Map();
-  const zeroExCommercialLedger = /* @__PURE__ */ new Map();
   const agentMeterAccounts = /* @__PURE__ */ new Map();
   const agentMeterUsage = /* @__PURE__ */ new Map();
   const agentMeterCreditOperations = /* @__PURE__ */ new Map();
@@ -43,19 +38,6 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
     async listX402PaymentLedgerEvents(ledgerId) {
       if (!/^xpl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError("Invalid x402 payment ledger identifier");
       return [...x402PaymentLedger.get(ledgerId)?.values() ?? []].sort((left, right) => left.occurredAt - right.occurredAt || paymentLedgerEventOrder(left.type) - paymentLedgerEventOrder(right.type) || left.eventId.localeCompare(right.eventId)).map((value) => structuredClone(value));
-    },
-    async appendZeroExCommercialLedgerEvent(value) {
-      const event = assertZeroExCommercialLedgerEvent(value);
-      const entries = zeroExCommercialLedger.get(event.ledgerId) ?? /* @__PURE__ */ new Map();
-      zeroExCommercialLedger.set(event.ledgerId, entries);
-      const existing = entries.get(event.eventId);
-      if (existing) return structuredClone(existing);
-      entries.set(event.eventId, structuredClone(event));
-      return structuredClone(event);
-    },
-    async listZeroExCommercialLedgerEvents(ledgerId) {
-      if (!/^zcl_[0-9a-f]{32}$/.test(ledgerId)) throw new TypeError("Invalid 0x commercial ledger identifier");
-      return [...zeroExCommercialLedger.get(ledgerId)?.values() ?? []].sort((left, right) => left.occurredAt - right.occurredAt || zeroExCommercialLedgerEventOrder(left.type) - zeroExCommercialLedgerEventOrder(right.type) || left.eventId.localeCompare(right.eventId)).map((value) => structuredClone(value));
     },
     async provisionAgentMeterAccount(input) {
       const provisionedCredits = BigInt(input.provisionedCredits);

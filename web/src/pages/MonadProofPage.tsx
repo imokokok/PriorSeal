@@ -45,7 +45,7 @@ export function MonadProofPage() {
         <Brand />
         <nav aria-label="Primary navigation">
           <Link to="/">Overview</Link>
-          <Link to="/swap">Swap</Link>
+          <Link to="/app/intents/exact-call">Exact call</Link>
           <Link to="/integrations/mcp">MCP</Link>
           <a href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">GitHub ↗</a>
         </nav>
@@ -120,7 +120,7 @@ export function MonadProofPage() {
           <div>
             <p>The case record proves a principal-controlled, zero-value, exact-call evidence flow on Monad. It does not claim an Insight market assessment, x402 settlement, token safety, economic safety, investment result, production custody, or permission for autonomous trading.</p>
             <p>For a financial agent action, Insight and PriorSeal stay separate but connected: Insight evaluates the bounded request; PriorSeal binds the accepted scope to the one authorized execution and preserves evidence afterward.</p>
-            <div className="monad-proof__boundary-links"><Link to="/">Explore PriorSeal <span>↗</span></Link><Link to="/swap">See a constrained swap flow <span>↗</span></Link></div>
+            <div className="monad-proof__boundary-links"><Link to="/">Explore PriorSeal <span>↗</span></Link><Link to="/app/intents/exact-call">See the exact-call flow <span>↗</span></Link></div>
           </div>
         </section>
 

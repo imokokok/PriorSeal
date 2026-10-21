@@ -10,9 +10,6 @@
 - Approval time (Asia/Shanghai):
 - Release owner:
 - Initial cohort / rollout limit:
-- Guarded Jupiter status and server policy revision:
-- Guarded 0x status and server policy revision:
-- Supported wallets, chains, assets, amount/slippage/expiry/fee limits:
 
 ## Customer commitments
 
