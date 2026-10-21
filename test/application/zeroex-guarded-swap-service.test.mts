@@ -140,9 +140,11 @@ test('guarded 0x verifies a tenant fee recipient before forwarding server-owned 
       return json({ data: { receipt: { schema: 'insight.solana-simulation-receipt.v1', payload: { simulation: { messageHash: simulationRequest.expectedMessageHash, signatureState: 'UNSIGNED', status: 'SIMULATED' } } }, contextCommitment: { namespace: 'insight.solana-simulation-receipt.v1', algorithm: 'sha256', digest: `0x${'b'.repeat(64)}` } } })
     },
   })
-  const result = await service.prepare({ inputMint: USDC, outputMint: WRAPPED_SOL, amount: '1000000', taker: payerAddress, slippageBps: 50 })
+  const agentProposal = { schema: 'priorseal.agent-proposal.v1' as const, agentId: 'agent:zeroex-service-test', proposalId: 'proposal:zeroex-service-test', createdAt: 1_800_000_000, rationale: 'The principal requested one bounded 0x test swap.' }
+  const result = await service.prepare({ inputMint: USDC, outputMint: WRAPPED_SOL, amount: '1000000', taker: payerAddress, slippageBps: 50, agentProposal })
   assert.equal(result.tenantId, 'public')
   assert.equal(feeAccountReads, 1)
   assert.deepEqual({ ppm: zeroExRequest?.swap_fee_ppm, recipient: zeroExRequest?.swap_fee_recipient, side: zeroExRequest?.swap_fee_side }, { ppm: '1000', recipient: USDC, side: 'sell' })
   assert.equal(result.review.commercial.fee?.expectedAmountAtomic, '1000')
+  assert.equal(result.prepared.intent.contextCommitments?.filter((commitment) => commitment.namespace === 'priorseal.agent-proposal.v1').length, 1)
 })

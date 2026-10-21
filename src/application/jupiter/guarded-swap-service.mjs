@@ -2,6 +2,7 @@
 import { Connection, PublicKey, Transaction, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 import {
   assertPreparedGuardedJupiterSwap,
+  agentProposalCommitment,
   createInsightSolanaSimulationClient,
   createJupiterRouterClient,
   hashSolanaTransactionMessage,
@@ -23,9 +24,15 @@ function createGuardedJupiterSwapService(options) {
   return {
     async prepare(input, requestOptions = {}) {
       const intentId = input.intentId ?? `jps_${crypto.randomUUID().replaceAll("-", "")}`;
+      const { agentProposal, ...requestInput } = input;
+      const contextCommitments = [
+        ...requestInput.contextCommitments ?? [],
+        ...agentProposal ? [await agentProposalCommitment(agentProposal)] : []
+      ];
       const request = {
-        ...input,
+        ...requestInput,
         intentId,
+        ...contextCommitments.length ? { contextCommitments } : {},
         ...policy.platformFee ? { platformFeeBps: policy.platformFee.feeBps, feeAccount: policy.platformFee.feeAccount } : {}
       };
       if (policy.platformFee) await assertPlatformFeeAccount(connection, policy.platformFee);

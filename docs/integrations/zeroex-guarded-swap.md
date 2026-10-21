@@ -7,7 +7,8 @@ application never accepts a wallet private key.
 
 ```text
 0x /solana/swap-instructions → final v0 message → Insight simulation
-  → PriorSeal message authorization → wallet signs unchanged bytes → relay → observation
+  → retained Agent proposal commitment → PriorSeal message authorization
+  → wallet signs unchanged bytes → relay → observation
 ```
 
 This adapter uses 0x's Solana raw-instruction API, not an 0x-managed signing or
@@ -165,8 +166,14 @@ When deployment capabilities report
 
 Preparation accepts only `inputMint`, `outputMint`, positive atomic `amount`,
 the self-paying `taker`, `slippageBps`, optional
-`minimumOutputAmountAtomic`, and optional PriorSeal context commitments. It
-returns a `PreparedGuardedZeroExSwap` and a non-secret review.
+`minimumOutputAmountAtomic`, optional PriorSeal context commitments, and an
+optional `agentProposal`. `agentProposal` is a strict
+`priorseal.agent-proposal.v1` record: the protected service hashes it into the
+exact intent while the caller retains its readable record. Callers must not
+supply the matching context commitment themselves. Before authorization, the
+SDK requires the retained record to match the exact intent and its Agent ID to
+match the principal-signed delegation. It returns a `PreparedGuardedZeroExSwap`
+and a non-secret review.
 
 Submission accepts a fresh accepted authorization ID, that exact prepared
 package, and a wallet-signed transaction. The relay verifies the unsigned and
@@ -194,14 +201,22 @@ prepared schema, so it cannot silently route an authorized package elsewhere.
 import {
   assertPreparedGuardedZeroExSwap,
   authorizeGuardedZeroExSwap,
+  createAgentProposal,
   observeGuardedZeroExSwap,
   reviewGuardedZeroExSwap,
 } from 'priorseal-sdk'
 
+const proposal = createAgentProposal({
+  agentId: 'agent:swap-console',
+  proposalId: 'proposal:user-request-001',
+  createdAt: Math.floor(Date.now() / 1000),
+  rationale: 'The wallet owner requested one bounded conversion.',
+})
+
 const prepared = await fetch('/v1/0x/guarded-swaps/prepare', {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ inputMint, outputMint, amount, taker: wallet.publicKey, slippageBps: 50 }),
+  body: JSON.stringify({ inputMint, outputMint, amount, taker: wallet.publicKey, slippageBps: 50, agentProposal: proposal }),
 }).then((response) => response.json())
 
 await assertPreparedGuardedZeroExSwap(prepared.prepared)
@@ -212,7 +227,8 @@ const accepted = await authorizeGuardedZeroExSwap({
   prepared: prepared.prepared,
   wallet, // { publicKey, signMessage }; no private key crosses the SDK boundary
   principal: { type: 'user', id: 'user:42' },
-  agentId: 'agent:swap-console',
+  agentId: proposal.agentId,
+  proposal,
 })
 
 // Your wallet signs the exact base64 transaction. Compare its serialized
@@ -226,8 +242,10 @@ const observation = await observeGuardedZeroExSwap({
 
 The console is available at `/app/0x-guarded-swap` only when capabilities say
 the integration is ready. It keeps provider credentials server-side, displays
-atomic limits and exact transaction identifiers before signing, and exports a
-portable evidence package after observation.
+the retained Agent rationale/ID, readable known-mint amounts alongside
+authoritative atomic limits, a route-expiry countdown and exact transaction
+identifiers before signing. It can import/export v2 packages that retain the
+Agent proposal record and exports a portable evidence package after observation.
 
 ## Commercial use
 

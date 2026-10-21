@@ -1,8 +1,11 @@
 # Jupiter Guarded Swap
 
 `priorseal-sdk` can compose Jupiter Router's raw Solana swap instructions with
-an Insight pre-sign simulation and an exact PriorSeal authorization. The result
-is a self-custodial, single-wallet workflow:
+an Insight pre-sign simulation and an exact PriorSeal authorization. It is the
+execution boundary for an Agent-facing application: an Agent can prepare a
+proposal, while the wallet owner retains the final decision and every accepted
+action leaves independently verifiable evidence. The result is a
+self-custodial, single-wallet workflow:
 
 ```text
 Jupiter /build → application compiles final message → Insight simulation
@@ -11,9 +14,68 @@ Jupiter /build → application compiles final message → Insight simulation
 
 This is an integration adapter, not a Jupiter replacement, a wallet, an
 execution bot, or a claim that a swap is economically safe. Jupiter produces
-the route. The application owns RPC selection, address-lookup-table resolution,
-the current blockhash and transaction signing. PriorSeal never receives the
-transaction-signing key.
+the route. The application owns Agent identity, proposal generation, RPC
+selection, address-lookup-table resolution, the current blockhash and
+transaction signing. PriorSeal never receives the transaction-signing key and
+does not establish an Agent's identity, reputation, strategy quality or token
+safety.
+
+## Agent and retail-user contract
+
+Use this integration as a **human-controlled Agent action**, not a delegated
+trading mandate:
+
+1. Treat every model output, prompt, memory entry, market feed, token label and
+   Agent-supplied route field as untrusted until the protected service has
+   validated the exact message and deployment policy.
+2. Before a wallet signature, show the principal the Agent/application ID,
+   exact input amount and mint, minimum output and mint, maximum slippage,
+   platform fee, maximum network/priority fee, expiry and the fact that the
+   authorization is single-use. Atomic values and addresses are authoritative.
+3. Bind a stable, application-owned `agentId` in
+   `authorizeGuardedJupiterSwap()`. It is part of the principal-signed
+   authorization and receipt, but it is not an identity proof by itself. Use a
+   separately reviewed registry or signed identity record if the UI claims an
+   Agent identity.
+4. Retain one `priorseal.agent-proposal.v1` record containing the Agent ID,
+   proposal ID, creation time and a short rationale. The protected Jupiter
+   route hashes it into the exact intent; the wallet UI must show the retained
+   text as an untrusted disclosure, not as investment advice. Supply the same
+   record to `authorizeGuardedJupiterSwap()` so the SDK confirms that the
+   proposal, Agent ID and exact action match.
+5. Make route, simulation, authorization and submission states explicit:
+   `not prepared`, `review required`, `authorized`, `submitted`, `unknown`,
+   `observed`, or a final failure state. Never silently re-quote or retry a
+   possibly broadcast transaction. Solana can charge base and priority fees
+   even when a transaction ultimately fails.
+6. Do not describe one exact authorization as repeatable automation. Session,
+   budget, recurring or unattended trading needs a dedicated authorization
+   profile with explicit budget accounting, revocation, emergency stop,
+   replay semantics and independent verification.
+
+The bundled console implements this contract at
+`/app/jupiter-guarded-swap`: it records an Agent rationale and ID in a retained
+proposal record, binds the record into the exact transaction intent and the ID
+into the signed authorization, requires a user acknowledgement of the exact
+boundary, shows a local expiry countdown, and blocks customer-facing
+authorization if lookup tables are unpinned or the priority fee is uncapped.
+
+## Agent integration discovery
+
+Before an Agent host offers a protected swap, read
+`GET /.well-known/priorseal-agent.json`. This cacheable, non-secret manifest
+points to capabilities, OpenAPI, MCP and issuer-key discovery, reports whether
+guarded Jupiter is currently available, and states the mandatory safety model:
+proposal plus a principal signature for every exact action, no transaction key
+for PriorSeal, and no retry after a submitted or unknown result. It is
+integration guidance, not an authorization or an identity registry.
+
+The manifest names `priorseal.agent-proposal.v1` as the required retained
+record for the hosted Jupiter proposal route. Send it in `agentProposal` on
+`POST /v1/jupiter/guarded-swaps/prepare`; do not precompute and send its
+reserved context commitment. The server validates the compact record and
+computes the SHA-256 commitment itself. Keep the raw record beside the returned
+prepared package because the exact intent carries only its digest.
 
 ## Supported first-release scope
 
@@ -126,8 +188,10 @@ service usage charges.
 The server exposes two no-store routes only when this configuration is present:
 
 - `POST /v1/jupiter/guarded-swaps/prepare` accepts mint addresses, atomic
-  input, wallet and bounded slippage; it returns the prepared package and its
-  human-review record.
+  input, wallet, bounded slippage and an optional retained `agentProposal`;
+  it returns the prepared package and its human-review record. A proposal
+  record is committed into the exact intent but is not echoed by the service,
+  so the caller must retain it locally.
 - `POST /v1/jupiter/guarded-swaps/submit` accepts the `authorizationId` from
   the accepted PriorSeal authorization, that package, and wallet-signed base64
   bytes. It revalidates expiry, binds the serialized message bytes to the
@@ -157,7 +221,9 @@ the transaction requires running this whole flow again.
 
 ```ts
 import {
+  agentProposalCommitment,
   authorizeGuardedJupiterSwap,
+  createAgentProposal,
   createInsightSolanaSimulationClient,
   createJupiterRouterClient,
   createPriorSealClient,
@@ -173,6 +239,13 @@ const insight = createInsightSolanaSimulationClient({
   apiKey: process.env.INSIGHT_API_KEY!,
 })
 
+const proposal = createAgentProposal({
+  agentId: 'agent:swap-copilot',
+  proposalId: 'proposal:customer-request-001',
+  createdAt: Math.floor(Date.now() / 1000),
+  rationale: 'The wallet owner requested one bounded USDC-to-SOL conversion.',
+})
+
 const prepared = await prepareGuardedJupiterSwap({
   intentId: crypto.randomUUID(),
   inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
@@ -181,6 +254,7 @@ const prepared = await prepareGuardedJupiterSwap({
   minimumOutputAmountAtomic: '990000', // independent user-visible output floor
   taker: wallet.publicKey.toBase58(),
   slippageBps: 50,
+  contextCommitments: [await agentProposalCommitment(proposal)],
 }, {
   router,
   insight,
@@ -225,7 +299,8 @@ const authorization = await authorizeGuardedJupiterSwap({
   prepared,
   wallet,
   principal: { type: 'user', id: 'user:42' },
-  agentId: 'agent:solana-swap',
+  agentId: proposal.agentId,
+  proposal,
   audience: (await priorseal.capabilities()).audience,
 })
 
@@ -255,10 +330,13 @@ it with the authorization record; it contains neither an API key nor a private
 key.
 
 `authorizeGuardedJupiterSwap()` automatically calls
-`assertPreparedGuardedJupiterSwap()` again. Consequently a stale, persisted or
-mutated prepared object fails before PriorSeal asks a wallet to authorize it.
-Applications that present a review in a separate process should call the same
-function before displaying their final confirmation.
+`assertPreparedGuardedJupiterSwap()` again. When given a proposal record, it
+also requires the same Agent ID and an unambiguous matching
+`priorseal.agent-proposal.v1` commitment in the exact intent. Consequently a
+stale, persisted or mutated prepared object—or a substituted rationale—fails
+before PriorSeal asks a wallet to authorize it. Applications that present a
+review in a separate process should call the same function before displaying
+their final confirmation.
 
 ## Operational rules
 

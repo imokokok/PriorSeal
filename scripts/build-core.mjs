@@ -45,7 +45,8 @@ const onDemandToolSources = [
   "scripts/preview-web.mts",
   "scripts/verify-rwa-execution-profiles.mts",
   "scripts/verify-wak-base-sepolia-router.mts",
-  "scripts/verify-wak-frozen-multicall-sheet.mts"
+  "scripts/verify-wak-frozen-multicall-sheet.mts",
+  "scripts/verify-wak-frozen-multicall-sheet-v4.mts"
 ].map((path) => join(projectRoot, path));
 const onDemandOperationSources = [
   "scripts/erc4337-pilot-doctor.mts",

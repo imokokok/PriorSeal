@@ -3,6 +3,7 @@ import { Connection, PublicKey, Transaction, VersionedTransaction } from "@solan
 import {
   ZeroExGuardedSwapError,
   assertPreparedGuardedZeroExSwap,
+  agentProposalCommitment,
   createInsightSolanaSimulationClient,
   createZeroExRouterClient,
   hashSolanaTransactionMessage,
@@ -33,7 +34,16 @@ function createGuardedZeroExSwapService(options) {
   return {
     async prepare(input, requestOptions = {}) {
       const intentId = input.intentId ?? `zxs_${crypto.randomUUID().replaceAll("-", "")}`;
-      const request = { ...input, intentId };
+      const { agentProposal, ...requestInput } = input;
+      const contextCommitments = [
+        ...requestInput.contextCommitments ?? [],
+        ...agentProposal ? [await agentProposalCommitment(agentProposal)] : []
+      ];
+      const request = {
+        ...requestInput,
+        intentId,
+        ...contextCommitments.length ? { contextCommitments } : {}
+      };
       const tenant = resolveGuardedZeroExTenantPolicy(policy, options.tenantPolicies, requestOptions.agentAccountId);
       const effectivePolicy = { ...tenant.policy, feePayer: request.taker };
       if (effectivePolicy.commercialFee) await assertExistingFeeRecipient(connection, effectivePolicy.commercialFee.inputMint, effectivePolicy.commercialFee.recipientTokenAccount);
