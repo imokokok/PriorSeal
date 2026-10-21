@@ -1,5 +1,5 @@
 import { createPriorSealClient, validatePriorSealResponse, type DeploymentCapabilities } from 'priorseal-sdk'
-import type { GuardedJupiterSwapReview, GuardedZeroExSwapReview, PreparedGuardedJupiterSwap, PreparedGuardedZeroExSwap } from 'priorseal-sdk'
+import type { AgentProposal, GuardedJupiterSwapReview, GuardedZeroExSwapReview, PreparedGuardedJupiterSwap, PreparedGuardedZeroExSwap } from 'priorseal-sdk'
 
 export const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
@@ -32,6 +32,8 @@ export type GuardedJupiterPrepareInput = {
   maxAccounts?: number
   mode?: 'standard' | 'fast'
   minimumOutputAmountAtomic?: string
+  /** A non-secret, user-readable Agent disclosure committed server-side into the exact intent. */
+  agentProposal?: AgentProposal
 }
 
 export function prepareGuardedJupiterSwap(input: GuardedJupiterPrepareInput) {
@@ -53,6 +55,8 @@ export type GuardedZeroExPrepareInput = {
   taker: string
   slippageBps: number
   minimumOutputAmountAtomic?: string
+  /** A non-secret, user-readable Agent disclosure committed server-side into the exact intent. */
+  agentProposal?: AgentProposal
 }
 
 export function prepareGuardedZeroExSwap(input: GuardedZeroExPrepareInput) {

@@ -2,12 +2,15 @@ import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solan
 import {
   ZeroExGuardedSwapError,
   assertPreparedGuardedZeroExSwap,
+  agentProposalCommitment,
   createInsightSolanaSimulationClient,
   createZeroExRouterClient,
   hashSolanaTransactionMessage,
   prepareGuardedZeroExSwap,
   reviewGuardedZeroExSwap,
   type GuardedZeroExSwapRequest,
+  type AgentProposal,
+  type ContextCommitment,
   type JupiterTransactionCompiler,
   type PreparedGuardedZeroExSwap,
   type ZeroExGuardPolicy,
@@ -20,7 +23,11 @@ import { buildZeroExCommercialLedgerEvent, type ZeroExCommercialLedgerEvent } fr
 import type { Authorization, AuthorizationAcceptance } from '../../domain/authorization.mjs'
 
 export type GuardedZeroExDeploymentPolicy = Omit<ZeroExGuardPolicy, 'feePayer' | 'commercialFee'>
-export type GuardedZeroExPrepareInput = Omit<GuardedZeroExSwapRequest, 'intentId'> & { intentId?: string }
+export type GuardedZeroExPrepareInput = Omit<GuardedZeroExSwapRequest, 'intentId'> & {
+  intentId?: string
+  /** A caller-retained disclosure; only its server-computed commitment enters the exact intent. */
+  agentProposal?: AgentProposal
+}
 
 export type GuardedZeroExSwapService = {
   prepare(input: GuardedZeroExPrepareInput, options?: { signal?: AbortSignal; agentAccountId?: string }): Promise<{ prepared: PreparedGuardedZeroExSwap; review: Awaited<ReturnType<typeof reviewGuardedZeroExSwap>>; tenantId: string }>
@@ -87,7 +94,16 @@ export function createGuardedZeroExSwapService(options: GuardedZeroExSwapService
   return {
     async prepare(input, requestOptions = {}) {
       const intentId = input.intentId ?? `zxs_${crypto.randomUUID().replaceAll('-', '')}`
-      const request: GuardedZeroExSwapRequest = { ...input, intentId }
+      const { agentProposal, ...requestInput } = input
+      const contextCommitments: ContextCommitment[] = [
+        ...(requestInput.contextCommitments ?? []),
+        ...(agentProposal ? [await agentProposalCommitment(agentProposal)] : []),
+      ]
+      const request: GuardedZeroExSwapRequest = {
+        ...requestInput,
+        intentId,
+        ...(contextCommitments.length ? { contextCommitments } : {}),
+      }
       const tenant = resolveGuardedZeroExTenantPolicy(policy, options.tenantPolicies, requestOptions.agentAccountId)
       const effectivePolicy: ZeroExGuardPolicy = { ...tenant.policy, feePayer: request.taker }
       if (effectivePolicy.commercialFee) await assertExistingFeeRecipient(connection, effectivePolicy.commercialFee.inputMint, effectivePolicy.commercialFee.recipientTokenAccount)

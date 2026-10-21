@@ -4,7 +4,10 @@ import test from 'node:test'
 import {
   createInsightSolanaSimulationClient,
   createJupiterRouterClient,
+  agentProposalCommitment,
   assertPreparedGuardedJupiterSwap,
+  authorizeGuardedJupiterSwap,
+  createAgentProposal,
   JupiterGuardedSwapError,
   prepareGuardedJupiterSwap,
   reviewGuardedJupiterSwap,
@@ -120,6 +123,24 @@ test('prepares a self-paying Jupiter exact-in swap bound to Insight simulation e
   assert.equal(prepared.intent.asset, 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/spl:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
   assert.equal(prepared.intent.validUntil, 1_800_000_060)
   assert.deepEqual(prepared.intent.contextCommitments, [prepared.simulation.contextCommitment])
+})
+
+test('binds a retained Agent proposal record to the exact route before authorization', async () => {
+  const proposal = createAgentProposal({ agentId: 'agent:swap-copilot', proposalId: 'proposal:guarded-jupiter-1', createdAt: 1_800_000_000, rationale: 'The wallet owner requested this bounded test swap.' })
+  const prepared = await prepareGuardedJupiterSwap({ ...request(), contextCommitments: [await agentProposalCommitment(proposal)] }, {
+    router: { async build() { return build() } },
+    compiler: { async compile() { return { transactionBase64: 'AA==', transaction: message() } } },
+    insight: { async simulate(input: { expectedMessageHash: string }) { return { messageHash: input.expectedMessageHash, signatureState: 'UNSIGNED' as const, status: 'SIMULATED' as const, contextCommitment: { namespace: 'insight.solana-simulation-receipt.v1', algorithm: 'sha256' as const, digest: `0x${'e'.repeat(64)}` }, receipt: {} } } },
+    policy: policy(), now: () => 1_800_000_000_000,
+  })
+  let authorizationInput: Record<string, unknown> | undefined
+  const client = { async authorizeWithSolanaWallet(input: Record<string, unknown>) { authorizationInput = input; return {} } } as never
+  await authorizeGuardedJupiterSwap({ client, prepared, wallet: { publicKey: WALLET, async signMessage() { return new Uint8Array() } }, principal: { type: 'user', id: 'wallet:test' }, agentId: proposal.agentId, proposal })
+  assert.equal((authorizationInput?.delegate as { agentId: string }).agentId, proposal.agentId)
+  await assert.rejects(
+    authorizeGuardedJupiterSwap({ client, prepared, wallet: { publicKey: WALLET, async signMessage() { return new Uint8Array() } }, principal: { type: 'user', id: 'wallet:test' }, agentId: 'agent:other', proposal }),
+    (error) => error instanceof JupiterGuardedSwapError && error.code === 'AGENT_PROPOSAL_AGENT_MISMATCH',
+  )
 })
 
 test('binds a deployment-owned 10 bps USDC platform fee to the exact review and intent', async () => {

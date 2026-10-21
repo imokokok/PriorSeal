@@ -1,6 +1,7 @@
 import { Connection, PublicKey, Transaction, TransactionInstruction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import {
   assertPreparedGuardedJupiterSwap,
+  agentProposalCommitment,
   createInsightSolanaSimulationClient,
   createJupiterRouterClient,
   hashSolanaTransactionMessage,
@@ -9,6 +10,8 @@ import {
   reviewGuardedJupiterSwap,
   SOLANA_USDC_MINT,
   type GuardedJupiterSwapRequest,
+  type AgentProposal,
+  type ContextCommitment,
   type JupiterGuardPolicy,
   type JupiterTransactionCompiler,
   type PreparedGuardedJupiterSwap,
@@ -23,6 +26,8 @@ export type GuardedJupiterDeploymentPolicy = Omit<JupiterGuardPolicy, 'feePayer'
 export type GuardedJupiterPrepareInput = Omit<GuardedJupiterSwapRequest, 'intentId' | 'platformFeeBps' | 'feeAccount'> & {
   /** A client may supply a traceable id; otherwise the protected service creates one. */
   intentId?: string;
+  /** The service hashes this non-secret disclosure into the exact intent. */
+  agentProposal?: AgentProposal;
 };
 
 export type GuardedJupiterSwapService = {
@@ -79,9 +84,15 @@ export function createGuardedJupiterSwapService(options: GuardedJupiterSwapServi
   return {
     async prepare(input, requestOptions = {}) {
       const intentId = input.intentId ?? `jps_${crypto.randomUUID().replaceAll('-', '')}`;
+      const { agentProposal, ...requestInput } = input;
+      const contextCommitments: ContextCommitment[] = [
+        ...(requestInput.contextCommitments ?? []),
+        ...(agentProposal ? [await agentProposalCommitment(agentProposal)] : []),
+      ];
       const request: GuardedJupiterSwapRequest = {
-        ...input,
+        ...requestInput,
         intentId,
+        ...(contextCommitments.length ? { contextCommitments } : {}),
         ...(policy.platformFee ? { platformFeeBps: policy.platformFee.feeBps, feeAccount: policy.platformFee.feeAccount } : {}),
       };
       if (policy.platformFee) await assertPlatformFeeAccount(connection, policy.platformFee);

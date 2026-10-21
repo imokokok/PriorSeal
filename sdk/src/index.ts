@@ -6,6 +6,8 @@ export type { SelfServeTopupPayer, SelfServeTopupResult, SelfserveClaimCapabilit
 export { parseAuthorizationCheckpoint } from './checkpoint.js'
 export { validatePriorSealResponse } from './response-validation.js'
 export { buildExactCallIntent, parseExactCallTransaction, parseContextCommitments } from './exact-call.js'
+export { AGENT_PROPOSAL_NAMESPACE, agentProposalCommitment, assertAgentId, canonicalAgentProposalBytes, createAgentProposal, parseAgentProposal, verifyAgentProposalCommitment } from './agent-proposal.js'
+export type { AgentProposal } from './agent-proposal.js'
 export { buildSolanaTransactionIntent, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
 export type { SolanaTransactionIntentInput } from './solana-transaction.js'
 export {

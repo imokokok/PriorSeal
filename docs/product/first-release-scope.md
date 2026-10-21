@@ -12,7 +12,7 @@ PriorSeal 的长期商业方向是 Agent 按调用使用的授权与证据层；
 
 ## Primary user
 
-The first release serves agent builders and treasury engineering teams that need a portable, independently verifiable statement connecting a pre-authorized intent to an observed EVM or Solana execution.
+The first release serves Agent builders, wallet and trading-application teams, and treasury engineering teams that need a portable, independently verifiable statement connecting an Agent proposal and a pre-authorized intent to an observed EVM or Solana execution. The end user is the principal who reviews and signs one exact action; the Agent is not given an open-ended asset mandate.
 
 Auditors are the primary evidence consumer. They do not need wallet access and should be able to inspect a downloaded receipt or evidence bundle without trusting the PriorSeal HTTP verification endpoint.
 
@@ -39,7 +39,9 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 ## Implemented workflow polish
 
 - The browser imports an already constructed exact EVM call using the SDK's canonical intent builder; transfer and exact-call reports show their different verification scopes.
-- The guarded Jupiter profile prepares one Solana ExactIn route, compiles and simulates an exact message, requires a wallet authorization, and relays the unchanged signed bytes only once. A new route, message, blockhash or authorized boundary requires a new preparation and authorization.
+- The guarded Jupiter profile prepares one Solana ExactIn route, commits a retained `priorseal.agent-proposal.v1` disclosure into the exact intent, records its matching application-supplied Agent ID in the authorization, compiles and simulates an exact message, requires a wallet authorization, and relays the unchanged signed bytes only once. The console shows familiar USDC/wSOL display amounts alongside authoritative atomic values, an expiry countdown and an unsigned-proposal discard control. It blocks customer-facing authorization if lookup tables are not pinned or priority fees are uncapped. A new route, message, blockhash or authorized boundary requires a new preparation and authorization.
+- The guarded 0x Solana profile has the same Agent-proposal and retail review boundary: it server-commits the caller-retained rationale record into the exact route, requires that record and Agent ID at authorization, shows known-mint amounts and expiry before signing, and imports/exports complete v2 proposal packages. Its independently configured 0x response-signature, compute-budget and optional commercial-fee controls remain in force.
+- `/.well-known/priorseal-agent.json` gives Agent hosts a non-secret machine-readable entry point for capabilities, OpenAPI, MCP, issuer-key discovery and the proposal-and-principal-confirmation boundary. It reports unavailable integrations rather than inviting a call that cannot complete.
 - Deployment capability discovery reports profiles, chain configuration, audience, proof mode, and dependencies before wallet signing. Its readiness result describes configuration and storage, not a live RPC/TSA availability guarantee.
 - Reviewers can import native bundles or composite manifests and independently confirm reusable trust profiles. Embedded discovery keys cannot approve themselves. Custom audiences and historical key windows are checked.
 - SDK authorization checkpoints preserve prepared/signed bytes and an acceptance idempotency key. Observation timeouts return job and transaction recovery handles. Recovery does not broadcast another transaction.
@@ -58,6 +60,7 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 
 - Wallet custody, transaction construction, transaction signing or broadcast.
 - Economic safety scoring, token legitimacy guarantees or investment recommendations.
+- Agent reputation guarantees, unrestricted delegation, recurring authorization, or autonomous budget spending.
 - Treating one RPC provider as an absolute source of truth.
 - Presenting browser-local activity as an organizational system of record.
 

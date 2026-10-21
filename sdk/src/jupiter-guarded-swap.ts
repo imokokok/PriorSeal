@@ -1,4 +1,5 @@
 import { PriorSealClient } from './client.js'
+import { AGENT_PROPOSAL_NAMESPACE, assertAgentId, verifyAgentProposalCommitment, type AgentProposal } from './agent-proposal.js'
 import { buildSolanaTransactionIntent, hashSolanaTransactionMessage, SOLANA_MAINNET_CAIP2 } from './solana-transaction.js'
 import type {
   ContextCommitment,
@@ -186,6 +187,8 @@ export type AuthorizeGuardedJupiterSwapInput = {
   wallet: SolanaMessageWallet
   principal: { type: 'user' | 'organization'; id: string }
   agentId: string
+  /** Optional retained Agent disclosure; when supplied it must be committed into the exact prepared intent. */
+  proposal?: AgentProposal
   audience?: string
   /** Testable clock source; values are Unix milliseconds. */
   now?: () => number
@@ -342,10 +345,18 @@ export function authorizeGuardedJupiterSwap(input: AuthorizeGuardedJupiterSwapIn
 async function authorizePreparedGuardedJupiterSwap(input: AuthorizeGuardedJupiterSwapInput): Promise<Awaited<ReturnType<PriorSealClient['authorizeWithSolanaWallet']>>> {
   const { prepared } = input
   await assertPreparedGuardedJupiterSwap(prepared, input.now)
+  const agentId = assertAgentId(input.agentId)
+  if (input.proposal) {
+    if (input.proposal.agentId !== agentId) throw new JupiterGuardedSwapError('AGENT_PROPOSAL_AGENT_MISMATCH', 'The Agent proposal record identifies a different Agent than the authorization')
+    const binding = await verifyAgentProposalCommitment(prepared.intent, input.proposal)
+    if (!binding.matched) throw new JupiterGuardedSwapError('AGENT_PROPOSAL_COMMITMENT_MISMATCH', 'The Agent proposal record is not committed into the prepared exact action')
+  } else if (prepared.intent.contextCommitments?.some((entry) => entry.namespace === AGENT_PROPOSAL_NAMESPACE)) {
+    throw new JupiterGuardedSwapError('AGENT_PROPOSAL_RECORD_REQUIRED', 'This prepared action carries an Agent proposal commitment; retain and supply the matching proposal record before authorization')
+  }
   return input.client.authorizeWithSolanaWallet({
     intent: prepared.intent,
     principal: input.principal,
-    delegate: { agentId: input.agentId, executor: prepared.transaction.feePayer },
+    delegate: { agentId, executor: prepared.transaction.feePayer },
     ...(input.audience ? { audience: input.audience } : {}),
   }, input.wallet, { signal: input.signal })
 }

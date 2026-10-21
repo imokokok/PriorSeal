@@ -29,7 +29,7 @@ test('capability-aware navigation exposes available workflows and blocks an unav
   await expect(page.getByRole('link', { name: 'Quickstart' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Exact-call authorization' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Project archive' })).toBeVisible()
-  const guardedJupiter = page.locator('.nav-unavailable').filter({ hasText: 'Guarded Jupiter swap' })
+  const guardedJupiter = page.locator('.nav-unavailable').filter({ hasText: 'Verified Agent Swap' })
   await expect(guardedJupiter).toContainText('Deployment setup required')
 
   await page.goto('/app/intents/exact-call')
@@ -41,6 +41,36 @@ test('capability-aware navigation exposes available workflows and blocks an unav
   await page.goto('/app/jupiter-guarded-swap')
   await expect(page.getByRole('heading', { level: 1, name: 'Guarded swap unavailable' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Connect Solana wallet/ })).toHaveCount(0)
+})
+
+test('the verified Agent swap surface preserves a retained rationale and user-controlled route boundary', async ({ page }) => {
+  await page.route('**/v1/capabilities', (route) => route.fulfill({ json: {
+    ...caps,
+    executionProfiles: ['priorseal.execution-profile.solana-transaction.v2'],
+    chains: [0],
+    authorizers: ['solana-ed25519'],
+    integrations: { guardedJupiter: { enabled: true, reason: 'READY' }, guardedZeroEx: { enabled: false, reason: 'NOT_CONFIGURED' } },
+  } }))
+  await page.goto('/app/jupiter-guarded-swap')
+  await expect(page.getByRole('heading', { level: 1, name: 'Verify an agent swap' })).toBeVisible()
+  await expect(page.getByLabel('Agent rationale')).toHaveValue('No additional rationale was supplied by the proposing application.')
+  await expect(page.getByText('The agent never gets a blank check')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Prepare verified proposal' })).toBeDisabled()
+})
+
+test('the verified Agent 0x surface preserves the same retained rationale and principal-confirmation boundary', async ({ page }) => {
+  await page.route('**/v1/capabilities', (route) => route.fulfill({ json: {
+    ...caps,
+    executionProfiles: ['priorseal.execution-profile.solana-transaction.v2'],
+    chains: [0],
+    authorizers: ['solana-ed25519'],
+    integrations: { guardedJupiter: { enabled: false, reason: 'NOT_CONFIGURED' }, guardedZeroEx: { enabled: true, reason: 'READY' } },
+  } }))
+  await page.goto('/app/0x-guarded-swap')
+  await expect(page.getByRole('heading', { level: 1, name: 'Verify an agent 0x swap' })).toBeVisible()
+  await expect(page.getByLabel('Agent rationale')).toHaveValue('No additional rationale was supplied by the proposing application.')
+  await expect(page.getByText('The browser never receives an 0x API key, Insight API key, or RPC credential.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Prepare verified proposal' })).toBeDisabled()
 })
 
 test('verification errors move focus to the actionable feedback on narrow screens', async ({ page }, testInfo) => {

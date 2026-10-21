@@ -82,6 +82,22 @@ test('OpenAPI does not advertise a guarded Jupiter workflow when the deployment 
   assert.equal('/v1/jupiter/guarded-swaps/submit' in paths.paths, false);
 });
 
+test('Agent integration discovery describes the exact human-control boundary without claiming an unavailable swap is usable', async (t) => {
+  const server = await serverFor(t);
+  const manifest = await request(server, '/.well-known/priorseal-agent.json');
+  assert.equal(manifest.status, 200);
+  assert.equal(manifest.headers['cache-control'], 'public, max-age=300');
+  const body = manifest.json() as unknown as { schema: string; discovery: { capabilities: string; openapi: string }; safety: { executionMode: string; automaticRetries: string }; guardedJupiter: { status: string; reason: string; proposal: { agentProposal: { commitmentNamespace: string } } }; guardedZeroEx: { status: string; proposal: { agentProposal: { commitmentNamespace: string } } } };
+  assert.equal(body.schema, 'priorseal.agent-integration.v1');
+  assert.deepEqual(body.discovery, { capabilities: '/v1/capabilities', openapi: '/openapi/v1.json', mcp: '/mcp', issuerKeys: '/.well-known/priorseal-keys.json' });
+  assert.equal(body.safety.executionMode, 'PROPOSAL_AND_PRINCIPAL_CONFIRMATION');
+  assert.equal(body.safety.automaticRetries, 'PROHIBITED_AFTER_SUBMISSION_OR_UNKNOWN_RESULT');
+  assert.equal(body.guardedJupiter.status, 'UNAVAILABLE');
+  assert.equal(body.guardedJupiter.proposal.agentProposal.commitmentNamespace, 'priorseal.agent-proposal.v1');
+  assert.equal(body.guardedZeroEx.status, 'UNAVAILABLE');
+  assert.equal(body.guardedZeroEx.proposal.agentProposal.commitmentNamespace, 'priorseal.agent-proposal.v1');
+});
+
 test('PriorSeal MCP exposes stateless discovery, deterministic tools, and a JSON-only capability call', async (t) => {
   const server = await serverFor(t);
   const modernHeaders = { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2026-07-28' };
@@ -288,6 +304,22 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
   assert.equal(JSON.stringify(operationalEvents[0]).includes(inputMint), false);
   assert.equal(JSON.stringify(operationalEvents[0]).includes(taker), false);
 
+  const agentProposal = { schema: 'priorseal.agent-proposal.v1', agentId: 'agent:swap-copilot', proposalId: 'proposal:http-1', createdAt: 1_800_000_000, rationale: 'The wallet owner requested this bounded test swap.' };
+  const preparedWithProposal = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint, outputMint, amount: '1000000', taker, slippageBps: 50, agentProposal }),
+  });
+  assert.equal(preparedWithProposal.status, 201);
+  assert.deepEqual(preparedInput, { inputMint, outputMint, amount: '1000000', taker, slippageBps: 50, agentProposal });
+
+  const invalidProposal = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint, outputMint, amount: '1000000', taker, slippageBps: 50, agentProposal: { ...agentProposal, unknown: true } }),
+  });
+  assert.equal(invalidProposal.status, 400);
+
   const unknownField = await request(server, '/v1/jupiter/guarded-swaps/prepare', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -310,9 +342,9 @@ test('guarded Jupiter routes keep preparation and submission behind the server b
   assert.equal(submitted.status, 200);
   assert.equal(submitted.headers['cache-control'], 'no-store');
   assert.deepEqual(submittedInput, { authorizationId: 'jupiter-authorization-1', prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, signedTransactionBase64: 'AQID' });
-  assert.deepEqual(operationalEvents[1] && { event: operationalEvents[1].event, method: operationalEvents[1].method, path: operationalEvents[1].path, submission: operationalEvents[1].submission }, { event: 'guarded_jupiter.submit_completed', method: 'POST', path: '/v1/jupiter/guarded-swaps/submit', submission: 'SUBMITTED' });
-  assert.equal(JSON.stringify(operationalEvents[1]).includes('jupiter-authorization-1'), false);
-  assert.equal(JSON.stringify(operationalEvents[1]).includes('AQID'), false);
+  assert.deepEqual(operationalEvents[2] && { event: operationalEvents[2].event, method: operationalEvents[2].method, path: operationalEvents[2].path, submission: operationalEvents[2].submission }, { event: 'guarded_jupiter.submit_completed', method: 'POST', path: '/v1/jupiter/guarded-swaps/submit', submission: 'SUBMITTED' });
+  assert.equal(JSON.stringify(operationalEvents[2]).includes('jupiter-authorization-1'), false);
+  assert.equal(JSON.stringify(operationalEvents[2]).includes('AQID'), false);
 });
 
 test('guarded Jupiter preparation reports only safe non-JSON upstream diagnostics', async (t) => {
@@ -364,6 +396,9 @@ test('guarded Jupiter policy violations are explicit 403 responses', async (t) =
 });
 
 test('guarded 0x routes keep provider credentials and submission behind the server boundary', async (t) => {
+  const inputMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+  const outputMint = 'So11111111111111111111111111111111111111112';
+  const taker = '11111111111111111111111111111111';
   let preparedInput: Record<string, unknown> | undefined;
   let submittedInput: Record<string, unknown> | undefined;
   const guardedZeroEx = {
@@ -381,13 +416,25 @@ test('guarded 0x routes keep provider credentials and submission behind the serv
 
   const prepared = await request(server, '/v1/0x/guarded-swaps/prepare', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 }),
+    body: JSON.stringify({ inputMint, outputMint, amount: '1000000', taker, slippageBps: 50 }),
   });
   assert.equal(prepared.status, 201);
-  assert.deepEqual(preparedInput, { inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 });
+  assert.deepEqual(preparedInput, { inputMint, outputMint, amount: '1000000', taker, slippageBps: 50 });
+  const agentProposal = { schema: 'priorseal.agent-proposal.v1', agentId: 'agent:swap-copilot', proposalId: 'proposal:zeroex-http-1', createdAt: 1_800_000_000, rationale: 'The wallet owner requested this bounded 0x test swap.' };
+  const preparedWithProposal = await request(server, '/v1/0x/guarded-swaps/prepare', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint, outputMint, amount: '1000000', taker, slippageBps: 50, agentProposal }),
+  });
+  assert.equal(preparedWithProposal.status, 201);
+  assert.deepEqual(preparedInput, { inputMint, outputMint, amount: '1000000', taker, slippageBps: 50, agentProposal });
+  const proposalWithoutRecord = await request(server, '/v1/0x/guarded-swaps/prepare', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputMint, outputMint, amount: '1000000', taker, slippageBps: 50, contextCommitments: [{ namespace: 'priorseal.agent-proposal.v1', algorithm: 'sha256', digest: `0x${'a'.repeat(64)}` }] }),
+  });
+  assert.equal(proposalWithoutRecord.status, 400);
   const unknownField = await request(server, '/v1/0x/guarded-swaps/prepare', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50, zeroExApiKey: 'never-accepted' }),
+    body: JSON.stringify({ inputMint, outputMint, amount: '1000000', taker, slippageBps: 50, zeroExApiKey: 'never-accepted' }),
   });
   assert.equal(unknownField.status, 400);
   const submitted = await request(server, '/v1/0x/guarded-swaps/submit', {
@@ -399,6 +446,9 @@ test('guarded 0x routes keep provider credentials and submission behind the serv
 });
 
 test('unified guarded Solana routes bind an explicit provider at preparation and infer it from the prepared schema at submission', async (t) => {
+  const inputMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+  const outputMint = 'So11111111111111111111111111111111111111112';
+  const taker = '11111111111111111111111111111111';
   const calls: Array<{ provider: string; operation: string; input: Record<string, unknown> }> = [];
   const guardedJupiter = {
     async prepare(input: Record<string, unknown>) { calls.push({ provider: 'jupiter', operation: 'prepare', input }); return { prepared: { schema: 'priorseal.jupiter-guarded-swap.v1' }, review: {} }; },
@@ -413,11 +463,11 @@ test('unified guarded Solana routes bind an explicit provider at preparation and
 
   const prepared = await request(server, '/v1/solana/guarded-swaps/prepare', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ provider: '0x', inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50, maxAccounts: 12, mode: 'standard' }),
+    body: JSON.stringify({ provider: '0x', inputMint, outputMint, amount: '1000000', taker, slippageBps: 50, maxAccounts: 12, mode: 'standard' }),
   });
   assert.equal(prepared.status, 201);
   assert.equal(prepared.json().provider, '0x');
-  assert.deepEqual(calls[0], { provider: '0x', operation: 'prepare', input: { inputMint: 'USDC', outputMint: 'SOL', amount: '1000000', taker: 'wallet', slippageBps: 50 } });
+  assert.deepEqual(calls[0], { provider: '0x', operation: 'prepare', input: { inputMint, outputMint, amount: '1000000', taker, slippageBps: 50 } });
 
   const submitted = await request(server, '/v1/solana/guarded-swaps/submit', {
     method: 'POST', headers: { 'content-type': 'application/json' },

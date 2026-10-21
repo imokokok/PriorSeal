@@ -16,6 +16,7 @@ import {
   type JupiterTransactionCompiler,
   type PreparedGuardedJupiterSwap,
 } from './jupiter-guarded-swap.js'
+import type { AgentProposal } from './agent-proposal.js'
 import type { ContextCommitment, ObservationResult, SolanaMessageWallet } from './types.js'
 
 /** The raw-instruction endpoint; 0x never receives a wallet signing key. */
@@ -163,6 +164,8 @@ export type AuthorizeGuardedZeroExSwapInput = {
   wallet: SolanaMessageWallet
   principal: { type: 'user' | 'organization'; id: string }
   agentId: string
+  /** Required when the prepared route commits to a retained Agent proposal record. */
+  proposal?: AgentProposal
   audience?: string
   now?: () => number
   signal?: AbortSignal

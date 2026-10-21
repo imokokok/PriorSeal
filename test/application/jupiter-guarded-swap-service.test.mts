@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { Keypair, PublicKey, VersionedTransaction } from '@solana/web3.js'
-import { JupiterGuardedSwapError } from '../../sdk/dist/index.js'
+import { JupiterGuardedSwapError, createAgentProposal, verifyAgentProposalCommitment } from '../../sdk/dist/index.js'
 import { createGuardedJupiterSwapService, createJupiterV0Compiler, type GuardedJupiterAuthorizationRecord } from '../../src/application/jupiter/guarded-swap-service.mjs'
 
 const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
@@ -75,7 +75,9 @@ test('guarded Jupiter relay requires and atomically consumes the exact accepted 
     },
   })
 
-  const prepared = (await service.prepare({ inputMint: USDC, outputMint: WRAPPED_SOL, amount: '1000000', taker: payerAddress, slippageBps: 50, intentId: 'jupiter-relay-test-1' })).prepared
+  const proposal = createAgentProposal({ agentId: 'agent:service-test', proposalId: 'proposal:service-test-1', createdAt: 1_800_000_000, rationale: 'Exercise a bounded protected-route test.' })
+  const prepared = (await service.prepare({ inputMint: USDC, outputMint: WRAPPED_SOL, amount: '1000000', taker: payerAddress, slippageBps: 50, intentId: 'jupiter-relay-test-1', agentProposal: proposal })).prepared
+  assert.equal((await verifyAgentProposalCommitment(prepared.intent, proposal)).matched, true)
   const signed = VersionedTransaction.deserialize(Uint8Array.from(Buffer.from(prepared.transactionBase64, 'base64')))
   await signed.sign([payer])
   const signedTransactionBase64 = Buffer.from(signed.serialize()).toString('base64')

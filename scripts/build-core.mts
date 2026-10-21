@@ -50,6 +50,7 @@ const onDemandToolSources = [
   'scripts/verify-rwa-execution-profiles.mts',
   'scripts/verify-wak-base-sepolia-router.mts',
   'scripts/verify-wak-frozen-multicall-sheet.mts',
+  'scripts/verify-wak-frozen-multicall-sheet-v4.mts',
 ].map((path) => join(projectRoot, path));
 const onDemandOperationSources = [
   'scripts/erc4337-pilot-doctor.mts',
@@ -62,6 +63,7 @@ const onDemandOperationSources = [
   'scripts/production-smoke.mts',
   'scripts/mcp-compatibility-proof.mts',
   'scripts/rotation-impact.mts',
+  'scripts/zeroex-production-quote.mts',
   'scripts/x402-production-readiness.mts',
   'scripts/x402-evidence-pack.mts',
   'scripts/x402-staging-bundle-rehearsal.mts',
