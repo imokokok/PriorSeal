@@ -37,7 +37,7 @@ export function JupiterPilotPage() {
   return <main id="main-content" className="jupiter-pilot">
     <header className="jupiter-pilot__nav">
       <Link className="jupiter-pilot__brand" to="/" aria-label="PriorSeal home"><PriorSealMark /><span>PriorSeal<small>Authority evidence</small></span></Link>
-      <div><Link to="/">Product</Link><Link to="/app">Console</Link></div>
+      <div><Link to="/">Product</Link><Link to="/swap">Swap</Link><Link to="/app">Console</Link></div>
     </header>
 
     <section className="jupiter-pilot__hero">

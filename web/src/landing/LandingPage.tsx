@@ -92,6 +92,7 @@ export function LandingPage() {
         <InstitutionMark />
         <nav className={menuOpen ? 'is-open' : ''} aria-label="Homepage navigation" id="homepage-navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id} onClick={() => setMenuOpen(false)}>{label}</a>)}
+          <Link to="/swap" onClick={() => setMenuOpen(false)}>Swap</Link>
           <Link to="/jupiter" onClick={() => setMenuOpen(false)}>Jupiter</Link>
           <Link to="/integrations/mcp" onClick={() => setMenuOpen(false)}>MCP</Link>
           <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/sdk">SDK</Link>
@@ -108,7 +109,7 @@ export function LandingPage() {
             <h1 data-route-heading tabIndex={-1}>Authority,<br /><em>before action.</em></h1>
             <p className="museum-hero__statement">Give an agent a bounded, principal-signed action—not a blank check. Connect what a person or organization explicitly authorized before action to an observed EVM or Solana execution, with a signed receipt others can verify independently.</p>
             <div className="museum-actions">
-              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Authorize an intent <span>→</span></Link><Link className="museum-text-link" to="/jupiter">Guard a Jupiter swap <span>↗</span></Link>
+              <Link className="museum-button" to="/swap">Explore PriorSeal Swap <span>→</span></Link><Link className="museum-text-link" to="/jupiter">Guard a Jupiter swap <span>↗</span></Link>
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
             </div>
             <div className="museum-hero__foot"><span>01 / 06</span><p>Bounded authority and portable evidence for onchain agents.<br />No custody. No transaction-signing keys.</p><a href="#system" aria-label="Explore the PriorSeal system">↓</a></div>
@@ -136,6 +137,11 @@ export function LandingPage() {
             <div><dt>Evidence format</dt><dd>Canonical JSON<br />Ed25519 issuer signature</dd></div>
             <div><dt>Custody boundary</dt><dd>No assets<br />No transaction-signing keys</dd></div>
           </dl>
+        </section>
+
+        <section className="landing-jupiter landing-swap" data-reveal>
+          <div><p className="museum-kicker">SOLANA / 0X / PRIORSEAL</p><h2>Swap with an<br /><em>evidence trail.</em></h2></div>
+          <div><p>PriorSeal Swap is a public path to a bounded Solana swap flow. It preserves the exact route review, wallet authorization and post-submission observation as a portable record.</p><p>Your wallet remains the signer and fee payer. Credentials for routing, simulation and RPC stay behind the protected service boundary.</p><Link className="museum-text-link" to="/swap">Open PriorSeal Swap <span>↗</span></Link></div>
         </section>
 
         <section className="landing-jupiter" data-reveal>
