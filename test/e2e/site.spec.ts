@@ -49,6 +49,22 @@ test('asks for the real local-storage choice without setting cookies', async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
 
+test('public pilot terms and support expose one safe contact channel', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Use without saving' }).click()
+  await page.goto('/support')
+  await expect(page.getByRole('heading', { level: 1, name: 'Contact PriorSeal.' })).toBeVisible()
+  const contact = page.getByRole('link', { name: 'contact@priorseal.xyz' }).first()
+  await expect(contact).toHaveAttribute('href', /mailto:contact@priorseal\.xyz/)
+  await expect(page.locator('main')).toContainText('PriorSeal will never ask for them')
+  await page.goto('/terms')
+  await expect(page.getByRole('heading', { level: 1, name: /Bounded service/ })).toBeVisible()
+  await expect(page.locator('main')).toContainText('does not hold customer assets')
+  await expect(page.locator('main')).toContainText('no automatic refund path')
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+})
+
 test('unknown paths and unavailable receipts offer a route back to evidence', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Use without saving' }).click()

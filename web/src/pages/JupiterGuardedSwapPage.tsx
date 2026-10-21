@@ -229,8 +229,8 @@ export function JupiterGuardedSwapPage() {
   }
 
   return <>
-    <PageHeader eyebrow="SOLANA / PRIORSEAL SWAP" title="Review one exact swap" actions={<><Link className="button secondary" to="/swap#feedback">Share feedback</Link>{evidence && <button className="button secondary" onClick={() => downloadJson(evidence, `${prepared!.request.intentId}-evidence.json`)}>Export evidence</button>}</>}>
-      Let an application or Agent prepare one Jupiter route while you keep the final say. Review the exact simulated transaction, authorize it once, submit unchanged bytes once, and retain portable evidence. This page never receives a signing key or an upstream API key.
+    <PageHeader eyebrow="SOLANA / VERIFIED AGENT SWAP" title="Verify an agent swap" actions={<><Link className="button secondary" to="/support#feedback">Share feedback</Link>{evidence && <button className="button secondary" onClick={() => downloadJson(evidence, `${prepared!.request.intentId}-evidence.json`)}>Export evidence</button>}</>}>
+      Let an agent prepare one Jupiter route while you keep the final say. Review the exact simulated transaction, authorize it once, submit unchanged bytes once, and retain portable evidence. This page never receives a signing key or an upstream API key.
     </PageHeader>
 
     <section className="jupiter-flow" aria-label="Guarded swap workflow">

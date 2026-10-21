@@ -47,7 +47,7 @@ const nav: NavigationItem[] = [
   { index: '03', key: 'intent', label: 'New authorization', to: '/app/intents/new', group: 'Execute' },
   { index: '04', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Execute' },
   { index: '05', key: 'exact-call', label: 'Exact-call authorization', to: '/app/intents/exact-call', group: 'Integrations' },
-  { index: '06', key: 'jupiter', label: 'Controlled Jupiter Swap', to: '/app/jupiter-guarded-swap', group: 'Integrations', disabled: (capabilities) => !capabilities?.integrations?.guardedJupiter.enabled },
+  { index: '06', key: 'jupiter', label: 'Verified Agent Swap', to: '/app/jupiter-guarded-swap', group: 'Integrations', disabled: (capabilities) => !capabilities?.integrations?.guardedJupiter.enabled },
   { index: '07', key: 'zeroex', label: 'Guarded 0x swap', to: '/app/0x-guarded-swap', group: 'Integrations', disabled: (capabilities) => !capabilities?.integrations?.guardedZeroEx?.enabled },
   { index: '08', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence & trust' },
   { index: '09', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence & trust' },
@@ -151,8 +151,8 @@ function AppShellFrame({ children }: { children: ReactNode }) {
       <div className="environment"><span className={`live-dot ${apiState}`} /><span>Local collection</span><small>DEVICE SCOPE</small></div>
       <nav aria-label="Console navigation">{groups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{visibleNavigation.filter((item) => item.group === group).map((item) => item.disabled?.(capabilities) ? <span className="nav-unavailable" aria-disabled="true" key={item.to}><span className="nav-index">{item.index}</span><span>{item.label}<small>{unavailableNavigationDetail(item, capabilities)}</small></span></span> : <NavLink end={item.to === '/app'} key={item.to} to={item.to} onClick={() => setOpen(false)}><span className="nav-index">{item.index}</span><span>{item.label}</span></NavLink>)}</div>)}</nav>
       <div className="side-bottom"><span>Local evidence collection</span><small>Browser activity remains on this device when local saving is allowed. Project archive access appears above when the deployment enables it.</small><button type="button" className="side-privacy" onClick={() => { setOpen(false); openStoragePreferences() }}>Privacy &amp; storage</button><span className="side-accession">PRIORSEAL / LOCAL / 001</span></div>
-    </aside>
-    <main id="main-content"><header className="app-topbar"><button ref={menuButton} type="button" className="menu" onClick={showNavigation} aria-label="Open navigation" aria-controls="console-navigation" aria-expanded={open}>☰</button><div className="top-title"><span>{current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className={`api-state ${apiState}`} aria-live="polite"><span className={`live-dot ${apiState}`} /> API {apiState}</span><Link className="text-link" to="/">Public collection ↗</Link></div></header><div key={location.pathname} className={`page page-${current.key}`}>{children}</div></main>
+  </aside>
+    <main id="main-content"><header className="app-topbar"><button ref={menuButton} type="button" className="menu" onClick={showNavigation} aria-label="Open navigation" aria-controls="console-navigation" aria-expanded={open}>☰</button><div className="top-title"><span>{current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className={`api-state ${apiState}`} aria-live="polite"><span className={`live-dot ${apiState}`} /> API {apiState}</span><Link className="text-link" to="/swap">Public Swap ↗</Link><Link className="text-link" to="/">Product ↗</Link></div></header><div key={location.pathname} className={`page page-${current.key}`}>{children}</div></main>
   </div></AppShellContext.Provider>
 }
 

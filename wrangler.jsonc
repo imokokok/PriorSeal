@@ -28,6 +28,7 @@
     "PRIORSEAL_KEY_ID": "production-1",
     "PRIORSEAL_AUTHORIZATION_AUDIENCE": "priorseal.xyz",
     "PRIORSEAL_PREEXECUTION_PROOF_MODE": "rfc3161",
+    "PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED": "false",
     "PRIORSEAL_CORS_ORIGINS": "https://priorseal.xyz,https://www.priorseal.xyz",
     "PRIORSEAL_TRUST_PROXY": "true",
     "PRIORSEAL_X402_FACILITATOR_URL": "https://api.cdp.coinbase.com/platform/v2/x402",
@@ -39,6 +40,7 @@
     "PRIORSEAL_X402_NETWORKS": "eip155:8453,eip155:56,solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
     "PRIORSEAL_X402_TIMEOUT_MS": "15000",
     "PRIORSEAL_X402_ROUTES_JSON": "[{\"method\":\"GET\",\"path\":\"/v1/receipts/:receiptId/bundle\",\"description\":\"Export a portable PriorSeal receipt bundle\",\"price\":\"$0.02\"}]",
+    "PRIORSEAL_ZEROEX_ENABLED": "true",
     "PRIORSEAL_JUPITER_PLATFORM_FEE_BPS": "10",
     "PRIORSEAL_JUPITER_FEE_ACCOUNT": "FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq"
   },
@@ -53,10 +55,15 @@
       "PRIORSEAL_RPC_ARBITRUM",
       "PRIORSEAL_RPC_BNB",
       "PRIORSEAL_RPC_SOLANA_MAINNET",
+      "ZEROEX_API_KEY",
       "JUPITER_API_KEY",
       "INSIGHT_API_KEY",
       "PRIORSEAL_JUPITER_RPC_URL",
       "PRIORSEAL_JUPITER_POLICY_JSON",
+      "PRIORSEAL_ZEROEX_POLICY_JSON",
+      "PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON",
+      "PRIORSEAL_ZEROEX_TENANTS_JSON",
+      "PRIORSEAL_AGENT_METER_JSON",
       "PRIORSEAL_X402_CDP_API_KEY_ID",
       "PRIORSEAL_X402_CDP_API_KEY_SECRET"
     ]
@@ -107,6 +114,7 @@
         "PRIORSEAL_BUILD_VERSION": "staging",
         "PRIORSEAL_AUTHORIZATION_AUDIENCE": "priorseal-staging",
         "PRIORSEAL_PREEXECUTION_PROOF_MODE": "rfc3161",
+        "PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED": "true",
         "PRIORSEAL_DATABASE_BACKEND": "d1",
         "PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS": "false",
         "PRIORSEAL_CORS_ORIGINS": "",
@@ -119,7 +127,8 @@
         "PRIORSEAL_X402_NETWORKS": "eip155:84532",
         "PRIORSEAL_X402_STAGING_OBSERVATION_NETWORKS": "eip155:84532",
         "PRIORSEAL_X402_TIMEOUT_MS": "15000",
-        "PRIORSEAL_X402_ROUTES_JSON": "[{\"method\":\"GET\",\"path\":\"/v1/receipts/:receiptId/bundle\",\"description\":\"Staging x402 receipt-bundle rehearsal\",\"price\":\"$0.01\"}]"
+        "PRIORSEAL_X402_ROUTES_JSON": "[{\"method\":\"GET\",\"path\":\"/v1/receipts/:receiptId/bundle\",\"description\":\"Staging x402 receipt-bundle rehearsal\",\"price\":\"$0.01\"}]",
+        "PRIORSEAL_ZEROEX_ENABLED": "false"
       },
       "secrets": {
         "required": [

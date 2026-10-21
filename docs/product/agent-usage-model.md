@@ -82,7 +82,7 @@ transaction key must not itself grant principal authority.
 | Design-partner pilot | One bounded execution path, configured jointly, with portable evidence delivered for review | Fixed-scope pilot, implementation fee, or enterprise service contract | Available now |
 | Paid evidence export | A caller purchases an eligible read-only receipt bundle and receives payment-to-resource evidence | x402 `exact` USDC payment | Implemented and rehearsed in staging; production disabled pending a facilitator that actually supports the reviewed Base-mainnet rail |
 | Agent runtime orchestration | Agent calls a principal-controlled signing boundary, submits exactly one authorized action through its integrator, then observes and verifies evidence | `priorseal-sdk` `authorizeWithEip712Signer()` / `runAgentAction()` | Implemented; authority and executor infrastructure remain integrator-owned |
-| Self-serve agent usage | Agent funds its own credits: transfers USDC to the deployment payTo on Base mainnet, proves payer-wallet ownership with an EIP-191 signature over the claim message, and receives the account plus its one-time deterministic credential | `POST /v1/selfserve/claim` with SDK `selfServeTopup()`; idempotency rides the credit-operation ledger, credentials are HMAC-derived per account and never persisted | Production meter and claim endpoint enabled; operator endpoints remain the fallback provisioning path |
+| Agent service credits | Operator reviews a pilot request, issues a scoped Agent credential, and can credit or revoke it | Protected operator account endpoints; raw credentials are returned once and never stored by PriorSeal | Current production pilot: operator-managed; public x402 payment and `POST /v1/selfserve/claim` are disabled |
 | Session or budget authorization | Principal defines repeatable policy boundaries for an agent | A separately specified and reviewed authorization profile | Later milestone; not implied by current single-use authorization |
 
 ## Why x402 is not the authorization protocol
@@ -95,7 +95,7 @@ resources. Charging a write such as authorization creation or observation
 through that flow could leave an ambiguous result when the write or response
 fails.
 
-Self-serve write usage uses a separate prepaid-credit meter rather than x402
+When public paid commerce is separately enabled, self-serve write usage uses a separate prepaid-credit meter rather than x402
 settlement. It atomically reserves a configured service credit using the
 request's idempotency key, consumes it only for a successful response, and
 releases it for a failed response. This must not be substituted with an API key
@@ -171,7 +171,7 @@ not double-credit the account. Operator endpoints are deliberately
 not SDK convenience methods: they are an administrative boundary and should be
 called only from a separately protected control plane.
 
-Self-serve claims share this ledger: a funded transfer is claimed with a
+When public paid commerce is enabled, self-serve claims share this ledger: a funded transfer is claimed with a
 payer-wallet signature, the account is seeded at zero credits, and the credit
 operation keyed by the transaction hash is the only grant path. Because the
 credential is deterministically derived from the account, a retried claim
@@ -204,7 +204,7 @@ observation flow. It validates the signer account, locally verifies the
 EIP-712 signature before acceptance, calls the supplied submission callback
 only once, and then observes the returned transaction hash.
 
-For eligible x402 receipt-bundle exports, the SDK also provides
+For separately approved eligible x402 receipt-bundle exports, the SDK also provides
 `createX402AgentFetch()`. Its required policy pins service origins and paths
 and can cap network, asset, payee, and USDC atomic amount. It accepts a
 principal-controlled x402 signer callback, verifies that the returned payment

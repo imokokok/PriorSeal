@@ -526,3 +526,5 @@
 .landing-jupiter .museum-text-link { margin-top: 29px; color: var(--porcelain); border-color: #d8a5af; }
 .landing-jupiter .museum-text-link:hover { color: #e9b9c2; }
 @media (max-width: 760px) { .landing-jupiter { grid-template-columns: 1fr; gap: 34px; } }
+
+.landing-swap { background: #59232c; }

@@ -6,7 +6,7 @@
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
 [![MIT License](https://img.shields.io/badge/license-MIT-151513.svg)](LICENSE)
 
-[Live console](https://priorseal.xyz/app) · [PriorSeal Swap](https://priorseal.xyz/swap) · [Agent-swap pilot brief](https://priorseal.xyz/swap/pilot-intake) · [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
+[Live console](https://priorseal.xyz/app) · [Agent-swap pilot brief](https://priorseal.xyz/jupiter/pilot-intake) · [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
 
 An Agent can propose a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, whether the observed execution matched it, or whether the user still had a final say**. PriorSeal connects a principal-signed, time-bounded authorization to an identified EVM or Solana execution in a portable receipt that another party can verify independently. Its core is the relationship between **what an Agent proposed, what was authorized before action, and what was observed afterward**.
 
@@ -162,10 +162,11 @@ Other partner fixtures are under [`examples/`](examples/). Insight can be used i
 | --- | --- |
 | Product scope, commercial direction and evidence limits | [Positioning](docs/product/positioning.md) · [First-release scope](docs/product/first-release-scope.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
 | Authorization and receipt semantics | [Signed authorization](docs/architecture/signed-authorization.md) · [Temporal evidence and finality](docs/architecture/temporal-finality.md) · [Lifecycle](docs/architecture/lifecycle.md) · [API compatibility](docs/api/compatibility.md) |
-| Security and operations | [Threat model](docs/security/threat-model.md) · [Supply-chain controls](docs/security/supply-chain.md) · [Operations](docs/runbooks/operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
+| Security and operations | [Threat model](docs/security/threat-model.md) · [Supply-chain controls](docs/security/supply-chain.md) · [Operations](docs/runbooks/operations.md) · [Agent/retail public operations](docs/runbooks/agent-retail-public-operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
 | SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |
 | Solana transaction authorization and observation | [Solana integration guide](docs/integrations/solana.md) |
 | Payment, observation, and advanced-profile boundaries by chain | [Chain capability matrix](docs/architecture/chain-capabilities.md) |
+| Agent and retail onboarding | [Agent and retail user guide](docs/integrations/agent-retail-user-guide.md) · [Agent usage model](docs/product/agent-usage-model.md) · [public-launch record](docs/templates/agent-retail-public-launch-record.md) |
 | x402 API payments on aligned EVM networks and Solana | [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md) |
 | Sandbox adapter proposal | [APS checkout-gate per-order limit check](docs/integrations/aps-checkout-gate-limit-check-2026-10.md) |
 
@@ -173,6 +174,6 @@ Run `npm run check` for the repository checks, or `npm run release:check` for th
 
 ## Work with PriorSeal
 
-For a pilot, choose one bounded EVM or Solana execution path and ask an independent reviewer to reproduce the Agent proposal boundary, authorization, timing, observation, and compliance result from its exported evidence. [PriorSeal Swap](https://priorseal.xyz/swap) is the public entry point for the guarded Jupiter flow; an application can prepare a non-sensitive [Agent-swap pilot brief](https://priorseal.xyz/swap/pilot-intake). Public Issues are only for redacted developer collaboration. See the [collaboration guide](COLLABORATING.md) or [open a redacted pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Code contributions follow [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow [SECURITY.md](SECURITY.md).
+For a pilot, choose one bounded EVM or Solana execution path and ask an independent reviewer to reproduce the Agent proposal boundary, authorization, timing, observation, and compliance result from its exported evidence. A Jupiter application can prepare a non-sensitive [Agent-swap pilot brief](https://priorseal.xyz/jupiter/pilot-intake); public Issues are only for redacted developer collaboration. See the [collaboration guide](COLLABORATING.md) or [open a redacted pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Code contributions follow [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow [SECURITY.md](SECURITY.md).
 
 MIT licensed. See [LICENSE](LICENSE).

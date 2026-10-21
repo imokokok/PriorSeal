@@ -1,5 +1,5 @@
 // Generated from summarize-guarded-jupiter-events.mts by npm run core:build. Do not edit directly.
-import { readFile, stat } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 const MAX_INPUT_BYTES = 5 * 1024 * 1024;
@@ -114,13 +114,18 @@ function ratio(numerator, denominator) {
 async function runGuardedJupiterMetricsCli(args) {
   if (args.length !== 1) throw new TypeError("Usage: npm run jupiter:pilot:metrics -- /absolute/path/to/events.ndjson");
   const inputPath = resolve(args[0]);
-  const input = await stat(inputPath);
-  if (!input.isFile()) throw new TypeError("The metrics input must be a regular NDJSON file");
-  if (input.size > MAX_INPUT_BYTES) throw new RangeError(`The metrics input must not exceed ${MAX_INPUT_BYTES} bytes`);
-  const contents = await readFile(inputPath, "utf8");
-  const lines = contents.split(/\r?\n/).filter((line) => line.length > 0);
-  return `${JSON.stringify(summarizeGuardedJupiterEvents(lines), null, 2)}
+  const handle = await open(inputPath, "r");
+  try {
+    const input = await handle.stat();
+    if (!input.isFile()) throw new TypeError("The metrics input must be a regular NDJSON file");
+    if (input.size > MAX_INPUT_BYTES) throw new RangeError(`The metrics input must not exceed ${MAX_INPUT_BYTES} bytes`);
+    const contents = await handle.readFile({ encoding: "utf8" });
+    const lines = contents.split(/\r?\n/).filter((line) => line.length > 0);
+    return `${JSON.stringify(summarizeGuardedJupiterEvents(lines), null, 2)}
 `;
+  } finally {
+    await handle.close();
+  }
 }
 const invokedDirectly = process.argv[1] !== void 0 && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
