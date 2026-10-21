@@ -82,10 +82,12 @@ not a flag change made during an incident.
 ## Customer support boundary
 
 Support may help a user understand a displayed review, retrieve public evidence,
-or verify a receipt. It must never request a seed phrase, private key, raw
-Agent credential, unredacted payment signature, or authority to sign/broadcast
-on the user's behalf. A service payment does not grant the Agent or PriorSeal
-authority over a customer action.
+or verify a receipt. Direct support, security, privacy, billing and pilot-access
+requests to `contact@priorseal.xyz`, with a subject prefix matching the request.
+It must never request a seed phrase, private key, raw Agent credential,
+unredacted payment signature, or authority to sign/broadcast on the user's
+behalf. A service payment does not grant the Agent or PriorSeal authority over
+a customer action.
 
 For the product flow and safe data to retain, use the
 [Agent and retail user guide](../integrations/agent-retail-user-guide.md).
