@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  agentProposalCommitment,
+  authorizeGuardedZeroExSwap,
+  createAgentProposal,
   createZeroExRouterClient,
+  JupiterGuardedSwapError,
   prepareGuardedZeroExSwap,
   reviewGuardedZeroExSwap,
   SOLANA_COMPUTE_BUDGET_PROGRAM,
@@ -197,6 +201,25 @@ test('0x guarded preparation binds provider instructions, deployment compute con
   const review = await reviewGuardedZeroExSwap(prepared, () => 1_800_000_010_000)
   assert.deepEqual(review.output, { mint: WRAPPED_SOL, minimumAmountAtomic: '990000', estimatedAmountAtomic: '1000000' })
   assert.equal(review.provider.zid, 'a'.repeat(24))
+})
+
+test('0x authorization requires the retained Agent proposal record bound to the exact route', async () => {
+  const proposal = createAgentProposal({ agentId: 'agent:zeroex-copilot', proposalId: 'proposal:zeroex-sdk-1', createdAt: 1_800_000_000, rationale: 'The wallet owner requested this bounded 0x test swap.' })
+  const router = createZeroExRouterClient({ apiKey: '0x-secret', computeBudget: { computeUnitLimit: 200_000, computeUnitPriceMicroLamports: '100' }, baseUrl: 'https://0x.test/solana/swap-instructions', fetch: async () => json(response()) })
+  const prepared = await prepareGuardedZeroExSwap({ ...request(), contextCommitments: [await agentProposalCommitment(proposal)] }, {
+    router,
+    compiler: { async compile() { return { transactionBase64: 'AA==', transaction: message() } } },
+    insight: { async simulate(input: { expectedMessageHash: string }) { return { messageHash: input.expectedMessageHash, signatureState: 'UNSIGNED' as const, status: 'SIMULATED' as const, contextCommitment: { namespace: 'insight.solana-simulation-receipt.v1', algorithm: 'sha256' as const, digest: `0x${'b'.repeat(64)}` }, receipt: {} } } },
+    policy: policy(), now: () => 1_800_000_000_000,
+  })
+  let authorizationInput: Record<string, unknown> | undefined
+  const client = { async authorizeWithSolanaWallet(input: Record<string, unknown>) { authorizationInput = input; return {} } } as never
+  await authorizeGuardedZeroExSwap({ client, prepared, wallet: { publicKey: WALLET, async signMessage() { return new Uint8Array() } }, principal: { type: 'user', id: 'wallet:test' }, agentId: proposal.agentId, proposal })
+  assert.equal((authorizationInput?.delegate as { agentId: string }).agentId, proposal.agentId)
+  await assert.rejects(
+    authorizeGuardedZeroExSwap({ client, prepared, wallet: { publicKey: WALLET, async signMessage() { return new Uint8Array() } }, principal: { type: 'user', id: 'wallet:test' }, agentId: 'agent:other', proposal }),
+    (error) => error instanceof JupiterGuardedSwapError && error.code === 'AGENT_PROPOSAL_AGENT_MISMATCH',
+  )
 })
 
 test('0x commercial fee is server-owned, transparent in review, and bound into the authorization intent', async () => {

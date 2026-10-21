@@ -47,7 +47,7 @@ const nav: NavigationItem[] = [
   { index: '03', key: 'intent', label: 'New authorization', to: '/app/intents/new', group: 'Execute' },
   { index: '04', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Execute' },
   { index: '05', key: 'exact-call', label: 'Exact-call authorization', to: '/app/intents/exact-call', group: 'Integrations' },
-  { index: '06', key: 'jupiter', label: 'Guarded Jupiter swap', to: '/app/jupiter-guarded-swap', group: 'Integrations', disabled: (capabilities) => !capabilities?.integrations?.guardedJupiter.enabled },
+  { index: '06', key: 'jupiter', label: 'Verified Agent Swap', to: '/app/jupiter-guarded-swap', group: 'Integrations', disabled: (capabilities) => !capabilities?.integrations?.guardedJupiter.enabled },
   { index: '07', key: 'zeroex', label: 'Guarded 0x swap', to: '/app/0x-guarded-swap', group: 'Integrations', disabled: (capabilities) => !capabilities?.integrations?.guardedZeroEx?.enabled },
   { index: '08', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence & trust' },
   { index: '09', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence & trust' },

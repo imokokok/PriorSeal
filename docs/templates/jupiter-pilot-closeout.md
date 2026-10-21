@@ -9,6 +9,9 @@ data into an operational dashboard.
 
 - Partner / internal sponsor:
 - Offer delivered: PriorSeal / Insight / Insight + PriorSeal
+- Agent or application and identity-verification source (if any):
+- Agent proposal-record owner, reference, and retention location:
+- User-control model (single exact authorization / other reviewed profile):
 - Approved pilot scope and version:
 - Scope reviewer:
 - Support owner:
@@ -18,6 +21,8 @@ data into an operational dashboard.
 ## 2. Execution and evidence outcome
 
 - One intended ExactIn route boundary (redacted identifier):
+- Agent ID recorded in the signed authorization:
+- Proposal record commitment and displayed rationale reviewed by principal: yes / no / unavailable
 - Maximum approved input, slippage, network and platform-fee caps:
 - Authorization accepted before execution: yes / no / unavailable
 - Submit result: submitted / unknown / failed
@@ -44,8 +49,9 @@ them from page views or protected-route event logs.
 - Evidence discrepancy or verification exception:
 - Support incident and resolution:
 - Partner-stated value or objection:
+- User cancellation or trust objection:
 - Any request for new authority, a different fee payer, gas sponsorship,
-  multi-party approval, or broader routing:
+  multi-party approval, session/budget authorization, or broader routing:
 
 ## 5. Decision
 

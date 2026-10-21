@@ -1,7 +1,8 @@
 # Jupiter guarded-swap design-partner pilot
 
-This runbook scopes one bounded Solana Jupiter ExactIn design-partner pilot.
-It does not authorize a payment, deployment, or transaction.
+This runbook scopes one bounded, user-controlled Solana Jupiter ExactIn
+design-partner pilot for an Agent or trading application. It does not authorize
+a payment, deployment, or transaction.
 
 Use the public [pilot-brief page](https://priorseal.xyz/jupiter/pilot-intake) to
 structure a non-sensitive request. The page is client-side only: it does not
@@ -10,12 +11,22 @@ Use the public GitHub Issue form only for redacted developer collaboration.
 
 ## 1. Agree the scope before preparing anything
 
-Record the partner, input and output mints, maximum input, maximum slippage,
-allowed programs and lookup tables, authorization expiry, reviewer, support
-owner, fee, evidence consumer, and success criterion. Disclose any USDC
-platform fee, its basis points, recipient, and floor rounding before a signer
-authorizes the swap. Do not make an economic, execution, or asset-safety
-claim.
+Record the partner, Agent/application name and identity-verification source (if
+any), the Agent proposal-record owner and retention location, input and output
+mints, maximum input, maximum slippage, maximum network and priority fees,
+allowed programs and pinned lookup tables, authorization expiry, reviewer,
+support owner, fee, evidence consumer, and success criterion. Disclose any
+USDC platform fee, its basis points, recipient, and floor rounding before a
+signer authorizes the swap. Do not make an economic, execution,
+Agent-reputation, or asset-safety claim.
+
+The Agent may propose the route and call the preparation APIs, but it must not
+receive a transaction-signing key or a reusable authorization. Retain the same
+`priorseal.agent-proposal.v1` record that was committed into the prepared
+intent. The wallet principal reviews the Agent ID, rationale, exact spend,
+minimum output, fees and expiry, then signs one authorization and the same
+final transaction. The pilot must stop if lookup tables are unpinned or a
+maximum priority fee is absent.
 
 Choose the offer deliberately:
 
@@ -29,9 +40,9 @@ Choose the offer deliberately:
 
 ## 2. Validate the route without funds
 
-Check the deployed health, readiness, capabilities, and OpenAPI endpoints;
-confirm guarded Jupiter is ready, Solana authorization is enabled, and the
-displayed fee matches the reviewed scope. Open `/jupiter` and
+Check the deployed health, readiness, capabilities, Agent integration manifest,
+and OpenAPI endpoints; confirm guarded Jupiter is ready, Solana authorization
+is enabled, and the displayed fee matches the reviewed scope. Open `/jupiter` and
 `/app/jupiter-guarded-swap` in a fresh browser profile, then run the focused
 guarded-Jupiter test suite. Configuration readiness proves only configuration
 and storage; it does not prove live RPC, TSA, Jupiter, or Insight reachability.
@@ -39,11 +50,12 @@ and storage; it does not prove live RPC, TSA, Jupiter, or Insight reachability.
 ## 3. Obtain a separate funded GO
 
 Before any transaction, obtain a new explicit GO identifying the wallet,
-network, input and output mints, maximum input, maximum platform and network
-fees, expiry, incident owner, and evidence viewers. Use one small transaction.
-Preserve the raw Jupiter response, compiled unsigned transaction, Insight
-input, signed authorization, submit result, observation, and independent
-verification result. If submission state is unknown, do not retry automatically.
+Agent/application, network, input and output mints, maximum input, maximum
+platform, network and priority fees, expiry, incident owner, and evidence
+viewers. Use one small transaction. Preserve the raw Jupiter response,
+compiled unsigned transaction, Insight input, signed authorization, submit
+result, observation, and independent verification result. If submission state
+is unknown, do not retry automatically.
 
 ## 4. Measure the pilot without browser tracking
 
@@ -62,9 +74,10 @@ credentials. They are operational logs, not browser analytics, and do not
 prove settlement or customer satisfaction.
 
 Record the following only in the private closeout record, not in public
-analytics: authorization-to-signature conversion, independent-verification
-completion, partner-confirmed value, and support response time. The existing
-server events cannot establish those facts by themselves.
+analytics: proposal-to-authorization conversion, authorization-to-signature
+conversion, independent-verification completion, user cancellation reason,
+partner-confirmed value, and support response time. The existing server events
+cannot establish those facts by themselves.
 
 ## 5. Close before expanding
 

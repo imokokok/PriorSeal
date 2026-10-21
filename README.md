@@ -1,32 +1,32 @@
 # PriorSeal
 
-**Connect explicit authorization to observed EVM and Solana execution with independently verifiable evidence.**
+**Let Agents prepare EVM and Solana actions while users retain explicit, independently verifiable control.**
 
 [![CI](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml/badge.svg)](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
 [![MIT License](https://img.shields.io/badge/license-MIT-151513.svg)](LICENSE)
 
-[Live console](https://priorseal.xyz/app) · [Jupiter pilot brief](https://priorseal.xyz/jupiter/pilot-intake) · [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
+[Live console](https://priorseal.xyz/app) · [Agent-swap pilot brief](https://priorseal.xyz/jupiter/pilot-intake) · [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
 
-An agent can propose and execute a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, or whether the observed execution matched it**. PriorSeal connects a principal-signed, time-bounded authorization to an identified EVM or Solana execution in a portable receipt that another party can verify independently. Its core is the relationship between **what was authorized before action** and **what was observed afterward**.
+An Agent can propose a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, whether the observed execution matched it, or whether the user still had a final say**. PriorSeal connects a principal-signed, time-bounded authorization to an identified EVM or Solana execution in a portable receipt that another party can verify independently. Its core is the relationship between **what an Agent proposed, what was authorized before action, and what was observed afterward**.
 
 ```text
-Bounded intent → Principal signature → Acceptance + time evidence
-               → EVM / Solana observation → Signed receipt → Independent review
+Agent proposal → Bounded intent → Principal signature → Acceptance + time evidence
+                                → EVM / Solana observation → Signed receipt → Independent review
 ```
 
-PriorSeal is for teams building EVM and Solana agents, treasury automation, wallets, and transaction infrastructure. It sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys or move funds.
+PriorSeal is for teams building EVM and Solana Agents, treasury automation, wallets, trading applications, and transaction infrastructure. It sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys, move funds, or turn a single authorization into open-ended automation.
 
 ## Choose your integration path
 
 | Need | Start here |
 | --- | --- |
-| Give an agent bounded authority and portable evidence around one action | [Agent usage and payment model](docs/product/agent-usage-model.md) · [PriorSeal offline example](#run-the-offline-example) |
+| Let an Agent prepare one user-controlled action with portable evidence | [Agent usage and payment model](docs/product/agent-usage-model.md) · [PriorSeal offline example](#run-the-offline-example) |
 | Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
 | Start a reproducible exact-call integration and hand a reviewer a portable v3 receipt bundle | [Exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) |
 | Bind a Solana mainnet transaction message to a wallet authorization and observed transaction | [Solana integration guide](docs/integrations/solana.md) |
-| Guard a Jupiter Router swap with Insight simulation, exact authorization and execution evidence | [Jupiter Guarded Swap](docs/integrations/jupiter-guarded-swap.md) |
+| Let an Agent disclose and commit one Jupiter Router proposal with Insight simulation, exact user authorization and execution evidence | [Verified Agent Swap](docs/integrations/jupiter-guarded-swap.md) |
 | Configure x402 payment for eligible read-only evidence exports | [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md) |
 | Use an eligible Base Wallet MCP call with Insight assessment and PriorSeal evidence | [Wallet MCP × Insight × PriorSeal](docs/integrations/wallet-mcp-insight-priorseal.md) · [local skill package](skills/wallet-mcp-insight-priorseal/README.md) |
 | Let an AI agent use PriorSeal's reviewed authorization and evidence workflow | [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [controlled-execution example](docs/integrations/priorseal-mcp-controlled-execution-example.md) · [compatibility proof](docs/runbooks/mcp-compatibility-proof.md) · remote endpoint `https://priorseal.xyz/mcp` |
@@ -38,11 +38,11 @@ PriorSeal is for teams building EVM and Solana agents, treasury automation, wall
 
 Insight and PriorSeal work independently. Insight provides **oracle transparency and risk intelligence**; PriorSeal provides **authorization and execution evidence**. The combined path links assessment, authorization, execution, and review while keeping each product’s trust checks separate. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
 
-PriorSeal is designed as an agent-facing, per-use authorization and evidence
-layer: an agent can call the service and, where enabled, pay for an eligible
-evidence export, but its service payment never gives it authority over a
-customer transaction. The principal's explicit signed authorization remains
-separate. The currently supported x402 route is a configured read-only receipt
+PriorSeal is designed as an Agent-facing, user-controlled, per-use
+authorization and evidence layer: an Agent can call the service and, where
+enabled, pay for an eligible evidence export, but its service payment never
+gives it authority over a customer transaction. The principal's explicit
+single-use signed authorization remains separate. The currently supported x402 route is a configured read-only receipt
 bundle export; it is not a public production offering unless the relevant
 production gates have been completed. See the
 [agent usage and payment model](docs/product/agent-usage-model.md).
@@ -55,7 +55,7 @@ requires that chain's independently configured RPC endpoint.
 
 ## What the evidence covers
 
-1. **Authority.** A user or organization signs a time-bounded, single-use EIP-712, ERC-1271, or Solana Ed25519 message authorization for an agent and executor. A deployment policy can bind a reviewed principal identity to an account; without that registry, a human-readable principal ID is self-asserted.
+1. **Authority.** A user or organization signs a time-bounded, single-use EIP-712, ERC-1271, or Solana Ed25519 message authorization for an Agent and executor. An application-declared Agent ID can be bound into the signed authorization but is not an identity or performance proof without separate verification. A deployment policy can bind a reviewed principal identity to an account; without that registry, a human-readable principal ID is self-asserted.
 2. **Ordering.** PriorSeal accepts the authorization before execution. Production deployments require an independent pre-execution proof mode: RFC 3161 timestamp, witness quorum, or EVM anchor. The default development `issuer` mode provides only an issuer acceptance statement.
 3. **Execution.** PriorSeal observes a specified transaction through configured EVM or Solana RPC sources and compares the supported fields with the signed intent. Solana support binds the complete legacy, v0, or v1 compiled message, including resolved v0 address lookup accounts and v1 resource configuration, and currently observes confirmed mainnet-beta transactions. It does not decode arbitrary Solana program semantics. Pending, unavailable, reverted, and reorged states remain explicit.
 4. **Review.** An Ed25519-signed v3 receipt separates evidence validity, execution state, and authorization compliance. A reviewer can download it and verify its hashes, signatures, policy result, and binding locally with an independently confirmed issuer key. A paid x402 receipt-bundle export can additionally carry a signed payment-to-resource evidence statement without conflating the payment rail with the subject execution chain.
@@ -173,6 +173,6 @@ Run `npm run check` for the repository checks, or `npm run release:check` for th
 
 ## Work with PriorSeal
 
-For a pilot, choose one bounded EVM or Solana execution path and ask an independent reviewer to reproduce the authorization, timing, observation, and compliance result from its exported evidence. A Jupiter buyer can prepare a non-sensitive [pilot brief](https://priorseal.xyz/jupiter/pilot-intake); public Issues are only for redacted developer collaboration. See the [collaboration guide](COLLABORATING.md) or [open a redacted pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Code contributions follow [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow [SECURITY.md](SECURITY.md).
+For a pilot, choose one bounded EVM or Solana execution path and ask an independent reviewer to reproduce the Agent proposal boundary, authorization, timing, observation, and compliance result from its exported evidence. A Jupiter application can prepare a non-sensitive [Agent-swap pilot brief](https://priorseal.xyz/jupiter/pilot-intake); public Issues are only for redacted developer collaboration. See the [collaboration guide](COLLABORATING.md) or [open a redacted pilot request](https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml). Code contributions follow [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow [SECURITY.md](SECURITY.md).
 
 MIT licensed. See [LICENSE](LICENSE).

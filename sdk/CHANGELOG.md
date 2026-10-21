@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add `priorseal.agent-proposal.v1`: a compact, caller-retained Agent rationale
+  record with a canonical SHA-256 context commitment. The Jupiter and 0x
+  Solana adapters can require the retained record to match the exact prepared
+  intent and the Agent ID in the principal-signed authorization. This is a disclosure and evidence
+  binding, not a reputation, identity, trading-safety, or investment claim.
+
 ## 0.13.1 — 2026-10-20
 
 - Add deployment-owned USDC-input platform fees to the Solana Jupiter guarded

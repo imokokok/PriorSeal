@@ -29,6 +29,37 @@ signature. A changed call, expired authorization, consumed nonce, failed
 policy, uncertain execution, or non-compliant observation remains an explicit
 state—not permission to retry or broaden the action.
 
+## User-controlled Agent mode
+
+For retail-facing wallets and trading applications, the product is not an
+autonomous trading bot. It is a **proposal-and-confirmation boundary**:
+
+```text
+Agent or application proposes one action
+  → it retains a short proposal record and protected integration commits its digest into the exact message intent
+  → wallet owner reviews the Agent ID, rationale, limits, fees and expiry
+  → owner signs one authorization and the same transaction
+  → one relay attempt is observed and exported as evidence
+```
+
+The user-facing review must state the maximum spend, minimum output when the
+profile supports it, slippage, disclosed platform fee, maximum priority/network
+fee, expiry, Agent/application ID, a short retained rationale, and the exact
+one-time boundary. It must also make an `UNKNOWN` relay state and the
+possibility of failed network fees clear. `priorseal.agent-proposal.v1` commits
+the record's SHA-256 digest into the exact intent while the application retains
+the readable record. It proves only that this record was linked to that action;
+it does not validate the rationale, establish Agent identity, or make a
+performance rating unless a separately reviewed identity source is present.
+
+The first retail-facing Jupiter and 0x Solana surfaces use one exact
+authorization per swap. They show a countdown to the signed route expiry and
+permit a user to discard an unsigned proposal locally. A v2 package retains the
+readable proposal record alongside the committed exact route; a package that
+commits a proposal without retaining its record is refused before signing. They
+do not support unattended execution, recurring trades, a trading budget, or a
+reusable session. Those are separate product profiles, not UI toggles.
+
 ## Account and trust separation
 
 | Account or role | Permitted purpose | Explicit boundary |

@@ -9,12 +9,12 @@ export const proofSequence = [
   {
     number: '01',
     title: 'Propose',
-    body: 'The agent defines an exact chain, executor, recipient, asset, amount, validity window and optional call constraints.',
+    body: 'An Agent or application proposes an exact chain action, including its executor, recipient, asset, amount, validity window and any constrained call fields.',
   },
   {
     number: '02',
     title: 'Authorize',
-    body: 'A user or organization approves the canonical intent with EIP-712 or ERC-1271 authority.',
+    body: 'A user or organization reviews and approves the canonical intent with EIP-712, ERC-1271, or a supported Solana authorization.',
   },
   {
     number: '03',
@@ -41,15 +41,15 @@ export const proofSequence = [
 export const audiences = [
   {
     label: 'Agent builders',
-    text: 'Prove that an automated execution stayed inside the authority it was given.',
+    text: 'Give an Agent enough authority to prepare and execute one bounded action, without giving it a blank check.',
   },
   {
-    label: 'Treasury teams',
-    text: 'Retain a portable record connecting organizational approval to one observed EVM transaction.',
+    label: 'Wallets & trading apps',
+    text: 'Embed a human-readable confirmation boundary before an Agent-mediated onchain action reaches a wallet.',
   },
   {
-    label: 'Auditors',
-    text: 'Recompute authorization, timing, binding and signatures without trusting the PriorSeal service.',
+    label: 'Users & reviewers',
+    text: 'Retain a portable record of what an Agent proposed, what a principal authorized, and what was observed afterward.',
   },
 ] as const
 
