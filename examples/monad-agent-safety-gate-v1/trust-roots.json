@@ -1,0 +1,13 @@
+{
+  "schema": "monad.agent-safety-gate-trust-roots.v1",
+  "fixtureMode": "SYNTHETIC_NO_BROADCAST",
+  "insight": {
+    "attester": "0x7564105E977516C53bE337314c7E53838967bDaC"
+  },
+  "priorSeal": {
+    "issuer": "priorseal.monad-agent-safety-gate-fixture",
+    "keyId": "priorseal-monad-agent-safety-gate-fixture-1",
+    "publicKeySpkiSha256": "a492f11e4af1df7b9877c529f146d8820fbb27aacc98e7b15786452edaaa5fc1"
+  },
+  "warning": "Public fixture keys prove reproducibility only. Production consumers must establish their own issuer and registry trust roots."
+}

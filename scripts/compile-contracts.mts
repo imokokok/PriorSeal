@@ -44,7 +44,7 @@ function parseCompilerOutput(value: unknown): CompilerOutput {
   return { contracts, errors };
 }
 
-const names = ['PriorSealAuthorizationModule.sol', 'PriorSealTransparencyAnchor.sol'];
+const names = ['MonadPriorSealPing.sol', 'PriorSealAuthorizationModule.sol', 'PriorSealTransparencyAnchor.sol'];
 const sources = Object.fromEntries(await Promise.all(names.map(async (name) => [name, { content: await readFile(new URL(`../contracts/${name}`, import.meta.url), 'utf8') }])));
 const output = parseCompilerOutput(JSON.parse(solc.compile(JSON.stringify({ language: 'Solidity', sources, settings: { outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object'] } } } }))));
 const errors = (output.errors ?? []).filter((entry) => entry.severity === 'error');

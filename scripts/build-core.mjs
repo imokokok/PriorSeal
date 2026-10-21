@@ -33,6 +33,7 @@ const onDemandGeneratorSources = [
   "scripts/generate-thoughtproof-sentinel-m2-final-pairs.mts",
   "scripts/generate-thoughtproof-sentinel-m2-vectors.mts",
   "scripts/generate-thoughtproof-sentinel-paired-vectors.mts",
+  "examples/monad-agent-safety-gate-v1/generate.mts",
   "scripts/generate-web3-agent-kit-base-swap-v2-vectors.mts",
   "scripts/generate-web3-agent-kit-base-swap-vectors.mts",
   "scripts/web3-agent-kit-base-swap-generator.mts",
@@ -51,6 +52,8 @@ const onDemandToolSources = [
 const onDemandOperationSources = [
   "scripts/erc4337-pilot-doctor.mts",
   "scripts/erc4337-eip7702-doctor.mts",
+  "scripts/monad-agent-safety-gate-live-run.mts",
+  "scripts/monad-priorseal-ping.mts",
   "scripts/prepare-transparency-anchor.mts",
   "scripts/record-x402-refund.mts",
   "scripts/record-transparency-anchor.mts",

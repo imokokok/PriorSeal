@@ -92,6 +92,7 @@ export function LandingPage() {
         <InstitutionMark />
         <nav className={menuOpen ? 'is-open' : ''} aria-label="Homepage navigation" id="homepage-navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id} onClick={() => setMenuOpen(false)}>{label}</a>)}
+          <Link to="/monad" onClick={() => setMenuOpen(false)}>Monad proof</Link>
           <Link to="/swap" onClick={() => setMenuOpen(false)}>Swap</Link>
           <Link to="/integrations/mcp" onClick={() => setMenuOpen(false)}>MCP</Link>
           <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/sdk">SDK</Link>
@@ -108,7 +109,7 @@ export function LandingPage() {
             <h1 data-route-heading tabIndex={-1}>Agent-ready.<br /><em>User-controlled.</em></h1>
             <p className="museum-hero__statement">Let an Agent prepare a bounded action, not hold a blank check. PriorSeal connects what a person or organization explicitly approved before action to observed EVM or Solana execution, with a signed receipt others can verify independently.</p>
             <div className="museum-actions">
-              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Control an agent action <span>→</span></Link><Link className="museum-text-link" to="/swap">Open a controlled swap <span>↗</span></Link>
+              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/intents/new">Control an agent action <span>→</span></Link><Link className="museum-text-link" to="/monad">View Monad proof <span>↗</span></Link><Link className="museum-text-link" to="/swap">Open a controlled swap <span>↗</span></Link>
               <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
             </div>
             <div className="museum-hero__foot"><span>01 / 06</span><p>Bounded authority and portable evidence for Agents and their users.<br />No custody. No transaction-signing keys.</p><a href="#system" aria-label="Explore the PriorSeal system">↓</a></div>

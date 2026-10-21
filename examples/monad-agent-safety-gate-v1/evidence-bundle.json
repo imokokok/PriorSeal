@@ -1,0 +1,241 @@
+{
+  "schema": "monad.agent-safety-gate-evidence.v1",
+  "fixtureMode": "SYNTHETIC_NO_BROADCAST",
+  "assembledAt": 1792540925,
+  "insight": {
+    "attestation": {
+      "schema": "insight.oracle-safety-attestation.v3",
+      "uid": "0xc77d361d8625b9047c6f7073a38f5f551a9f60dd3ee1335e20b3c209664723f2",
+      "attester": "0x7564105E977516C53bE337314c7E53838967bDaC",
+      "signature": "0xd0c9195c918ad2f07a90340407c0eedfa6d71d55d266084a3ab8e65303cbafd5157a673b712ac07ac07123e00920246b88cd71529fe4e3ec0742bab0b2a3f7db1b",
+      "validUntil": 1792541100,
+      "data": {
+        "verdict": "PASS",
+        "sourceAssetId": "eip155:143/native",
+        "destinationAssetId": "eip155:143/erc20:0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+        "subjectChainId": 143,
+        "action": "swap",
+        "tradeAmountUsd": 25000000,
+        "consensusPrice": 2500000000,
+        "maxDeviationBps": 12,
+        "manipulationRiskBps": 140,
+        "participantCount": 3,
+        "requiredParticipantCount": 3,
+        "coverageStatus": "SUFFICIENT",
+        "independenceStatus": "ASSESSED",
+        "sourceGroupCount": 3,
+        "crossProviderAgreementBps": 9988,
+        "maxStablecoinDepegBps": 3,
+        "maxDataAgeSeconds": 20,
+        "recommendedMaxPositionUsd": 50000000,
+        "reasonCodesHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "requestHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "evaluationScope": "PRE_TRADE_ORACLE_RISK",
+        "evaluatedAssetIdsHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "providerObservationsHash": "0x3333333333333333333333333333333333333333333333333333333333333333",
+        "validUntil": 1792541100,
+        "checkedAt": 1792540800,
+        "schemaVersion": 3,
+        "requiredSourceGroupCount": 2
+      }
+    },
+    "commitment": {
+      "namespace": "insight.oracle-safety-attestation.v3",
+      "algorithm": "sha256",
+      "digest": "0xe267b79b5c186983045fa7f560f2f7073a9df7f336fd3de651b3ae2f8657a9ab"
+    }
+  },
+  "gate": {
+    "policy": {
+      "schema": "monad.agent-safety-gate-policy.v1",
+      "finalDecisionPoint": "integrator-owned-agent-policy",
+      "insightRole": "signed-advisory-risk-input",
+      "priorSealRole": "principal-authorization-and-execution-evidence",
+      "allowedChainId": 143,
+      "allowedCallTarget": "0x3333333333333333333333333333333333333333",
+      "verdictMapping": {
+        "PASS": "PROCEED_TO_PRINCIPAL_AUTHORIZATION",
+        "CAUTION": "REQUIRE_PRINCIPAL_CONFIRMATION",
+        "DANGER": "DENY",
+        "BLOCK": "DENY"
+      }
+    },
+    "decision": {
+      "schema": "monad.agent-safety-gate-decision.v1",
+      "evaluatedAt": 1792540830,
+      "attestationUid": "0xc77d361d8625b9047c6f7073a38f5f551a9f60dd3ee1335e20b3c209664723f2",
+      "policyDigest": "0xfee648ec111fd51099a7e2cf65f0b0543365a0744d9ee4ef2f078879e4ce99ca",
+      "effect": "PROCEED_TO_PRINCIPAL_AUTHORIZATION",
+      "requiresPrincipalAuthorization": true
+    },
+    "commitment": {
+      "namespace": "monad.agent-safety-gate-decision.v1",
+      "algorithm": "sha256",
+      "digest": "0x23f1684a408732b9f5c085e9da82ba0c6e5c3a98ea6bf4782d5aeda383bb31a5"
+    }
+  },
+  "priorSeal": {
+    "receipt": {
+      "schema": "priorseal.execution-receipt.v3",
+      "domain": "priorseal/execution-receipt/v3",
+      "receiptId": "psr_5a50e93d866ea658e2e881029d6ca149",
+      "intentHash": "527050a6fdcd5be8b24b7cb6bf7b51308a59ea7ff51ff26b37d317c8dfedf340",
+      "authorizationHash": "55e1459768b899fed8129f022655eac268bae3368c0bb7327021ffd1d7ef1d99",
+      "executionHash": "00a1bde3cf7a95c8f466b927a07ba878dcf2cb9225e8bdbf6c2060565eb78f71",
+      "authorizationEvidence": {
+        "authorization": {
+          "schema": "priorseal.authorization.v2",
+          "domain": "priorseal/authorization/v2",
+          "intent": {
+            "schema": "priorseal.intent.v2",
+            "executionProfile": "priorseal.execution-profile.exact-call.v1",
+            "intentId": "monad-agent-safety-gate-fixture-0001",
+            "chainId": 143,
+            "action": "CONTRACT_CALL",
+            "asset": "eip155:143/native",
+            "amount": "1000000000000000",
+            "sender": "0x2222222222222222222222222222222222222222",
+            "recipient": "0x3333333333333333333333333333333333333333",
+            "validUntil": 1792541100,
+            "nonce": "17",
+            "callTarget": "0x3333333333333333333333333333333333333333",
+            "calldataHash": "0x6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a",
+            "transactionValue": "1000000000000000",
+            "contextCommitments": [
+              {
+                "namespace": "insight.oracle-safety-attestation.v3",
+                "algorithm": "sha256",
+                "digest": "0xe267b79b5c186983045fa7f560f2f7073a9df7f336fd3de651b3ae2f8657a9ab"
+              },
+              {
+                "namespace": "monad.agent-safety-gate-decision.v1",
+                "algorithm": "sha256",
+                "digest": "0x23f1684a408732b9f5c085e9da82ba0c6e5c3a98ea6bf4782d5aeda383bb31a5"
+              }
+            ],
+            "intentHash": "527050a6fdcd5be8b24b7cb6bf7b51308a59ea7ff51ff26b37d317c8dfedf340"
+          },
+          "intentHash": "527050a6fdcd5be8b24b7cb6bf7b51308a59ea7ff51ff26b37d317c8dfedf340",
+          "principal": {
+            "type": "user",
+            "id": "monad-agent-safety-gate-fixture-principal",
+            "account": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
+          },
+          "authorizer": {
+            "type": "eip712",
+            "address": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
+          },
+          "delegate": {
+            "agentId": "monad-agent-safety-gate-fixture-agent",
+            "executor": "0x2222222222222222222222222222222222222222"
+          },
+          "issuedAt": 1792540860,
+          "notBefore": 1792540860,
+          "expiresAt": 1792541100,
+          "authorizationNonce": "0x9191919191919191919191919191919191919191919191919191919191919191",
+          "maxUses": "1",
+          "audience": "priorseal",
+          "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "signature": "0x5748346a4546634ddb94553322a91e09b80e94ba8c42880321c4690e6222dca13fae0e9a63b4f7c3e8ce95fb9ef2512fa3ea362be903d99712732253a33969611c",
+          "authorizationId": "auth_212381250e8f37092737f571659b67fb"
+        },
+        "acceptance": {
+          "schema": "priorseal.authorization-receipt.v1",
+          "domain": "priorseal/authorization-receipt/v1",
+          "authorizationId": "auth_212381250e8f37092737f571659b67fb",
+          "authorizationHash": "55e1459768b899fed8129f022655eac268bae3368c0bb7327021ffd1d7ef1d99",
+          "intentHash": "527050a6fdcd5be8b24b7cb6bf7b51308a59ea7ff51ff26b37d317c8dfedf340",
+          "acceptedAt": 1792540861,
+          "sequence": 1,
+          "previousEntryHash": null,
+          "entryHash": "287c27f1a36d42c080c31e878b8a0733682f490fc4bb9abe92ea1441092f312b",
+          "status": "ACCEPTED",
+          "issuer": "priorseal.monad-agent-safety-gate-fixture",
+          "algorithm": "Ed25519",
+          "keyId": "priorseal-monad-agent-safety-gate-fixture-1",
+          "signature": "KZCtg8YDIBsgv3Embe-p07VMkxEe6OFpJDXseBJKWORfx0xXlYszk9t0VsmryGPqAquKEUyzdB-hTOWhOi4ODA"
+        },
+        "policy": {
+          "schema": "priorseal.policy-evidence.v1",
+          "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "document": null,
+          "result": {
+            "allowed": true,
+            "reasonCodes": [],
+            "policyId": null,
+            "evaluatedAt": 1792540861
+          }
+        }
+      },
+      "execution": {
+        "schema": "priorseal.execution-observation.v1",
+        "chainId": 143,
+        "txHash": "0xabababababababababababababababababababababababababababababababab",
+        "status": "CONFIRMED",
+        "blockNumber": 3200001,
+        "blockHash": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "executedAt": 1792540890,
+        "observedAt": 1792540895,
+        "action": "CONTRACT_CALL",
+        "nonce": "17",
+        "sender": "0x2222222222222222222222222222222222222222",
+        "recipient": "0x3333333333333333333333333333333333333333",
+        "target": "0x3333333333333333333333333333333333333333",
+        "calldataHash": "0x6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a",
+        "asset": "eip155:143/native",
+        "amount": "1000000000000000",
+        "transfers": [],
+        "transferMatchUnique": false,
+        "nativeValue": "1000000000000000",
+        "tokenValue": null,
+        "gasUsed": "180000",
+        "fee": null,
+        "executionDataAvailable": true,
+        "observationSource": "synthetic-offline-fixture",
+        "finalityState": "CONFIRMED",
+        "confirmations": 12
+      },
+      "executionStatus": "CONFIRMED",
+      "compliance": {
+        "schema": "priorseal.compliance-assessment.v1",
+        "status": "COMPLIANT",
+        "reasonCodes": []
+      },
+      "issuer": "priorseal.monad-agent-safety-gate-fixture",
+      "issuedAt": 1792540895,
+      "validUntil": 1792541100,
+      "outcome": "COMPLETED",
+      "reasonCodes": [],
+      "binding": {
+        "bound": true,
+        "reasonCodes": []
+      },
+      "algorithm": "Ed25519",
+      "keyId": "priorseal-monad-agent-safety-gate-fixture-1",
+      "verifierVersion": "3.0.0",
+      "signature": "PHgUsoPpOv3-w7-NQ8LhXgjvelQ4rgBUU5RfSn4avXwp7ef_5hdsYrD5TQzai3CYFL2U4x7Fx918nrKBk_nSAQ"
+    },
+    "keyRegistry": {
+      "schema": "priorseal.keys.v1",
+      "issuer": "priorseal.monad-agent-safety-gate-fixture",
+      "keys": [
+        {
+          "issuer": "priorseal.monad-agent-safety-gate-fixture",
+          "keyId": "priorseal-monad-agent-safety-gate-fixture-1",
+          "algorithm": "Ed25519",
+          "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAskkdlQKuKGMKK6yy4MdFEP/N0yjDNP8+E5PnWy0x59w=\n-----END PUBLIC KEY-----\n",
+          "status": "active",
+          "validFrom": null,
+          "validUntil": null
+        }
+      ]
+    }
+  },
+  "limits": {
+    "synthetic": true,
+    "paidX402RequestIncluded": false,
+    "transactionBroadcastIncluded": false,
+    "economicSafetyGuaranteed": false
+  },
+  "bundleHash": "0xf287d483d6368ba94dab9e684505c6842dc7a0ebd95afbf0a09bfae2a7b1e7db"
+}

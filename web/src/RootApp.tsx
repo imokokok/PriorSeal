@@ -6,6 +6,7 @@ import { LandingPage } from './landing/LandingPage'
 
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((module) => ({ default: module.PrivacyPage })))
 const McpPage = lazy(() => import('./pages/McpPage').then((module) => ({ default: module.McpPage })))
+const MonadProofPage = lazy(() => import('./pages/MonadProofPage').then((module) => ({ default: module.MonadProofPage })))
 const SwapPage = lazy(() => import('./pages/SwapPage').then((module) => ({ default: module.SwapPage })))
 const SwapPilotIntakePage = lazy(() => import('./pages/SwapPilotIntakePage').then((module) => ({ default: module.SwapPilotIntakePage })))
 const PublicNotFoundPage = lazy(() => import('./pages/OutcomePages').then((module) => ({ default: module.PublicNotFoundPage })))
@@ -92,5 +93,5 @@ function RouteFallback() {
 }
 
 export default function RootApp() {
-  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/swap" element={<SwapPage />} /><Route path="/swap/pilot-intake" element={<SwapPilotIntakePage />} /><Route path="/jupiter" element={<Navigate replace to="/swap" />} /><Route path="/jupiter/pilot-intake" element={<Navigate replace to="/swap/pilot-intake" />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
+  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/monad" element={<MonadProofPage />} /><Route path="/swap" element={<SwapPage />} /><Route path="/swap/pilot-intake" element={<SwapPilotIntakePage />} /><Route path="/jupiter" element={<Navigate replace to="/swap" />} /><Route path="/jupiter/pilot-intake" element={<Navigate replace to="/swap/pilot-intake" />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
 }
