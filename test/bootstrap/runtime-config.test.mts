@@ -30,6 +30,7 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     transparencyAnchorFile: undefined,
     witnessEndpointsFile: undefined,
     preExecutionProofMode: 'issuer',
+    publicPaidCommerceEnabled: true,
     erc4337EntryPoints: [],
     eip7702Delegates: [],
     safe4337Trust: [],
@@ -47,6 +48,7 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
 
 test('runtime configuration accepts a Solana-only x402 payment rail', () => {
   const config = loadRuntimeConfig({
+    PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'true',
     PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example',
     PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example',
     PRIORSEAL_X402_SOLANA_PAY_TO: '11111111111111111111111111111111',
@@ -55,10 +57,12 @@ test('runtime configuration accepts a Solana-only x402 payment rail', () => {
   assert.equal(config.x402?.payTo, undefined);
   assert.equal(config.x402?.solanaPayTo, '11111111111111111111111111111111');
   assert.throws(() => loadRuntimeConfig({
+    PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'true',
     PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_SOLANA_PAY_TO: '11111111111111111111111111111111',
     PRIORSEAL_X402_NETWORKS: 'eip155:8453', PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
   }), /EVM payment rail/);
   assert.throws(() => loadRuntimeConfig({
+    PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'true',
     PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
     PRIORSEAL_X402_NETWORKS: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
   }), /selects Solana/);
@@ -85,6 +89,7 @@ test('runtime configuration enables guarded Jupiter only with a complete server-
 test('runtime configuration locks a Jupiter platform fee to the merchant USDC ATA', () => {
   const policy = JSON.stringify({ maxInputAmountAtomic: '1000000', maxSlippageBps: 50, allowedProgramIds: ['ComputeBudget111111111111111111111111111111'], authorizationTtlSeconds: 60 });
   const environment = {
+    PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'true',
     JUPITER_API_KEY: 'jupiter-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_JUPITER_RPC_URL: 'https://rpc.example', PRIORSEAL_JUPITER_POLICY_JSON: policy,
     PRIORSEAL_X402_SOLANA_PAY_TO: 'BfVX9jcEALijnEuGPcGTjqjBgTFLTFMt6F7NrMHzGWf4', PRIORSEAL_JUPITER_PLATFORM_FEE_BPS: '10', PRIORSEAL_JUPITER_FEE_ACCOUNT: 'FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq',
     PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
@@ -135,12 +140,15 @@ test('runtime configuration accepts a server-owned guarded 0x tenant policy set 
   const agentMeter = JSON.stringify({ schema: 'priorseal.agent-meter.v1', creditUnitUsd: '0.01', operatorCredentialHash: 'a'.repeat(64), accounts: [{ accountId: 'agent-partner-a', credentialHash: 'b'.repeat(64), provisionedCredits: '10', status: 'active' }], routes: [{ routeId: 'zeroex-prepare', method: 'POST', path: '/v1/0x/guarded-swaps/prepare', credits: '1' }] });
   const config = loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: 'true', ZEROEX_API_KEY: '0x-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_ZEROEX_RPC_URL: 'https://rpc.example', PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys, PRIORSEAL_ZEROEX_TENANTS_JSON: tenants, PRIORSEAL_AGENT_METER_JSON: agentMeter });
   assert.equal(config.guardedZeroEx?.tenantPolicies?.tenants[1]?.commercialFee?.feePpm, 1000);
+  const pilot = loadRuntimeConfig({ PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'false', PRIORSEAL_ZEROEX_ENABLED: 'true', ZEROEX_API_KEY: '0x-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_ZEROEX_RPC_URL: 'https://rpc.example', PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys, PRIORSEAL_ZEROEX_TENANTS_JSON: tenants, PRIORSEAL_AGENT_METER_JSON: agentMeter });
+  assert.equal(pilot.guardedZeroEx?.tenantPolicies?.tenants[1]?.commercialFee, undefined);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: 'true', ZEROEX_API_KEY: '0x-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_ZEROEX_RPC_URL: 'https://rpc.example', PRIORSEAL_ZEROEX_POLICY_JSON: policy, PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: responseSigningKeys, PRIORSEAL_ZEROEX_TENANTS_JSON: tenants }), /require PRIORSEAL_AGENT_METER_JSON/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ZEROEX_ENABLED: 'true', PRIORSEAL_ZEROEX_TENANTS_JSON: tenants }), /require ZEROEX_API_KEY/);
 });
 
 test('Base Sepolia x402 is an explicit staging-only payment rail', () => {
   const x402 = {
+    PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'true',
     PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
     PRIORSEAL_X402_NETWORKS: 'eip155:84532', PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
   };
@@ -182,6 +190,7 @@ test('production runtime fails closed unless security dependencies are explicit'
   };
   assert.equal(loadRuntimeConfig(base).environment, 'production');
   const x402 = {
+    PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'true',
     PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
     PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
   };
@@ -204,4 +213,20 @@ test('production runtime fails closed unless security dependencies are explicit'
   assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_CORS_ORIGINS: 'http://localhost:5173' }), /non-localhost/);
   assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_KEY_ID: 'default' }), /deployment-specific PRIORSEAL_KEY_ID/);
   assert.throws(() => loadRuntimeConfig({ ...base, PRIORSEAL_BUILD_VERSION: 'dev' }), /PRIORSEAL_BUILD_VERSION/);
+});
+
+test('production defaults public paid commerce to disabled and suppresses configured payment and route fees', () => {
+  const guardedPolicy = JSON.stringify({ maxInputAmountAtomic: '1000000', maxSlippageBps: 50, allowedProgramIds: ['ComputeBudget111111111111111111111111111111'], authorizationTtlSeconds: 60 });
+  const config = loadRuntimeConfig({
+    PRIORSEAL_ENVIRONMENT: 'production', PRIORSEAL_RUNTIME: 'cloudflare-workers', PRIORSEAL_DATABASE_BACKEND: 'd1',
+    PRIORSEAL_ISSUER: 'priorseal-prod', PRIORSEAL_KEY_ID: 'prod-1', PRIORSEAL_BUILD_VERSION: 'a'.repeat(40), PRIORSEAL_AUTHORIZATION_AUDIENCE: 'priorseal.example.com',
+    PRIORSEAL_PRIVATE_KEY_PEM: '-----BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----', PRIORSEAL_PUBLIC_KEY_PEM: '-----BEGIN PUBLIC KEY-----\nfixture\n-----END PUBLIC KEY-----', PRIORSEAL_POLICY_JSON: '{}', PRIORSEAL_PREEXECUTION_PROOF_MODE: 'rfc3161', PRIORSEAL_CORS_ORIGINS: 'https://priorseal.example.com',
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://priorseal.example.com', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`, PRIORSEAL_X402_NETWORKS: 'eip155:8453', PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
+    JUPITER_API_KEY: 'jupiter-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_JUPITER_RPC_URL: 'https://rpc.example', PRIORSEAL_JUPITER_POLICY_JSON: guardedPolicy, PRIORSEAL_JUPITER_PLATFORM_FEE_BPS: '10', PRIORSEAL_JUPITER_FEE_ACCOUNT: 'FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq', PRIORSEAL_X402_SOLANA_PAY_TO: 'BfVX9jcEALijnEuGPcGTjqjBgTFLTFMt6F7NrMHzGWf4',
+  });
+  assert.equal(config.publicPaidCommerceEnabled, false);
+  assert.equal(config.x402, undefined);
+  assert.equal(config.selfserveClaim, undefined);
+  assert.equal(config.guardedJupiter?.policy.platformFee, undefined);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'invalid' }), /PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED/);
 });

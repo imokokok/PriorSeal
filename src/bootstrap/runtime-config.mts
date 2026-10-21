@@ -49,6 +49,7 @@ type RuntimeEnvironmentInput = Partial<Record<
   'PRIORSEAL_POLICY_FILE' |
   'PRIORSEAL_POLICY_JSON' |
   'PRIORSEAL_PREEXECUTION_PROOF_MODE' |
+  'PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED' |
   'PRIORSEAL_PRIVATE_KEY_FILE' |
   'PRIORSEAL_PRIVATE_KEY_PEM' |
   'PRIORSEAL_PUBLIC_KEY_FILE' |
@@ -104,10 +105,14 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
   const erc4337EntryPoints = parseErc4337EntryPoints(optionalJson(environment.PRIORSEAL_ERC4337_ENTRY_POINTS_JSON, 'PRIORSEAL_ERC4337_ENTRY_POINTS_JSON'));
   const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, 'PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON'));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, 'PRIORSEAL_SAFE_4337_TRUST_JSON'));
-  const x402 = parseX402Config(environment);
-  const selfserveClaim = selfserveClaimConfig(environment, agentMeter, privateKeyPem);
-  const guardedJupiter = guardedJupiterConfig(environment);
-  const guardedZeroEx = guardedZeroExConfig(environment);
+  // Public payment acceptance is opt-in in production. A metered Agent pilot
+  // can still use operator-issued credits without exposing a buyer payment or
+  // self-serve funding path.
+  const publicPaidCommerceEnabled = booleanValue(environment.PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED, 'PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED', runtimeEnvironment !== 'production');
+  const x402 = publicPaidCommerceEnabled ? parseX402Config(environment) : undefined;
+  const selfserveClaim = publicPaidCommerceEnabled ? selfserveClaimConfig(environment, agentMeter, privateKeyPem) : undefined;
+  const guardedJupiter = guardedJupiterConfig(environment, publicPaidCommerceEnabled);
+  const guardedZeroEx = guardedZeroExConfig(environment, publicPaidCommerceEnabled);
   assertGuardedZeroExCommercialReadiness(guardedZeroEx, agentMeter);
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some(entry => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
@@ -153,6 +158,7 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
     witnessEndpointsFile,
     ...(witnessEndpointsJson ? { witnessEndpointsJson } : {}),
     preExecutionProofMode,
+    publicPaidCommerceEnabled,
     allowSelfAssertedPrincipals,
     requireExternalAnchor: preExecutionProofMode === 'evm-anchor',
     anchorConfirmations,
@@ -185,7 +191,7 @@ function assertGuardedZeroExCommercialReadiness(guardedZeroEx: ReturnType<typeof
   }
 }
 
-function guardedZeroExConfig(environment: RuntimeEnvironmentInput): { zeroExApiKey: string; insightApiKey: string; rpcUrl: string; policy: GuardedZeroExDeploymentPolicy; responseSignature: ZeroExResponseSignatureConfiguration; tenantPolicies?: GuardedZeroExTenantPolicySet; zeroExBaseUrl?: string; insightBaseUrl?: string } | undefined {
+function guardedZeroExConfig(environment: RuntimeEnvironmentInput, publicPaidCommerceEnabled: boolean): { zeroExApiKey: string; insightApiKey: string; rpcUrl: string; policy: GuardedZeroExDeploymentPolicy; responseSignature: ZeroExResponseSignatureConfiguration; tenantPolicies?: GuardedZeroExTenantPolicySet; zeroExBaseUrl?: string; insightBaseUrl?: string } | undefined {
   // An explicit deployment switch keeps the integration inert while secrets and
   // policy are staged. Parse it before any optional 0x JSON so a malformed or
   // partial disabled configuration cannot prevent the unrelated service from starting.
@@ -201,7 +207,11 @@ function guardedZeroExConfig(environment: RuntimeEnvironmentInput): { zeroExApiK
   if (!rpcUrl || new URL(rpcUrl).protocol !== 'https:') throw new TypeError('The guarded 0x Solana RPC must use HTTPS');
   if (!policy || typeof policy !== 'object' || Array.isArray(policy)) throw new TypeError('PRIORSEAL_ZEROEX_POLICY_JSON must be an object');
   const responseSignature = parseZeroExResponseSignatureConfiguration(responseSignatureConfig);
-  const tenantPolicies = parseGuardedZeroExTenantPolicySet(tenantPolicyConfig, policy as GuardedZeroExDeploymentPolicy);
+  const parsedTenantPolicies = parseGuardedZeroExTenantPolicySet(tenantPolicyConfig, policy as GuardedZeroExDeploymentPolicy);
+  const tenantPolicies = publicPaidCommerceEnabled || !parsedTenantPolicies ? parsedTenantPolicies : {
+    ...parsedTenantPolicies,
+    tenants: parsedTenantPolicies.tenants.map(({ commercialFee: _commercialFee, ...tenant }) => tenant),
+  };
   return {
     zeroExApiKey: zeroExApiKey!, insightApiKey: insightApiKey!, rpcUrl,
     policy: policy as GuardedZeroExDeploymentPolicy, responseSignature,
@@ -241,13 +251,13 @@ function addressValue(value: unknown) {
   return address;
 }
 
-function guardedJupiterConfig(environment: RuntimeEnvironmentInput): { jupiterApiKey: string; insightApiKey: string; rpcUrl: string; policy: GuardedJupiterDeploymentPolicy; jupiterBaseUrl?: string; insightBaseUrl?: string } | undefined {
+function guardedJupiterConfig(environment: RuntimeEnvironmentInput, publicPaidCommerceEnabled: boolean): { jupiterApiKey: string; insightApiKey: string; rpcUrl: string; policy: GuardedJupiterDeploymentPolicy; jupiterBaseUrl?: string; insightBaseUrl?: string } | undefined {
   const jupiterApiKey = optionalValue(environment.JUPITER_API_KEY);
   const insightApiKey = optionalValue(environment.INSIGHT_API_KEY);
   const rpcUrl = optionalValue(environment.PRIORSEAL_JUPITER_RPC_URL);
   const policy = optionalJson(environment.PRIORSEAL_JUPITER_POLICY_JSON, 'PRIORSEAL_JUPITER_POLICY_JSON');
-  const platformFeeBps = optionalValue(environment.PRIORSEAL_JUPITER_PLATFORM_FEE_BPS);
-  const feeAccount = optionalValue(environment.PRIORSEAL_JUPITER_FEE_ACCOUNT);
+  const platformFeeBps = publicPaidCommerceEnabled ? optionalValue(environment.PRIORSEAL_JUPITER_PLATFORM_FEE_BPS) : undefined;
+  const feeAccount = publicPaidCommerceEnabled ? optionalValue(environment.PRIORSEAL_JUPITER_FEE_ACCOUNT) : undefined;
   const jupiterConfigured = [jupiterApiKey, rpcUrl, policy].filter(Boolean).length;
   if (Boolean(platformFeeBps) !== Boolean(feeAccount)) throw new TypeError('PRIORSEAL_JUPITER_PLATFORM_FEE_BPS and PRIORSEAL_JUPITER_FEE_ACCOUNT must be configured together');
   if ((platformFeeBps || feeAccount) && jupiterConfigured === 0) throw new TypeError('Jupiter platform fees require the complete guarded Jupiter configuration');

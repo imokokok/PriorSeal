@@ -11,6 +11,7 @@ const requirement = { scheme: 'exact', network: 'eip155:8453', amount: '10000', 
 const challenge = { x402Version: 2, error: 'Payment required', resource: { url: probeUrl, description: 'Export a portable receipt bundle', mimeType: 'application/json', serviceName: 'PriorSeal' }, accepts: [requirement] };
 const environment = {
   PRIORSEAL_ENVIRONMENT: 'production', PRIORSEAL_RUNTIME: 'cloudflare-workers', PRIORSEAL_DATABASE_BACKEND: 'd1',
+  PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'true',
   PRIORSEAL_ISSUER: 'priorseal.xyz', PRIORSEAL_KEY_ID: 'production-1', PRIORSEAL_BUILD_VERSION: 'a'.repeat(40), PRIORSEAL_AUTHORIZATION_AUDIENCE: 'priorseal.xyz', PRIORSEAL_PREEXECUTION_PROOF_MODE: 'rfc3161',
   PRIORSEAL_ALLOW_SELF_ASSERTED_PRINCIPALS: 'false', PRIORSEAL_TRUST_PROXY: 'true',
   PRIORSEAL_ZEROEX_ENABLED: 'false',
