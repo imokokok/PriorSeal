@@ -1,5 +1,4 @@
 import type { loadRuntimeConfig } from './runtime-config.mjs';
-import { hasGuardedZeroExCommercialFees } from '../application/zeroex/tenant-policy.mjs';
 
 const SCHEMA_CACHE_TTL_MS = 300_000;
 type Config = ReturnType<typeof loadRuntimeConfig>;
@@ -8,8 +7,7 @@ type Config = ReturnType<typeof loadRuntimeConfig>;
 export function createSchemaGuard(now: () => number = Date.now) {
   const readyUntil = new Map<string, number>();
   return async (database: D1Database, config: Config, context: ExecutionContext, cache: Cache) => {
-    const zeroExCommercial = hasGuardedZeroExCommercialFees(config.guardedZeroEx?.tenantPolicies);
-    const cacheUrl = `https://priorseal.internal/schema/d1-0007/${config.preExecutionProofMode}/${config.archiveCredentials ? 'archive' : 'public'}/${config.x402 ? 'x402' : 'unpaid'}/${config.agentMeter ? 'agent-meter' : 'unmetered'}/${zeroExCommercial ? 'zeroex-commercial' : 'zeroex-free'}`;
+    const cacheUrl = `https://priorseal.internal/schema/d1-0007/${config.preExecutionProofMode}/${config.archiveCredentials ? 'archive' : 'public'}/${config.x402 ? 'x402' : 'unpaid'}/${config.agentMeter ? 'agent-meter' : 'unmetered'}`;
     const currentTime = now();
     if ((readyUntil.get(cacheUrl) ?? 0) > currentTime) return;
     const cacheKey = new Request(cacheUrl);
@@ -26,7 +24,6 @@ export function createSchemaGuard(now: () => number = Date.now) {
     if (config.archiveCredentials) required.push('project_evidence_archive');
     if (config.x402) required.push('x402_payment_ledger_events');
     if (config.agentMeter) required.push('agent_meter_accounts', 'agent_meter_usage', 'agent_meter_credit_operations');
-    if (zeroExCommercial) required.push('zeroex_commercial_ledger_events');
     if (config.preExecutionProofMode === 'witness-quorum') required.push('witness_attestations');
     const rows = await database.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${required.map(() => '?').join(',')})`).bind(...required).all<{ name: string }>();
     if (rows.results.length !== required.length) throw new TypeError('Required D1 production tables are missing');

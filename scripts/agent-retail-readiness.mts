@@ -106,10 +106,6 @@ export async function runAgentRetailReadiness({ env = process.env, fetcher = fet
   assert(capabilities.body.workflowReady === true, 'PriorSeal workflow is not ready');
   const dependencies = nested(capabilities.body, ['dependencies'], 'Capabilities dependencies');
   assert(dependencies.issuer === 'configured' && dependencies.storage === 'available', 'Issuer or durable storage is unavailable');
-  const guardedJupiter = nested(capabilities.body, ['integrations', 'guardedJupiter'], 'Guarded Jupiter capability');
-  const guardedZeroEx = nested(capabilities.body, ['integrations', 'guardedZeroEx'], 'Guarded 0x capability');
-  assert(guardedJupiter.enabled === true && guardedJupiter.reason === 'READY', 'Guarded Jupiter is unavailable');
-  assert(guardedZeroEx.enabled === true && guardedZeroEx.reason === 'READY', 'Guarded 0x is unavailable');
   const agentCredits = nested(capabilities.body, ['payments', 'agentCredits'], 'Agent credits capability');
   assert(agentCredits.configured === true, 'Operator-issued Agent service credits are unavailable');
   const publicPaidCommerce = nested(capabilities.body, ['payments', 'publicPaidCommerce'], 'Public paid-commerce capability');
@@ -124,23 +120,12 @@ export async function runAgentRetailReadiness({ env = process.env, fetcher = fet
   const safety = nested(agent.body, ['safety'], 'Agent discovery safety boundary');
   assert(safety.executionMode === 'PROPOSAL_AND_PRINCIPAL_CONFIRMATION', 'Agent discovery does not require principal confirmation');
   assert(safety.principalSignature === 'REQUIRED_FOR_EVERY_EXACT_ACTION' && safety.transactionSigningKey === 'NEVER_REQUESTED_BY_PRIORSEAL', 'Agent discovery weakens the signing boundary');
-  for (const integration of ['guardedJupiter', 'guardedZeroEx']) {
-    const declared = nested(agent.body, [integration], `${integration} discovery`);
-    assert(declared.status === 'AVAILABLE' && declared.reason === 'READY', `${integration} discovery is unavailable`);
-    const proposal = nested(declared, ['proposal'], `${integration} proposal`);
-    const agentProposal = nested(proposal, ['agentProposal'], `${integration} Agent proposal`);
-    assert(agentProposal.schema === 'priorseal.agent-proposal.v1', `${integration} Agent proposal schema is unavailable`);
-    const authorization = nested(declared, ['authorization'], `${integration} authorization`);
-    assert(authorization.requirement === 'REVIEW_EXACT_SPEND_MINIMUM_OUTPUT_FEES_EXPIRY_AND_AGENT_PROPOSAL', `${integration} does not require a complete user review`);
-  }
-
   const result = {
     ok: true,
     schema: 'priorseal.agent-retail-readiness.v1',
     mode: 'PUBLIC_READ_ONLY_GET',
     baseUrl: baseUrl.origin,
     version: releaseVersion,
-    integrations: ['guardedJupiter', 'guardedZeroEx'],
     agentCredits: 'CONFIGURED',
     selfserveClaim: 'OPERATOR_MANAGED_ONLY',
     x402: 'DISABLED_FOR_PILOT',

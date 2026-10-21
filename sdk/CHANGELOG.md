@@ -3,20 +3,10 @@
 ## Unreleased
 
 - Add `priorseal.agent-proposal.v1`: a compact, caller-retained Agent rationale
-  record with a canonical SHA-256 context commitment. The Jupiter and 0x
-  Solana adapters can require the retained record to match the exact prepared
-  intent and the Agent ID in the principal-signed authorization. This is a disclosure and evidence
-  binding, not a reputation, identity, trading-safety, or investment claim.
-
-## 0.13.1 — 2026-10-20
-
-- Add deployment-owned USDC-input platform fees to the Solana Jupiter guarded
-  swap adapter. A configured fee is capped at 20 bps, is bound to the exact
-  review and authorization intent, and is accepted only when Jupiter's raw
-  build contains the configured merchant legacy-SPL USDC associated-token
-  account. The hosted preparation service validates that account against its
-  configured merchant and mint before it requests a Router build. Browser
-  inputs cannot set, raise, replace, or omit the deployment fee.
+  record with a canonical SHA-256 context commitment. It binds the retained
+  record to the exact authorization intent and the Agent ID in the
+  principal-signed authorization. This is a disclosure and evidence binding,
+  not a reputation, identity, trading-safety, or investment claim.
 
 ## 0.13.0 — 2026-10-19
 
@@ -31,13 +21,6 @@
 
 ## 0.12.0 — 2026-10-19
 
-- Add the Jupiter Guarded Swap adapter for self-paying Solana `ExactIn` Router
-  builds. It binds an independently simulated exact message to a PriorSeal
-  authorization, supports deployment-owned mint/program/ALT/fee limits and
-  produces a non-secret signing review. The adapter fails closed when any
-  compiled instruction, account meta or instruction byte differs from the
-  Jupiter build, and revalidates a prepared object immediately before wallet
-  authorization. It never receives signing keys or broadcasts transactions.
 - Bind Insight Decision Input v1 evidence into the review manifest so a trusted-decision swap authorization can carry an independently verifiable decision-input pair next to the exact-call authorization and receipt evidence.
 - Derive the default authorization audience from the client `baseUrl` hostname
   instead of the hardcoded `priorseal` default, matching how servers derive

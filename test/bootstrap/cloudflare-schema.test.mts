@@ -45,7 +45,6 @@ test('schema readiness skips repeated cache I/O and expires with the edge entry'
     assert.equal(fixture.calls.length, 2);
   } finally { fixture.sqlite.close(); }
 });
-
 test('missing schema never enters the in-isolate or edge cache', async () => {
   const guard = createSchemaGuard();
   let matches = 0;
@@ -77,24 +76,5 @@ test('x402 schema readiness requires the durable payment ledger', async () => {
     fixture.sqlite.exec('DROP TABLE x402_payment_ledger_events');
     const freshGuard = createSchemaGuard();
     await assert.rejects(() => freshGuard(fixture.database, config, context, cache), /Required D1 production tables are missing/);
-  } finally { fixture.sqlite.close(); }
-});
-
-test('fee-bearing 0x schema readiness requires the durable commercial ledger', async () => {
-  const fixture = testD1();
-  const guard = createSchemaGuard();
-  const cache = { async match() { return undefined; }, async put() {} } as unknown as Cache;
-  const context = { waitUntil(promise: Promise<unknown>) { void promise; } } as ExecutionContext;
-  const config = loadRuntimeConfig({
-    PRIORSEAL_ZEROEX_ENABLED: 'true', ZEROEX_API_KEY: '0x-secret', INSIGHT_API_KEY: 'insight-secret', PRIORSEAL_ZEROEX_RPC_URL: 'https://rpc.example',
-    PRIORSEAL_ZEROEX_POLICY_JSON: JSON.stringify({ maxInputAmountAtomic: '1000000', maxSlippageBps: 50, allowedInputMints: ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'], allowedProgramIds: ['ComputeBudget111111111111111111111111111111'], computeUnitLimit: 200000, computeUnitPriceMicroLamports: '100', maxComputeUnitLimit: 200000, maxComputeUnitPriceMicroLamports: '100', maxPriorityFeeLamports: '20', authorizationTtlSeconds: 60 }),
-    PRIORSEAL_ZEROEX_RESPONSE_SIGNING_KEYS_JSON: JSON.stringify({ trustedKeys: [{ kty: 'OKP', crv: 'Ed25519', kid: '0x-signing-key-prod-24092026', x: '19P3C981JsyQsqwVho8Tlabx51rslvdruSH59mGuWn0' }] }),
-    PRIORSEAL_ZEROEX_TENANTS_JSON: JSON.stringify({ schema: 'priorseal.zeroex-tenant-policy-set.v1', defaultTenantId: 'public', tenants: [{ tenantId: 'public' }, { tenantId: 'partner-a', agentAccountId: 'agent-partner-a', commercialFee: { profileId: 'partner-a-usdc-10bps', inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', feePpm: 1000, recipientTokenAccount: 'FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq', side: 'sell' } }] }),
-    PRIORSEAL_AGENT_METER_JSON: JSON.stringify({ schema: 'priorseal.agent-meter.v1', creditUnitUsd: '0.01', operatorCredentialHash: 'a'.repeat(64), accounts: [{ accountId: 'agent-partner-a', credentialHash: 'b'.repeat(64), provisionedCredits: '10', status: 'active' }], routes: [{ routeId: 'zeroex-prepare', method: 'POST', path: '/v1/0x/guarded-swaps/prepare', credits: '1' }] }),
-  });
-  try {
-    await guard(fixture.database, config, context, cache);
-    fixture.sqlite.exec('DROP TABLE zeroex_commercial_ledger_events');
-    await assert.rejects(() => createSchemaGuard()(fixture.database, config, context, cache), /Required D1 production tables are missing/);
   } finally { fixture.sqlite.close(); }
 });

@@ -5,18 +5,12 @@ import { createMemoryStore } from '../../src/infrastructure/persistence/memory-s
 import { archiveQuery, type ArchiveAccess } from '../../src/application/archive/evidence-archive.mjs';
 import type { ObservationJob } from '../../src/application/observations/observation-worker.mjs';
 import { buildX402PaymentLedgerEvent } from '../../src/domain/x402-payment-ledger.mjs';
-import { buildZeroExCommercialLedgerEvent } from '../../src/domain/zeroex-commercial-ledger.mjs';
 import { testD1 } from '../support/d1.mjs';
 
 const txHash = `0x${'a'.repeat(64)}`;
 const x402LedgerContext = {
   payload: { x402Version: 2 as const, accepted: { scheme: 'exact' as const, network: 'eip155:8453', amount: '10000', asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', payTo: `0x${'b'.repeat(40)}`, maxTimeoutSeconds: 300, extra: { name: 'USD Coin', version: '2' } }, payload: { opaque: 'payment' } },
   requirement: { scheme: 'exact' as const, network: 'eip155:8453', amount: '10000', asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', payTo: `0x${'b'.repeat(40)}`, maxTimeoutSeconds: 300, extra: { name: 'USD Coin', version: '2' } },
-};
-const zeroExCommercial = {
-  schema: 'priorseal.zeroex-commercial-record.v1' as const, provider: '0x' as const, tenantId: 'partner-a',
-  fee: { profileId: 'partner-a-usdc-5bps', side: 'sell' as const, mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', feePpm: 500, recipientTokenAccount: 'FYj2K9vJqCgGq5FHWg3HQTdTSXtripR1k6ZsWfSCNqrq', expectedAmountAtomic: '500' },
-  commitment: { namespace: 'priorseal.zeroex-commercial-record.v1' as const, algorithm: 'sha256' as const, digest: `0x${'c'.repeat(64)}` },
 };
 
 test('D1 persists privacy-minimised x402 delivery events idempotently', async () => {
@@ -31,20 +25,6 @@ test('D1 persists privacy-minimised x402 delivery events idempotently', async ()
     assert.deepEqual(await store.appendX402PaymentLedgerEvent(event), event);
     assert.deepEqual(await store.listX402PaymentLedgerEvents(event.ledgerId), [event]);
     assert.equal(String(fixture.sqlite.prepare('SELECT event_json FROM x402_payment_ledger_events').get()?.event_json).includes('"opaque"'), false);
-  } finally { fixture.sqlite.close(); }
-});
-
-test('D1 persists fee-bearing 0x relay evidence idempotently without signed transaction bytes', async () => {
-  const fixture = testD1();
-  try {
-    const store = createD1Store(fixture.database);
-    const attempted = buildZeroExCommercialLedgerEvent({ type: 'RELAY_ATTEMPTED', occurredAt: 1_800_000_000_000, authorizationId: 'authorization-1', intentHash: 'a'.repeat(64), messageHash: `0x${'b'.repeat(64)}`, transactionSignature: '1'.repeat(64), commercial: zeroExCommercial });
-    const submitted = buildZeroExCommercialLedgerEvent({ ...attempted, type: 'RELAY_SUBMITTED', occurredAt: 1_800_000_001_000, commercial: zeroExCommercial });
-    assert.deepEqual(await store.appendZeroExCommercialLedgerEvent(attempted), attempted);
-    assert.deepEqual(await store.appendZeroExCommercialLedgerEvent(attempted), attempted);
-    assert.deepEqual(await store.appendZeroExCommercialLedgerEvent(submitted), submitted);
-    assert.deepEqual(await store.listZeroExCommercialLedgerEvents(attempted.ledgerId), [attempted, submitted]);
-    assert.equal(String(fixture.sqlite.prepare('SELECT event_json FROM zeroex_commercial_ledger_events').get()?.event_json).includes('signedTransactionBase64'), false);
   } finally { fixture.sqlite.close(); }
 });
 
