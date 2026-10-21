@@ -52,6 +52,7 @@ expiry. Tell the user that the protected route is not available and retain no
 new authorization. If a completed transaction cannot be observed yet, keep its
 signature and wait for the explicit pending/reconciliation result.
 
-Public support contact details are published only after the release owner has
-approved a real destination. Until then, use the project's approved private
-channel for sensitive incident data; public issues must be redacted.
+For public support, security, privacy, billing or pilot access, use
+`contact@priorseal.xyz` with a clear subject prefix. Do not include sensitive
+incident data, wallet secrets, raw signatures or credentials; public issues
+must remain redacted.

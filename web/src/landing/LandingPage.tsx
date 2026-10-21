@@ -95,6 +95,8 @@ export function LandingPage() {
           <Link to="/swap" onClick={() => setMenuOpen(false)}>Swap</Link>
           <Link to="/jupiter" onClick={() => setMenuOpen(false)}>Agent swaps</Link>
           <Link to="/integrations/mcp" onClick={() => setMenuOpen(false)}>MCP</Link>
+          <Link to="/terms" onClick={() => setMenuOpen(false)}>Terms &amp; risk</Link>
+          <Link to="/support" onClick={() => setMenuOpen(false)}>Contact</Link>
           <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/sdk">SDK</Link>
           <a href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
@@ -227,7 +229,7 @@ export function LandingPage() {
             <p className="museum-closing__statement">Use PriorSeal to give an Agent explicit, bounded authority while its user retains the final signature and portable execution evidence. Pair it with Insight when you also need simulation or oracle transparency; each product remains independently usable.</p>
             <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/integrations/mcp">Connect MCP <span>↗</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/sdk">Review the SDK <span>↗</span></Link></div>
           </div>
-          <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for Agent-driven actions.</span><span><a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
+          <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for Agent-driven actions.</span><span><a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <Link className="museum-footer-link" to="/terms">Terms &amp; risk</Link> · <Link className="museum-footer-link" to="/support">Contact</Link> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
         </section>
       </main>
     </div>
