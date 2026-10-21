@@ -8,6 +8,7 @@ const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((module) => ({
 const PublicTermsPage = lazy(() => import('./pages/PublicTermsPage').then((module) => ({ default: module.PublicTermsPage })))
 const SupportPage = lazy(() => import('./pages/SupportPage').then((module) => ({ default: module.SupportPage })))
 const McpPage = lazy(() => import('./pages/McpPage').then((module) => ({ default: module.McpPage })))
+const MonadProofPage = lazy(() => import('./pages/MonadProofPage').then((module) => ({ default: module.MonadProofPage })))
 const JupiterPilotPage = lazy(() => import('./pages/JupiterPilotPage').then((module) => ({ default: module.JupiterPilotPage })))
 const JupiterPilotIntakePage = lazy(() => import('./pages/JupiterPilotIntakePage').then((module) => ({ default: module.JupiterPilotIntakePage })))
 const PriorSealSwapPage = lazy(() => import('./pages/PriorSealSwapPage').then((module) => ({ default: module.PriorSealSwapPage })))
@@ -95,5 +96,5 @@ function RouteFallback() {
 }
 
 export default function RootApp() {
-  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/swap" element={<PriorSealSwapPage />} /><Route path="/jupiter" element={<JupiterPilotPage />} /><Route path="/jupiter/pilot-intake" element={<JupiterPilotIntakePage />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/terms" element={<PublicTermsPage />} /><Route path="/support" element={<SupportPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
+  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/monad" element={<MonadProofPage />} /><Route path="/swap" element={<PriorSealSwapPage />} /><Route path="/jupiter" element={<JupiterPilotPage />} /><Route path="/jupiter/pilot-intake" element={<JupiterPilotIntakePage />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/terms" element={<PublicTermsPage />} /><Route path="/support" element={<SupportPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
 }

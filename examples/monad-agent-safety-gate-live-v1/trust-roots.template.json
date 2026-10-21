@@ -1,0 +1,7 @@
+{
+  "schema": "monad.agent-safety-gate-live-trust-roots.v1",
+  "insight": {
+    "attester": "REPLACE_WITH_A_CURRENT_PRODUCTION_ATTESTER_PIN"
+  },
+  "warning": "Pin the attester only after independently checking Insight's published key material. Do not use a sample signer or infer trust from an API response."
+}
