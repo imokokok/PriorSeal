@@ -1,0 +1,76 @@
+.priorseal-swap { min-height: 100vh; padding: 0 clamp(22px, 5vw, 88px); color: var(--ink); background: #eee8dc; }
+.priorseal-swap__nav { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--ink); }
+.priorseal-swap__brand { display: inline-flex; align-items: center; gap: 11px; font-weight: 730; letter-spacing: -.045em; }
+.priorseal-swap__brand svg { width: 38px; height: 38px; color: var(--wine); }
+.priorseal-swap__brand span { display: grid; gap: 3px; font-size: 18px; }
+.priorseal-swap__brand small, .priorseal-swap__nav nav { color: var(--muted); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.priorseal-swap__nav nav { display: flex; align-items: center; gap: clamp(14px, 2.2vw, 30px); }
+.priorseal-swap__nav nav a { padding: 8px 0; border-bottom: 1px solid transparent; }
+.priorseal-swap__nav nav a:hover { color: var(--wine); border-bottom-color: currentColor; }
+.priorseal-swap__hero { min-height: min(770px, calc(100svh - 88px)); padding: clamp(62px, 9vw, 132px) 0 66px; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .6fr); gap: clamp(40px, 8vw, 142px); align-items: end; border-bottom: 1px solid var(--ink); }
+.priorseal-swap__hero-copy { max-width: 900px; }
+.priorseal-swap__eyebrow, .priorseal-swap__section-heading > p { margin: 0; color: var(--wine); font: 600 11px/1.5 "JetBrains Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
+.priorseal-swap__status { width: max-content; margin: 14px 0 22px; padding: 6px 9px; display: inline-flex; align-items: center; gap: 8px; color: var(--amber); border: 1px solid currentColor; font: 600 10px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.priorseal-swap__status span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.priorseal-swap__status.available { color: var(--green); }
+.priorseal-swap__status.unavailable { color: var(--wine); }
+.priorseal-swap h1, .priorseal-swap h2 { margin: 0; font-family: "Iowan Old Style", Baskerville, Georgia, serif; font-weight: 400; letter-spacing: -.07em; text-wrap: balance; }
+.priorseal-swap h1 { max-width: 920px; font-size: clamp(58px, 7.7vw, 118px); line-height: .88; }
+.priorseal-swap h1 em, .priorseal-swap h2 em { color: var(--wine); font-weight: 400; }
+.priorseal-swap__lede { max-width: 745px; margin: 29px 0 0; color: var(--graphite); font-size: clamp(16px, 1.55vw, 20px); line-height: 1.6; }
+.priorseal-swap__actions { margin-top: 31px; display: flex; flex-wrap: wrap; gap: 12px; }
+.priorseal-swap__primary, .priorseal-swap__secondary { min-height: 50px; padding: 0 17px; display: inline-flex; align-items: center; justify-content: space-between; gap: 34px; border: 1px solid var(--ink); font-size: 14px; font-weight: 700; }
+.priorseal-swap__primary { color: var(--porcelain); background: var(--wine); border-color: var(--wine); }
+.priorseal-swap__primary:hover { background: var(--wine-dark); border-color: var(--wine-dark); }
+.priorseal-swap__secondary:hover { color: var(--porcelain); background: var(--ink); }
+.priorseal-swap__disclosure { max-width: 610px; margin: 28px 0 0; color: var(--muted); font: 500 11px/1.65 "JetBrains Mono", monospace; letter-spacing: .015em; }
+.priorseal-swap__route-card { position: relative; overflow: hidden; padding: 20px; color: #fcf5eb; background: #2c1c21; border: 1px solid var(--ink); box-shadow: -8px 8px 0 var(--wine); }
+.priorseal-swap__route-card::before { content: ""; position: absolute; inset: 0; opacity: .3; pointer-events: none; background-image: linear-gradient(rgba(255,245,235,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,245,235,.12) 1px, transparent 1px); background-size: 42px 42px; mask-image: linear-gradient(180deg, black, transparent); }
+.priorseal-swap__route-card > * { position: relative; }
+.priorseal-swap__route-card header, .priorseal-swap__route-card footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; font: 600 9px "JetBrains Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.priorseal-swap__route-card header { padding-bottom: 15px; border-bottom: 1px solid rgba(255,245,235,.37); }
+.priorseal-swap__route-card header b { color: #d9a9b4; font-size: inherit; }
+.priorseal-swap__route-card header b.available { color: #9bc8ae; }
+.priorseal-swap__route-path { min-height: 56px; display: grid; grid-template-columns: auto 1fr auto 1fr auto 1fr auto; align-items: center; gap: 8px; color: #dfabb8; font: 600 10px "JetBrains Mono", monospace; }
+.priorseal-swap__route-path span { width: 20px; height: 20px; display: grid; place-items: center; color: #2c1c21; background: #f6e2d9; border-radius: 50%; }
+.priorseal-swap__route-path i { height: 1px; background: rgba(255,245,235,.46); }
+.priorseal-swap__route-card dl { margin: 0; border-top: 1px solid rgba(255,245,235,.37); }
+.priorseal-swap__route-card dl div { padding: 13px 0; display: grid; grid-template-columns: 82px 1fr; gap: 12px; border-bottom: 1px solid rgba(255,245,235,.21); }
+.priorseal-swap__route-card dt { color: #dca9b5; font: 600 9px "JetBrains Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.priorseal-swap__route-card dd { margin: 0; color: #f4e9df; font-size: 13px; line-height: 1.43; }
+.priorseal-swap__route-card footer { padding-top: 15px; color: #cdbdb4; letter-spacing: .045em; }
+.priorseal-swap__route-card footer span:last-child { color: #dca9b5; white-space: nowrap; }
+.priorseal-swap__sequence { padding: clamp(76px, 10vw, 148px) 0; display: grid; grid-template-columns: minmax(0, .92fr) minmax(510px, 1.08fr); gap: clamp(42px, 8vw, 145px); border-bottom: 1px solid var(--ink); }
+.priorseal-swap__section-heading h2, .priorseal-swap__review h2, .priorseal-swap__evidence h2 { margin-top: 15px; font-size: clamp(45px, 5.4vw, 78px); line-height: .92; }
+.priorseal-swap__sequence ol { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ink); }
+.priorseal-swap__sequence li { min-height: 122px; padding: 20px 0; display: grid; grid-template-columns: 42px minmax(120px, .58fr) 1fr; align-items: start; gap: 14px; border-bottom: 1px solid var(--rule); }
+.priorseal-swap__sequence li > span { color: var(--wine); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .06em; }
+.priorseal-swap__sequence h3 { margin: 0; font: 400 clamp(22px, 2.2vw, 31px)/1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.04em; }
+.priorseal-swap__sequence li p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.58; }
+.priorseal-swap__review { padding: clamp(72px, 10vw, 148px) 0; display: grid; grid-template-columns: minmax(0, 1.13fr) minmax(300px, .7fr); gap: clamp(46px, 10vw, 170px); border-bottom: 1px solid var(--ink); }
+.priorseal-swap__review > div > p:not(.priorseal-swap__eyebrow) { max-width: 700px; margin: 27px 0 0; color: var(--muted); font-size: 16px; line-height: 1.65; }
+.priorseal-swap__inline-link { width: max-content; margin-top: 27px; padding-bottom: 5px; display: inline-flex; gap: 16px; color: var(--wine); border-bottom: 1px solid currentColor; font: 600 12px "JetBrains Mono", monospace; }
+.priorseal-swap__inline-link:hover { color: var(--wine-dark); }
+.priorseal-swap__review dl { margin: 0; border-top: 1px solid var(--ink); }
+.priorseal-swap__review dl div { padding: 20px 0 22px; border-bottom: 1px solid var(--rule); }
+.priorseal-swap__review dt { color: var(--wine); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.priorseal-swap__review dd { margin: 10px 0 0; color: var(--graphite); font: 400 22px/1.15 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.025em; }
+.priorseal-swap__evidence { padding: clamp(76px, 11vw, 165px) 0; display: grid; grid-template-columns: minmax(260px, .74fr) minmax(0, 1.26fr); gap: clamp(50px, 11vw, 190px); align-items: center; border-bottom: 1px solid var(--ink); }
+.priorseal-swap__evidence-card { min-height: 390px; padding: 27px; display: flex; flex-direction: column; color: #fff5e9; background: var(--wine-dark); box-shadow: 10px 10px 0 #d6aab0; }
+.priorseal-swap__stamp { width: 65px; height: 65px; display: grid; place-items: center; color: var(--wine-dark); background: #f5ded5; border-radius: 50%; font: 400 25px "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.08em; }
+.priorseal-swap__stamp small { margin-left: 2px; font: 600 8px "JetBrains Mono", monospace; letter-spacing: .04em; }
+.priorseal-swap__evidence-card > p { margin: auto 0 15px; color: #e7bcc5; font: 600 10px "JetBrains Mono", monospace; letter-spacing: .1em; }
+.priorseal-swap__evidence-card strong { font: 400 clamp(37px, 4vw, 57px)/.91 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.065em; }
+.priorseal-swap__evidence-card strong i { color: #e7bcc5; font-weight: 400; }
+.priorseal-swap__evidence-card > span { margin-top: auto; padding-top: 22px; color: #dbcac2; border-top: 1px solid rgba(255,245,235,.34); font: 500 10px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }
+.priorseal-swap__evidence-copy > p:not(.priorseal-swap__eyebrow) { max-width: 680px; margin: 29px 0 0; color: var(--muted); font-size: 16px; line-height: 1.65; }
+.priorseal-swap__boundaries { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--ink); }
+.priorseal-swap__boundaries article { min-height: 220px; padding: 36px clamp(20px, 4vw, 68px) 42px 0; display: grid; align-content: space-between; gap: 35px; }
+.priorseal-swap__boundaries article + article { padding-right: 0; padding-left: clamp(20px, 4vw, 68px); border-left: 1px solid var(--ink); }
+.priorseal-swap__boundaries span { color: var(--wine); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.priorseal-swap__boundaries strong { max-width: 620px; font: 400 clamp(22px, 2.4vw, 36px)/1.1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.04em; }
+.priorseal-swap__footer { min-height: 112px; display: flex; align-items: center; flex-wrap: wrap; gap: 21px 30px; color: var(--muted); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }
+.priorseal-swap__footer a:hover { color: var(--wine); }
+@media (max-width: 900px) { .priorseal-swap__hero, .priorseal-swap__sequence, .priorseal-swap__review, .priorseal-swap__evidence { min-height: 0; grid-template-columns: 1fr; } .priorseal-swap__hero { align-items: start; } .priorseal-swap__route-card { max-width: 560px; } .priorseal-swap__sequence { gap: 46px; } }
+@media (max-width: 600px) { .priorseal-swap { padding: 0 20px; } .priorseal-swap__nav { min-height: 72px; } .priorseal-swap__brand small { display: none; } .priorseal-swap__nav nav { gap: 13px; font-size: 9px; } .priorseal-swap__nav nav a:nth-child(2), .priorseal-swap__nav nav a:nth-child(3) { display: none; } .priorseal-swap__hero { padding: 53px 0 60px; } .priorseal-swap h1 { font-size: clamp(53px, 15vw, 78px); } .priorseal-swap__lede { font-size: 16px; } .priorseal-swap__actions { align-items: stretch; flex-direction: column; } .priorseal-swap__primary, .priorseal-swap__secondary { width: 100%; } .priorseal-swap__route-card { padding: 17px; box-shadow: 6px 6px 0 var(--wine); } .priorseal-swap__route-card dl div { grid-template-columns: 65px 1fr; gap: 9px; } .priorseal-swap__sequence, .priorseal-swap__review, .priorseal-swap__evidence { padding: 72px 0; } .priorseal-swap__sequence li { min-height: 0; grid-template-columns: 32px 1fr; gap: 10px; } .priorseal-swap__sequence li p { grid-column: 2; } .priorseal-swap__review dd { font-size: 20px; } .priorseal-swap__evidence-card { min-height: 340px; } .priorseal-swap__boundaries { grid-template-columns: 1fr; } .priorseal-swap__boundaries article { min-height: 190px; padding: 32px 0; } .priorseal-swap__boundaries article + article { padding-left: 0; border-top: 1px solid var(--ink); border-left: 0; } .priorseal-swap__footer { min-height: 0; padding: 32px 0 42px; align-items: flex-start; flex-direction: column; gap: 17px; } }
+@media (prefers-reduced-motion: reduce) { .priorseal-swap *, .priorseal-swap *::before, .priorseal-swap *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
