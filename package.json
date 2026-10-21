@@ -94,6 +94,7 @@
     "agent8004:register": "npm run core:build:tools && node --env-file=.env.local scripts/register-erc8004-agent.mjs",
     "production:smoke": "npm run core:build:operations && node scripts/production-smoke.mjs",
     "production:smoke:pending": "npm run core:build:operations && node scripts/production-smoke.mjs --pending",
+    "agent-retail:check": "npm run core:build:operations && node scripts/agent-retail-readiness.mjs",
     "mcp:compatibility:check": "npm run core:build:operations && node scripts/mcp-compatibility-proof.mjs",
     "x402:refund:record": "npm run core:build:operations && node scripts/record-x402-refund.mjs",
     "x402:production:check": "npm run core:build:operations && node scripts/x402-production-readiness.mjs",
