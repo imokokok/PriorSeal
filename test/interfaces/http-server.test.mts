@@ -312,7 +312,7 @@ test('capability discovery advertises only rails supported by the current facili
   const x402Capabilities = (capabilities.json() as unknown as { payments: { x402: { networks: Array<{ network: string }> } } }).payments.x402;
   assert.deepEqual(x402Capabilities.networks.map(network => network.network), ['eip155:8453']);
 });
-test('x402 Solana mainnet advertises the facilitator fee payer and settles a base58 signature', async (t) => {
+test('x402 Solana mainnet uses the exact-network fee payer when wildcard signers span clusters', async (t) => {
   const originalFetch = globalThis.fetch;
   const feePayer = 'EwWqGE4ZFKLofuestmU4LDdK7XM1N4ALgdZccwYugwGd';
   const merchant = '2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4';
@@ -320,8 +320,8 @@ test('x402 Solana mainnet advertises the facilitator fee payer and settles a bas
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
     if (url.pathname === '/supported') return new Response(JSON.stringify({
-      kinds: [{ x402Version: 2, scheme: 'exact', network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' }],
-      signers: { 'solana:*': [feePayer] },
+      kinds: [{ x402Version: 2, scheme: 'exact', network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', extra: { feePayer } }],
+      signers: { 'solana:*': [feePayer, merchant] },
     }), { status: 200, headers: { 'content-type': 'application/json' } });
     const body = JSON.parse(String(init?.body)) as { paymentRequirements: { network: string; payTo: string; extra: Record<string, string> } };
     assert.equal(body.paymentRequirements.network, 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');

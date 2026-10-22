@@ -363,7 +363,8 @@ async function getSupportedNetworks(config, parentSignal) {
     const networks = /* @__PURE__ */ new Set();
     for (const response of responses) for (const network of response.networks) networks.add(network);
     const solanaUrl = facilitatorFor(config, SOLANA_MAINNET_CAIP2);
-    const solanaFeePayer = urls.includes(solanaUrl) ? responses[urls.indexOf(solanaUrl)].solanaFeePayer : null;
+    const solanaResponse = urls.includes(solanaUrl) ? responses[urls.indexOf(solanaUrl)] : void 0;
+    const solanaFeePayer = solanaResponse?.solanaFeePayers.get(SOLANA_MAINNET_CAIP2) ?? null;
     return { networks, solanaFeePayer };
   });
   capabilityCache.set(cacheKey, { expiresAt: Date.now() + 6e4, promise });
@@ -378,10 +379,25 @@ function parseSupported(value) {
   if (!isRecord(value) || !Array.isArray(value.kinds)) throw new Error("Configured facilitator returned an invalid supported response");
   const kinds = value.kinds;
   for (const kind of kinds) if (!isRecord(kind) || typeof kind.x402Version !== "number" || typeof kind.scheme !== "string" || typeof kind.network !== "string") throw new Error("Configured facilitator returned an invalid supported response");
+  const signerFallback = solanaFeePayerFromSupported(value);
+  const solanaFeePayers = /* @__PURE__ */ new Map();
+  for (const kind of kinds) {
+    if (kind.x402Version !== 2 || kind.scheme !== "exact" || kind.network !== SOLANA_MAINNET_CAIP2) continue;
+    const fromKind = solanaFeePayerFromKind(kind);
+    if (fromKind) solanaFeePayers.set(kind.network, fromKind);
+    else if (signerFallback) solanaFeePayers.set(kind.network, signerFallback);
+  }
   return {
     networks: new Set(kinds.filter((kind) => kind.x402Version === 2 && kind.scheme === "exact").map((kind) => kind.network)),
-    solanaFeePayer: solanaFeePayerFromSupported(value)
+    solanaFeePayers
   };
+}
+function solanaFeePayerFromKind(kind) {
+  if (kind.extra === void 0) return null;
+  if (!isRecord(kind.extra)) throw new Error("Configured facilitator returned invalid Solana fee payer metadata");
+  if (kind.extra.feePayer === void 0) return null;
+  if (typeof kind.extra.feePayer !== "string") throw new Error("Configured facilitator returned invalid Solana fee payer metadata");
+  return parseSolanaPublicKey(kind.extra.feePayer, "configured facilitator Solana fee payer");
 }
 function solanaFeePayerFromSupported(value) {
   if (value.signers === void 0) return null;

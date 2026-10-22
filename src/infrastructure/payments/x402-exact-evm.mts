@@ -112,7 +112,9 @@ export type X402PaymentContext = { payload: X402PaymentPayload; requirement: X40
 export type X402Settlement = { success: boolean; transaction: string; network: string; errorReason?: string; payer?: string; amount?: string };
 export type X402NetworkDescriptor = { family: 'evm' | 'svm'; network: string; chainId: number; name: string; asset: string; assetName: string };
 
-type FacilitatorCapability = { kinds: { x402Version: number; scheme: string; network: string }[]; signers?: Record<string, string[]> };
+type FacilitatorKind = { x402Version: number; scheme: string; network: string; extra?: unknown };
+type FacilitatorCapability = { kinds: FacilitatorKind[]; signers?: Record<string, string[]> };
+type ParsedFacilitatorSupport = { networks: Set<string>; solanaFeePayers: ReadonlyMap<string, string> };
 type FacilitatorSupport = { networks: Set<string>; solanaFeePayer: string | null };
 
 const capabilityCache = new Map<string, { expiresAt: number; promise: Promise<FacilitatorSupport> }>();
@@ -460,29 +462,48 @@ async function getSupportedNetworks(config: X402Config, parentSignal?: AbortSign
     const networks = new Set<string>();
     for (const response of responses) for (const network of response.networks) networks.add(network);
     const solanaUrl = facilitatorFor(config, SOLANA_MAINNET_CAIP2);
-    const solanaFeePayer = urls.includes(solanaUrl) ? responses[urls.indexOf(solanaUrl)].solanaFeePayer : null;
+    const solanaResponse = urls.includes(solanaUrl) ? responses[urls.indexOf(solanaUrl)] : undefined;
+    const solanaFeePayer = solanaResponse?.solanaFeePayers.get(SOLANA_MAINNET_CAIP2) ?? null;
     return { networks, solanaFeePayer };
   });
   capabilityCache.set(cacheKey, { expiresAt: Date.now() + 60_000, promise });
   try { return await promise; } catch (error) { capabilityCache.delete(cacheKey); throw error; }
 }
 
-function parseSupported(value: unknown): FacilitatorSupport {
+function parseSupported(value: unknown): ParsedFacilitatorSupport {
   if (!isRecord(value) || !Array.isArray(value.kinds)) throw new Error('Configured facilitator returned an invalid supported response');
   const kinds = value.kinds as FacilitatorCapability['kinds'];
   for (const kind of kinds) if (!isRecord(kind) || typeof kind.x402Version !== 'number' || typeof kind.scheme !== 'string' || typeof kind.network !== 'string') throw new Error('Configured facilitator returned an invalid supported response');
+  const signerFallback = solanaFeePayerFromSupported(value);
+  const solanaFeePayers = new Map<string, string>();
+  for (const kind of kinds) {
+    if (kind.x402Version !== 2 || kind.scheme !== 'exact' || kind.network !== SOLANA_MAINNET_CAIP2) continue;
+    const fromKind = solanaFeePayerFromKind(kind);
+    if (fromKind) solanaFeePayers.set(kind.network, fromKind);
+    else if (signerFallback) solanaFeePayers.set(kind.network, signerFallback);
+  }
   return {
-    networks: new Set(kinds.filter((kind) => kind.x402Version === 2 && kind.scheme === 'exact').map(kind => (kind as { network: string }).network)),
-    solanaFeePayer: solanaFeePayerFromSupported(value),
+    networks: new Set(kinds.filter((kind) => kind.x402Version === 2 && kind.scheme === 'exact').map(kind => kind.network)),
+    solanaFeePayers,
   };
 }
 
 /**
  * SVM exact payment requirements must name the sponsor's fee payer. The v2
- * facilitator discovery response exposes this through `signers`; fail closed
- * when the response has no unambiguous Solana signer rather than inventing an
- * address or advertising an unusable SVM quote.
+ * capability response may put it on the exact network kind. That per-network
+ * metadata takes precedence because a wildcard signer list can include fee
+ * payers for multiple Solana clusters. Older facilitators may provide only an
+ * unambiguous `signers` entry; fail closed when neither representation is
+ * usable rather than inventing an address or advertising an unusable quote.
  */
+function solanaFeePayerFromKind(kind: FacilitatorKind): string | null {
+  if (kind.extra === undefined) return null;
+  if (!isRecord(kind.extra)) throw new Error('Configured facilitator returned invalid Solana fee payer metadata');
+  if (kind.extra.feePayer === undefined) return null;
+  if (typeof kind.extra.feePayer !== 'string') throw new Error('Configured facilitator returned invalid Solana fee payer metadata');
+  return parseSolanaPublicKey(kind.extra.feePayer, 'configured facilitator Solana fee payer');
+}
+
 function solanaFeePayerFromSupported(value: Record<string, unknown>): string | null {
   if (value.signers === undefined) return null;
   if (!isRecord(value.signers)) throw new Error('Configured facilitator returned invalid signer metadata');
