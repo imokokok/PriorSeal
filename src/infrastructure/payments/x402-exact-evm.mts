@@ -110,6 +110,7 @@ type X402Environment = Partial<Record<
 
 export type X402PaymentContext = { payload: X402PaymentPayload; requirement: X402Requirement };
 export type X402Settlement = { success: boolean; transaction: string; network: string; errorReason?: string; payer?: string; amount?: string };
+export type X402NetworkDescriptor = { family: 'evm' | 'svm'; network: string; chainId: number; name: string; asset: string; assetName: string };
 
 type FacilitatorCapability = { kinds: { x402Version: number; scheme: string; network: string }[]; signers?: Record<string, string[]> };
 type FacilitatorSupport = { networks: Set<string>; solanaFeePayer: string | null };
@@ -158,6 +159,19 @@ export function parseX402Config(environment: X402Environment): X402Config | unde
 export function matchX402Route(config: X402Config | undefined, method: string | undefined, path: string) {
   if (!config || method?.toUpperCase() !== 'GET') return undefined;
   return config.routes.find(route => route.regex.test(path));
+}
+
+/**
+ * Return only the locally selected rails that the current facilitator can
+ * settle right now. Discovery uses this so agents never see a configured
+ * chain as purchasable merely because it appears in an environment allowlist.
+ */
+export async function discoverX402AvailableNetworks(config: X402Config, signal?: AbortSignal): Promise<X402NetworkDescriptor[]> {
+  const supported = await getSupportedNetworks(config, signal);
+  return X402_STAGING_NETWORKS
+    .filter(network => config.networks.includes(network.network) && supported.networks.has(network.network))
+    .filter(network => network.family === 'evm' ? Boolean(config.payTo) : Boolean(config.solanaPayTo && supported.solanaFeePayer))
+    .map(({ family, network, chainId, name, asset, assetName }) => ({ family, network, chainId, name, asset, assetName }));
 }
 
 /** Implements the x402 v2 HTTP lifecycle through the configured facilitator. */
