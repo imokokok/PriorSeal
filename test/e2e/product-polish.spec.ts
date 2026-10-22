@@ -4,8 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { buildReviewManifest } from '../../sdk/dist/verifier.js'
 import type { ReviewResult } from '../../sdk/dist/verifier.js'
 import { privateKeyToAccount } from 'viem/accounts'
-import { V3_SINGLE_SWAP_ABI, buildExactCallIntent, buildV3SwapIntent, createV3SwapApproval, swapApprovalCommitment } from '../../sdk/dist/index.js'
-import { encodeFunctionData, keccak256 } from 'viem'
+import { buildExactCallIntent } from '../../sdk/dist/index.js'
 import { authorizeIntent, authorizationTypedData, buildAuthorization, buildAuthorizedReceipt, buildVerificationBundle, createMemoryStore } from '../../src/index.mjs'
 import { signReceipt } from '../../src/domain/receipt.mjs'
 import { createJointReviewFixture } from '../helpers/joint-review-fixture.mjs'
@@ -144,106 +143,6 @@ test('unsupported exact-call workflow is rejected before any wallet request', as
   await page.getByLabel('Transaction JSON', { exact: true }).fill(JSON.stringify({ chainId: 8453, from: `0x${'a'.repeat(40)}`, to: `0x${'b'.repeat(40)}`, nonce: '7', value: '0', data: '0x' }))
   await expect(page.getByText('This chain is not supported by the selected deployment.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Prepare canonical intent' })).toBeDisabled()
-})
-
-test('swap review decodes the call, checks router code, and signs the same approved fields', async ({ page }) => {
-  const now = Math.floor(Date.now() / 1000)
-  const signer = privateKeyToAccount(`0x${'3'.repeat(64)}`)
-  const sender = signer.address.toLowerCase() as `0x${string}`
-  const router = `0x${'2'.repeat(40)}` as const
-  const inputToken = '0x4200000000000000000000000000000000000006' as const
-  const outputToken = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913' as const
-  const recipient = `0x${'6'.repeat(40)}` as const
-  const routerCode = '0x60006000'
-  const transaction = { chainId: 8453, from: sender, to: router, nonce: '7', value: '0', data: encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: 'exactInputSingle', args: [{ tokenIn: inputToken, tokenOut: outputToken, fee: 3000, recipient, deadline: BigInt(now + 7200), amountIn: 1_000_000n, amountOutMinimum: 900_000n, sqrtPriceLimitX96: 0n }] }) }
-  const approval = createV3SwapApproval(transaction, keccak256(routerCode))
-  const walletCalls: string[] = []
-  await page.exposeFunction('__signFixture', (data: unknown) => signer.signTypedData(data as Parameters<typeof signer.signTypedData>[0]))
-  await page.addInitScript(({ address, code, inputToken }) => { window.ethereum = { request: async ({ method, params }) => {
-    window.__walletCalls ??= []; window.__walletCalls.push(method)
-    if (method === 'eth_chainId') return '0x2105'
-    if (method === 'eth_getCode') return code
-    if (method === 'eth_call') return (params?.[0] as { to?: string })?.to?.toLowerCase() === inputToken ? '0x12' : '0x6'
-    if (method === 'eth_requestAccounts') return [address]
-    if (method === 'eth_signTypedData_v4') return window.__signFixture(JSON.parse(String(params?.[1])))
-    throw new Error(`Unexpected wallet method ${method}`)
-  } } }, { address: signer.address, code: routerCode, inputToken })
-  await page.route('**/v1/authorizations/prepare', async (route) => {
-    const input = route.request().postDataJSON()
-    const expected = buildV3SwapIntent({ approval, transaction, intentId: input.intent.intentId, validUntil: input.intent.validUntil, constraints: { minConfirmations: 12 }, now })
-    expect(input.intent).toEqual(expected)
-    const prepared = buildAuthorization({ ...input, policyHash: caps.policyHash })
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authorization: prepared, typedData: authorizationTypedData(prepared) }, (_key, value) => typeof value === 'bigint' ? value.toString() : value) })
-  })
-  let acceptanceCalls = 0
-  await page.route('**/v1/authorizations', async (route) => {
-    acceptanceCalls += 1
-    if (acceptanceCalls === 1) { await route.fulfill({ status: 503, json: { error: { message: 'Acceptance response temporarily unavailable' } } }); return }
-    const signed = route.request().postDataJSON()
-    await route.fulfill({ json: { authorization: signed, acceptance: { acceptedAt: now, status: 'ACCEPTED', authorizationId: signed.authorizationId } } })
-  })
-  await page.goto('/app/intents/exact-call')
-  await page.getByLabel('Review as a single-pool ERC-20 swap').check()
-  await page.getByLabel('Trusted router runtime code hash').fill(approval.routerCodeHash)
-  await page.getByLabel('Transaction JSON', { exact: true }).fill(JSON.stringify(transaction))
-  await expect(page.getByRole('heading', { name: 'Swap you are approving' })).toBeVisible()
-  await expect(page.locator('.preview')).toContainText('1000000 atomic units')
-  await expect(page.locator('.preview')).toContainText('900000 atomic units')
-  await expect(page.locator('.preview')).toContainText('contract decimals: 6')
-  await expect(page.locator('.preview')).toContainText('WETH')
-  await expect(page.locator('.preview')).toContainText('USDC')
-  await page.getByRole('button', { name: 'Prepare canonical intent' }).click()
-  await expect(page.getByRole('heading', { name: 'Review canonical authorization' })).toBeVisible()
-  const checkpointDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export recovery checkpoint' }).click()
-  const checkpointFile = await (await checkpointDownload).path()
-  await page.reload()
-  await page.getByLabel('Authorization checkpoint file').setInputFiles(checkpointFile!)
-  await expect(page.getByRole('heading', { name: 'Review canonical authorization' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Swap you are approving' })).toBeVisible()
-  await page.getByRole('button', { name: 'Confirm and sign authorization' }).click()
-  await expect(page.getByText('Acceptance response temporarily unavailable', { exact: true })).toBeVisible()
-  walletCalls.push(...await page.evaluate(() => window.__walletCalls))
-  const signedDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export recovery checkpoint' }).click()
-  const signedCheckpointFile = await (await signedDownload).path()
-  await page.reload()
-  await page.clock.install({ time: new Date(Date.now() + 3 * 60 * 60_000) })
-  await page.getByLabel('Authorization checkpoint file').setInputFiles(signedCheckpointFile!)
-  await page.getByRole('button', { name: 'Retry acceptance of the same signed bytes' }).click()
-  await expect(page.getByRole('heading', { name: 'Authorization accepted' })).toBeVisible()
-  const replanned = { ...transaction, data: encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: 'exactInputSingle', args: [{ tokenIn: inputToken, tokenOut: outputToken, fee: 3000, recipient: sender, deadline: BigInt(now + 7200), amountIn: 1_000_000n, amountOutMinimum: 900_000n, sqrtPriceLimitX96: 0n }] }) }
-  await page.getByLabel('Proposed transaction JSON').fill(JSON.stringify(replanned))
-  await expect(page.getByText('New authorization required')).toBeVisible()
-  await expect(page.getByText('recipient', { exact: true })).toBeVisible()
-  await expect(page.getByText('Authorization window is not active', { exact: true })).toBeVisible()
-  expect(acceptanceCalls).toBe(2)
-  expect(walletCalls).toContain('eth_getCode')
-  expect(walletCalls).toContain('eth_signTypedData_v4')
-  const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Download swap approval package' }).click()
-  const exported = await download
-  expect(exported.suggestedFilename()).toContain('-swap-approval.json')
-  const packagePath = await exported.path()
-  expect(packagePath).toBeTruthy()
-  const saved = JSON.parse(await readFile(packagePath!, 'utf8'))
-  expect(saved.approval).toEqual(approval)
-  expect(saved.transaction).toEqual(transaction)
-  expect(saved.authorization.authorization.intent.contextCommitments).toContainEqual(swapApprovalCommitment(approval))
-})
-
-test('swap signing stops when wallet RPC router code differs from the reviewed hash', async ({ page }) => {
-  const now = Math.floor(Date.now() / 1000)
-  const transaction = { chainId: 8453, from: `0x${'1'.repeat(40)}`, to: `0x${'2'.repeat(40)}`, nonce: '7', value: '0', data: encodeFunctionData({ abi: V3_SINGLE_SWAP_ABI, functionName: 'exactInputSingle', args: [{ tokenIn: `0x${'3'.repeat(40)}`, tokenOut: `0x${'4'.repeat(40)}`, fee: 3000, recipient: `0x${'5'.repeat(40)}`, deadline: BigInt(now + 7200), amountIn: 1_000_000n, amountOutMinimum: 900_000n, sqrtPriceLimitX96: 0n }] }) }
-  await page.addInitScript(() => { window.__walletCalls = []; window.ethereum = { request: async ({ method }) => { window.__walletCalls.push(method); return method === 'eth_chainId' ? '0x2105' : method === 'eth_getCode' ? '0x6001' : [] } } })
-  await page.goto('/app/intents/exact-call')
-  await page.getByLabel('Review as a single-pool ERC-20 swap').check()
-  await page.getByLabel('Trusted router runtime code hash').fill(keccak256('0x60006000'))
-  await page.getByLabel('Transaction JSON', { exact: true }).fill(JSON.stringify(transaction))
-  await page.getByRole('button', { name: 'Prepare canonical intent' }).click()
-  await expect(page.getByText('SWAP_ROUTER_CODE_MISMATCH')).toBeVisible()
-  expect(await page.evaluate(() => window.__walletCalls)).toContain('eth_getCode')
-  expect(await page.evaluate(() => window.__walletCalls)).not.toContain('eth_signTypedData_v4')
 })
 
 async function nativeFixture() {

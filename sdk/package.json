@@ -24,11 +24,6 @@
       "types": "./dist/verifier.d.ts",
       "import": "./dist/verifier.js",
       "default": "./dist/verifier.js"
-    },
-    "./defi": {
-      "types": "./dist/defi.d.ts",
-      "import": "./dist/defi.js",
-      "default": "./dist/defi.js"
     }
   },
   "scripts": {

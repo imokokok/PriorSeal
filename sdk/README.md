@@ -6,17 +6,9 @@ Typed browser and Node.js client connecting explicit authorization to observed E
 npm install priorseal-sdk
 ```
 
-The package includes exact-call authorization, receipt verification, optional RWA APIs, and independently verified Insight coverage binding.
+The package includes exact-call authorization, receipt verification, optional RWA evidence APIs, and independently verified Insight coverage binding.
 
 To require an RPC-finalized observation, set `intent.constraints.finalityRequirement` to `RPC_FINALIZED`. An optional `maxToleratedReorgDepth: N` requires at least `N + 1` confirmations. The offline verifier checks signed evidence consistency; an RPC finalized assertion remains an observation by the configured endpoint and issuer, not an embedded consensus proof. See [temporal evidence and finality](https://github.com/imokokok/PriorSeal/blob/main/docs/architecture/temporal-finality.md).
-
-## Node DeFi execution gateway
-
-Import `createDefiExecutionGateway`, `createDefiViemSubmitter`, and the durable attempt-store adapter from `priorseal-sdk/defi`. The gateway offers `prepare`, `authorize`, `execute`, `status`, and `recover`. Its reviewed single-pool ERC-20 route accepts the original Uniswap V3 SwapRouter `exactInputSingle` or one deadline-protected SwapRouter02 `multicall(deadline, [exactInputSingle])`; other routers and selectors fail closed. Keep the wallet and signer in your Node process, provide an independently reviewed router code hash, and use one shared primary PostgreSQL attempt table for every route using the same signer nonce. Apply the repository's migration 011 before using `createPostgresDefiAttemptStore`.
-
-The hosted PriorSeal Worker accepts authorizations and issues evidence. It does not hold funds or broadcast transactions. See [the complete gateway contract](https://github.com/imokokok/PriorSeal/blob/main/docs/product/defi-execution-gateway.md) and [swap authorization semantics](https://github.com/imokokok/PriorSeal/blob/main/docs/product/swap-authorization.md) before integrating a signer.
-
-The SDK exports `compareV3SwapReplan()` for field-level explanations. A matching comparison does not replace the signing-time authorization guard or confirm that an authorization is still active and unused.
 
 ## Start with a local receipt
 
@@ -421,7 +413,7 @@ const assessmentReference = matchUniqueContextCommitment(intent, {
 })
 ```
 
-The profile binds chain, executor, nonce, target, calldata, native value, time, finality and any namespaced external context digests. It intentionally ignores transfer-log recipient/asset/amount matching and transfer-count ambiguity, so a swap-specific verifier can grade fills without PriorSeal pretending to understand router semantics. For one supported Uniswap V3 `exactInputSingle` ERC-20 call, the opt-in [reviewed swap adapter](../docs/product/swap-authorization.md) decodes the concrete calldata, commits the user's asset/amount/recipient/router approval, and checks independently pinned router bytecode before signing. It does not change the generic exact-call profile or authorize an ERC-20 allowance transaction.
+The profile binds chain, executor, nonce, target, calldata, native value, time, finality and any namespaced external context digests. It intentionally ignores transfer-log recipient/asset/amount matching and transfer-count ambiguity; an external system remains responsible for interpreting its own transaction semantics and any associated commitments.
 
 `matchUniqueContextCommitment` confirms that exactly one commitment in the
 namespace matches the expected external digest. Verify the containing
