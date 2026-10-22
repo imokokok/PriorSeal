@@ -9,7 +9,7 @@
 .exact-flow > div:last-child span { color: #e6aeb8; }
 .exact-flow strong { font: 400 clamp(24px,2.4vw,32px)/1.08 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
 .exact-checkpoint { margin: 0 0 22px; padding: 23px 28px; border-top: 3px solid var(--ink); background: #eeeae2; }
-.exact-checkpoint::before, .exact-form::before, .exact-preview::before, .exact-result::before, .exact-replan::before { display: none; }
+.exact-checkpoint::before, .exact-form::before, .exact-preview::before, .exact-result::before { display: none; }
 .exact-checkpoint h2 { margin: 7px 0 13px; font-size: 28px; letter-spacing: -.035em; }
 .exact-checkpoint .field { max-width: 850px; }
 .exact-checkpoint .field-hint { max-width: 780px; }
@@ -36,13 +36,11 @@
 .exact-preview .data-grid { margin-top: 16px; grid-template-columns: minmax(0,1fr); }
 .exact-preview .data-grid > div { min-height: 65px; padding: 12px; }
 .exact-preview .data-grid dd { overflow-wrap: anywhere; }
-.exact-result, .exact-replan { max-width: 960px; padding: 30px; border-top: 4px solid var(--wine); }
+.exact-result { max-width: 960px; padding: 30px; border-top: 4px solid var(--wine); }
 .exact-result .status { margin: 11px 0 23px; }
 .exact-result .data-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .exact-result .data-grid dd { overflow-wrap: anywhere; }
 .exact-result .header-actions { margin-top: 23px; }
-.exact-replan { margin-top: 22px; }
-.exact-replan h2 { margin-top: 8px; font-size: 37px; }
 
 @media (max-width: 1100px) {
   .page-intent .form-layout:has(.exact-form) { grid-template-columns: minmax(0,1fr); }
@@ -54,7 +52,7 @@
   .exact-flow { margin-top: 22px; grid-template-columns: 1fr; }
   .exact-flow > div { min-height: 76px; padding: 15px 18px; gap: 8px; border-right: 0; border-bottom: 1px solid var(--rule); }
   .exact-flow strong { font-size: 26px; }
-  .exact-checkpoint, .page-intent .exact-form, .exact-preview, .exact-result, .exact-replan { padding: 22px; }
+  .exact-checkpoint, .page-intent .exact-form, .exact-preview, .exact-result { padding: 22px; }
   .exact-form .form-grid, .exact-result .data-grid { grid-template-columns: minmax(0,1fr); }
   .exact-section-heading { align-items: start; flex-direction: column; gap: 4px; }
   .exact-form .button.primary { width: 100%; }
