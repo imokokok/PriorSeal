@@ -13,10 +13,12 @@ Payment is disabled unless all required `PRIORSEAL_X402_*` settings are
 provided. An EVM payee is shared across every EVM option; a Solana merchant
 public key is separate. The deployment operator still configures the
 facilitator, resource origin, paid routes, and their prices. Once configured,
-`/v1/capabilities` lists the locally enabled payment families and route price
-schedule. A paid request checks the facilitator's current `/supported` response
-and offers only the compatible networks. The request returns HTTP 503 if it
-cannot produce at least one safe payment option.
+`/v1/capabilities` lists only the locally enabled payment families that the
+current facilitator reports as supported, plus the route price schedule. A paid
+request applies the same current `/supported` check and offers only compatible
+networks. If facilitator discovery is unavailable, discovery publishes no
+payment rail and a paid request fails closed rather than advertising an
+unsettleable option.
 
 One `PRIORSEAL_X402_PAY_TO` address and one route/price schedule are shared
 across advertised EVM networks. `PRIORSEAL_X402_SOLANA_PAY_TO` is the Solana

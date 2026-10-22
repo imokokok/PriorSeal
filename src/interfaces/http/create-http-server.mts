@@ -33,7 +33,7 @@ import type { createHttpWitnessProvider } from '../../infrastructure/witness/htt
 import type { createObservationWorker } from '../../application/observations/observation-worker.mjs';
 import type { AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { parsePolicyDocument } from '../../infrastructure/policy/file-policy-provider.mjs';
-import { createX402PaymentService, matchX402Route, type X402Config, type X402PaymentContext } from '../../infrastructure/payments/x402-exact-evm.mjs';
+import { createX402PaymentService, discoverX402AvailableNetworks, matchX402Route, type X402Config, type X402PaymentContext } from '../../infrastructure/payments/x402-exact-evm.mjs';
 import type { AgentMeter, AgentUsageReservation } from '../../application/commerce/agent-meter.mjs';
 import type { SelfserveClaim } from '../../application/commerce/selfserve-claim.mjs';
 import { handlePriorSealMcpRequest } from '../mcp/priorseal-mcp.mjs';
@@ -55,7 +55,13 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
   const archiveAccess = createArchiveAccess(archiveCredentials);
   const serveStaticAsset = staticDir ? createStaticAssetHandler(staticDir) : null;
   const x402Payments = x402 ? createX402PaymentService(x402) : null;
-  const readDeploymentCapabilities = () => deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? 'rfc3161' : requireWitnessQuorum ? 'witness-quorum' : 'issuer'), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === 'function', publicPaidCommerceEnabled, x402, agentMeter, selfserveClaim, now: now() });
+  const readDeploymentCapabilities = async () => {
+    // A facilitator outage must not turn a discovery request into a false
+    // payment claim. The payment route remains fail-closed and discovery
+    // reports no currently available rail until facilitator discovery recovers.
+    const x402AvailableNetworks = x402 ? await discoverX402AvailableNetworks(x402).catch(() => []) : undefined;
+    return deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? 'rfc3161' : requireWitnessQuorum ? 'witness-quorum' : 'issuer'), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === 'function', publicPaidCommerceEnabled, x402, x402AvailableNetworks, agentMeter, selfserveClaim, now: now() });
+  };
   return createServer({ requestTimeout: requestTimeoutMs }, async (req, res) => {
     const requestId = typeof req.headers['x-request-id'] === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(req.headers['x-request-id']) ? req.headers['x-request-id'] : randomUUID();
     const path = requestPath(req);
