@@ -78,6 +78,10 @@ function matchX402Route(config, method, path) {
   if (!config || method?.toUpperCase() !== "GET") return void 0;
   return config.routes.find((route) => route.regex.test(path));
 }
+async function discoverX402AvailableNetworks(config, signal) {
+  const supported = await getSupportedNetworks(config, signal);
+  return X402_STAGING_NETWORKS.filter((network) => config.networks.includes(network.network) && supported.networks.has(network.network)).filter((network) => network.family === "evm" ? Boolean(config.payTo) : Boolean(config.solanaPayTo && supported.solanaFeePayer)).map(({ family, network, chainId, name, asset, assetName }) => ({ family, network, chainId, name, asset, assetName }));
+}
 function createX402PaymentService(config) {
   return {
     async prepare(route, resourceUrl, paymentHeader, signal) {
@@ -510,6 +514,7 @@ export {
   X402_STAGING_EVM_NETWORKS,
   X402_STAGING_NETWORKS,
   createX402PaymentService,
+  discoverX402AvailableNetworks,
   matchX402Route,
   parseX402Config
 };

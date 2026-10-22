@@ -288,6 +288,30 @@ test('x402 Monad mainnet is advertised, verified, and settled through the HTTP l
   assert.equal(capabilities.payments.x402.configured, true);
   assert.ok(capabilities.payments.x402.networks.some(network => network.network === 'eip155:143'));
 });
+test('capability discovery advertises only rails supported by the current facilitator', async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    assert.equal(url.pathname, '/supported');
+    return Response.json({ kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:8453' }] });
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://capabilities-facilitator.test',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test',
+    PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'eip155:8453,eip155:143',
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path: '/v1/receipts/:receiptId/bundle', description: 'Export a receipt bundle', price: '$0.01' }]),
+  });
+  assert.ok(x402);
+  const server = createHttpServer({ x402 });
+  t.after(() => server.close());
+
+  const capabilities = await request(server, '/v1/capabilities');
+  assert.equal(capabilities.status, 200);
+  const x402Capabilities = (capabilities.json() as unknown as { payments: { x402: { networks: Array<{ network: string }> } } }).payments.x402;
+  assert.deepEqual(x402Capabilities.networks.map(network => network.network), ['eip155:8453']);
+});
 test('x402 Solana mainnet advertises the facilitator fee payer and settles a base58 signature', async (t) => {
   const originalFetch = globalThis.fetch;
   const feePayer = 'EwWqGE4ZFKLofuestmU4LDdK7XM1N4ALgdZccwYugwGd';
