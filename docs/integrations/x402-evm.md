@@ -33,7 +33,7 @@ secrets/vars:
 | Variable | Required | Purpose |
 |---|---:|---|
 | `PRIORSEAL_X402_FACILITATOR_URL` | Yes | Facilitator base URL; the service calls `/supported`, `/verify`, and `/settle`. |
-| `PRIORSEAL_X402_FACILITATOR_URLS` | No | Per-network facilitator overrides as comma-separated `network=url` pairs (for example `eip155:56=https://facilitator.aeon.xyz`); each entry must reference a known rail and an HTTPS URL. May be combined with CDP authentication — CDP bearer JWTs are only ever attached to the CDP base URL, never to an override. |
+| `PRIORSEAL_X402_FACILITATOR_URLS` | No | Per-network facilitator overrides as comma-separated `network=url` pairs (for example `eip155:56=https://facilitator.aeon.xyz` or `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp=https://facilitator.payai.network`); each entry must reference a known rail and an HTTPS URL. May be combined with CDP authentication — CDP bearer JWTs are only ever attached to the CDP base URL, never to an override. |
 | `PRIORSEAL_X402_FACILITATOR_HEADERS_JSON` | No | Per-operation authentication headers, stored as a secret. |
 | `PRIORSEAL_X402_FACILITATOR_AUTH_MODE` | No | Set only to `cdp` for CDP's hosted facilitator; it creates a short-lived JWT for each operation. |
 | `PRIORSEAL_X402_CDP_API_KEY_ID` | With `AUTH_MODE=cdp` | CDP API-key identifier, stored as a Worker secret. |
@@ -104,12 +104,14 @@ change record before enabling the rail, exactly as the
 new mainnet rail.
 
 For Solana, the resource server obtains the sponsor's public `feePayer` from
-the facilitator's x402 v2 signer discovery metadata. PriorSeal offers a Solana
-option only when the facilitator reports exactly one valid Solana signer for
-the mainnet network (or `solana:*`). The client signs a partially signed SPL
-USDC payment transaction; the sponsor performs the final fee-payer signature
-and submission. A missing or ambiguous signer therefore fails closed instead
-of producing an unusable quote.
+the facilitator's exact-v2 network metadata (`kinds[].extra.feePayer`). This
+per-network value takes precedence over a wildcard signer list because a
+facilitator may advertise fee payers for both mainnet and devnet. For older
+responses that omit the exact-network value, PriorSeal accepts only one valid
+mainnet (or `solana:*`) signer. The client signs a partially signed SPL USDC
+payment transaction; the sponsor performs the final fee-payer signature and
+submission. Missing, malformed, or ambiguous metadata fails closed instead of
+producing an unusable quote.
 
 For a generic x402 v2 facilitator, authentication is independently configured
 for each operation:
