@@ -72,9 +72,9 @@ transaction key must not itself grant principal authority.
 | Stage | Customer experience | Commercial mechanism | Status |
 | --- | --- | --- | --- |
 | Design-partner pilot | One bounded execution path, configured jointly, with portable evidence delivered for review | Fixed-scope pilot, implementation fee, or enterprise service contract | Available now |
-| Paid evidence export | A caller purchases an eligible read-only receipt bundle and receives payment-to-resource evidence | x402 `exact` USDC payment | Implemented and rehearsed in staging; production disabled pending a facilitator that actually supports the reviewed Base-mainnet rail |
+| Paid evidence export | A caller purchases an eligible read-only receipt bundle and receives payment-to-resource evidence | x402 `exact` USDC payment on Base | Public production service: one Base-mainnet, read-only receipt-bundle route at $0.02 |
 | Agent runtime orchestration | Agent calls a principal-controlled signing boundary, submits exactly one authorized action through its integrator, then observes and verifies evidence | `priorseal-sdk` `authorizeWithEip712Signer()` / `runAgentAction()` | Implemented; authority and executor infrastructure remain integrator-owned |
-| Agent service credits | Operator reviews a pilot request, issues a scoped Agent credential, and can credit or revoke it | Protected operator account endpoints; raw credentials are returned once and never stored by PriorSeal | Current production pilot: operator-managed; public x402 payment and `POST /v1/selfserve/claim` are disabled |
+| Agent service credits | An eligible Base USDC payment can create a scoped Agent credential; the operator can also issue, credit or revoke one | Protected account endpoints; raw credentials are returned once and never stored by PriorSeal | Public self-service claims are enabled; operator controls remain available for support and account lifecycle |
 | Session or budget authorization | Principal defines repeatable policy boundaries for an agent | A separately specified and reviewed authorization profile | Later milestone; not implied by current single-use authorization |
 
 ## Why x402 is not the authorization protocol

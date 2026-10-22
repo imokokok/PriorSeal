@@ -149,3 +149,16 @@ test('production defaults public paid commerce to disabled and suppresses config
   assert.equal(config.selfserveClaim, undefined);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'invalid' }), /PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED/);
 });
+
+test('runtime configuration suppresses the retired 0x Agent-meter route without rotating credentials', () => {
+  const config = loadRuntimeConfig({
+    PRIORSEAL_AGENT_METER_JSON: JSON.stringify({
+      schema: 'priorseal.agent-meter.v1', creditUnitUsd: '0.01', operatorCredentialHash: 'a'.repeat(64), accounts: [],
+      routes: [
+        { routeId: 'authorization-acceptance', method: 'POST', path: '/v1/authorizations', credits: '3' },
+        { routeId: 'zeroex-guarded-swap-prepare', method: 'POST', path: '/v1/zeroex/prepare', credits: '3' },
+      ],
+    }),
+  });
+  assert.deepEqual(config.agentMeter?.routes.map(route => route.routeId), ['authorization-acceptance']);
+});
