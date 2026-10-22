@@ -54,6 +54,7 @@ async function readLimitedJson(response, label) {
 }
 async function runAgentRetailReadiness({ env = process.env, fetcher = fetch, log = console.log } = {}) {
   const baseUrl = new URL(env.PRIORSEAL_BASE_URL ?? "https://priorseal.xyz");
+  const expectPublicPaidCommerce = env.PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE === "true";
   assert(!baseUrl.username && !baseUrl.password, "Base URL must not contain credentials");
   assert(baseUrl.protocol === "https:" || ["localhost", "127.0.0.1"].includes(baseUrl.hostname), "HTTPS is required outside local development");
   let getRequests = 0;
@@ -88,11 +89,14 @@ async function runAgentRetailReadiness({ env = process.env, fetcher = fetch, log
   const agentCredits = nested(capabilities.body, ["payments", "agentCredits"], "Agent credits capability");
   assert(agentCredits.configured === true, "Operator-issued Agent service credits are unavailable");
   const publicPaidCommerce = nested(capabilities.body, ["payments", "publicPaidCommerce"], "Public paid-commerce capability");
-  assert(publicPaidCommerce.enabled === false && publicPaidCommerce.mode === "PILOT_OPERATOR_MANAGED", "Public paid commerce is unexpectedly enabled during the pilot");
+  assert(publicPaidCommerce.enabled === expectPublicPaidCommerce && publicPaidCommerce.mode === (expectPublicPaidCommerce ? "PUBLIC_PAID" : "PILOT_OPERATOR_MANAGED"), expectPublicPaidCommerce ? "Public paid commerce is not enabled" : "Public paid commerce is unexpectedly enabled during the pilot");
   const selfserveClaim = nested(capabilities.body, ["payments", "selfserveClaim"], "Self-serve claim capability");
-  assert(selfserveClaim.configured === false, "Self-serve paid credit claims are unexpectedly enabled during the pilot");
+  assert(selfserveClaim.configured === expectPublicPaidCommerce, expectPublicPaidCommerce ? "Self-serve paid credit claims are not enabled" : "Self-serve paid credit claims are unexpectedly enabled during the pilot");
   const x402 = nested(capabilities.body, ["payments", "x402"], "x402 capability");
-  assert(x402.configured === false && Array.isArray(x402.routes) && x402.routes.length === 0, "x402 payment acceptance is unexpectedly enabled during the pilot");
+  assert(
+    expectPublicPaidCommerce ? x402.configured === true && Array.isArray(x402.routes) && x402.routes.length > 0 : x402.configured === false && Array.isArray(x402.routes) && x402.routes.length === 0,
+    expectPublicPaidCommerce ? "Public x402 payment acceptance is not enabled" : "x402 payment acceptance is unexpectedly enabled during the pilot"
+  );
   assert(agent.body.schema === "priorseal.agent-integration.v1" && agent.body.service === "PriorSeal", "Agent discovery document is unavailable");
   assert(agent.body.version === releaseVersion, "Agent discovery document version differs from the deployed release");
   const safety = nested(agent.body, ["safety"], "Agent discovery safety boundary");
@@ -105,8 +109,8 @@ async function runAgentRetailReadiness({ env = process.env, fetcher = fetch, log
     baseUrl: baseUrl.origin,
     version: releaseVersion,
     agentCredits: "CONFIGURED",
-    selfserveClaim: "OPERATOR_MANAGED_ONLY",
-    x402: "DISABLED_FOR_PILOT",
+    selfserveClaim: expectPublicPaidCommerce ? "PUBLIC_SELF_SERVE_ENABLED" : "OPERATOR_MANAGED_ONLY",
+    x402: expectPublicPaidCommerce ? "PUBLIC_ENABLED" : "DISABLED_FOR_PILOT",
     getRequests,
     writesPerformed: 0,
     walletOrTransactionSignatures: 0
