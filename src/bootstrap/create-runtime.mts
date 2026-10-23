@@ -12,6 +12,7 @@ import { parsePolicyDocument, readPolicyFile } from '../infrastructure/policy/fi
 import { createObservationWorker } from '../application/observations/observation-worker.mjs';
 import { observeExecution, type ExecutionObserver } from '../application/observations/observe-execution.mjs';
 import { observeEvm } from '../infrastructure/blockchain/evm/observer.mjs';
+import { createIntegrationReadinessInspector } from '../infrastructure/blockchain/evm/integration-readiness.mjs';
 import { observeSolana } from '../infrastructure/blockchain/solana/observer.mjs';
 import { parseTransparencyAnchor, readTransparencyAnchor, verifyTransparencyAnchor } from '../infrastructure/transparency/file-anchor-provider.mjs';
 import { buildMerkleTransparencyEvidence, buildTransparencyEvidence } from '../domain/transparency.mjs';
@@ -92,6 +93,7 @@ async function composeRuntime({ config, environment = process.env, database, d1,
     const observer: ExecutionObserver = (input) => input.chainId === 0 && input.solanaTransaction
       ? observeSolana({ chainId: input.chainId, txHash: input.txHash, rpcUrls: rpcUrls(input.chainId), confirmations: input.confirmations, finalityRequirement: input.finalityRequirement ?? 'CONFIRMATIONS', expectedTransaction: input.solanaTransaction, signal: input.signal })
       : observeEvm({ ...input, rpcUrls: rpcUrls(input.chainId), rpcClient, erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates });
+    const integrationReadinessInspector = createIntegrationReadinessInspector({ rpcClient, rpcUrls: (chainId) => rpcUrls(chainId) });
     const baseObservationWorker = store ? createObservationWorker({ store, observerManagesEvidence: true, observe: async (input: ObservationWorkInput) => (await observeExecution({ input, store, observer, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response, saveObservation: (observation) => store.saveObservation(observation as Parameters<typeof store.saveObservation>[0]) }) : null;
     const observationWorker = baseObservationWorker && dispatchObservationJob ? {
       ...baseObservationWorker,
@@ -101,7 +103,7 @@ async function composeRuntime({ config, environment = process.env, database, d1,
         return job;
       },
     } : baseObservationWorker;
-    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, agentMeter, selfserveClaim, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, publicPaidCommerceEnabled: config.publicPaidCommerceEnabled, x402: config.x402, version: config.buildVersion, staticDir, observer, rateLimiter, logger }) : undefined;
+    const server = http ? createHttpServer({ archiveCredentials: config.archiveCredentials, proofMode: config.preExecutionProofMode, rpcChainIds: Object.keys(SUPPORTED_CHAINS).map(Number).filter(id => rpcUrls(id).length > 0), erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates, store, agentMeter, selfserveClaim, issuer: config.issuer, keyId: config.keyId, privateKeyPem, publicKeyPem, keyRegistry: registry, policy, authorizationAudience: config.authorizationAudience, verifyContractSignature, timestampProvider, requireTimestamp: config.preExecutionProofMode === 'rfc3161', witnessProvider, requireWitnessQuorum: config.preExecutionProofMode === 'witness-quorum', transparencyProvider, observationWorker, corsOrigins: config.corsOrigins, trustProxy: config.trustProxy, publicPaidCommerceEnabled: config.publicPaidCommerceEnabled, x402: config.x402, version: config.buildVersion, staticDir, observer, integrationReadinessInspector, rateLimiter, logger }) : undefined;
     return { config, pool, store, server, observationWorker, baseObservationWorker };
   } catch (error) {
     if (ownsPool) await pool?.end().catch(() => {});

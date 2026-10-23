@@ -21,6 +21,7 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
   const transfer = evmChains.length > 0 && (!actions || actions.includes("TRANSFER"));
   const chains = [...evmChains, ...solanaTransaction ? [0] : []];
   const evidenceBundleRoute = x402 ? matchX402Route(x402, "GET", "/v1/receipts/evidence/bundle") : void 0;
+  const integrationReadinessRoute = x402 ? matchX402Route(x402, "GET", "/v1/integration-readiness") : void 0;
   const proofConfigured = proofMode === "issuer" || (proofMode === "rfc3161" ? timestampConfigured : proofMode === "witness-quorum" ? witnessConfigured : anchorConfigured);
   const rpc = rpcChainIds === void 0 ? "unknown" : chains.some((id) => rpcChainIds.includes(id)) ? "configured" : "unavailable";
   return {
@@ -52,6 +53,16 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
       boundaries: ["Does not submit transactions or custody keys.", "Does not turn a service payment into execution authority.", "Only receipts already issued by PriorSeal are addressable."],
       commerce: { x402: evidenceBundleRoute ? { enabled: true, price: evidenceBundleRoute.price, paymentPath: "/v1/evidence/receipts/{receiptId}/check", staticExportPaths: ["/v1/receipts/{receiptId}/bundle", "/v1/evidence/receipts/{receiptId}"], samePriceAs: evidenceBundleRoute.path, product: "fresh_evidence_check" } : { enabled: false } }
     },
+    integrationReadiness: integrationReadinessRoute ? {
+      enabled: true,
+      product: "signed_evm_integration_readiness",
+      method: "GET",
+      path: "/v1/integration-readiness",
+      price: integrationReadinessRoute.price,
+      input: { query: ["chainId", "subjectAddress"] },
+      output: "priorseal.integration-readiness.v1",
+      boundary: "Read-only point-in-time EVM RPC configuration and bytecode presence check. It never proves ownership, contract safety, execution authority, or a right to transact."
+    } : { enabled: false },
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? "operator_defined", scope: "project_uploaded_evidence" }
   };
 }
