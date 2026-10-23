@@ -21,6 +21,7 @@ import { buildX402PaymentEvidence, signX402PaymentEvidence } from "../../domain/
 import { buildX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
 import { createStaticAssetHandler } from "./static-assets.mjs";
 import { buildVerificationBundle } from "../../domain/verification-bundle.mjs";
+import { buildEvidenceEnvelope } from "../../domain/evidence-api.mjs";
 import { assertIssuableIntentInput } from "../../domain/intent.mjs";
 import { evaluateAuthorizationPolicy, evaluateNewIntentPolicyCompatibility } from "../../domain/intent-policy.mjs";
 import { assertEd25519KeyPair } from "../../domain/ed25519.mjs";
@@ -54,7 +55,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
     const cleanup = () => deadline.cleanup();
     res.once("close", cleanup);
     res.once("finish", cleanup);
-    const paidRoute = matchX402Route(x402, req.method, path);
+    const paidRoute = matchPaidRoute(x402, req.method, path);
     const origin = req.headers.origin;
     const cors = origin && corsOrigins.includes(origin) ? { "access-control-allow-origin": origin, vary: "Origin", "access-control-allow-headers": "content-type,idempotency-key,x-request-id,authorization,payment-signature,x-priorseal-agent-key,x-priorseal-operator-key", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-expose-headers": "payment-required,payment-response,x-priorseal-usage-id" } : {};
     let captureResponse = false;
@@ -160,11 +161,13 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
               if (!job) throw new PriorSealError("NOT_FOUND", "Observation job not found");
               return job;
             }
-            if (name === "priorseal_get_receipt" || name === "priorseal_get_evidence_bundle") {
+            if (name === "priorseal_get_receipt" || name === "priorseal_get_evidence_bundle" || name === "priorseal_get_evidence") {
               const receiptId = mcpIdentifier(toolArguments, "receiptId", "receipt");
               const receipt = await store.getReceipt(receiptId);
               if (!receipt) throw new PriorSealError("RECEIPT_NOT_FOUND", "Receipt not found");
-              return name === "priorseal_get_evidence_bundle" ? buildVerificationBundle({ receipt, keyRegistry: keyRegistryDocument(issuer, keyRegistry), assembledAt: Math.floor(now() / 1e3) }) : receipt;
+              if (name === "priorseal_get_receipt") return receipt;
+              const bundle = buildVerificationBundle({ receipt, keyRegistry: keyRegistryDocument(issuer, keyRegistry), assembledAt: Math.floor(now() / 1e3) });
+              return name === "priorseal_get_evidence" ? buildEvidenceEnvelope(bundle) : bundle;
             }
             if (name === "priorseal_verify_receipt") {
               assertOnlyFields(toolArguments, ["receipt"], "PriorSeal MCP receipt verification arguments");
@@ -236,7 +239,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         }
         throw new PriorSealError("NOT_FOUND", "Archive route not found");
       }
-      if (req.method === "GET" && path === "/v1/version") return respond(200, { service: "priorseal", version, protocol: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.witness-attestation.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1"], requestId });
+      if (req.method === "GET" && path === "/v1/version") return respond(200, { service: "priorseal", version, protocol: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.witness-attestation.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1", "priorseal.evidence.v1", "priorseal.evidence-profile.v1"], requestId });
       if (req.method === "GET" && path === "/openapi/v1.json") {
         return respond(200, openApiSpec(), { "cache-control": "public, max-age=300" });
       }
@@ -297,6 +300,13 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         const receipt = await store.getReceipt(decodeURIComponent(bundleMatch[1]));
         if (!receipt) throw new PriorSealError("RECEIPT_NOT_FOUND", "Receipt not found");
         return respond(200, buildVerificationBundle({ receipt, keyRegistry: keyRegistryDocument(issuer, keyRegistry), assembledAt: Math.floor(now() / 1e3) }));
+      }
+      const evidenceMatch = req.method === "GET" && path.match(/^\/v1\/evidence\/receipts\/([^/]+)$/);
+      if (evidenceMatch) {
+        const receipt = await store.getReceipt(decodeURIComponent(evidenceMatch[1]));
+        if (!receipt) throw new PriorSealError("RECEIPT_NOT_FOUND", "Receipt not found");
+        const bundle = buildVerificationBundle({ receipt, keyRegistry: keyRegistryDocument(issuer, keyRegistry), assembledAt: Math.floor(now() / 1e3) });
+        return respond(200, buildEvidenceEnvelope(bundle));
       }
       const match = req.method === "GET" && path.match(/^\/v1\/receipts\/([^/]+)$/);
       if (match) {
@@ -469,6 +479,10 @@ function agentUsageLimit(value) {
   return Number(value);
 }
 function bindX402PaymentEvidenceToBundle({ body, resourceUrl, status, context, settlement, issuer, keyId, privateKeyPem, issuedAt }) {
+  if (isRecord(body) && body.schema === "priorseal.evidence.v1" && isRecord(body.bundle)) {
+    const paidBundle = bindX402PaymentEvidenceToBundle({ body: body.bundle, resourceUrl, status, context, settlement, issuer, keyId, privateKeyPem, issuedAt });
+    return paidBundle === body.bundle ? body : buildEvidenceEnvelope(paidBundle);
+  }
   if (!isRecord(body) || body.schema !== "priorseal.verification-bundle.v1" || typeof body.bundleHash !== "string" || !/^[0-9a-f]{64}$/.test(body.bundleHash) || !isRecord(body.receipt) || !isRecord(body.keyRegistry) || !Number.isSafeInteger(body.assembledAt)) return body;
   const evidence = signX402PaymentEvidence(buildX402PaymentEvidence({
     paymentPayload: context.payload,
@@ -482,8 +496,16 @@ function bindX402PaymentEvidenceToBundle({ body, resourceUrl, status, context, s
   return buildVerificationBundle({ receipt: body.receipt, keyRegistry: body.keyRegistry, assembledAt: body.assembledAt, paymentEvidence: evidence });
 }
 function paymentEvidenceId(body) {
-  const value = isRecord(body) && isRecord(body.paymentEvidence) ? body.paymentEvidence.paymentEvidenceId : void 0;
+  const value = isRecord(body) && isRecord(body.paymentEvidence) ? body.paymentEvidence.paymentEvidenceId : isRecord(body) && isRecord(body.bundle) && isRecord(body.bundle.paymentEvidence) ? body.bundle.paymentEvidence.paymentEvidenceId : void 0;
   return typeof value === "string" && /^psp_[0-9a-f]{32}$/.test(value) ? value : void 0;
+}
+function matchPaidRoute(config, method, path) {
+  const direct = matchX402Route(config, method, path);
+  if (direct) return direct;
+  const evidence = method?.toUpperCase() === "GET" ? path.match(/^\/v1\/evidence\/receipts\/([^/]+)$/) : null;
+  if (!evidence) return void 0;
+  const bundleRoute = matchX402Route(config, method, `/v1/receipts/${evidence[1]}/bundle`);
+  return bundleRoute ? { ...bundleRoute, path: "/v1/evidence/receipts/:receiptId", description: "Export a chain-neutral Evidence API envelope with a portable verification bundle" } : void 0;
 }
 const AGENT8004_REGISTRATION = Object.freeze({
   type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
@@ -505,14 +527,14 @@ const AGENT8004_REGISTRATION = Object.freeze({
   supportedTrust: []
 });
 function keyRegistryDocument(issuer, keyRegistry) {
-  return { schema: "priorseal.keys.v1", issuer, keys: keyRegistry.list(), verifierVersion: "3.0.0", schemaVersions: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1"] };
+  return { schema: "priorseal.keys.v1", issuer, keys: keyRegistry.list(), verifierVersion: "3.0.0", schemaVersions: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1", "priorseal.evidence.v1", "priorseal.evidence-profile.v1"] };
 }
 function agentIntegrationManifest({ version }) {
   return {
     schema: "priorseal.agent-integration.v1",
     service: "PriorSeal",
     version,
-    discovery: { capabilities: "/v1/capabilities", openapi: "/openapi/v1.json", mcp: "/mcp", issuerKeys: "/.well-known/priorseal-keys.json" },
+    discovery: { capabilities: "/v1/capabilities", openapi: "/openapi/v1.json", mcp: "/mcp", issuerKeys: "/.well-known/priorseal-keys.json", evidence: "/v1/evidence/receipts/{receiptId}" },
     safety: {
       executionMode: "PROPOSAL_AND_PRINCIPAL_CONFIRMATION",
       principalSignature: "REQUIRED_FOR_EVERY_EXACT_ACTION",
@@ -522,7 +544,7 @@ function agentIntegrationManifest({ version }) {
     }
   };
 }
-const OPENAPI = { openapi: "3.1.0", info: { title: "PriorSeal API", version: "2.0.0", description: "Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts." }, paths: { "/v1/capabilities": { get: { summary: "Deployment configuration and workflow capabilities" } }, "/v1/archive": { get: { summary: "List private uploaded evidence with a project bearer credential" }, post: { summary: "Archive immutable evidence with a writer credential" } }, "/v1/archive/export": { get: { summary: "Export a private snapshot page including raw artifacts" } }, "/v1/archive/{entryId}": { get: { summary: "Read private project evidence" } }, "/v1/intents": { post: { summary: "Create a legacy unsigned intent draft", deprecated: true, responses: { "201": { description: "Created" } } } }, "/v1/authorizations/prepare": { post: { summary: "Canonicalize an authorization and return EIP-712 typed data or a Solana message" } }, "/v1/authorizations": { post: { summary: "Verify and accept a signed authorization" } }, "/v1/authorizations/{authorizationId}": { get: { summary: "Read authorization state" } }, "/v1/authorizations/{authorizationId}/transparency": { get: { summary: "Read signed transparency evidence and any verified external anchor" } }, "/v1/executions/observe": { post: { summary: "Observe EVM or Solana execution against an authorization" } }, "/v1/observation-jobs/{jobId}": { get: { summary: "Read automatic finality observation job" } }, "/v1/receipts/{receiptId}": { get: { summary: "Read receipt" } }, "/v1/receipts/{receiptId}/bundle": { get: { summary: "Export portable receipt evidence and key-discovery metadata" } }, "/v1/receipts/verify": { post: { summary: "Convenience verification, not authority" } }, "/.well-known/priorseal-keys.json": { get: { summary: "Read the issuer public-key registry" } }, "/.well-known/agent8004.json": { get: { summary: "Read the ERC-8004 agent registration record" } }, "/.well-known/priorseal-agent.json": { get: { summary: "Read safe Agent integration discovery" } }, "/v1/version": { get: { summary: "Read service and protocol versions" } }, "/health/live": { get: { summary: "Liveness" } }, "/health/ready": { get: { summary: "Readiness" } } } };
+const OPENAPI = { openapi: "3.1.0", info: { title: "PriorSeal API", version: "2.0.0", description: "Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts." }, paths: { "/v1/capabilities": { get: { summary: "Deployment configuration and workflow capabilities" } }, "/v1/archive": { get: { summary: "List private uploaded evidence with a project bearer credential" }, post: { summary: "Archive immutable evidence with a writer credential" } }, "/v1/archive/export": { get: { summary: "Export a private snapshot page including raw artifacts" } }, "/v1/archive/{entryId}": { get: { summary: "Read private project evidence" } }, "/v1/intents": { post: { summary: "Create a legacy unsigned intent draft", deprecated: true, responses: { "201": { description: "Created" } } } }, "/v1/authorizations/prepare": { post: { summary: "Canonicalize an authorization and return EIP-712 typed data or a Solana message" } }, "/v1/authorizations": { post: { summary: "Verify and accept a signed authorization" } }, "/v1/authorizations/{authorizationId}": { get: { summary: "Read authorization state" } }, "/v1/authorizations/{authorizationId}/transparency": { get: { summary: "Read signed transparency evidence and any verified external anchor" } }, "/v1/executions/observe": { post: { summary: "Observe EVM or Solana execution against an authorization" } }, "/v1/observation-jobs/{jobId}": { get: { summary: "Read automatic finality observation job" } }, "/v1/receipts/{receiptId}": { get: { summary: "Read receipt" } }, "/v1/receipts/{receiptId}/bundle": { get: { summary: "Export portable receipt evidence and key-discovery metadata" } }, "/v1/evidence/receipts/{receiptId}": { get: { summary: "Read a chain-neutral evidence envelope with the portable verification bundle" } }, "/v1/receipts/verify": { post: { summary: "Convenience verification, not authority" } }, "/.well-known/priorseal-keys.json": { get: { summary: "Read the issuer public-key registry" } }, "/.well-known/agent8004.json": { get: { summary: "Read the ERC-8004 agent registration record" } }, "/.well-known/priorseal-agent.json": { get: { summary: "Read safe Agent integration discovery" } }, "/v1/version": { get: { summary: "Read service and protocol versions" } }, "/health/live": { get: { summary: "Liveness" } }, "/health/ready": { get: { summary: "Readiness" } } } };
 function openApiSpec() {
   return OPENAPI;
 }

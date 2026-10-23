@@ -34,6 +34,20 @@ function receipt(value: unknown): boolean {
   return record(value) && hasString(value, 'receiptId') && record(value.execution)
 }
 
+function evidence(value: unknown): boolean {
+  if (!record(value) || value.schema !== 'priorseal.evidence.v1' || !hasString(value, 'evidenceId') || !hasString(value, 'evidenceHash') || (value.kind !== 'AUTHORIZATION_BOUND_EXECUTION' && value.kind !== 'EXECUTION')) return false
+  if (!record(value.subject) || !record(value.profile) || !record(value.claims) || !record(value.verification) || !record(value.bundle)) return false
+  if (!hasString(value.profile, 'schema') || !hasString(value.profile, 'id') || !hasString(value.profile, 'family') || !Array.isArray(value.profile.capabilities) || !strings(value.profile.capabilities) || !Array.isArray(value.profile.limitations) || !strings(value.profile.limitations)) return false
+  if (!record(value.claims.authorizationBinding) || !record(value.claims.execution) || !record(value.claims.receiptSignature)) return false
+  if (!hasString(value.verification, 'method') || !hasString(value.verification, 'bundleHash') || !hasString(value.verification, 'trust') || !hasString(value.verification, 'required')) return false
+  return value.bundle.schema === 'priorseal.verification-bundle.v1' && receipt(value.bundle.receipt) && record(value.bundle.keyRegistry) && hasString(value.bundle, 'bundleHash')
+}
+
+function evidenceApiCapabilities(value: unknown): boolean {
+  if (!record(value) || value.schema !== 'priorseal.evidence.v1' || !hasString(value, 'receiptPath') || !Array.isArray(value.profiles) || !value.profiles.every(profile => record(profile) && hasString(profile, 'id')) || !hasString(value, 'verification') || !strings(value.boundaries) || !record(value.commerce) || !record(value.commerce.x402) || typeof value.commerce.x402.enabled !== 'boolean') return false
+  return value.commerce.x402.enabled === false || (hasString(value.commerce.x402, 'price') && hasString(value.commerce.x402, 'paymentPath') && hasString(value.commerce.x402, 'samePriceAs'))
+}
+
 function job(value: unknown): boolean {
   return record(value) && hasString(value, 'jobId') && hasString(value, 'state') && (value.input === undefined || record(value.input))
 }
@@ -56,7 +70,7 @@ export function validatePriorSealResponse(path: string, value: unknown): void {
   } else if (route === '/v1/version') {
     if (!hasString(value, 'service') || !hasString(value, 'version') || !strings(value.protocol)) invalid(path)
   } else if (route === '/v1/capabilities') {
-    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry >= 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean') invalid(path)
+    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry >= 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean' || (value.evidenceApi !== undefined && !evidenceApiCapabilities(value.evidenceApi))) invalid(path)
   } else if (route === '/v1/agent-accounts/self/usage') {
     if (!Array.isArray(value.items) || !value.items.every(agentUsage)) invalid(path)
   } else if (route === '/v1/agent-accounts/self') {
@@ -79,6 +93,8 @@ export function validatePriorSealResponse(path: string, value: unknown): void {
     if (!job(value)) invalid(path)
   } else if (route === '/v1/receipts/verify') {
     if (!record(value.result) || typeof value.result.valid !== 'boolean' || !hasString(value.result, 'code')) invalid(path)
+  } else if (route.startsWith('/v1/evidence/receipts/')) {
+    if (!evidence(value)) invalid(path)
   } else if (route.startsWith('/v1/receipts/')) {
     if (route.endsWith('/bundle')) {
       if (!receipt(value.receipt) || !record(value.keyRegistry)) invalid(path)

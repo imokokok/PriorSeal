@@ -18,6 +18,8 @@ export { createWitnessHttpServer } from './interfaces/http/create-witness-http-s
 export { buildTimestampPolicy, createTimestampRequest, buildTimestampEvidence, validateTimestampEvidenceClaims, verifyTimestampEvidence, DIGICERT_RFC3161_PROFILE, DIGICERT_RFC3161_URL } from './domain/rfc3161.mjs';
 export { createDigiCertTimestampProvider } from './infrastructure/timestamp/digicert-rfc3161-client.mjs';
 export { buildVerificationBundle, VERIFICATION_BUNDLE_SCHEMA, VERIFICATION_BUNDLE_TRUST } from './domain/verification-bundle.mjs';
+export { buildEvidenceEnvelope, evidenceProfilesForChains, evidenceProfileForExecution, EVIDENCE_API_SCHEMA, EVIDENCE_PROFILE_SCHEMA } from './domain/evidence-api.mjs';
+export type { EvidenceEnvelope, EvidenceProfile } from './domain/evidence-api.mjs';
 export { buildX402PaymentEvidence, signX402PaymentEvidence, verifyX402PaymentEvidence, X402_PAYMENT_EVIDENCE_SCHEMA, X402_PAYMENT_EVIDENCE_DOMAIN } from './domain/x402-payment-evidence.mjs';
 export { buildX402PaymentLedgerEvent, buildX402PaymentRefundLedgerEvent, assertX402PaymentLedgerEvent, x402PaymentLedgerId, X402_PAYMENT_LEDGER_SCHEMA } from './domain/x402-payment-ledger.mjs';
 export { agentCredentialHash, createAgentMeter, parseAgentMeterConfig } from './application/commerce/agent-meter.mjs';

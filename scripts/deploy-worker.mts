@@ -5,6 +5,6 @@ if (git('status', '--porcelain')) throw new Error('Refusing to deploy a dirty wo
 const revision = git('rev-parse', 'HEAD');
 if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error('Could not determine the release Git SHA');
 
-const result = spawnSync('npm', ['exec', '--', 'wrangler', 'deploy', '--tag', revision, '--message', `Git ${revision}`], { stdio: 'inherit', env: process.env });
+const result = spawnSync('npm', ['exec', '--', 'wrangler', 'deploy', '--env', '', '--tag', revision, '--message', `Git ${revision}`], { stdio: 'inherit', env: process.env });
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;

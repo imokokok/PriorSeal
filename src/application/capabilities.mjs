@@ -1,8 +1,9 @@
 // Generated from capabilities.mts by npm run core:build. Do not edit directly.
 import { hashJson } from "../domain/hashing.mjs";
 import { SOLANA_MAINNET_CAIP2 } from "../domain/solana.mjs";
+import { evidenceProfilesForChains, EVIDENCE_API_SCHEMA } from "../domain/evidence-api.mjs";
 import { SUPPORTED_CHAINS } from "../infrastructure/blockchain/evm/chains.mjs";
-import { X402_STAGING_NETWORKS } from "../infrastructure/payments/x402-exact-evm.mjs";
+import { matchX402Route, X402_STAGING_NETWORKS } from "../infrastructure/payments/x402-exact-evm.mjs";
 async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], store, archiveEnabled, contractSignatureConfigured = false, publicPaidCommerceEnabled = true, x402, x402AvailableNetworks, agentMeter = null, selfserveClaim = null, now }) {
   let storage = "available";
   try {
@@ -19,6 +20,7 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
   const erc4337 = evmChains.length > 0 && policy?.allowedAssets === void 0 && policy?.allowedRecipients === void 0 && policy?.maxAmount === void 0 && (!actions || actions.includes("ERC4337_USER_OPERATION")) && erc4337EntryPoints.some((entry) => evmChains.includes(entry.chainId));
   const transfer = evmChains.length > 0 && (!actions || actions.includes("TRANSFER"));
   const chains = [...evmChains, ...solanaTransaction ? [0] : []];
+  const evidenceBundleRoute = x402 ? matchX402Route(x402, "GET", "/v1/receipts/evidence/bundle") : void 0;
   const proofConfigured = proofMode === "issuer" || (proofMode === "rfc3161" ? timestampConfigured : proofMode === "witness-quorum" ? witnessConfigured : anchorConfigured);
   const rpc = rpcChainIds === void 0 ? "unknown" : chains.some((id) => rpcChainIds.includes(id)) ? "configured" : "unavailable";
   return {
@@ -42,6 +44,14 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
     chainReadiness: chains.map((chainId) => ({ chainId, rpc: rpcChainIds === void 0 ? "unknown" : rpcChainIds.includes(chainId) ? "configured" : "unavailable" })),
     readinessScope: "Configuration and storage check only; prepare evaluates the actual request policy. RPC/TSA reachability is not probed.",
     checkedAt: Math.floor(now / 1e3),
+    evidenceApi: {
+      schema: EVIDENCE_API_SCHEMA,
+      receiptPath: "/v1/evidence/receipts/{receiptId}",
+      profiles: evidenceProfilesForChains(chains),
+      verification: "The response embeds a portable verification bundle. Pin issuer-key trust independently and verify locally before relying on claims.",
+      boundaries: ["Does not submit transactions or custody keys.", "Does not turn a service payment into execution authority.", "Only receipts already issued by PriorSeal are addressable."],
+      commerce: { x402: evidenceBundleRoute ? { enabled: true, price: evidenceBundleRoute.price, paymentPath: "/v1/evidence/receipts/{receiptId}", samePriceAs: evidenceBundleRoute.path } : { enabled: false } }
+    },
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? "operator_defined", scope: "project_uploaded_evidence" }
   };
 }

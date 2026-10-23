@@ -4,7 +4,7 @@ import { runMcpCompatibilityProof } from '../../scripts/mcp-compatibility-proof.
 
 const toolNames = [
   'priorseal_get_capabilities', 'priorseal_prepare_authorization', 'priorseal_prepare_controlled_execution', 'priorseal_accept_authorization', 'priorseal_get_authorization',
-  'priorseal_observe_execution', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_verify_receipt',
+  'priorseal_observe_execution', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_get_evidence', 'priorseal_verify_receipt',
 ];
 
 test('MCP compatibility proof checks both protocol forms without a business write', async () => {
