@@ -334,6 +334,32 @@ test('capability discovery advertises only rails supported by the current facili
   const x402Capabilities = (capabilities.json() as unknown as { payments: { x402: { networks: Array<{ network: string }> } } }).payments.x402;
   assert.deepEqual(x402Capabilities.networks.map(network => network.network), ['eip155:8453']);
 });
+test('capability discovery fails open before the request deadline when the facilitator stalls', async (t) => {
+  const originalFetch = globalThis.fetch;
+  let aborted = false;
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+    const signal = init?.signal;
+    if (!signal) return reject(new Error('Expected an abort signal'));
+    signal.addEventListener('abort', () => { aborted = true; reject(signal.reason); }, { once: true });
+  })) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://capabilities-stalled-facilitator.test',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test',
+    PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'eip155:8453',
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path: '/v1/receipts/:receiptId/bundle', description: 'Export a receipt bundle', price: '$0.01' }]),
+  });
+  assert.ok(x402);
+  const server = createHttpServer({ x402, requestTimeoutMs: 100, capabilityDiscoveryTimeoutMs: 10 });
+  t.after(() => server.close());
+
+  const capabilities = await request(server, '/v1/capabilities');
+  assert.equal(capabilities.status, 200);
+  const x402Capabilities = (capabilities.json() as unknown as { payments: { x402: { networks: unknown[] } } }).payments.x402;
+  assert.deepEqual(x402Capabilities.networks, []);
+  assert.equal(aborted, true);
+});
 test('x402 Solana mainnet uses the exact-network fee payer when wildcard signers span clusters', async (t) => {
   const originalFetch = globalThis.fetch;
   const feePayer = 'EwWqGE4ZFKLofuestmU4LDdK7XM1N4ALgdZccwYugwGd';

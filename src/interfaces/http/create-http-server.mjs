@@ -37,7 +37,7 @@ const CLAIM_ERROR_STATUS = Object.freeze({ CLAIM_INVALID_REQUEST: 400, CLAIM_SIG
 function requester(req, trustProxy) {
   return trustProxy ? String(req.headers["cf-connecting-ip"] ?? "").trim() || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress || "unknown" : req.socket.remoteAddress || "unknown";
 }
-function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, observer = observeEvm, corsOrigins = [], trustProxy = false, publicPaidCommerceEnabled = true, x402, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
+function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, capabilityDiscoveryTimeoutMs = Math.max(1, Math.min(3e3, Math.floor(requestTimeoutMs / 2))), observer = observeEvm, corsOrigins = [], trustProxy = false, publicPaidCommerceEnabled = true, x402, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
   if (privateKeyPem || publicKeyPem) {
     if (!privateKeyPem || !publicKeyPem) throw new TypeError("Issuer private and public keys must be configured together");
     assertEd25519KeyPair(privateKeyPem, publicKeyPem);
@@ -46,7 +46,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
   const serveStaticAsset = staticDir ? createStaticAssetHandler(staticDir) : null;
   const x402Payments = x402 ? createX402PaymentService(x402) : null;
   const readDeploymentCapabilities = async () => {
-    const x402AvailableNetworks = x402 ? await discoverX402AvailableNetworks(x402).catch(() => []) : void 0;
+    const x402AvailableNetworks = x402 ? await discoverAvailableNetworksWithinDeadline(x402, capabilityDiscoveryTimeoutMs) : void 0;
     return deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? "rfc3161" : requireWitnessQuorum ? "witness-quorum" : "issuer"), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === "function", publicPaidCommerceEnabled, x402, x402AvailableNetworks, agentMeter, selfserveClaim, now: now() });
   };
   return createServer({ requestTimeout: requestTimeoutMs }, async (req, res) => {
@@ -485,6 +485,17 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       cleanup();
     }
   });
+}
+async function discoverAvailableNetworksWithinDeadline(x402, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error("x402 capability discovery timed out")), timeoutMs);
+  try {
+    return await discoverX402AvailableNetworks(x402, controller.signal);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 function jsonSafe(value) {
   return JSON.parse(JSON.stringify(value, (_, item) => typeof item === "bigint" ? item.toString() : item));
