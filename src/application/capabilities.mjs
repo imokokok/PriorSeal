@@ -50,7 +50,7 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
       profiles: evidenceProfilesForChains(chains),
       verification: "The response embeds a portable verification bundle. Pin issuer-key trust independently and verify locally before relying on claims.",
       boundaries: ["Does not submit transactions or custody keys.", "Does not turn a service payment into execution authority.", "Only receipts already issued by PriorSeal are addressable."],
-      commerce: { x402: evidenceBundleRoute ? { enabled: true, price: evidenceBundleRoute.price, paymentPath: "/v1/evidence/receipts/{receiptId}", samePriceAs: evidenceBundleRoute.path } : { enabled: false } }
+      commerce: { x402: evidenceBundleRoute ? { enabled: true, price: evidenceBundleRoute.price, paymentPath: "/v1/evidence/receipts/{receiptId}/check", staticExportPaths: ["/v1/receipts/{receiptId}/bundle", "/v1/evidence/receipts/{receiptId}"], samePriceAs: evidenceBundleRoute.path, product: "fresh_evidence_check" } : { enabled: false } }
     },
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? "operator_defined", scope: "project_uploaded_evidence" }
   };

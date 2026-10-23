@@ -98,7 +98,8 @@ function createX402PaymentService(config) {
           malformed = true;
         }
       }
-      const paymentRequired = (error) => ({ x402Version: 2, error, resource, accepts: requirements });
+      const extensions = { bazaar: { info: { input: { type: "http", method: route.method } }, schema: {} } };
+      const paymentRequired = (error) => ({ x402Version: 2, error, resource, accepts: requirements, extensions });
       const response = paymentRequired(malformed ? "Invalid PAYMENT-SIGNATURE header" : "Payment required");
       const header = encodeBase64Json(response);
       if (malformed) return { kind: "invalid", status: 400, response, header };

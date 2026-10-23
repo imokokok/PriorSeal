@@ -36,12 +36,15 @@ Insight and PriorSeal work independently. Insight provides **oracle transparency
 
 PriorSeal is designed as an Agent-facing, user-controlled, per-use
 authorization and evidence layer: an Agent can call the service and, where
-enabled, pay for an eligible evidence export, but its service payment never
-gives it authority over a customer transaction. The principal's explicit
-single-use signed authorization remains separate. The currently supported x402 route is a configured read-only receipt
-bundle export; it is not a public production offering unless the relevant
-production gates have been completed. See the
-[agent usage and payment model](docs/product/agent-usage-model.md).
+enabled, pay for an eligible evidence export or **Fresh Evidence Check**, but
+its service payment never gives it authority over a customer transaction. The
+principal's explicit single-use signed authorization remains separate. A Fresh
+Evidence Check re-observes the transaction named by an authorization-bound
+receipt, then returns a new issuer-signed report; it does not submit an action
+or make a future-safety claim. The free MCP surface provides discovery and a
+purchase handoff only—it cannot materialize a paid bundle or check. Live
+pricing, enabled rails and exact resources are available from
+`GET /v1/capabilities`. See the [agent usage and payment model](docs/product/agent-usage-model.md).
 
 For x402 API payments, the aligned production rails are Ethereum, OP Mainnet,
 Polygon PoS, Monad, X Layer, Sei, Base, Arbitrum One, Avalanche C-Chain, and

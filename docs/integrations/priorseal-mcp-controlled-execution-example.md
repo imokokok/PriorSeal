@@ -95,6 +95,7 @@ After a transaction is already submitted, call
 `priorseal_observe_execution` with the authorization identifier and transaction
 identity. If it returns `observation_queued`, poll
 `priorseal_get_observation_job`; otherwise review its receipt. Retrieve the
-portable bundle with `priorseal_get_evidence_bundle` and verify it locally
+an x402 purchase handoff with `priorseal_get_evidence_bundle`, purchase the
+portable bundle through the returned URL, and verify it locally
 against independently established issuer-key trust. The convenience
 `priorseal_verify_receipt` result is not an independent trust root.

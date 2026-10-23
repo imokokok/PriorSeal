@@ -40,8 +40,9 @@ The server exposes these tools:
 | `priorseal_observe_execution` | Compare an already-submitted transaction with an authorization. |
 | `priorseal_get_observation_job` | Read an automatic finality-observation job. |
 | `priorseal_get_receipt` | Read a signed receipt. |
-| `priorseal_get_evidence_bundle` | Retrieve the receipt with key-discovery metadata. |
-| `priorseal_get_evidence` | Retrieve the chain-neutral Evidence API envelope and its verification bundle. |
+| `priorseal_get_evidence_bundle` | Return a free x402 purchase handoff for the receipt with key-discovery metadata. |
+| `priorseal_get_evidence` | Return a free x402 purchase handoff for the chain-neutral Evidence API envelope. |
+| `priorseal_get_fresh_evidence_check` | Return a free x402 purchase handoff for a newly signed, read-only chain re-observation. |
 | `priorseal_verify_receipt` | Run the deployment's convenience verification endpoint. |
 
 ## Agent safety metadata and structured results
@@ -115,10 +116,12 @@ metered route and idempotency semantics as the REST API. Send
 enabled metered call. The raw credential belongs in the MCP host's secret
 store, never a prompt, source file, or browser application.
 
-Use the downloaded evidence bundle and independently established issuer key
-trust for a review decision. The service's `priorseal_verify_receipt` tool is
-a convenience check, not an independent trust root.
+Use the x402 URL returned by an evidence MCP tool to purchase the resource, then
+use the delivered evidence and independently established issuer key trust for a
+review decision. The service's `priorseal_verify_receipt` tool is a convenience
+check, not an independent trust root.
 
-`priorseal_get_evidence` is a delivery view, not a new proof authority. Its
-signature status deliberately remains `PRESENT_NOT_VERIFIED` until the caller
-verifies the embedded bundle locally with independently pinned issuer-key trust.
+The evidence MCP tools are discovery and payment handoffs, not a free delivery
+path. `priorseal_get_fresh_evidence_check` points to a newly signed current
+re-observation; it does not authorize a subject-chain action or replace local
+verification with independently pinned issuer-key trust.

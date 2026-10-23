@@ -7,7 +7,7 @@ const endpoint = 'https://priorseal.xyz/mcp'
 const config = JSON.stringify({ type: 'streamable-http', url: endpoint }, null, 2)
 
 const toolGroups = [
-  { title: 'Read & verify', tone: 'read', detail: 'No business-state change.', tools: ['priorseal_get_capabilities', 'priorseal_get_authorization', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_verify_receipt'] },
+  { title: 'Read, verify & buy', tone: 'read', detail: 'No business-state change. Evidence-export tools return free x402 purchase handoffs, never a free copy of a paid resource.', tools: ['priorseal_get_capabilities', 'priorseal_get_authorization', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_get_evidence', 'priorseal_get_fresh_evidence_check', 'priorseal_verify_receipt'] },
   { title: 'Prepare', tone: 'prepare', detail: 'Returns review and signing material only.', tools: ['priorseal_prepare_authorization', 'priorseal_prepare_controlled_execution'] },
   { title: 'Record a reviewed action', tone: 'record', detail: 'Persists service state; may consume configured Agent credits.', tools: ['priorseal_accept_authorization', 'priorseal_observe_execution'] },
 ]
@@ -34,13 +34,13 @@ export function McpPage() {
         <div>
           <p className="mcp-guide__kicker">PRIORSEAL / REMOTE MCP</p>
           <h1 data-route-heading tabIndex={-1}>Bounded authority,<br /><em>ready for agents.</em></h1>
-          <p>Connect an MCP client to prepare principal-reviewed authorizations, record observations of already-submitted actions, and retrieve portable evidence. The server never holds wallet keys, signs for a principal, or broadcasts a transaction.</p>
+          <p>Connect an MCP client to prepare principal-reviewed authorizations, record observations of already-submitted actions, and discover x402-paid evidence resources. The server never holds wallet keys, signs for a principal, or broadcasts a transaction.</p>
           <div className="mcp-guide__actions"><a href="#connect">Connect the endpoint <span>↓</span></a><a href="https://registry.modelcontextprotocol.io/v0/servers/io.github.imokokok%2Fpriorseal/versions/0.1.1" target="_blank" rel="noreferrer">View in MCP Registry <span>↗</span></a></div>
         </div>
         <aside className="mcp-guide__endpoint" aria-label="PriorSeal MCP endpoint">
           <div><span>REMOTE ENDPOINT</span><b>STREAMABLE HTTP</b></div>
           <code>{endpoint}</code>
-          <dl><div><dt>Protocol</dt><dd>2026-07-28</dd></div><div><dt>Fallback handshake</dt><dd>2025-11-25</dd></div><div><dt>Tools</dt><dd>10</dd></div></dl>
+          <dl><div><dt>Protocol</dt><dd>2026-07-28</dd></div><div><dt>Fallback handshake</dt><dd>2025-11-25</dd></div><div><dt>Tools</dt><dd>12</dd></div></dl>
         </aside>
       </section>
 
@@ -61,12 +61,12 @@ export function McpPage() {
 
       <section className="mcp-guide__boundaries">
         <div><p className="mcp-guide__kicker">OPERATING BOUNDARIES</p><h2>What the integration will not do.</h2></div>
-        <ul><li><b>No custody</b><span>No wallet keys, principal signature, or transaction broadcast passes through PriorSeal.</span></li><li><b>No implied permission</b><span>A prepared or accepted authorization never permits an altered, expired, or unmatched action.</span></li><li><b>Explicit state changes</b><span>Acceptance and observation can persist records and consume configured Agent credits; use an idempotency key.</span></li><li><b>Independent evidence</b><span>Download the bundle and verify it using independently established issuer-key trust.</span></li></ul>
+        <ul><li><b>No custody</b><span>No wallet keys, principal signature, or transaction broadcast passes through PriorSeal.</span></li><li><b>No implied permission</b><span>A prepared or accepted authorization never permits an altered, expired, or unmatched action.</span></li><li><b>Explicit state changes</b><span>Acceptance and observation can persist records and consume configured Agent credits; use an idempotency key.</span></li><li><b>Paid evidence stays paid</b><span>MCP offers discovery and a purchase URL; it does not bypass x402 by embedding the bundle or fresh-check report.</span></li><li><b>Independent evidence</b><span>Verify the delivered signature using independently established issuer-key trust.</span></li></ul>
       </section>
 
       <section className="mcp-guide__compatibility" id="compatibility">
         <header><p className="mcp-guide__kicker">04 / COMPATIBILITY EVIDENCE</p><h2>Protocol claims that can be rerun.</h2><p>The release includes a read-only production check, rather than an unqualified claim about any particular client application.</p></header>
-        <div className="mcp-guide__proof"><dl><div><dt>Stateless discovery</dt><dd><code>server/discover</code> with MCP 2026-07-28</dd></div><div><dt>Legacy initialization</dt><dd><code>initialize</code> with MCP 2025-11-25</dd></div><div><dt>Tool contract</dt><dd>All 10 tools, annotations and structured capabilities result</dd></div><div><dt>Safety invariant</dt><dd>Read-only proof requests create no authorization, observation or transaction</dd></div></dl><div><a href="https://github.com/imokokok/PriorSeal/blob/main/docs/runbooks/mcp-compatibility-proof.md" target="_blank" rel="noreferrer">Read the proof runbook <span>↗</span></a><a href="https://github.com/imokokok/PriorSeal/blob/main/docs/integrations/priorseal-mcp.md" target="_blank" rel="noreferrer">Read the integration reference <span>↗</span></a></div></div>
+        <div className="mcp-guide__proof"><dl><div><dt>Stateless discovery</dt><dd><code>server/discover</code> with MCP 2026-07-28</dd></div><div><dt>Legacy initialization</dt><dd><code>initialize</code> with MCP 2025-11-25</dd></div><div><dt>Tool contract</dt><dd>All 12 tools, annotations and structured capabilities result</dd></div><div><dt>Safety invariant</dt><dd>Read-only proof requests create no authorization, observation or transaction</dd></div></dl><div><a href="https://github.com/imokokok/PriorSeal/blob/main/docs/runbooks/mcp-compatibility-proof.md" target="_blank" rel="noreferrer">Read the proof runbook <span>↗</span></a><a href="https://github.com/imokokok/PriorSeal/blob/main/docs/integrations/priorseal-mcp.md" target="_blank" rel="noreferrer">Read the integration reference <span>↗</span></a></div></div>
       </section>
     </main>
   </div>

@@ -20,6 +20,7 @@ export { createDigiCertTimestampProvider } from './infrastructure/timestamp/digi
 export { buildVerificationBundle, VERIFICATION_BUNDLE_SCHEMA, VERIFICATION_BUNDLE_TRUST } from './domain/verification-bundle.mjs';
 export { buildEvidenceEnvelope, evidenceProfilesForChains, evidenceProfileForExecution, EVIDENCE_API_SCHEMA, EVIDENCE_PROFILE_SCHEMA } from './domain/evidence-api.mjs';
 export type { EvidenceEnvelope, EvidenceProfile } from './domain/evidence-api.mjs';
+export { buildFreshEvidenceCheck, signFreshEvidenceCheck, verifyFreshEvidenceCheck, FRESH_EVIDENCE_CHECK_SCHEMA, FRESH_EVIDENCE_CHECK_DOMAIN } from './domain/fresh-evidence-check.mjs';
 export { buildX402PaymentEvidence, signX402PaymentEvidence, verifyX402PaymentEvidence, X402_PAYMENT_EVIDENCE_SCHEMA, X402_PAYMENT_EVIDENCE_DOMAIN } from './domain/x402-payment-evidence.mjs';
 export { buildX402PaymentLedgerEvent, buildX402PaymentRefundLedgerEvent, assertX402PaymentLedgerEvent, x402PaymentLedgerId, X402_PAYMENT_LEDGER_SCHEMA } from './domain/x402-payment-ledger.mjs';
 export { agentCredentialHash, createAgentMeter, parseAgentMeterConfig } from './application/commerce/agent-meter.mjs';
