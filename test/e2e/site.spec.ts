@@ -173,7 +173,7 @@ test('developer routes load the key registry, rotation diagnostics and API refer
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   await page.goto('/app/api')
   await expect(page.getByRole('heading', { level: 1, name: 'API reference' })).toBeVisible()
-  await expect(page.locator('.endpoint')).toHaveCount(7)
+  await expect(page.locator('.endpoint')).toHaveCount(10)
   await expect(page.locator('.endpoint-index').first()).toContainText('AUTHORITY')
   await expect(page.locator('.endpoint-index').last()).toContainText('TRUST')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
