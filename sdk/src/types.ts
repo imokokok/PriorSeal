@@ -292,6 +292,37 @@ export type VerificationBundle = {
   bundleHash: string
 }
 
+/**
+ * Chain-neutral delivery envelope for an existing PriorSeal verification bundle.
+ * The envelope itself does not assert that the embedded signature is valid;
+ * independently pin issuer-key trust and verify `bundle` locally.
+ */
+export type EvidenceProfile = {
+  schema: 'priorseal.evidence-profile.v1'
+  id: 'priorseal.evidence-profile.evm.v1' | 'priorseal.evidence-profile.solana-transaction.v1' | 'priorseal.evidence-profile.unsupported.v1'
+  family: 'evm' | 'svm' | 'unsupported'
+  network: string | null
+  chainId: number | null
+  capabilities: string[]
+  limitations: string[]
+}
+
+export type EvidenceEnvelope = {
+  schema: 'priorseal.evidence.v1'
+  evidenceId: string
+  evidenceHash: string
+  kind: 'AUTHORIZATION_BOUND_EXECUTION' | 'EXECUTION'
+  subject: { receiptId: string | null; authorizationId: string | null; executionHash: string | null; txHash: string | null }
+  profile: EvidenceProfile
+  claims: {
+    authorizationBinding: { status: 'ASSERTED_BY_RECEIPT' | 'NOT_INCLUDED_IN_RECEIPT'; authorizationHash: string | null }
+    execution: { status: string | null; finalityState: string | null; confirmations: number | null; observationSource: string | null }
+    receiptSignature: { status: 'PRESENT_NOT_VERIFIED' | 'MISSING'; issuer: string | null; keyId: string | null }
+  }
+  verification: { method: 'verification_bundle'; bundleHash: string; trust: 'PIN_ISSUER_KEY_OUT_OF_BAND'; required: 'VERIFY_LOCALLY_WITH_INDEPENDENT_ISSUER_KEY_TRUST' }
+  bundle: VerificationBundle
+}
+
 export type PrepareAuthorizationInput = Omit<Authorization, 'schema' | 'domain' | 'authorizationId' | 'intentHash' | 'signature' | 'policyHash'> & { policyHash?: string }
 export type ObserveExecutionInput = { intentId?: string; authorizationId?: string; chainId: number; txHash: string; confirmations?: number }
 export type RequestOptions = { idempotencyKey?: string; signal?: AbortSignal; headers?: HeadersInit }
@@ -410,6 +441,14 @@ export type DeploymentCapabilities = {
   chainReadiness: { chainId: number; rpc: 'configured' | 'unknown' | 'unavailable' }[]
   readinessScope: string
   checkedAt: number
+  evidenceApi?: {
+    schema: 'priorseal.evidence.v1'
+    receiptPath: '/v1/evidence/receipts/{receiptId}'
+    profiles: EvidenceProfile[]
+    verification: string
+    boundaries: string[]
+    commerce: { x402: { enabled: true; price: string; paymentPath: '/v1/evidence/receipts/{receiptId}'; samePriceAs: string } | { enabled: false } }
+  }
   archive: { enabled: boolean; retention: string; scope: string }
   payments?: {
     x402: { configured: boolean; networks: { family: string; network: string; chainId: number; name: string; asset: string; assetName: string }[]; routes: { method: string; path: string; description: string; price: string }[] }

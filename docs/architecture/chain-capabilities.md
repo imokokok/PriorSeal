@@ -56,6 +56,17 @@ delegate, proxy/singleton, and runtime code hashes as applicable. Solana support
 does not decode arbitrary program semantics: it binds the compiled message and
 observes the confirmed transaction.
 
+## Evidence API profile
+
+Every execution receipt can be delivered through the chain-neutral
+[`Evidence API`](evidence-api.md). Its EVM profile applies to each supported
+EIP-155 chain in this matrix, including Monad (`eip155:143`); its Solana
+profile applies only to the compiled Solana transaction path. A profile is a
+description of signed receipt fields and their verification route, not a claim
+that a chain-specific advanced feature is available. In particular, Monad's
+future concurrency-oriented evidence must add directly observed, verifiable
+fields before it is advertised as a separate capability.
+
 ## Payment versus the subject execution
 
 An x402 buyer may pay in any configured and facilitator-supported payment rail

@@ -11,6 +11,7 @@ const expectedTools = [
   "priorseal_get_observation_job",
   "priorseal_get_receipt",
   "priorseal_get_evidence_bundle",
+  "priorseal_get_evidence",
   "priorseal_verify_receipt"
 ];
 function assert(condition, message) {

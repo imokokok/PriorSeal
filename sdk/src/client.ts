@@ -22,6 +22,7 @@ import type {
   AuthorizationCheckpoint,
   SolanaMessageWallet,
   DeploymentCapabilities,
+  EvidenceEnvelope,
   AgentServiceAccount,
   AgentUsage,
   AgentActionInput,
@@ -235,6 +236,15 @@ export class PriorSealClient {
 
   getVerificationBundle(id: string, options?: RequestOptions) {
     return this.verificationBundle(id, options)
+  }
+
+  /** Read a chain-neutral Evidence API envelope for an already issued receipt. */
+  evidence(id: string, options?: RequestOptions) {
+    return this.request<EvidenceEnvelope>(`/v1/evidence/receipts/${encodeURIComponent(id)}`, {}, options)
+  }
+
+  getEvidence(id: string, options?: RequestOptions) {
+    return this.evidence(id, options)
   }
 
   verify(receipt: Receipt, options?: RequestOptions) {

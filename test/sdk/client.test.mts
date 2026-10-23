@@ -36,6 +36,23 @@ test('SDK maps typed methods to the PriorSeal API and sends stable idempotency k
   assert.deepEqual(parseRequestBody(call.init.body), { authorizationId: 'auth_1', chainId: 8453, txHash: '0x1', confirmations: 0 });
 });
 
+test('SDK retrieves a chain-neutral Evidence API envelope from an encoded receipt path', async () => {
+  const client = createPriorSealClient({ baseUrl: 'https://priorseal.test', fetch: async (url) => {
+    assert.equal(String(url), 'https://priorseal.test/v1/evidence/receipts/psr%2F1');
+    return response({
+      schema: 'priorseal.evidence.v1', evidenceId: 'pse_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', evidenceHash: 'a'.repeat(64), kind: 'AUTHORIZATION_BOUND_EXECUTION',
+      subject: { receiptId: 'psr/1', authorizationId: 'auth_1', executionHash: 'b'.repeat(64), txHash: `0x${'1'.repeat(64)}` },
+      profile: { schema: 'priorseal.evidence-profile.v1', id: 'priorseal.evidence-profile.evm.v1', family: 'evm', network: 'eip155:143', chainId: 143, capabilities: ['signed_receipt'], limitations: ['Verify locally.'] },
+      claims: { authorizationBinding: { status: 'ASSERTED_BY_RECEIPT', authorizationHash: 'c'.repeat(64) }, execution: { status: 'CONFIRMED', finalityState: 'CONFIRMED', confirmations: 1, observationSource: 'fixture' }, receiptSignature: { status: 'PRESENT_NOT_VERIFIED', issuer: 'priorseal', keyId: 'default' } },
+      verification: { method: 'verification_bundle', bundleHash: 'd'.repeat(64), trust: 'PIN_ISSUER_KEY_OUT_OF_BAND', required: 'VERIFY_LOCALLY_WITH_INDEPENDENT_ISSUER_KEY_TRUST' },
+      bundle: { schema: 'priorseal.verification-bundle.v1', receipt: { receiptId: 'psr/1', execution: { status: 'CONFIRMED' } }, keyRegistry: { schema: 'priorseal.keys.v1', keys: [] }, assembledAt: 1, trust: { model: 'PIN_ISSUER_KEY_OUT_OF_BAND', notice: 'Fixture' }, bundleHash: 'd'.repeat(64) },
+    });
+  } });
+  const evidence = await client.getEvidence('psr/1');
+  assert.equal(evidence.profile.network, 'eip155:143');
+  assert.equal(evidence.claims.receiptSignature.status, 'PRESENT_NOT_VERIFIED');
+});
+
 test('SDK rejects malformed successful API responses before exposing typed values', async () => {
   const client = createPriorSealClient({ fetch: async () => response({ observation: { status: 1, txHash: '0x1' }, receipt: null }) });
   await assert.rejects(client.observeExecution({ chainId: 8453, txHash: '0x1' }), { code: 'INVALID_RESPONSE' });

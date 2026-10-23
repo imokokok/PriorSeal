@@ -92,7 +92,7 @@ test('PriorSeal MCP exposes stateless discovery, deterministic tools, and a JSON
   });
   const listedResult = listed.json() as unknown as { result: { tools: { name: string; annotations: Record<string, unknown>; outputSchema: { required: string[] } }[] } };
   const toolNames = listedResult.result.tools.map(tool => tool.name);
-  assert.deepEqual(toolNames, ['priorseal_get_capabilities', 'priorseal_prepare_authorization', 'priorseal_prepare_controlled_execution', 'priorseal_accept_authorization', 'priorseal_get_authorization', 'priorseal_observe_execution', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_verify_receipt']);
+  assert.deepEqual(toolNames, ['priorseal_get_capabilities', 'priorseal_prepare_authorization', 'priorseal_prepare_controlled_execution', 'priorseal_accept_authorization', 'priorseal_get_authorization', 'priorseal_observe_execution', 'priorseal_get_observation_job', 'priorseal_get_receipt', 'priorseal_get_evidence_bundle', 'priorseal_get_evidence', 'priorseal_verify_receipt']);
   const byName = new Map(listedResult.result.tools.map(tool => [tool.name, tool]));
   assert.deepEqual(byName.get('priorseal_get_receipt')!.annotations, { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
   assert.deepEqual(byName.get('priorseal_accept_authorization')!.annotations, { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
@@ -380,6 +380,8 @@ test('a paid receipt bundle includes issuer-signed x402 payment evidence', async
   const store = createMemoryStore();
   const server = createHttpServer({ store, x402, privateKeyPem, publicKeyPem, issuer: 'priorseal.test', keyId: 'test-1', observer: async () => ({ chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_000, observedAt: 1_001, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'evm-json-rpc:eip155:8453:configured-1' }) as unknown as ObserverResult });
   t.after(() => server.close());
+  const capabilities = await request(server, '/v1/capabilities');
+  assert.deepEqual((capabilities.json() as unknown as { evidenceApi: { commerce: { x402: unknown } } }).evidenceApi.commerce.x402, { enabled: true, price: '$0.01', paymentPath: '/v1/evidence/receipts/{receiptId}', samePriceAs: '/v1/receipts/:receiptId/bundle' });
   await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
   const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash }) });
   const receiptId = observed.json().receipt.receiptId;
@@ -396,6 +398,22 @@ test('a paid receipt bundle includes issuer-signed x402 payment evidence', async
   const ledger = await store.listX402PaymentLedgerEvents(x402PaymentLedgerId(ledgerContext, `https://api.example.test/v1/receipts/${receiptId}/bundle`));
   assert.deepEqual(ledger.map(event => event.type), ['PAYMENT_AUTHORIZED', 'DELIVERED']);
   assert.equal(ledger.at(-1)?.paymentEvidenceId, bundle.paymentEvidence.paymentEvidenceId);
+
+  const unpaidEvidence = await request(server, `/v1/evidence/receipts/${receiptId}`);
+  assert.equal(unpaidEvidence.status, 402);
+  const evidenceAccepted = (unpaidEvidence.json() as unknown as { accepts: Array<Record<string, unknown>> }).accepts[0];
+  const evidenceHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: evidenceAccepted, payload: {} })).toString('base64');
+  const paidEvidence = await request(server, `/v1/evidence/receipts/${receiptId}`, { headers: { 'payment-signature': evidenceHeader } });
+  assert.equal(paidEvidence.status, 200);
+  const evidence = paidEvidence.json() as unknown as { schema: string; bundle: { bundleHash: string; paymentEvidence: Record<string, unknown> & { service: { resourceUrl: string; responseHash: string } } } };
+  assert.equal(evidence.schema, 'priorseal.evidence.v1');
+  assert.equal(evidence.bundle.paymentEvidence.service.resourceUrl, `https://api.example.test/v1/evidence/receipts/${receiptId}`);
+  assert.notEqual(evidence.bundle.paymentEvidence.service.responseHash, evidence.bundle.bundleHash);
+  assert.equal(verifyX402PaymentEvidence(evidence.bundle.paymentEvidence, publicKeyPem).valid, true);
+  const evidenceLedgerContext = { payload: { x402Version: 2 as const, accepted: evidenceAccepted, payload: {} }, requirement: evidenceAccepted } as Parameters<typeof x402PaymentLedgerId>[0];
+  const evidenceLedger = await store.listX402PaymentLedgerEvents(x402PaymentLedgerId(evidenceLedgerContext, `https://api.example.test/v1/evidence/receipts/${receiptId}`));
+  assert.deepEqual(evidenceLedger.map(event => event.type), ['PAYMENT_AUTHORIZED', 'DELIVERED']);
+  assert.equal(evidenceLedger.at(-1)?.paymentEvidenceId, evidence.bundle.paymentEvidence.paymentEvidenceId);
 });
 test('request deadline terminates stalled bodies and rejects slow route work', async (t) => {
   const store = { async health() { await new Promise(resolve => setTimeout(resolve, 80)); return 'ok'; } };
@@ -560,6 +578,19 @@ test('observation writes honor Idempotency-Key and return a signed linked receip
   assert.equal(bundle.trust.model, 'PIN_ISSUER_KEY_OUT_OF_BAND');
   const { bundleHash, ...unsignedBundle } = bundle;
   assert.equal(bundleHash, hashJson(unsignedBundle));
+  const evidence = await request(server, `/v1/evidence/receipts/${issued.receiptId}`);
+  assert.equal(evidence.status, 200);
+  assert.equal(evidence.json().schema, 'priorseal.evidence.v1');
+  assert.equal((evidence.json() as unknown as { profile: { id: string; network: string }; bundle: { bundleHash: string }; verification: { required: string } }).profile.id, 'priorseal.evidence-profile.evm.v1');
+  assert.equal((evidence.json() as unknown as { profile: { id: string; network: string }; bundle: { bundleHash: string }; verification: { required: string } }).profile.network, 'eip155:8453');
+  assert.equal((evidence.json() as unknown as { profile: { id: string; network: string }; bundle: { bundleHash: string }; verification: { required: string } }).bundle.bundleHash, bundleHash);
+  assert.equal((evidence.json() as unknown as { profile: { id: string; network: string }; bundle: { bundleHash: string }; verification: { required: string } }).verification.required, 'VERIFY_LOCALLY_WITH_INDEPENDENT_ISSUER_KEY_TRUST');
+  const mcpEvidence = await request(server, '/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 'evidence', method: 'tools/call', params: { name: 'priorseal_get_evidence', arguments: { receiptId: issued.receiptId } } }) });
+  const mcpEvidenceResult = mcpEvidence.json() as unknown as { result: { structuredContent: { status: string; risk: { reasonCode: string }; data: { schema: string; bundle: { receipt: { receiptId: string } } } } } };
+  assert.equal(mcpEvidenceResult.result.structuredContent.status, 'evidence_loaded');
+  assert.equal(mcpEvidenceResult.result.structuredContent.risk.reasonCode, 'EVIDENCE_READ');
+  assert.equal(mcpEvidenceResult.result.structuredContent.data.schema, 'priorseal.evidence.v1');
+  assert.equal(mcpEvidenceResult.result.structuredContent.data.bundle.receipt.receiptId, issued.receiptId);
   assert.equal(verified.json().result.valid, true);
 });
 test('pending observations return a durable job handle', async (t) => {
