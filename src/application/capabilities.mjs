@@ -27,6 +27,12 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
     schema: "priorseal.capabilities.v1",
     issuer,
     audience,
+    evidenceDelivery: {
+      default: "OFFCHAIN_SIGNED_RECEIPT",
+      executionObservation: "READ_ONLY",
+      transactionSubmission: "INTEGRATOR_OWNED",
+      transparencyAnchoring: anchorConfigured ? "OPERATOR_MANAGED_OPTIONAL" : "NOT_CONFIGURED"
+    },
     payments: { publicPaidCommerce: { enabled: publicPaidCommerceEnabled, mode: publicPaidCommerceEnabled ? "PUBLIC_PAID" : "PILOT_OPERATOR_MANAGED" }, x402: { configured: Boolean(x402), networks: x402 ? x402AvailableNetworks ?? X402_STAGING_NETWORKS.filter((network) => x402.networks.includes(network.network) && (network.family === "evm" ? Boolean(x402.payTo) : Boolean(x402.solanaPayTo))).map(({ family, network, chainId, name, asset, assetName }) => ({ family, network, chainId, name, asset, assetName })) : [], routes: x402?.routes.map(({ method, path, description, price }) => ({ method, path, description, price })) ?? [] }, agentCredits: { configured: Boolean(agentMeter), creditUnitUsd: agentMeter?.config.creditUnitUsd ?? null, credentialHeader: agentMeter ? "x-priorseal-agent-key" : null, accountStatusPath: agentMeter ? "/v1/agent-accounts/self" : null, usagePath: agentMeter ? "/v1/agent-accounts/self/usage" : null, routes: agentMeter?.routes.map(({ routeId, method, path, credits, priceUsd }) => ({ routeId, method, path, credits, priceUsd })) ?? [] }, selfserveClaim: selfserveClaim ? { configured: true, method: "POST", path: "/v1/selfserve/claim", chainId: selfserveClaim.config.chainId, asset: selfserveClaim.config.usdcAddress, payTo: selfserveClaim.config.payTo, minPayUsd: selfserveClaim.config.minPayUsd, creditUnitUsd: selfserveClaim.config.creditUnitUsd } : { configured: false } },
     executionProfiles: [...transfer ? ["priorseal.intent.v1"] : [], ...exactCall ? ["priorseal.execution-profile.exact-call.v1"] : [], ...erc4337 ? ["priorseal.execution-profile.erc4337-user-operation.v1"] : [], ...solanaTransaction ? ["priorseal.execution-profile.solana-transaction.v2"] : []],
     erc4337EntryPoints: erc4337EntryPoints.filter((entry) => chains.includes(entry.chainId)),
@@ -49,7 +55,7 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
       receiptPath: "/v1/evidence/receipts/{receiptId}",
       profiles: evidenceProfilesForChains(chains),
       verification: "The response embeds a portable verification bundle. Pin issuer-key trust independently and verify locally before relying on claims.",
-      boundaries: ["Does not submit transactions or custody keys.", "Does not turn a service payment into execution authority.", "Only receipts already issued by PriorSeal are addressable."],
+      boundaries: ["Does not submit transactions or custody keys.", "Observes an integrator-supplied transaction hash without creating a customer transaction.", "Does not turn a service payment into execution authority.", "Only receipts already issued by PriorSeal are addressable."],
       commerce: { x402: evidenceBundleRoute ? { enabled: true, price: evidenceBundleRoute.price, paymentPath: "/v1/evidence/receipts/{receiptId}/check", staticExportPaths: ["/v1/receipts/{receiptId}/bundle", "/v1/evidence/receipts/{receiptId}"], samePriceAs: evidenceBundleRoute.path, product: "fresh_evidence_check" } : { enabled: false } }
     },
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? "operator_defined", scope: "project_uploaded_evidence" }

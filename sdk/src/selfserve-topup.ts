@@ -34,9 +34,10 @@ export function selfServeClaimMessage(payTo: string, txHash: string): string {
 }
 
 /**
- * One-call self-serve funding: transfer USDC to the deployment payTo, prove
- * payer-wallet ownership with an EIP-191 signature, and receive a meter
- * account with payment-backed credits plus its one-time credential.
+ * Optional one-call self-serve funding. A deployment must explicitly advertise
+ * this path: transfer USDC to its payTo, prove payer-wallet ownership with an
+ * EIP-191 signature, and receive a meter account with payment-backed credits
+ * plus its one-time credential.
  *
  * The transfer callback is called exactly once and its transaction hash is
  * reused across claim retries; the signature is bound to that hash, so a

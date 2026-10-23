@@ -28,6 +28,7 @@ type RuntimeEnvironmentInput = Partial<Record<
   'PRIORSEAL_POLICY_JSON' |
   'PRIORSEAL_PREEXECUTION_PROOF_MODE' |
   'PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED' |
+  'PRIORSEAL_SELF_SERVE_CREDITS_ENABLED' |
   'PRIORSEAL_PRIVATE_KEY_FILE' |
   'PRIORSEAL_PRIVATE_KEY_PEM' |
   'PRIORSEAL_PUBLIC_KEY_FILE' |
@@ -88,8 +89,13 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
   // can still use operator-issued credits without exposing a buyer payment or
   // self-serve funding path.
   const publicPaidCommerceEnabled = booleanValue(environment.PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED, 'PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED', runtimeEnvironment !== 'production');
+  // Customer-funded USDC top-ups are not part of the default evidence flow.
+  // Keep them behind a second opt-in so a paid read-only export never implies
+  // that a customer must first originate an on-chain transfer.
+  const selfserveCreditsEnabled = booleanValue(environment.PRIORSEAL_SELF_SERVE_CREDITS_ENABLED, 'PRIORSEAL_SELF_SERVE_CREDITS_ENABLED', false);
+  if (selfserveCreditsEnabled && !publicPaidCommerceEnabled) throw new TypeError('PRIORSEAL_SELF_SERVE_CREDITS_ENABLED requires PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED=true');
   const x402 = publicPaidCommerceEnabled ? parseX402Config(environment) : undefined;
-  const selfserveClaim = publicPaidCommerceEnabled ? selfserveClaimConfig(environment, agentMeter, privateKeyPem) : undefined;
+  const selfserveClaim = selfserveCreditsEnabled ? selfserveClaimConfig(environment, agentMeter, privateKeyPem) : undefined;
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some(entry => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
   }
@@ -135,6 +141,7 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
     ...(witnessEndpointsJson ? { witnessEndpointsJson } : {}),
     preExecutionProofMode,
     publicPaidCommerceEnabled,
+    selfserveCreditsEnabled,
     allowSelfAssertedPrincipals,
     requireExternalAnchor: preExecutionProofMode === 'evm-anchor',
     anchorConfirmations,
@@ -165,9 +172,10 @@ function withoutRetiredAgentMeterRoutes(config: ReturnType<typeof parseAgentMete
 }
 
 /**
- * Self-serve funding claims piggyback on the agent meter and x402 payTo:
- * they activate only when metered credits, an EVM payTo, Base mainnet RPC,
- * and an issuer key (for the credential derivation secret) are all present.
+ * This function is reached only after the explicit self-serve opt-in. Funding
+ * claims piggyback on the agent meter and x402 payTo, so they also require
+ * metered credits, an EVM payTo, Base mainnet RPC, and an issuer key (for the
+ * credential derivation secret).
  */
 function selfserveClaimConfig(environment: RuntimeEnvironmentInput, agentMeter: ReturnType<typeof parseAgentMeterConfig>, privateKeyPem: string | undefined): SelfserveClaimConfig | undefined {
   if (!agentMeter || !privateKeyPem) return undefined;

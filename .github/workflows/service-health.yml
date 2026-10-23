@@ -41,6 +41,11 @@ jobs:
   agent-retail-readiness:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    env:
+      # Paid read-only evidence export is public; customer-funded credit top-ups
+      # remain a separate, disabled-by-default product.
+      PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE: 'true'
+      PRIORSEAL_EXPECT_SELF_SERVE_CREDITS: 'false'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

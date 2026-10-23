@@ -48,6 +48,14 @@ function evidenceApiCapabilities(value: unknown): boolean {
   return value.commerce.x402.enabled === false || (hasString(value.commerce.x402, 'price') && hasString(value.commerce.x402, 'paymentPath') && hasString(value.commerce.x402, 'samePriceAs'))
 }
 
+function evidenceDelivery(value: unknown): boolean {
+  return record(value)
+    && value.default === 'OFFCHAIN_SIGNED_RECEIPT'
+    && value.executionObservation === 'READ_ONLY'
+    && value.transactionSubmission === 'INTEGRATOR_OWNED'
+    && (value.transparencyAnchoring === 'OPERATOR_MANAGED_OPTIONAL' || value.transparencyAnchoring === 'NOT_CONFIGURED')
+}
+
 function job(value: unknown): boolean {
   return record(value) && hasString(value, 'jobId') && hasString(value, 'state') && (value.input === undefined || record(value.input))
 }
@@ -70,7 +78,7 @@ export function validatePriorSealResponse(path: string, value: unknown): void {
   } else if (route === '/v1/version') {
     if (!hasString(value, 'service') || !hasString(value, 'version') || !strings(value.protocol)) invalid(path)
   } else if (route === '/v1/capabilities') {
-    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry >= 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean' || (value.evidenceApi !== undefined && !evidenceApiCapabilities(value.evidenceApi))) invalid(path)
+    if (value.schema !== 'priorseal.capabilities.v1' || !hasString(value, 'issuer') || !hasString(value, 'audience') || !strings(value.executionProfiles) || !Array.isArray(value.chains) || !value.chains.every(entry => Number.isSafeInteger(entry) && entry >= 0) || !strings(value.authorizers) || typeof value.workflowReady !== 'boolean' || (value.evidenceDelivery !== undefined && !evidenceDelivery(value.evidenceDelivery)) || (value.evidenceApi !== undefined && !evidenceApiCapabilities(value.evidenceApi))) invalid(path)
   } else if (route === '/v1/agent-accounts/self/usage') {
     if (!Array.isArray(value.items) || !value.items.every(agentUsage)) invalid(path)
   } else if (route === '/v1/agent-accounts/self') {

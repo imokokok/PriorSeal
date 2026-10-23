@@ -15,7 +15,7 @@ Agent proposal → Bounded intent → Principal signature → Acceptance + time 
                                 → EVM / Solana observation → Signed receipt → Independent review
 ```
 
-PriorSeal is for teams building EVM and Solana Agents, treasury automation, wallets, trading applications, and transaction infrastructure. It sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys, move funds, or turn a single authorization into open-ended automation.
+PriorSeal is for teams building EVM and Solana Agents, treasury automation, wallets, trading applications, and transaction infrastructure. It sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys, move funds, or turn a single authorization into open-ended automation. The default authorization and receipt path is off-chain. When an application already has a real transaction, PriorSeal reads its hash and binds the observation to the authorization; it never asks a user to create a test or self-transfer merely to obtain evidence. See the [hybrid evidence model](docs/product/hybrid-evidence-model.md).
 
 ## Choose your integration path
 
@@ -158,7 +158,7 @@ Other partner fixtures are under [`examples/`](examples/). Insight can be used i
 
 | Topic | Start here |
 | --- | --- |
-| Product scope, commercial direction and evidence limits | [Positioning](docs/product/positioning.md) · [First-release scope](docs/product/first-release-scope.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
+| Product scope, commercial direction and evidence limits | [Positioning](docs/product/positioning.md) · [Hybrid evidence model](docs/product/hybrid-evidence-model.md) · [First-release scope](docs/product/first-release-scope.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
 | Authorization and receipt semantics | [Signed authorization](docs/architecture/signed-authorization.md) · [Temporal evidence and finality](docs/architecture/temporal-finality.md) · [Lifecycle](docs/architecture/lifecycle.md) · [API compatibility](docs/api/compatibility.md) |
 | Security and operations | [Threat model](docs/security/threat-model.md) · [Supply-chain controls](docs/security/supply-chain.md) · [Operations](docs/runbooks/operations.md) · [Agent/retail public operations](docs/runbooks/agent-retail-public-operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
 | SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |

@@ -31,6 +31,7 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     witnessEndpointsFile: undefined,
     preExecutionProofMode: 'issuer',
     publicPaidCommerceEnabled: true,
+    selfserveCreditsEnabled: false,
     erc4337EntryPoints: [],
     eip7702Delegates: [],
     safe4337Trust: [],
@@ -44,6 +45,28 @@ test('runtime configuration normalizes explicit startup dependencies', () => {
     trustProxy: true,
     x402: void 0,
   });
+});
+
+test('customer-funded self-serve credits require a separate explicit opt-in', () => {
+  const paymentRail = {
+    PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'true',
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example',
+    PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]',
+    PRIORSEAL_AGENT_METER_JSON: JSON.stringify({ schema: 'priorseal.agent-meter.v1', creditUnitUsd: '0.01', operatorCredentialHash: 'a'.repeat(64), accounts: [], routes: [] }),
+    PRIORSEAL_PRIVATE_KEY_PEM: '-----BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----',
+    PRIORSEAL_PUBLIC_KEY_PEM: '-----BEGIN PUBLIC KEY-----\nfixture\n-----END PUBLIC KEY-----',
+    PRIORSEAL_RPC_BASE: 'https://base-rpc.example',
+  };
+  const defaultConfig = loadRuntimeConfig(paymentRail);
+  assert.equal(defaultConfig.selfserveCreditsEnabled, false);
+  assert.equal(defaultConfig.selfserveClaim, undefined);
+  const enabledConfig = loadRuntimeConfig({ ...paymentRail, PRIORSEAL_SELF_SERVE_CREDITS_ENABLED: 'true' });
+  assert.equal(enabledConfig.selfserveCreditsEnabled, true);
+  assert.equal(enabledConfig.selfserveClaim?.chainId, 8453);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'false', PRIORSEAL_SELF_SERVE_CREDITS_ENABLED: 'true' }), /requires PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_SELF_SERVE_CREDITS_ENABLED: 'invalid' }), /PRIORSEAL_SELF_SERVE_CREDITS_ENABLED/);
 });
 
 test('runtime configuration accepts a Solana-only x402 payment rail', () => {

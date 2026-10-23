@@ -12,6 +12,12 @@ The product promise is:
 > An agent may automatically pay for and call PriorSeal, but may act only
 > within authorization its principal and an independent reviewer can verify.
 
+Routine use follows the [hybrid evidence model](hybrid-evidence-model.md):
+signed authorization and receipt issuance are off-chain; execution observation
+is read-only against a transaction the integrator already submitted. PriorSeal
+does not introduce a self-transfer or other test transaction into the customer
+path.
+
 ## The agent flow
 
 ```text
@@ -74,7 +80,7 @@ transaction key must not itself grant principal authority.
 | Design-partner pilot | One bounded execution path, configured jointly, with portable evidence delivered for review | Fixed-scope pilot, implementation fee, or enterprise service contract | Available now |
 | Paid evidence export | A caller purchases an eligible read-only receipt bundle and receives payment-to-resource evidence | x402 `exact` USDC payment on Base | Public production service: one Base-mainnet, read-only receipt-bundle route at $0.02 |
 | Agent runtime orchestration | Agent calls a principal-controlled signing boundary, submits exactly one authorized action through its integrator, then observes and verifies evidence | `priorseal-sdk` `authorizeWithEip712Signer()` / `runAgentAction()` | Implemented; authority and executor infrastructure remain integrator-owned |
-| Agent service credits | An eligible Base USDC payment can create a scoped Agent credential; the operator can also issue, credit or revoke one | Protected account endpoints; raw credentials are returned once and never stored by PriorSeal | Public self-service claims are enabled; operator controls remain available for support and account lifecycle |
+| Agent service credits | An operator provisions a scoped Agent credential and plan allowance; a separately approved deployment may later offer self-service top-ups | Protected account endpoints; raw credentials are returned once and never stored by PriorSeal | Operator-managed by default; customer-funded top-ups require an explicit deployment switch |
 | Session or budget authorization | Principal defines repeatable policy boundaries for an agent | A separately specified and reviewed authorization profile | Later milestone; not implied by current single-use authorization |
 
 ## Why x402 is not the authorization protocol
@@ -87,8 +93,8 @@ resources. Charging a write such as authorization creation or observation
 through that flow could leave an ambiguous result when the write or response
 fails.
 
-When public paid commerce is separately enabled, self-serve write usage uses a separate prepaid-credit meter rather than x402
-settlement. It atomically reserves a configured service credit using the
+When a deployment enables service credits, write usage uses a separate
+prepaid-credit meter rather than x402 settlement. It atomically reserves a configured service credit using the
 request's idempotency key, consumes it only for a successful response, and
 releases it for a failed response. This must not be substituted with an API key
 that silently gives the agent asset-execution authority.
@@ -115,7 +121,7 @@ The first public schedule, once the launch gates below are complete, is:
 | Observation task that produces the durable receipt path | 9 | $0.09 |
 | Standard Evidence Flow | 12 | $0.12 |
 | Read-only receipt bundle via x402 | — | $0.02 |
-| Higher-assurance time, witness, or anchor evidence | — | separately quoted; not in the initial self-serve meter |
+| Higher-assurance time, witness, or anchor evidence | — | separately quoted; not in the initial credit allowance |
 
 The Agent credit configuration for that schedule uses `creditUnitUsd: "0.01"`.
 Status polling, local/offline verification, and a replay of the same
@@ -163,13 +169,17 @@ not double-credit the account. Operator endpoints are deliberately
 not SDK convenience methods: they are an administrative boundary and should be
 called only from a separately protected control plane.
 
-When public paid commerce is enabled, self-serve claims share this ledger: a funded transfer is claimed with a
-payer-wallet signature, the account is seeded at zero credits, and the credit
-operation keyed by the transaction hash is the only grant path. Because the
-credential is deterministically derived from the account, a retried claim
-returns the same credential without storing it, and an account provisioned
-through the operator flow keeps its operator-issued credential (its claim
-fails closed rather than leaking or rotating the secret).
+The standard commercial path is operator-issued or contract-included credits:
+it avoids requiring an end user to make a separate on-chain USDC transfer just
+to use an evidence service. An optional self-serve claim exists only when the
+deployment explicitly sets `PRIORSEAL_SELF_SERVE_CREDITS_ENABLED=true` in
+addition to public paid commerce. In that exceptional model, a funded transfer
+is claimed with a payer-wallet signature, the account is seeded at zero
+credits, and the credit operation keyed by the transaction hash is the only
+grant path. Because the credential is deterministically derived from the
+account, a retried claim returns the same credential without storing it, and
+an account provisioned through the operator flow keeps its operator-issued
+credential (its claim fails closed rather than leaking or rotating the secret).
 
 Bootstrap configuration seeds a previously absent account and may increase its
 configured credit allowance. It cannot reactivate a revoked account or replace
@@ -210,7 +220,7 @@ case and retain the accepted authorization and final receipt.
 
 ## Launch gates
 
-No public claim of x402 self-serve agent payments is allowed until all
+No public claim of x402 payment availability is allowed until all
 applicable production x402 gates are complete: a reviewed payment rail and
 payee, price schedule, facilitator terms, production ledger migration and
 health checks, production issuer and secrets, a passing no-payment Go/No-Go

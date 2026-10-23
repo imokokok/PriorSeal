@@ -99,6 +99,7 @@ test('memory archive pages sparse filtered matches in sequence order across a fi
 test('capabilities never equate an active issuer with workflow readiness and suppress incompatible exact-call policy', async () => {
   const base = { issuer: 'test', audience: 'test-env', keyConfigured: true, policy: { allowedChainIds: [8453], allowedAssets: ['eip155:8453/native'] }, proofMode: 'rfc3161', timestampConfigured: false, witnessConfigured: false, anchorConfigured: false, rpcChainIds: [8453], store: createMemoryStore(), now: 1000, archiveEnabled: false };
   const missing = await deploymentCapabilities(base);
+  assert.deepEqual(missing.evidenceDelivery, { default: 'OFFCHAIN_SIGNED_RECEIPT', executionObservation: 'READ_ONLY', transactionSubmission: 'INTEGRATOR_OWNED', transparencyAnchoring: 'NOT_CONFIGURED' });
   assert.equal(missing.workflowReady, false);
   assert.equal(missing.dependencies.timestamp, 'unavailable');
   assert.deepEqual(missing.executionProfiles, ['priorseal.intent.v1']);
@@ -108,6 +109,7 @@ test('capabilities never equate an active issuer with workflow readiness and sup
   assert.deepEqual((await deploymentCapabilities({ ...base, timestampConfigured: true, contractSignatureConfigured: true })).authorizers, ['eip712', 'eip1271']);
   assert.equal((await deploymentCapabilities({ ...base, timestampConfigured: true, rpcChainIds: [] })).workflowReady, false);
   assert.equal((await deploymentCapabilities({ ...base, timestampConfigured: true, store: { health: async () => { throw new Error('down'); } } })).dependencies.storage, 'unavailable');
+  assert.equal((await deploymentCapabilities({ ...base, timestampConfigured: true, anchorConfigured: true })).evidenceDelivery.transparencyAnchoring, 'OPERATOR_MANAGED_OPTIONAL');
 });
 
 test('capability action matching follows the case-insensitive policy evaluator', async () => {

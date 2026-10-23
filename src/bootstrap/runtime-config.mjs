@@ -26,8 +26,10 @@ function loadRuntimeConfig(environment = process.env) {
   const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, "PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON"));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, "PRIORSEAL_SAFE_4337_TRUST_JSON"));
   const publicPaidCommerceEnabled = booleanValue(environment.PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED, "PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED", runtimeEnvironment !== "production");
+  const selfserveCreditsEnabled = booleanValue(environment.PRIORSEAL_SELF_SERVE_CREDITS_ENABLED, "PRIORSEAL_SELF_SERVE_CREDITS_ENABLED", false);
+  if (selfserveCreditsEnabled && !publicPaidCommerceEnabled) throw new TypeError("PRIORSEAL_SELF_SERVE_CREDITS_ENABLED requires PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED=true");
   const x402 = publicPaidCommerceEnabled ? parseX402Config(environment) : void 0;
-  const selfserveClaim = publicPaidCommerceEnabled ? selfserveClaimConfig(environment, agentMeter, privateKeyPem) : void 0;
+  const selfserveClaim = selfserveCreditsEnabled ? selfserveClaimConfig(environment, agentMeter, privateKeyPem) : void 0;
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some((entry) => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
   }
@@ -72,6 +74,7 @@ function loadRuntimeConfig(environment = process.env) {
     ...witnessEndpointsJson ? { witnessEndpointsJson } : {},
     preExecutionProofMode,
     publicPaidCommerceEnabled,
+    selfserveCreditsEnabled,
     allowSelfAssertedPrincipals,
     requireExternalAnchor: preExecutionProofMode === "evm-anchor",
     anchorConfirmations,

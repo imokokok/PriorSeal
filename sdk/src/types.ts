@@ -425,6 +425,12 @@ export type DeploymentCapabilities = {
   schema: 'priorseal.capabilities.v1'
   issuer: string
   audience: string
+  evidenceDelivery?: {
+    default: 'OFFCHAIN_SIGNED_RECEIPT'
+    executionObservation: 'READ_ONLY'
+    transactionSubmission: 'INTEGRATOR_OWNED'
+    transparencyAnchoring: 'OPERATOR_MANAGED_OPTIONAL' | 'NOT_CONFIGURED'
+  }
   executionProfiles: string[]
   chains: number[]
   authorizers: string[]

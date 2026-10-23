@@ -13,6 +13,12 @@ readiness, and the public Agent discovery document.
 The check sends no Agent credential, payment signature, wallet signature, or
 write request. It does not call a payment facilitator and cannot move funds.
 
+The production health workflow currently expects public x402 payment only for
+read-only evidence export. It separately expects customer-funded self-serve
+credits to remain disabled. Change either expectation only with an approved
+commercial and customer-cost decision, then update the launch record and this
+workflow together.
+
 ## Incident handling
 
 1. Preserve the GitHub Actions artifact, public request ID, UTC timestamp, and

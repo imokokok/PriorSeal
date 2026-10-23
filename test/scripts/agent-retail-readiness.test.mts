@@ -9,13 +9,13 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 }
 
-function capabilities(publicPaidCommerce = false) {
+function capabilities(publicPaidCommerce = false, selfserveClaim = false) {
   return {
     schema: 'priorseal.capabilities.v1', workflowReady: true,
     dependencies: { issuer: 'configured', storage: 'available' },
     payments: {
       publicPaidCommerce: { enabled: publicPaidCommerce, mode: publicPaidCommerce ? 'PUBLIC_PAID' : 'PILOT_OPERATOR_MANAGED' },
-      agentCredits: { configured: true }, selfserveClaim: { configured: publicPaidCommerce },
+      agentCredits: { configured: true }, selfserveClaim: { configured: selfserveClaim },
       x402: publicPaidCommerce ? { configured: true, routes: [{ method: 'GET', path: '/v1/receipts/:receiptId/bundle' }] } : { configured: false, routes: [] },
     },
   };
@@ -51,7 +51,7 @@ test('public Agent-and-retail readiness checks only public GET surfaces while pa
   assert.ok(requests.every((request) => request.method === 'GET' && !request.headers.has('payment-signature')));
 });
 
-test('public Agent-and-retail readiness accepts the enabled self-service payment surface without spending or signing', async () => {
+test('public Agent-and-retail readiness accepts x402 while customer-funded credits remain disabled', async () => {
   const result = await runAgentRetailReadiness({
     env: { ...process.env, PRIORSEAL_BASE_URL: origin, PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE: 'true' },
     log: () => {},
@@ -65,7 +65,25 @@ test('public Agent-and-retail readiness accepts the enabled self-service payment
       throw new Error(`Unexpected request ${url}`);
     },
   });
-  assert.equal(result.selfserveClaim, 'PUBLIC_SELF_SERVE_ENABLED');
+  assert.equal(result.selfserveClaim, 'DISABLED_BY_DEFAULT');
   assert.equal(result.x402, 'PUBLIC_ENABLED');
   assert.equal(result.writesPerformed, 0);
+});
+
+test('public Agent-and-retail readiness checks self-serve funding only when explicitly requested', async () => {
+  const result = await runAgentRetailReadiness({
+    env: { ...process.env, PRIORSEAL_BASE_URL: origin, PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE: 'true', PRIORSEAL_EXPECT_SELF_SERVE_CREDITS: 'true' },
+    log: () => {},
+    fetcher: async (input, init) => {
+      const url = new URL(new Request(input, init).url);
+      if (url.pathname === '/health/live') return json({ status: 'ok' });
+      if (url.pathname === '/health/ready') return json({ status: 'ready', storage: 'd1' });
+      if (url.pathname === '/v1/version') return json({ service: 'priorseal', version });
+      if (url.pathname === '/v1/capabilities') return json(capabilities(true, true));
+      if (url.pathname === '/.well-known/priorseal-agent.json') return json(discovery());
+      throw new Error(`Unexpected request ${url}`);
+    },
+  });
+  assert.equal(result.selfserveClaim, 'EXPLICITLY_ENABLED');
+  assert.equal(result.x402, 'PUBLIC_ENABLED');
 });

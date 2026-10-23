@@ -113,7 +113,7 @@ export class PriorSealClient {
     return this.request<{ items: AgentUsage[]; requestId?: string }>(`/v1/agent-accounts/self/usage?limit=${limit}`, {}, options)
   }
 
-  /** Claim metered credits for an on-chain USDC transfer with a payer-wallet signature. See selfServeTopup for the composed flow. */
+  /** Claim credits for an explicitly enabled self-serve USDC top-up. See selfServeTopup for the composed opt-in flow. */
   selfServeClaim(input: { txHash: string; signature: string }, options?: RequestOptions) {
     if (!/^0x[0-9a-fA-F]{64}$/.test(input.txHash)) throw new TypeError('txHash must be a 32-byte transaction hash')
     if (!/^0x[0-9a-fA-F]{130}$/.test(input.signature)) throw new TypeError('signature must be a 65-byte EIP-191 signature')

@@ -95,6 +95,9 @@ test('SDK rejects malformed capability claims instead of exposing them as typed 
   };
   const client = createPriorSealClient({ fetch: async () => response(valid) });
   assert.deepEqual(await client.capabilities(), valid);
+  const hybrid = { ...valid, evidenceDelivery: { default: 'OFFCHAIN_SIGNED_RECEIPT', executionObservation: 'READ_ONLY', transactionSubmission: 'INTEGRATOR_OWNED', transparencyAnchoring: 'OPERATOR_MANAGED_OPTIONAL' } };
+  const hybridClient = createPriorSealClient({ fetch: async () => response(hybrid) });
+  assert.deepEqual(await hybridClient.capabilities(), hybrid);
   const solana = { ...valid, chains: [0] };
   const solanaClient = createPriorSealClient({ fetch: async () => response(solana) });
   assert.deepEqual(await solanaClient.capabilities(), solana);
@@ -103,6 +106,7 @@ test('SDK rejects malformed capability claims instead of exposing them as typed 
     { ...valid, chains: ['8453'] },
     { ...valid, chains: [-1] },
     { ...valid, authorizers: [null] },
+    { ...valid, evidenceDelivery: { default: 'ONCHAIN', executionObservation: 'READ_ONLY', transactionSubmission: 'INTEGRATOR_OWNED', transparencyAnchoring: 'NOT_CONFIGURED' } },
   ]) {
     const badClient = createPriorSealClient({ fetch: async () => response(malformed) });
     await assert.rejects(badClient.capabilities(), { code: 'INVALID_RESPONSE' });

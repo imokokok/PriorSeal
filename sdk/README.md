@@ -158,10 +158,11 @@ Store this credential separately from both the principal authorization signer
 and the executor key. If it is revoked or depleted, the service rejects the
 call without granting any substitute execution authority.
 
-#### Self-serve funding with one call
+#### Optional self-serve funding with one call
 
-Where a deployment advertises `capabilities().payments.selfserveClaim`, an
-agent can fund its own credits without contacting an operator: transfer USDC
+This is not part of PriorSeal's default commercial flow. Where a separately
+reviewed deployment explicitly advertises
+`capabilities().payments.selfserveClaim`, an agent can fund its own credits without contacting an operator: transfer USDC
 to the deployment `payTo` on the advertised chain, prove payer-wallet ownership
 with an EIP-191 signature, and receive the account plus its one-time
 credential. `selfServeTopup()` composes the transfer, the claim signature, and

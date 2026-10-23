@@ -23,7 +23,8 @@
 ## Payment and service credits
 
 - Agent-credit schedule approval record:
-- Self-serve claim payee control confirmation:
+- Customer-funded self-serve credits: `DISABLED_BY_DEFAULT` / `EXPLICITLY_APPROVED`:
+- If explicitly approved: self-serve claim payee control confirmation, customer-gas disclosure, and separate commercial-owner approval:
 - Refund/chargeback owner and procedure:
 - x402 status: `NOT_ADVERTISED` / `GO_NO_GO_PASSED`:
 - If x402 is approved: facilitator approval record, exact network/route/price,

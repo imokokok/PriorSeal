@@ -6,6 +6,12 @@
 
 PriorSeal preserves the relationship between what a principal authorized before action and what was observed afterward. A portable receipt lets another party check signed permission, supported ordering evidence, execution state, and compliance with the authorization's bound fields.
 
+The default delivery path is off-chain: authorization and signed receipts do
+not require a customer wallet or a new transaction. When an integrator already
+has a real transaction, PriorSeal reads and verifies that transaction rather
+than creating a test transfer. Optional batch anchoring is an
+operator-funded, high-assurance tier. See the [hybrid evidence model](hybrid-evidence-model.md).
+
 Its product path is **Agent proposal → bounded intent → principal authorization → acceptance and time evidence → observed execution → signed receipt → independent review**. Agent builders, wallets, trading applications, treasury teams and their users can use PriorSeal independently of Insight.
 
 中文：**让 Agent 提议链上行动，而由用户保留明确控制权；将事前的授权与事后的实际执行连接起来，形成可独立验证的证据。**
@@ -28,10 +34,10 @@ accounts:
 | Principal / authorizer | The bounded action the agent may take | Settlement of a PriorSeal service charge |
 | Executor | Submission of the subject transaction | A broader authorization than the signed intent |
 
-The eventual self-serve payment mechanism can be x402 or another reviewed
-prepaid-usage design, but it does not replace principal authorization. A
-payment rail is separate from the subject-execution chain and never proves
-that the subject action was authorized.
+x402 is an optional read-only evidence-export payment mechanism; it does not
+replace principal authorization. Customer-funded prepaid usage is disabled by
+default and requires a separate deployment decision. Neither payment route
+proves that the subject action was authorized.
 
 中文：**PriorSeal 是 Agent 按调用使用的授权与证据层；Agent 可以自动为服务
 付费，但只能在授权人可独立证明的边界内行动。**
@@ -60,6 +66,8 @@ Combined description: **Oracle risk intelligence, explicit authorization, and ve
 ## Claim boundaries
 
 - PriorSeal does not construct, sign, or broadcast execution transactions and does not hold transaction-signing keys or funds.
+- PriorSeal does not require a customer test transaction or self-transfer. It only observes a transaction an integrator has already submitted for a real business purpose.
+- Optional batch anchors are funded and submitted by the PriorSeal operator; they do not shift an internal evidence cost to an end user.
 - An Agent ID bound into an authorization identifies the application-declared proposer; it is not a reputation, performance or identity claim unless separately verified.
 - A single-use authorization is not a session, budget, recurring or unattended trading mandate.
 - Compliance concerns the authorization's supported bound fields. It does not guarantee economic safety, token legitimacy, profitability, or an infallible RPC view.
