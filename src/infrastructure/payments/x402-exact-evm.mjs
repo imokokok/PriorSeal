@@ -37,6 +37,11 @@ const MAX_FACILITATOR_RESPONSE_BYTES = 64 * 1024;
 const PAYMENT_HEADER_LIMIT = 64 * 1024;
 const MAX_TIMEOUT_MS = 2147483647;
 const RESERVED_FACILITATOR_HEADERS = /* @__PURE__ */ new Set(["content-type", "content-length", "host", "connection", "transfer-encoding", "payment-signature", "payment-required", "payment-response"]);
+const BAZAAR_SERVICE = Object.freeze({
+  serviceName: "PriorSeal Evidence API",
+  tags: ["agent-evidence", "authorization", "execution", "verification", "x402"],
+  iconUrl: "/priorseal-mark.svg"
+});
 const capabilityCache = /* @__PURE__ */ new Map();
 function parseX402Config(environment) {
   const raw = {
@@ -88,7 +93,14 @@ function createX402PaymentService(config) {
       const supported = await getSupportedNetworks(config, signal);
       const requirements = X402_STAGING_NETWORKS.filter((network) => config.networks.includes(network.network)).map((network) => makeRequirement(config, route, network, supported.solanaFeePayer)).filter((requirement2) => Boolean(requirement2 && supported.networks.has(requirement2.network)));
       if (requirements.length === 0) throw new Error("Configured facilitator does not support exact payments on any locally configured network");
-      const resource = { url: resourceUrl, description: route.description, mimeType: "application/json", serviceName: "PriorSeal" };
+      const resource = {
+        url: resourceUrl,
+        description: route.description,
+        mimeType: "application/json",
+        serviceName: BAZAAR_SERVICE.serviceName,
+        tags: BAZAAR_SERVICE.tags,
+        iconUrl: new URL(BAZAAR_SERVICE.iconUrl, config.resourceOrigin).toString()
+      };
       let payload;
       let malformed = false;
       if (paymentHeader) {
@@ -98,7 +110,7 @@ function createX402PaymentService(config) {
           malformed = true;
         }
       }
-      const extensions = { bazaar: { info: { input: { type: "http", method: route.method } }, schema: {} } };
+      const extensions = { bazaar: bazaarDiscovery(route, resourceUrl) };
       const paymentRequired = (error) => ({ x402Version: 2, error, resource, accepts: requirements, extensions });
       const response = paymentRequired(malformed ? "Invalid PAYMENT-SIGNATURE header" : "Payment required");
       const header = encodeBase64Json(response);
@@ -245,6 +257,116 @@ function priceToAtomicUnits(price) {
   const atomic = BigInt(match[1]) * 1000000n + BigInt((match[2] ?? "").padEnd(6, "0"));
   if (atomic <= 0n || atomic > 9000000000000000000n) throw new TypeError("x402 route price is outside the supported range");
   return atomic.toString();
+}
+function bazaarDiscovery(route, resourceUrl) {
+  const pathParams = bazaarPathParams(route.path, resourceUrl);
+  const input = {
+    type: "http",
+    method: route.method,
+    ...Object.keys(pathParams).length ? { pathParams } : {}
+  };
+  const pathParamNames = Object.keys(pathParams);
+  return {
+    info: {
+      input,
+      output: bazaarOutput(route.path)
+    },
+    schema: bazaarSchema(pathParamNames),
+    ...pathParamNames.length ? { routeTemplate: route.path } : {}
+  };
+}
+function bazaarPathParams(routePath, resourceUrl) {
+  const template = routePath.replace(/\/+$/, "").split("/");
+  const pathname = new URL(resourceUrl).pathname.replace(/\/+$/, "") || "/";
+  const actual = pathname.split("/");
+  const params = {};
+  for (let index = 0; index < template.length; index += 1) {
+    const segment = template[index];
+    if (!segment.startsWith(":")) continue;
+    const value = actual[index];
+    if (!value || value.length > 512 || /[\u0000-\u001F\u007F]/.test(value)) throw new TypeError("x402 resource URL has an invalid dynamic path parameter");
+    params[segment.slice(1)] = decodeURIComponent(value);
+  }
+  return params;
+}
+function bazaarSchema(pathParamNames) {
+  const pathParams = pathParamNames.length ? {
+    type: "object",
+    properties: Object.fromEntries(pathParamNames.map((name) => [name, { type: "string", minLength: 1, maxLength: 512 }])),
+    required: pathParamNames,
+    additionalProperties: false
+  } : void 0;
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    properties: {
+      input: {
+        type: "object",
+        properties: {
+          type: { type: "string", const: "http" },
+          method: { type: "string", enum: ["GET", "HEAD", "DELETE"] },
+          ...pathParams ? { pathParams } : {}
+        },
+        required: ["type", "method", ...pathParams ? ["pathParams"] : []],
+        additionalProperties: false
+      },
+      output: {
+        type: "object",
+        properties: {
+          type: { type: "string", const: "json" },
+          format: { type: "string" },
+          example: {}
+        },
+        required: ["type"],
+        additionalProperties: false
+      }
+    },
+    required: ["input"],
+    additionalProperties: false
+  };
+}
+function bazaarOutput(path) {
+  if (path.endsWith("/bundle")) {
+    return {
+      type: "json",
+      format: "priorseal.verification-bundle.v1",
+      example: {
+        schema: "priorseal.verification-bundle.v1",
+        receipt: { receiptId: "psr_example", executionStatus: "COMPLETED" },
+        keyRegistry: { schema: "priorseal.keys.v1", keys: [] },
+        bundleHash: "0".repeat(64)
+      }
+    };
+  }
+  if (path.endsWith("/check")) {
+    return {
+      type: "json",
+      format: "priorseal.fresh-evidence-check.v1",
+      example: {
+        schema: "priorseal.fresh-evidence-check.v1",
+        checkId: "psc_example",
+        receiptVerification: { valid: true, code: "OK" },
+        current: { status: "CONFIRMED", finalityState: "FINALIZED" },
+        issuer: "priorseal.xyz",
+        algorithm: "Ed25519"
+      }
+    };
+  }
+  if (path.startsWith("/v1/evidence/receipts/")) return {
+    type: "json",
+    format: "priorseal.evidence.v1",
+    example: {
+      schema: "priorseal.evidence.v1",
+      evidenceId: "pse_example",
+      subject: { receiptId: "psr_example" },
+      verification: { method: "verification_bundle", required: "VERIFY_LOCALLY_WITH_INDEPENDENT_ISSUER_KEY_TRUST" }
+    }
+  };
+  return {
+    type: "json",
+    format: "application/json",
+    example: { status: "paid_resource_delivered" }
+  };
 }
 function parseFacilitatorUrl(value, name = "PRIORSEAL_X402_FACILITATOR_URL") {
   let url;

@@ -1,5 +1,6 @@
 // Generated from cdp-facilitator-auth.mts by npm run core:build. Do not edit directly.
 const CDP_X402_FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402";
+const CDP_X402_DISCOVERY_SEARCH_URL = "https://api.cdp.coinbase.com/platform/v2/x402/discovery/search";
 function parseCdpFacilitatorAuth({ apiKeyId, apiKeySecret, facilitatorUrl, hasStaticHeaders }) {
   if (facilitatorUrl !== CDP_X402_FACILITATOR_URL) throw new TypeError(`PRIORSEAL_X402_FACILITATOR_AUTH_MODE=cdp requires ${CDP_X402_FACILITATOR_URL}`);
   if (hasStaticHeaders) throw new TypeError("PRIORSEAL_X402_FACILITATOR_HEADERS_JSON cannot be combined with CDP facilitator authentication");
@@ -11,7 +12,13 @@ function parseCdpFacilitatorAuth({ apiKeyId, apiKeySecret, facilitatorUrl, hasSt
 }
 async function cdpFacilitatorAuthHeaders(auth, operation) {
   const endpoint = new URL(`${CDP_X402_FACILITATOR_URL}/${operation}`);
-  const jwt = await cdpJwt(auth, operation === "supported" ? "GET" : "POST", endpoint);
+  return cdpApiAuthHeaders(auth, operation === "supported" ? "GET" : "POST", endpoint);
+}
+async function cdpApiAuthHeaders(auth, method, endpoint) {
+  if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.host !== "api.cdp.coinbase.com" || !endpoint.pathname.startsWith("/platform/v2/x402/")) {
+    throw new TypeError("CDP API authentication is limited to HTTPS x402 API endpoints");
+  }
+  const jwt = await cdpJwt(auth, method, endpoint);
   return { Authorization: `Bearer ${jwt}` };
 }
 async function cdpJwt(auth, method, endpoint) {
@@ -49,7 +56,9 @@ function randomHex(size) {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
 }
 export {
+  CDP_X402_DISCOVERY_SEARCH_URL,
   CDP_X402_FACILITATOR_URL,
+  cdpApiAuthHeaders,
   cdpFacilitatorAuthHeaders,
   parseCdpFacilitatorAuth
 };

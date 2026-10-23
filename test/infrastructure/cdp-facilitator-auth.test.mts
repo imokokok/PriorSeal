@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
-import { CDP_X402_FACILITATOR_URL } from '../../src/infrastructure/payments/cdp-facilitator-auth.mjs';
+import { CDP_X402_DISCOVERY_SEARCH_URL, CDP_X402_FACILITATOR_URL, cdpApiAuthHeaders, parseCdpFacilitatorAuth } from '../../src/infrastructure/payments/cdp-facilitator-auth.mjs';
 import { createX402PaymentService, parseX402Config } from '../../src/infrastructure/payments/x402-exact-evm.mjs';
 
 const route = { method: 'GET' as const, path: '/v1/receipts/:receiptId/bundle', description: 'Export an evidence bundle', price: '$0.01' };
@@ -56,6 +56,27 @@ test('CDP facilitator mode creates an endpoint-bound Ed25519 JWT for discovery',
 
   const result = await createX402PaymentService(config!).prepare(config!.routes[0], 'https://api.example.test/v1/receipts/probe/bundle', undefined);
   assert.equal(result.kind, 'required');
+});
+
+test('CDP discovery catalog authentication is bound to the read-only search endpoint', async () => {
+  const { secret, publicJwk } = cdpSecret();
+  const auth = parseCdpFacilitatorAuth({
+    apiKeyId: 'organizations/example/apiKeys/key-1',
+    apiKeySecret: secret,
+    facilitatorUrl: CDP_X402_FACILITATOR_URL,
+    hasStaticHeaders: false,
+  });
+  const headers = await cdpApiAuthHeaders(auth, 'GET', new URL(`${CDP_X402_DISCOVERY_SEARCH_URL}?urlSubstring=priorseal.xyz&extensions=bazaar`));
+  const authorization = headers.Authorization;
+  assert.ok(authorization.startsWith('Bearer '));
+  assert.equal(authorization.includes(secret), false);
+  const [headerPart, payloadPart, signaturePart] = authorization.slice('Bearer '.length).split('.');
+  const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8')) as Record<string, unknown>;
+  assert.deepEqual(payload.uris, ['GET api.cdp.coinbase.com/platform/v2/x402/discovery/search']);
+  const verifyKey = await crypto.subtle.importKey('jwk', publicJwk, 'Ed25519', false, ['verify']);
+  assert.equal(await crypto.subtle.verify('Ed25519', verifyKey, Buffer.from(signaturePart, 'base64url'), Buffer.from(`${headerPart}.${payloadPart}`)), true);
+  await assert.rejects(cdpApiAuthHeaders(auth, 'GET', new URL('https://api.cdp.coinbase.com/platform/v2/other/search')), /limited to HTTPS x402 API endpoints/);
+  await assert.rejects(cdpApiAuthHeaders(auth, 'GET', new URL('https://example.test/platform/v2/x402/discovery/search')), /limited to HTTPS x402 API endpoints/);
 });
 
 test('CDP facilitator mode fails closed on missing, mixed, or mismatched credentials', () => {

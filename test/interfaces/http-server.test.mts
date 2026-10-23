@@ -245,11 +245,15 @@ test('x402 Monad mainnet is advertised, verified, and settled through the HTTP l
     const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
     facilitatorCalls.push(`${init?.method} ${url.pathname}`);
     if (url.pathname === '/supported') return new Response(JSON.stringify({ kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:143' }, { x402Version: 2, scheme: 'exact', network: 'eip155:8453' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
-    const body = JSON.parse(String(init?.body)) as { paymentRequirements: { network: string; asset: string; extra: { name: string; version: string } } };
+    const body = JSON.parse(String(init?.body)) as { paymentRequirements: { network: string; asset: string; extra: { name: string; version: string } }; paymentPayload: { resource?: Record<string, unknown>; extensions?: Record<string, unknown> } };
     assert.equal(body.paymentRequirements.network, 'eip155:143');
     assert.equal(body.paymentRequirements.asset, '0x754704Bc059F8C67012fEd69BC8A327a5aafb603');
     assert.deepEqual(body.paymentRequirements.extra, { name: 'USDC', version: '2' });
-    if (url.pathname === '/verify') return new Response(JSON.stringify({ isValid: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.pathname === '/verify') {
+      assert.deepEqual(body.paymentPayload.resource, challenge.resource);
+      assert.deepEqual(body.paymentPayload.extensions, challenge.extensions);
+      return new Response(JSON.stringify({ isValid: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     if (url.pathname === '/settle') return new Response(JSON.stringify({ success: true, network: 'eip155:143', transaction: `0x${'1'.repeat(64)}`, payer: `0x${'c'.repeat(40)}`, amount: '10000' }), { status: 200, headers: { 'content-type': 'application/json' } });
     throw new Error(`Unexpected facilitator request: ${url.pathname}`);
   }) as typeof fetch;
@@ -268,15 +272,32 @@ test('x402 Monad mainnet is advertised, verified, and settled through the HTTP l
   const unpaid = await request(server, '/v1/capabilities');
   assert.equal(unpaid.status, 402);
   assert.equal(unpaid.headers['cache-control'], 'no-store');
-  const challenge = unpaid.json() as unknown as { accepts: { network: string; amount: string; asset: string; extra: { name: string; version: string } }[]; extensions: { bazaar: { info: { input: { type: string; method: string } }; schema: Record<string, never> } } };
+  const challenge = unpaid.json() as unknown as {
+    resource: { serviceName: string; tags: string[]; iconUrl: string };
+    accepts: { network: string; amount: string; asset: string; extra: { name: string; version: string } }[];
+    extensions: { bazaar: { info: { input: { type: string; method: string; pathParams?: { receiptId: string } }; output: { type: string; format: string; example: Record<string, unknown> } }; schema: { $schema: string; properties: { input: { required: string[] } } }; routeTemplate?: string } };
+  };
   assert.deepEqual(challenge.accepts.map(requirement => requirement.network), ['eip155:143']);
-  assert.deepEqual(challenge.extensions, { bazaar: { info: { input: { type: 'http', method: 'GET' } }, schema: {} } });
+  assert.deepEqual(challenge.resource, {
+    url: 'https://api.example.test/v1/capabilities',
+    description: 'Read deployment capabilities',
+    mimeType: 'application/json',
+    serviceName: 'PriorSeal Evidence API',
+    tags: ['agent-evidence', 'authorization', 'execution', 'verification', 'x402'],
+    iconUrl: 'https://api.example.test/priorseal-mark.svg',
+  });
+  assert.deepEqual(challenge.extensions.bazaar.info.input, { type: 'http', method: 'GET' });
+  assert.equal(challenge.extensions.bazaar.info.output.type, 'json');
+  assert.equal(challenge.extensions.bazaar.info.output.format, 'application/json');
+  assert.equal(challenge.extensions.bazaar.routeTemplate, undefined);
+  assert.equal(challenge.extensions.bazaar.schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
+  assert.deepEqual(challenge.extensions.bazaar.schema.properties.input.required, ['type', 'method']);
   const accepted = challenge.accepts[0];
   assert.equal(accepted.amount, '10000');
   assert.equal(accepted.asset, '0x754704Bc059F8C67012fEd69BC8A327a5aafb603');
   assert.deepEqual(accepted.extra, { name: 'USDC', version: '2' });
 
-  const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: { ...accepted, scheme: 'exact', payTo: x402.payTo!, maxTimeoutSeconds: 300 }, payload: {} })).toString('base64');
+  const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: { ...accepted, scheme: 'exact', payTo: x402.payTo!, maxTimeoutSeconds: 300 }, payload: {}, resource: challenge.resource, extensions: challenge.extensions })).toString('base64');
   const paid = await request(server, '/v1/capabilities', { headers: { 'payment-signature': paymentHeader } });
   assert.equal(paid.status, 200);
   assert.equal(paid.headers['cache-control'], 'private, no-store');
@@ -389,7 +410,10 @@ test('a paid receipt bundle includes issuer-signed x402 payment evidence', async
   const receiptId = observed.json().receipt.receiptId;
   const unpaid = await request(server, `/v1/receipts/${receiptId}/bundle`);
   assert.equal(unpaid.status, 402);
-  const accepted = (unpaid.json() as unknown as { accepts: Array<Record<string, unknown>> }).accepts[0];
+  const bundleChallenge = unpaid.json() as unknown as { accepts: Array<Record<string, unknown>>; extensions: { bazaar: { info: { output: { format: string } }; routeTemplate: string } } };
+  assert.equal(bundleChallenge.extensions.bazaar.info.output.format, 'priorseal.verification-bundle.v1');
+  assert.equal(bundleChallenge.extensions.bazaar.routeTemplate, '/v1/receipts/:receiptId/bundle');
+  const accepted = bundleChallenge.accepts[0];
   const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted, payload: {} })).toString('base64');
   const paid = await request(server, `/v1/receipts/${receiptId}/bundle`, { headers: { 'payment-signature': paymentHeader } });
   assert.equal(paid.status, 200);
@@ -405,7 +429,10 @@ test('a paid receipt bundle includes issuer-signed x402 payment evidence', async
 
   const unpaidEvidence = await request(server, `/v1/evidence/receipts/${receiptId}`);
   assert.equal(unpaidEvidence.status, 402);
-  const evidenceAccepted = (unpaidEvidence.json() as unknown as { accepts: Array<Record<string, unknown>> }).accepts[0];
+  const evidenceChallenge = unpaidEvidence.json() as unknown as { accepts: Array<Record<string, unknown>>; extensions: { bazaar: { info: { output: { format: string } }; routeTemplate: string } } };
+  assert.equal(evidenceChallenge.extensions.bazaar.info.output.format, 'priorseal.evidence.v1');
+  assert.equal(evidenceChallenge.extensions.bazaar.routeTemplate, '/v1/evidence/receipts/:receiptId');
+  const evidenceAccepted = evidenceChallenge.accepts[0];
   const evidenceHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: evidenceAccepted, payload: {} })).toString('base64');
   const paidEvidence = await request(server, `/v1/evidence/receipts/${receiptId}`, { headers: { 'payment-signature': evidenceHeader } });
   assert.equal(paidEvidence.status, 200);
@@ -418,6 +445,12 @@ test('a paid receipt bundle includes issuer-signed x402 payment evidence', async
   const evidenceLedger = await store.listX402PaymentLedgerEvents(x402PaymentLedgerId(evidenceLedgerContext, `https://api.example.test/v1/evidence/receipts/${receiptId}`));
   assert.deepEqual(evidenceLedger.map(event => event.type), ['PAYMENT_AUTHORIZED', 'DELIVERED']);
   assert.equal(evidenceLedger.at(-1)?.paymentEvidenceId, evidence.bundle.paymentEvidence.paymentEvidenceId);
+
+  const unpaidFresh = await request(server, `/v1/evidence/receipts/${receiptId}/check`);
+  assert.equal(unpaidFresh.status, 402);
+  const freshChallenge = unpaidFresh.json() as unknown as { extensions: { bazaar: { info: { output: { format: string } }; routeTemplate: string } } };
+  assert.equal(freshChallenge.extensions.bazaar.info.output.format, 'priorseal.fresh-evidence-check.v1');
+  assert.equal(freshChallenge.extensions.bazaar.routeTemplate, '/v1/evidence/receipts/:receiptId/check');
 });
 test('request deadline terminates stalled bodies and rejects slow route work', async (t) => {
   const store = { async health() { await new Promise(resolve => setTimeout(resolve, 80)); return 'ok'; } };
