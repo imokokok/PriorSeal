@@ -5,6 +5,7 @@
  * Crypto runtime without carrying a wallet key or a long-lived bearer token.
  */
 export const CDP_X402_FACILITATOR_URL = 'https://api.cdp.coinbase.com/platform/v2/x402';
+export const CDP_X402_DISCOVERY_SEARCH_URL = 'https://api.cdp.coinbase.com/platform/v2/x402/discovery/search';
 
 export type CdpFacilitatorAuth = { provider: 'cdp'; apiKeyId: string; apiKeySecret: string };
 export type CdpFacilitatorOperation = 'supported' | 'verify' | 'settle';
@@ -22,7 +23,22 @@ export function parseCdpFacilitatorAuth({ apiKeyId, apiKeySecret, facilitatorUrl
 /** Build a fresh, endpoint-bound CDP bearer header. Tokens expire in 120 seconds. */
 export async function cdpFacilitatorAuthHeaders(auth: CdpFacilitatorAuth, operation: CdpFacilitatorOperation): Promise<Record<string, string>> {
   const endpoint = new URL(`${CDP_X402_FACILITATOR_URL}/${operation}`);
-  const jwt = await cdpJwt(auth, operation === 'supported' ? 'GET' : 'POST', endpoint);
+  return cdpApiAuthHeaders(auth, operation === 'supported' ? 'GET' : 'POST', endpoint);
+}
+
+/**
+ * Creates an API-key JWT for a CDP x402 API endpoint.
+ *
+ * The endpoint validation prevents an operational checker from accidentally
+ * signing a request for a different host or CDP product surface. Query
+ * parameters are deliberately excluded from the JWT URI claim, as CDP binds
+ * that claim to the HTTP method, host, and path.
+ */
+export async function cdpApiAuthHeaders(auth: CdpFacilitatorAuth, method: 'GET' | 'POST', endpoint: URL): Promise<Record<string, string>> {
+  if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.host !== 'api.cdp.coinbase.com' || !endpoint.pathname.startsWith('/platform/v2/x402/')) {
+    throw new TypeError('CDP API authentication is limited to HTTPS x402 API endpoints');
+  }
+  const jwt = await cdpJwt(auth, method, endpoint);
   return { Authorization: `Bearer ${jwt}` };
 }
 

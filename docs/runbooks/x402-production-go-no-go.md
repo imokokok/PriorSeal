@@ -96,7 +96,27 @@ The check must return `ready: true` before customer traffic is announced. A
 missing production x402 configuration is intentionally a hard failure, not a
 reason to infer a payee, choose more networks, or enable a route.
 
-## 4. Production payment gate and rollback
+## 4. Verify Bazaar discovery separately
+
+The production 402 probe proves that PriorSeal publishes compliant Bazaar
+metadata, but it cannot itself add an entry to a facilitator catalog. A paying
+client must echo `PaymentRequired.extensions.bazaar` in its payment payload.
+After the first valid x402 payment, run the separate, read-only catalog check
+from the approved transient CDP operator environment:
+
+```sh
+npm run x402:bazaar:check
+```
+
+It reads `/v1/capabilities` and CDP's Bazaar search endpoint, then requires
+every configured and Evidence-API-derived paid route template to have the
+expected service name, five search tags, public icon, HTTP input, JSON output
+format, and Draft 2020-12 schema. It never sends `PAYMENT-SIGNATURE`, calls
+`/verify` or `/settle`, or uses a wallet credential. A missing catalog entry
+is a hard failure; wait for the facilitator's indexing window and retry rather
+than reporting the service as agent-discoverable.
+
+## 5. Production payment gate and rollback
 
 The no-payment result is not approval to settle. For one paid production
 rehearsal, obtain a new explicit GO that identifies the wallet, exact route,

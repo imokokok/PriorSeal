@@ -14,6 +14,7 @@ async function runX402ProductionReadiness(environment = process.env, log = conso
   const probeResourceUrl = new URL(probePath, x402.resourceOrigin).toString();
   const localChallenge = await createX402PaymentService(x402).prepare(x402.routes[0], probeResourceUrl, void 0, AbortSignal.timeout(TIMEOUT_MS));
   if (localChallenge.kind !== "required") throw new TypeError("Local production x402 probe did not produce a payment challenge");
+  assertBazaarDiscovery(localChallenge.response, x402.routes[0], probeResourceUrl);
   const capabilities = await readJson(new URL("/v1/capabilities", x402.resourceOrigin).toString());
   const payments = nested(capabilities.body, ["payments", "x402"]);
   if (!payments || payments.configured !== true) throw new TypeError("Production API does not report x402 as configured");
@@ -23,15 +24,15 @@ async function runX402ProductionReadiness(environment = process.env, log = conso
   if (remoteChallenge.headers.has("payment-response")) throw new TypeError("Unpaid production x402 probe unexpectedly returned PAYMENT-RESPONSE");
   const encodedHeader = remoteChallenge.headers.get("payment-required");
   if (!encodedHeader) throw new TypeError("Production x402 payment challenge is missing PAYMENT-REQUIRED");
-  assertEquivalentChallenges(localChallenge.response, remoteChallenge.body, probeResourceUrl);
-  assertEquivalentChallenges(decodeBase64Json(encodedHeader, "PAYMENT-REQUIRED"), remoteChallenge.body, probeResourceUrl);
+  assertEquivalentChallenges(localChallenge.response, remoteChallenge.body, x402.routes[0], probeResourceUrl);
+  assertEquivalentChallenges(decodeBase64Json(encodedHeader, "PAYMENT-REQUIRED"), remoteChallenge.body, x402.routes[0], probeResourceUrl);
   log(JSON.stringify({
     ready: true,
     environment: config.environment,
     resourceOrigin: new URL(x402.resourceOrigin).origin,
     route: x402.routes[0].path,
     networks: [...x402.networks].sort(),
-    checks: ["facilitator-supported", "production-capabilities", "production-402-challenge", "payment-required-header-match"],
+    checks: ["facilitator-supported", "production-capabilities", "production-402-challenge", "payment-required-header-match", "bazaar-discovery-metadata"],
     settlementAttempted: false
   }));
 }
@@ -73,14 +74,48 @@ async function readLimitedText(response) {
   }
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
-function assertEquivalentChallenges(expected, actual, resourceUrl) {
+function assertEquivalentChallenges(expected, actual, route, resourceUrl) {
   if (expected.x402Version !== 2 || actual.x402Version !== 2 || expected.error !== "Payment required" || actual.error !== "Payment required") throw new TypeError("Production x402 challenge has an unexpected envelope");
   const expectedResource = requireRecord(expected.resource, "Local payment resource is invalid");
   const actualResource = requireRecord(actual.resource, "Production payment resource is invalid");
   if (expectedResource.url !== resourceUrl || actualResource.url !== resourceUrl || JSON.stringify(expectedResource) !== JSON.stringify(actualResource)) throw new TypeError("Production x402 challenge resource differs from the configured route");
+  assertBazaarDiscovery(expected, route, resourceUrl);
+  assertBazaarDiscovery(actual, route, resourceUrl);
   const expectedAccepts = normalizedRequirements(expected.accepts);
   const actualAccepts = normalizedRequirements(actual.accepts);
   if (JSON.stringify(expectedAccepts) !== JSON.stringify(actualAccepts)) throw new TypeError("Production x402 challenge requirements differ from the configured facilitator quote");
+}
+function assertBazaarDiscovery(challenge, route, resourceUrl) {
+  const resource = requireRecord(challenge.resource, "x402 Bazaar challenge resource is invalid");
+  const resourceOrigin = new URL(resourceUrl).origin;
+  if (resource.serviceName !== "PriorSeal Evidence API" || JSON.stringify(resource.tags) !== JSON.stringify(["agent-evidence", "authorization", "execution", "verification", "x402"]) || resource.iconUrl !== new URL("/priorseal-mark.svg", resourceOrigin).toString()) throw new TypeError("x402 Bazaar service metadata is invalid");
+  const extensions = requireRecord(challenge.extensions, "x402 Bazaar challenge has no extensions");
+  const bazaar = requireRecord(extensions.bazaar, "x402 Bazaar challenge has no Bazaar extension");
+  const info = requireRecord(bazaar.info, "x402 Bazaar challenge has invalid discovery info");
+  const input = requireRecord(info.input, "x402 Bazaar challenge has invalid input metadata");
+  const output = requireRecord(info.output, "x402 Bazaar challenge has invalid output metadata");
+  const schema = requireRecord(bazaar.schema, "x402 Bazaar challenge has invalid schema metadata");
+  const pathParams = routePathParams(route.path, resourceUrl);
+  if (input.type !== "http" || input.method !== route.method || JSON.stringify(input.pathParams ?? {}) !== JSON.stringify(pathParams)) throw new TypeError("x402 Bazaar challenge input metadata differs from the configured route");
+  if (output.type !== "json" || output.format !== outputFormat(route.path) || !isRecord(output.example)) throw new TypeError("x402 Bazaar challenge output metadata differs from the configured route");
+  if (Object.keys(pathParams).length && bazaar.routeTemplate !== route.path) throw new TypeError("x402 Bazaar challenge route template differs from the configured route");
+  if (!Object.keys(pathParams).length && bazaar.routeTemplate !== void 0) throw new TypeError("x402 Bazaar challenge unexpectedly declares a route template");
+  if (schema.$schema !== "https://json-schema.org/draft/2020-12/schema" || schema.type !== "object" || !isRecord(schema.properties) || !Array.isArray(schema.required) || !schema.required.includes("input")) throw new TypeError("x402 Bazaar challenge schema is invalid");
+  const inputSchema = requireRecord(schema.properties.input, "x402 Bazaar challenge input schema is invalid");
+  if (!Array.isArray(inputSchema.required) || !inputSchema.required.includes("type") || !inputSchema.required.includes("method") || Object.keys(pathParams).length && !inputSchema.required.includes("pathParams")) throw new TypeError("x402 Bazaar challenge input schema does not validate its declared input");
+}
+function routePathParams(routePath, resourceUrl) {
+  const template = routePath.replace(/\/+$/, "").split("/");
+  const actual = new URL(resourceUrl).pathname.replace(/\/+$/, "").split("/");
+  const result = {};
+  for (let index = 0; index < template.length; index += 1) if (template[index].startsWith(":") && actual[index]) result[template[index].slice(1)] = decodeURIComponent(actual[index]);
+  return result;
+}
+function outputFormat(path) {
+  if (path.endsWith("/bundle")) return "priorseal.verification-bundle.v1";
+  if (path.endsWith("/check")) return "priorseal.fresh-evidence-check.v1";
+  if (path.startsWith("/v1/evidence/receipts/")) return "priorseal.evidence.v1";
+  return "application/json";
 }
 function normalizedRequirements(value) {
   if (!Array.isArray(value) || !value.length) throw new TypeError("x402 payment challenge has no accepted requirements");

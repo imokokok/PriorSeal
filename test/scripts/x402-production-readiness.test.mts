@@ -8,7 +8,34 @@ const origin = 'https://priorseal.example';
 const path = '/v1/receipts/:receiptId/bundle';
 const probeUrl = `${origin}/v1/receipts/x402-production-probe/bundle`;
 const requirement = { scheme: 'exact', network: 'eip155:8453', amount: '10000', asset, payTo, maxTimeoutSeconds: 300, extra: { name: 'USD Coin', version: '2' } };
-const challenge = { x402Version: 2, error: 'Payment required', resource: { url: probeUrl, description: 'Export a portable receipt bundle', mimeType: 'application/json', serviceName: 'PriorSeal' }, accepts: [requirement] };
+const challenge = {
+  x402Version: 2,
+  error: 'Payment required',
+  resource: {
+    url: probeUrl,
+    description: 'Export a portable receipt bundle',
+    mimeType: 'application/json',
+    serviceName: 'PriorSeal Evidence API',
+    tags: ['agent-evidence', 'authorization', 'execution', 'verification', 'x402'],
+    iconUrl: `${origin}/priorseal-mark.svg`,
+  },
+  accepts: [requirement],
+  extensions: {
+    bazaar: {
+      info: {
+        input: { type: 'http', method: 'GET', pathParams: { receiptId: 'x402-production-probe' } },
+        output: { type: 'json', format: 'priorseal.verification-bundle.v1', example: { schema: 'priorseal.verification-bundle.v1' } },
+      },
+      schema: {
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        type: 'object',
+        properties: { input: { type: 'object', required: ['type', 'method', 'pathParams'] } },
+        required: ['input'],
+      },
+      routeTemplate: path,
+    },
+  },
+};
 const environment = {
   PRIORSEAL_ENVIRONMENT: 'production', PRIORSEAL_RUNTIME: 'cloudflare-workers', PRIORSEAL_DATABASE_BACKEND: 'd1',
   PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: 'true',
@@ -35,4 +62,5 @@ test('production x402 readiness is quote-only and rejects any settlement path', 
   assert.deepEqual(requests.map(request => request.method), ['GET', 'GET', 'GET']);
   assert.ok(requests.every(request => request.paymentSignature === null));
   assert.equal(logged.length, 1);
+  assert.ok(JSON.parse(logged[0]).checks.includes('bazaar-discovery-metadata'));
 });
