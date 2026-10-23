@@ -99,3 +99,8 @@ Their `core` field list differs from the v0.1 include-list above (`schema`,
 v0.1 commitment is client-side (what the payer saw and acted on), the
 send21 `coreSha256` is server-authoritative. Binding to `coreSha256` instead
 would be a semantic upgrade for a v0.2, tracked separately.
+
+The source-defined profile-conformance shape is now recorded separately in
+[`send21-payment-draft-binding-v2`](../send21-payment-draft-binding-v2/). It
+keeps this v0.1 payer-view commitment intact; it does not reinterpret the
+public demo response as a server-authoritative `core` or `quote`.
