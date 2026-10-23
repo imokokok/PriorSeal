@@ -23,6 +23,7 @@ import { buildX402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mj
 import { createStaticAssetHandler } from './static-assets.mjs';
 import { buildVerificationBundle } from '../../domain/verification-bundle.mjs';
 import { buildEvidenceEnvelope } from '../../domain/evidence-api.mjs';
+import { buildFreshEvidenceCheck, signFreshEvidenceCheck } from '../../domain/fresh-evidence-check.mjs';
 import { assertIssuableIntentInput } from '../../domain/intent.mjs';
 import { evaluateAuthorizationPolicy, evaluateNewIntentPolicyCompatibility } from '../../domain/intent-policy.mjs';
 import { assertEd25519KeyPair } from '../../domain/ed25519.mjs';
@@ -39,7 +40,7 @@ import type { AgentMeter, AgentUsageReservation } from '../../application/commer
 import type { SelfserveClaim } from '../../application/commerce/selfserve-claim.mjs';
 import { handlePriorSealMcpRequest } from '../mcp/priorseal-mcp.mjs';
 
-const ERROR_STATUS = Object.freeze({ ARCHIVE_UNAUTHORIZED: 401, ARCHIVE_FORBIDDEN: 403, ARCHIVE_CONFLICT: 409, AGENT_CREDENTIAL_REQUIRED: 401, AGENT_CREDENTIAL_INVALID: 403, AGENT_CREDITS_EXHAUSTED: 402, INVALID_JSON: 400, INVALID_REQUEST: 400, UNKNOWN_FIELD: 400, DANGEROUS_JSON_KEY: 400, JSON_TOO_DEEP: 400, INVALID_INTENT: 400, INVALID_AUTHORIZATION: 400, MISSING_AUTHORIZATION_SIGNATURE: 400, INVALID_AUTHORIZATION_SIGNATURE: 400, AUTHORIZATION_AUDIENCE_MISMATCH: 400, AUTHORIZATION_NOT_YET_VALID: 400, AUTHORIZATION_ISSUED_IN_FUTURE: 400, AUTHORIZATION_POLICY_MISMATCH: 409, AUTHORIZATION_EXPIRED: 410, AUTHORIZATION_ALREADY_USED: 409, AUTHORIZATION_NONCE_REUSED: 409, INVALID_TIMESTAMP_EVIDENCE: 400, INVALID_TIMESTAMP_PROFILE: 400, TIMESTAMP_POLICY_MISMATCH: 409, TIMESTAMP_AUTHORIZATION_MISMATCH: 409, TIMESTAMP_RESPONSE_HASH_MISMATCH: 409, TIMESTAMP_METADATA_MISMATCH: 409, INVALID_TIMESTAMP_POLICY: 400, TIMESTAMP_CLOCK_SKEW: 409, TIMESTAMP_AFTER_EXECUTION: 409, INVALID_TIMESTAMP_SIGNATURE: 409, INVALID_TIMESTAMP_CERTIFICATE_USAGE: 409, UNTRUSTED_TIMESTAMP_ROOT: 409, TIMESTAMP_SERVICE_UNAVAILABLE: 503, TIMESTAMP_NOT_CONFIGURED: 503, INVALID_TIMESTAMP_RESPONSE: 502, INVALID_WITNESS_POLICY: 400, INVALID_WITNESS_EVIDENCE: 400, WITNESS_POLICY_MISMATCH: 409, WITNESS_AUTHORIZATION_MISMATCH: 409, WITNESS_ACCEPTANCE_MISMATCH: 409, WITNESS_QUORUM_NOT_MET: 409, WITNESS_QUORUM_UNAVAILABLE: 503, WITNESS_NOT_CONFIGURED: 503, TRANSPARENCY_ANCHOR_REQUIRED: 409, TRANSPARENCY_AFTER_EXECUTION: 409, INVALID_CHAIN_ID: 400, INVALID_TX_HASH: 400, INVALID_ADDRESS: 400, INVALID_ASSET: 400, INVALID_UINT: 400, INVALID_TIME: 400, INVALID_IDENTIFIER: 400, INVALID_CONSTRAINT: 400, ERC4337_ENTRY_POINT_NOT_TRUSTED: 403, ERC4337_ENTRY_POINT_MISMATCH: 409, ERC4337_CODE_HASH_MISMATCH: 409, ERC4337_ACCOUNT_CALL_UNSUPPORTED: 409, ERC4337_ACCOUNT_CALL_MISMATCH: 409, ERC4337_SAFE_ACCOUNT_UNTRUSTED: 409, ERC4337_EVENT_MISMATCH: 409, ERC4337_EIP7702_UNTRUSTED: 403, ERC4337_EIP7702_AUTH_MISMATCH: 409, ERC4337_EIP7702_OPERATION_MISMATCH: 409, ERC4337_EIP7702_TRACE_UNAVAILABLE: 503, INVALID_IDEMPOTENCY_KEY: 400, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, IDEMPOTENCY_CONFLICT: 409, POLICY_REJECTED: 403, INTENT_NOT_FOUND: 404, AUTHORIZATION_NOT_FOUND: 404, RECEIPT_NOT_FOUND: 404, NOT_FOUND: 404, REQUEST_TIMEOUT: 504, ISSUER_NOT_CONFIGURED: 503, AUTHORIZATION_VERIFIER_UNAVAILABLE: 503, RATE_LIMITER_UNAVAILABLE: 503, RPC_NOT_CONFIGURED: 503, RPC_TIMEOUT: 503, RPC_FAILURE: 503, RPC_UNAVAILABLE: 503, RPC_HTTP_ERROR: 502, RPC_CALL_FAILED: 502, RPC_INVALID_RESPONSE: 502, SOLANA_CLUSTER_MISMATCH: 502 });
+const ERROR_STATUS = Object.freeze({ ARCHIVE_UNAUTHORIZED: 401, ARCHIVE_FORBIDDEN: 403, ARCHIVE_CONFLICT: 409, AGENT_CREDENTIAL_REQUIRED: 401, AGENT_CREDENTIAL_INVALID: 403, AGENT_CREDITS_EXHAUSTED: 402, INVALID_JSON: 400, INVALID_REQUEST: 400, UNKNOWN_FIELD: 400, DANGEROUS_JSON_KEY: 400, JSON_TOO_DEEP: 400, INVALID_INTENT: 400, INVALID_AUTHORIZATION: 400, MISSING_AUTHORIZATION_SIGNATURE: 400, INVALID_AUTHORIZATION_SIGNATURE: 400, AUTHORIZATION_AUDIENCE_MISMATCH: 400, AUTHORIZATION_NOT_YET_VALID: 400, AUTHORIZATION_ISSUED_IN_FUTURE: 400, AUTHORIZATION_POLICY_MISMATCH: 409, AUTHORIZATION_EXPIRED: 410, AUTHORIZATION_ALREADY_USED: 409, AUTHORIZATION_NONCE_REUSED: 409, INVALID_TIMESTAMP_EVIDENCE: 400, INVALID_TIMESTAMP_PROFILE: 400, TIMESTAMP_POLICY_MISMATCH: 409, TIMESTAMP_AUTHORIZATION_MISMATCH: 409, TIMESTAMP_RESPONSE_HASH_MISMATCH: 409, TIMESTAMP_METADATA_MISMATCH: 409, INVALID_TIMESTAMP_POLICY: 400, TIMESTAMP_CLOCK_SKEW: 409, TIMESTAMP_AFTER_EXECUTION: 409, INVALID_TIMESTAMP_SIGNATURE: 409, INVALID_TIMESTAMP_CERTIFICATE_USAGE: 409, UNTRUSTED_TIMESTAMP_ROOT: 409, TIMESTAMP_SERVICE_UNAVAILABLE: 503, TIMESTAMP_NOT_CONFIGURED: 503, INVALID_TIMESTAMP_RESPONSE: 502, INVALID_WITNESS_POLICY: 400, INVALID_WITNESS_EVIDENCE: 400, WITNESS_POLICY_MISMATCH: 409, WITNESS_AUTHORIZATION_MISMATCH: 409, WITNESS_ACCEPTANCE_MISMATCH: 409, WITNESS_QUORUM_NOT_MET: 409, WITNESS_QUORUM_UNAVAILABLE: 503, WITNESS_NOT_CONFIGURED: 503, TRANSPARENCY_ANCHOR_REQUIRED: 409, TRANSPARENCY_AFTER_EXECUTION: 409, INVALID_CHAIN_ID: 400, INVALID_TX_HASH: 400, INVALID_ADDRESS: 400, INVALID_ASSET: 400, INVALID_UINT: 400, INVALID_TIME: 400, INVALID_IDENTIFIER: 400, INVALID_CONSTRAINT: 400, ERC4337_ENTRY_POINT_NOT_TRUSTED: 403, ERC4337_ENTRY_POINT_MISMATCH: 409, ERC4337_CODE_HASH_MISMATCH: 409, ERC4337_ACCOUNT_CALL_UNSUPPORTED: 409, ERC4337_ACCOUNT_CALL_MISMATCH: 409, ERC4337_SAFE_ACCOUNT_UNTRUSTED: 409, ERC4337_EVENT_MISMATCH: 409, ERC4337_EIP7702_UNTRUSTED: 403, ERC4337_EIP7702_AUTH_MISMATCH: 409, ERC4337_EIP7702_OPERATION_MISMATCH: 409, ERC4337_EIP7702_TRACE_UNAVAILABLE: 503, INVALID_IDEMPOTENCY_KEY: 400, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, IDEMPOTENCY_CONFLICT: 409, POLICY_REJECTED: 403, INTENT_NOT_FOUND: 404, AUTHORIZATION_NOT_FOUND: 404, RECEIPT_NOT_FOUND: 404, FRESH_CHECK_UNSUPPORTED: 409, NOT_FOUND: 404, REQUEST_TIMEOUT: 504, ISSUER_NOT_CONFIGURED: 503, AUTHORIZATION_VERIFIER_UNAVAILABLE: 503, RATE_LIMITER_UNAVAILABLE: 503, RPC_NOT_CONFIGURED: 503, RPC_TIMEOUT: 503, RPC_FAILURE: 503, RPC_UNAVAILABLE: 503, RPC_HTTP_ERROR: 502, RPC_CALL_FAILED: 502, RPC_INVALID_RESPONSE: 502, SOLANA_CLUSTER_MISMATCH: 502 });
 const AGENT_ACCOUNT_ERROR_STATUS = Object.freeze({ AGENT_OPERATOR_CREDENTIAL_INVALID: 403, AGENT_ACCOUNT_INVALID: 400, AGENT_ACCOUNT_NOT_FOUND: 404, AGENT_ACCOUNT_EXISTS: 409, AGENT_IDEMPOTENCY_REQUIRED: 400 });
 const CLAIM_ERROR_STATUS = Object.freeze({ CLAIM_INVALID_REQUEST: 400, CLAIM_SIGNATURE_INVALID: 400, CLAIM_TX_NOT_FOUND: 404, CLAIM_TX_NOT_ACCEPTED: 400, CLAIM_TX_SENDER_MISMATCH: 403, CLAIM_TX_FAILED: 400, CLAIM_BELOW_MINIMUM: 400, CLAIM_ACCOUNT_PREEXISTING: 409, CLAIM_ACCOUNT_REVOKED: 403, CLAIM_CHAIN_UNAVAILABLE: 503 });
 
@@ -169,13 +170,15 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
               if (!job) throw new PriorSealError('NOT_FOUND', 'Observation job not found');
               return job;
             }
-            if (name === 'priorseal_get_receipt' || name === 'priorseal_get_evidence_bundle' || name === 'priorseal_get_evidence') {
+            if (name === 'priorseal_get_receipt' || name === 'priorseal_get_evidence_bundle' || name === 'priorseal_get_evidence' || name === 'priorseal_get_fresh_evidence_check') {
               const receiptId = mcpIdentifier(toolArguments, 'receiptId', 'receipt');
               const receipt = await store.getReceipt(receiptId);
               if (!receipt) throw new PriorSealError('RECEIPT_NOT_FOUND', 'Receipt not found');
               if (name === 'priorseal_get_receipt') return receipt;
-              const bundle = buildVerificationBundle({ receipt, keyRegistry: keyRegistryDocument(issuer, keyRegistry), assembledAt: Math.floor(now() / 1000) });
-              return name === 'priorseal_get_evidence' ? buildEvidenceEnvelope(bundle) : bundle;
+              // MCP remains a free discovery surface.  It never materializes a
+              // paid export; instead an agent receives the exact x402 resource
+              // URL and can decide whether to pay through its own wallet rail.
+              return paidEvidenceHandoff({ receiptId, kind: name === 'priorseal_get_evidence_bundle' ? 'bundle' : name === 'priorseal_get_evidence' ? 'envelope' : 'fresh-check', x402, publicPaidCommerceEnabled });
             }
             if (name === 'priorseal_verify_receipt') {
               assertOnlyFields(toolArguments, ['receipt'], 'PriorSeal MCP receipt verification arguments');
@@ -246,7 +249,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
         if (entryMatch) { const entry = await store.getArchiveEntry(access, entryMatch[1]); if (!entry) throw new PriorSealError('NOT_FOUND', 'Archive entry not found'); return respond(200, entry); }
         throw new PriorSealError('NOT_FOUND', 'Archive route not found');
       }
-      if (req.method === 'GET' && path === '/v1/version') return respond(200, { service: 'priorseal', version, protocol: ['priorseal.intent.v1', 'priorseal.intent.v2', 'priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1', 'priorseal.execution-profile.solana-transaction.v2', 'priorseal.context-commitment.v1', 'priorseal.authorization.v1', 'priorseal.authorization.v2', 'priorseal.rfc3161-evidence.v1', 'priorseal.witness-attestation.v1', 'priorseal.execution-receipt.v1', 'priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3', 'priorseal.temporal-evidence.v1', 'priorseal.compliance-assessment.v1', 'priorseal.x402-payment-evidence.v1', 'priorseal.verification-bundle.v1', 'priorseal.evidence.v1', 'priorseal.evidence-profile.v1'], requestId });
+      if (req.method === 'GET' && path === '/v1/version') return respond(200, { service: 'priorseal', version, protocol: ['priorseal.intent.v1', 'priorseal.intent.v2', 'priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1', 'priorseal.execution-profile.solana-transaction.v2', 'priorseal.context-commitment.v1', 'priorseal.authorization.v1', 'priorseal.authorization.v2', 'priorseal.rfc3161-evidence.v1', 'priorseal.witness-attestation.v1', 'priorseal.execution-receipt.v1', 'priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3', 'priorseal.temporal-evidence.v1', 'priorseal.compliance-assessment.v1', 'priorseal.x402-payment-evidence.v1', 'priorseal.verification-bundle.v1', 'priorseal.evidence.v1', 'priorseal.evidence-profile.v1', 'priorseal.fresh-evidence-check.v1'], requestId });
       if (req.method === 'GET' && path === '/openapi/v1.json') {
         return respond(200, openApiSpec(), { 'cache-control': 'public, max-age=300' });
       }
@@ -293,6 +296,14 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
       if (jobMatch && observationWorker) { const job = await observationWorker.get(decodeURIComponent(jobMatch[1])); if (!job) throw new PriorSealError('NOT_FOUND', 'Observation job not found'); return respond(200, job); }
       const bundleMatch = req.method === 'GET' && path.match(/^\/v1\/receipts\/([^/]+)\/bundle$/);
       if (bundleMatch) { const receipt = await store.getReceipt(decodeURIComponent(bundleMatch[1])); if (!receipt) throw new PriorSealError('RECEIPT_NOT_FOUND', 'Receipt not found'); return respond(200, buildVerificationBundle({ receipt, keyRegistry: keyRegistryDocument(issuer, keyRegistry), assembledAt: Math.floor(now() / 1000) })); }
+      const freshCheckMatch = req.method === 'GET' && path.match(/^\/v1\/evidence\/receipts\/([^/]+)\/check$/);
+      if (freshCheckMatch) {
+        if (!privateKeyPem || !publicKeyPem) throw new PriorSealError('ISSUER_NOT_CONFIGURED', 'Fresh evidence checks require a configured issuer key');
+        const receipt = await store.getReceipt(decodeURIComponent(freshCheckMatch[1]));
+        if (!receipt) throw new PriorSealError('RECEIPT_NOT_FOUND', 'Receipt not found');
+        const checked = await createFreshEvidenceCheck({ receipt, keyRegistry, publicKeyPem, authorizationAudience, verifyContractSignature, observer, issuer, keyId, privateKeyPem, now: Math.floor(now() / 1000), signal: deadline.signal });
+        return respond(200, checked);
+      }
       const evidenceMatch = req.method === 'GET' && path.match(/^\/v1\/evidence\/receipts\/([^/]+)$/);
       if (evidenceMatch) {
         const receipt = await store.getReceipt(decodeURIComponent(evidenceMatch[1]));
@@ -373,6 +384,8 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
           return;
         }
         if (prepared.kind !== 'authorized') {
+          const accepts = Array.isArray(prepared.response.accepts) ? prepared.response.accepts : [];
+          logger?.info?.({ event: 'x402.challenge_issued', route: paidRoute.path, price: paidRoute.price, outcome: prepared.kind === 'invalid' ? 'invalid_payment' : 'payment_required', availableNetworks: accepts.length });
           if (prepared.kind === 'invalid' && prepared.status === 400) {
             respond(400, errorBody('INVALID_PAYMENT', 'The payment payload is malformed or does not match the advertised requirements', requestId));
             return;
@@ -381,6 +394,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
           return;
         }
         paymentContext = prepared.context;
+        logger?.info?.({ event: 'x402.payment_authorized', route: paidRoute.path, price: paidRoute.price, network: paymentContext.requirement.network });
         try {
           await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: 'PAYMENT_AUTHORIZED', context: paymentContext, resourceUrl: paymentResourceUrl!, occurredAt: now() }));
         } catch (error) {
@@ -397,6 +411,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
           return;
         }
         if (completedResponse.status < 200 || completedResponse.status >= 300) {
+          logger?.info?.({ event: 'x402.resource_withheld', route: paidRoute.path, responseStatus: completedResponse.status, network: paymentContext.requirement.network });
           try {
             await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: 'RESOURCE_WITHHELD', context: paymentContext, resourceUrl: paymentResourceUrl!, occurredAt: now(), responseStatus: completedResponse.status, responseBody: completedResponse.body }));
           } catch (error) {
@@ -408,6 +423,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
         try {
           const settlement = await x402Payments.settle(paymentContext, deadline.signal);
           if (!settlement.success) {
+            logger?.info?.({ event: 'x402.settlement_failed', route: paidRoute.path, network: paymentContext.requirement.network, reason: settlement.settlement.errorReason ?? 'unknown' });
             try {
               await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: 'SETTLEMENT_FAILED', context: paymentContext, resourceUrl: paymentResourceUrl!, occurredAt: now(), responseStatus: completedResponse.status, responseBody: completedResponse.body, settlement: settlement.settlement, settlementAttempts: settlement.attempts }));
             } catch (error) {
@@ -417,6 +433,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
             return;
           }
           let paymentBoundBody = completedResponse.body;
+          logger?.info?.({ event: 'x402.settlement_succeeded', route: paidRoute.path, price: paidRoute.price, network: paymentContext.requirement.network, attempts: settlement.attempts });
           if (privateKeyPem && paymentResourceUrl) {
             try {
               paymentBoundBody = bindX402PaymentEvidenceToBundle({ body: completedResponse.body, resourceUrl: paymentResourceUrl, status: completedResponse.status, context: paymentContext, settlement: settlement.settlement, issuer, keyId, privateKeyPem, issuedAt: Math.floor(now() / 1000) });
@@ -431,12 +448,14 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
             // Settlement has already succeeded: preserve delivery and its signed bundle evidence.
             logger?.error?.({ event: 'x402.payment_ledger_write_failed', requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || 'INTERNAL_ERROR' });
           }
+          logger?.info?.({ event: 'x402.delivery_completed', route: paidRoute.path, responseStatus: completedResponse.status, network: paymentContext.requirement.network });
           sendJson(res, completedResponse.status, paymentBoundBody, requestId, {
             ...completedResponse.headers,
             'payment-response': settlement.header,
             'cache-control': 'private, no-store',
           });
         } catch (error) {
+          logger?.info?.({ event: 'x402.settlement_unknown', route: paidRoute.path, network: paymentContext.requirement.network });
           try {
             await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: 'SETTLEMENT_UNKNOWN', context: paymentContext, resourceUrl: paymentResourceUrl!, occurredAt: now(), responseStatus: completedResponse.status, responseBody: completedResponse.body }));
           } catch (ledgerError) {
@@ -465,6 +484,68 @@ function agentUsageLimit(value: string | null) {
   if (value === null) return 25;
   if (!/^[1-9][0-9]{0,2}$/.test(value) || Number(value) > 100) throw new PriorSealError('INVALID_REQUEST', 'Agent usage limit must be an integer from 1 through 100');
   return Number(value);
+}
+
+async function createFreshEvidenceCheck({ receipt: receiptValue, keyRegistry, publicKeyPem, authorizationAudience, verifyContractSignature, observer, issuer, keyId, privateKeyPem, now, signal }: { receipt: unknown; keyRegistry: ReturnType<typeof createKeyRegistry>; publicKeyPem: string; authorizationAudience: string; verifyContractSignature?: HttpServerOptions['verifyContractSignature']; observer: ExecutionObserver; issuer: string; keyId: string; privateKeyPem: string; now: number; signal: AbortSignal }) {
+  if (!isRecord(receiptValue) || !['priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3'].includes(String(receiptValue.schema))) {
+    throw new PriorSealError('FRESH_CHECK_UNSUPPORTED', 'Fresh evidence checks require an authorization-bound v2 or v3 receipt');
+  }
+  const entry = keyRegistry.get(typeof receiptValue.keyId === 'string' ? receiptValue.keyId : '');
+  if (!entry) throw new PriorSealError('FRESH_CHECK_UNSUPPORTED', 'The receipt issuer key is not available for a fresh check');
+  const verification = await verifyAuthorizedReceipt(receiptValue, entry.publicKey, { key: entry, now, audience: authorizationAudience, verifyContractSignature });
+  if (!verification.valid) throw new PriorSealError('FRESH_CHECK_UNSUPPORTED', 'The stored receipt does not pass authorization-bound verification', { verification: verification.code });
+  const authorizationEvidence = isRecord(receiptValue.authorizationEvidence) ? receiptValue.authorizationEvidence : null;
+  const execution = isRecord(receiptValue.execution) ? receiptValue.execution : null;
+  if (!authorizationEvidence || !execution || typeof execution.txHash !== 'string') throw new PriorSealError('FRESH_CHECK_UNSUPPORTED', 'The stored receipt lacks the information needed for a fresh chain observation');
+  const authorization = buildAuthorization(authorizationEvidence.authorization);
+  const constraints = authorization.intent.constraints as { minConfirmations?: number; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' } | undefined;
+  const solana = authorization.intent.executionProfile === 'priorseal.execution-profile.solana-transaction.v2';
+  const maxToleratedReorgDepth = constraints?.maxToleratedReorgDepth ?? null;
+  const finalityRequirement = constraints?.finalityRequirement ?? 'CONFIRMATIONS';
+  const minConfirmations = Number(constraints?.minConfirmations ?? 0);
+  const confirmations = solana ? minConfirmations : Math.max(minConfirmations, maxToleratedReorgDepth == null ? 0 : maxToleratedReorgDepth + 1);
+  const erc4337 = authorization.intent.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1'
+    ? { entryPoint: String(authorization.intent.entryPoint), entryPointCodeHash: String(authorization.intent.entryPointCodeHash), entryPointVersion: authorization.intent.entryPointVersion as '0.6' | '0.7' | '0.8' | '0.9', userOperationHash: String(authorization.intent.userOperationHash), ...(authorization.intent.accountCallProfile ? { accountCallProfile: authorization.intent.accountCallProfile as 'safe-4337.v1', accountCallTarget: String(authorization.intent.accountCallTarget), accountCallValue: String(authorization.intent.accountCallValue), accountCallDataHash: String(authorization.intent.accountCallDataHash) } : {}), ...(authorization.intent.eip7702 ? { eip7702: authorization.intent.eip7702 } : {}) }
+    : undefined;
+  const currentExecution = await observer({
+    chainId: authorization.intent.chainId,
+    txHash: execution.txHash,
+    confirmations,
+    finalityRequirement,
+    maxToleratedReorgDepth,
+    ...(solana ? { solanaTransaction: authorization.intent.solanaTransaction } : {}),
+    ...(erc4337 ? { erc4337 } : {}),
+    signal,
+  });
+  const normalizedExpected = solana ? execution.txHash : execution.txHash.toLowerCase();
+  const normalizedObserved = typeof currentExecution.txHash === 'string' ? (solana ? currentExecution.txHash : currentExecution.txHash.toLowerCase()) : null;
+  if (normalizedObserved !== normalizedExpected || String(currentExecution.chainId) !== String(authorization.intent.chainId)) {
+    throw new PriorSealError('FRESH_CHECK_UNSUPPORTED', 'Fresh observation does not identify the receipt transaction');
+  }
+  const check = buildFreshEvidenceCheck({
+    receipt: { receiptId: String(receiptValue.receiptId), issuer: String(receiptValue.issuer), keyId: String(receiptValue.keyId), executionHash: String(receiptValue.executionHash), authorizationHash: String(receiptValue.authorizationHash) },
+    authorization,
+    currentExecution,
+    issuer,
+    keyId,
+    checkedAt: now,
+  });
+  return signFreshEvidenceCheck(check, privateKeyPem);
+}
+
+function paidEvidenceHandoff({ receiptId, kind, x402, publicPaidCommerceEnabled }: { receiptId: string; kind: 'bundle' | 'envelope' | 'fresh-check'; x402?: X402Config; publicPaidCommerceEnabled: boolean }) {
+  const encodedReceiptId = encodeURIComponent(receiptId);
+  const suffix = kind === 'bundle' ? '/bundle' : kind === 'envelope' ? '' : '/check';
+  const path = kind === 'bundle' ? `/v1/receipts/${encodedReceiptId}/bundle` : `/v1/evidence/receipts/${encodedReceiptId}${suffix}`;
+  const enabled = Boolean(x402 && publicPaidCommerceEnabled);
+  return {
+    schema: 'priorseal.paid-resource-handoff.v1',
+    status: enabled ? 'PAYMENT_REQUIRED' : 'PAYMENT_NOT_CONFIGURED',
+    product: kind === 'fresh-check' ? 'fresh_evidence_check' : kind === 'bundle' ? 'verification_bundle_export' : 'evidence_envelope_export',
+    receiptId,
+    payment: enabled ? { protocol: 'x402', method: 'GET', url: new URL(path, x402!.resourceOrigin).toString(), discovery: new URL('/v1/capabilities', x402!.resourceOrigin).toString() } : { protocol: 'x402', availability: 'not_configured', discovery: '/v1/capabilities' },
+    boundary: 'This free MCP result is a purchase handoff. It does not include the paid evidence resource or give payment authority over a subject-chain action.',
+  };
 }
 
 /**
@@ -502,6 +583,11 @@ function paymentEvidenceId(body: unknown) {
 function matchPaidRoute(config: X402Config | undefined, method: string | undefined, path: string) {
   const direct = matchX402Route(config, method, path);
   if (direct) return direct;
+  const freshCheck = method?.toUpperCase() === 'GET' ? path.match(/^\/v1\/evidence\/receipts\/([^/]+)\/check$/) : null;
+  if (freshCheck) {
+    const bundleRoute = matchX402Route(config, method, `/v1/receipts/${freshCheck[1]}/bundle`);
+    return bundleRoute ? { ...bundleRoute, path: '/v1/evidence/receipts/:receiptId/check', description: 'Perform a newly signed, read-only chain re-observation of an authorization-bound receipt' } : undefined;
+  }
   const evidence = method?.toUpperCase() === 'GET' ? path.match(/^\/v1\/evidence\/receipts\/([^/]+)$/) : null;
   if (!evidence) return undefined;
   const bundleRoute = matchX402Route(config, method, `/v1/receipts/${evidence[1]}/bundle`);
@@ -534,7 +620,7 @@ const AGENT8004_REGISTRATION = Object.freeze({
   supportedTrust: [],
 });
 
-function keyRegistryDocument(issuer: string, keyRegistry: ReturnType<typeof createKeyRegistry>) { return { schema: 'priorseal.keys.v1', issuer, keys: keyRegistry.list(), verifierVersion: '3.0.0', schemaVersions: ['priorseal.intent.v1', 'priorseal.intent.v2', 'priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1', 'priorseal.execution-profile.solana-transaction.v2', 'priorseal.context-commitment.v1', 'priorseal.authorization.v1', 'priorseal.authorization.v2', 'priorseal.rfc3161-evidence.v1', 'priorseal.execution-receipt.v1', 'priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3', 'priorseal.temporal-evidence.v1', 'priorseal.compliance-assessment.v1', 'priorseal.x402-payment-evidence.v1', 'priorseal.verification-bundle.v1', 'priorseal.evidence.v1', 'priorseal.evidence-profile.v1'] }; }
+function keyRegistryDocument(issuer: string, keyRegistry: ReturnType<typeof createKeyRegistry>) { return { schema: 'priorseal.keys.v1', issuer, keys: keyRegistry.list(), verifierVersion: '3.0.0', schemaVersions: ['priorseal.intent.v1', 'priorseal.intent.v2', 'priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1', 'priorseal.execution-profile.solana-transaction.v2', 'priorseal.context-commitment.v1', 'priorseal.authorization.v1', 'priorseal.authorization.v2', 'priorseal.rfc3161-evidence.v1', 'priorseal.execution-receipt.v1', 'priorseal.execution-receipt.v2', 'priorseal.execution-receipt.v3', 'priorseal.temporal-evidence.v1', 'priorseal.compliance-assessment.v1', 'priorseal.x402-payment-evidence.v1', 'priorseal.verification-bundle.v1', 'priorseal.evidence.v1', 'priorseal.evidence-profile.v1', 'priorseal.fresh-evidence-check.v1'] }; }
 
 /** Public, non-secret guidance for an agent host before it attempts a protected integration. */
 function agentIntegrationManifest({ version }: { version: string }) {
@@ -542,7 +628,8 @@ function agentIntegrationManifest({ version }: { version: string }) {
     schema: 'priorseal.agent-integration.v1',
     service: 'PriorSeal',
     version,
-    discovery: { capabilities: '/v1/capabilities', openapi: '/openapi/v1.json', mcp: '/mcp', issuerKeys: '/.well-known/priorseal-keys.json', evidence: '/v1/evidence/receipts/{receiptId}' },
+    discovery: { capabilities: '/v1/capabilities', openapi: '/openapi/v1.json', mcp: '/mcp', issuerKeys: '/.well-known/priorseal-keys.json', evidence: '/v1/evidence/receipts/{receiptId}', freshEvidenceCheck: '/v1/evidence/receipts/{receiptId}/check' },
+    commerce: { x402: { discovery: '/v1/capabilities', paidResources: ['verification_bundle_export', 'evidence_envelope_export', 'fresh_evidence_check'], mcpBehavior: 'FREE_DISCOVERY_AND_PURCHASE_HANDOFF_ONLY' } },
     safety: {
       executionMode: 'PROPOSAL_AND_PRINCIPAL_CONFIRMATION',
       principalSignature: 'REQUIRED_FOR_EVERY_EXACT_ACTION',
@@ -553,7 +640,7 @@ function agentIntegrationManifest({ version }: { version: string }) {
   };
 }
 
-const OPENAPI = { openapi: '3.1.0', info: { title: 'PriorSeal API', version: '2.0.0', description: 'Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts.' }, paths: { '/v1/capabilities': { get: { summary: 'Deployment configuration and workflow capabilities' } }, '/v1/archive': { get: { summary: 'List private uploaded evidence with a project bearer credential' }, post: { summary: 'Archive immutable evidence with a writer credential' } }, '/v1/archive/export': { get: { summary: 'Export a private snapshot page including raw artifacts' } }, '/v1/archive/{entryId}': { get: { summary: 'Read private project evidence' } }, '/v1/intents': { post: { summary: 'Create a legacy unsigned intent draft', deprecated: true, responses: { '201': { description: 'Created' } } } }, '/v1/authorizations/prepare': { post: { summary: 'Canonicalize an authorization and return EIP-712 typed data or a Solana message' } }, '/v1/authorizations': { post: { summary: 'Verify and accept a signed authorization' } }, '/v1/authorizations/{authorizationId}': { get: { summary: 'Read authorization state' } }, '/v1/authorizations/{authorizationId}/transparency': { get: { summary: 'Read signed transparency evidence and any verified external anchor' } }, '/v1/executions/observe': { post: { summary: 'Observe EVM or Solana execution against an authorization' } }, '/v1/observation-jobs/{jobId}': { get: { summary: 'Read automatic finality observation job' } }, '/v1/receipts/{receiptId}': { get: { summary: 'Read receipt' } }, '/v1/receipts/{receiptId}/bundle': { get: { summary: 'Export portable receipt evidence and key-discovery metadata' } }, '/v1/evidence/receipts/{receiptId}': { get: { summary: 'Read a chain-neutral evidence envelope with the portable verification bundle' } }, '/v1/receipts/verify': { post: { summary: 'Convenience verification, not authority' } }, '/.well-known/priorseal-keys.json': { get: { summary: 'Read the issuer public-key registry' } }, '/.well-known/agent8004.json': { get: { summary: 'Read the ERC-8004 agent registration record' } }, '/.well-known/priorseal-agent.json': { get: { summary: 'Read safe Agent integration discovery' } }, '/v1/version': { get: { summary: 'Read service and protocol versions' } }, '/health/live': { get: { summary: 'Liveness' } }, '/health/ready': { get: { summary: 'Readiness' } } } };
+const OPENAPI = { openapi: '3.1.0', info: { title: 'PriorSeal API', version: '2.0.0', description: 'Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts.' }, paths: { '/v1/capabilities': { get: { summary: 'Deployment configuration and workflow capabilities' } }, '/v1/archive': { get: { summary: 'List private uploaded evidence with a project bearer credential' }, post: { summary: 'Archive immutable evidence with a writer credential' } }, '/v1/archive/export': { get: { summary: 'Export a private snapshot page including raw artifacts' } }, '/v1/archive/{entryId}': { get: { summary: 'Read private project evidence' } }, '/v1/intents': { post: { summary: 'Create a legacy unsigned intent draft', deprecated: true, responses: { '201': { description: 'Created' } } } }, '/v1/authorizations/prepare': { post: { summary: 'Canonicalize an authorization and return EIP-712 typed data or a Solana message' } }, '/v1/authorizations': { post: { summary: 'Verify and accept a signed authorization' } }, '/v1/authorizations/{authorizationId}': { get: { summary: 'Read authorization state' } }, '/v1/authorizations/{authorizationId}/transparency': { get: { summary: 'Read signed transparency evidence and any verified external anchor' } }, '/v1/executions/observe': { post: { summary: 'Observe EVM or Solana execution against an authorization' } }, '/v1/observation-jobs/{jobId}': { get: { summary: 'Read automatic finality observation job' } }, '/v1/receipts/{receiptId}': { get: { summary: 'Read receipt' } }, '/v1/receipts/{receiptId}/bundle': { get: { summary: 'Export portable receipt evidence and key-discovery metadata (x402 when enabled)' } }, '/v1/evidence/receipts/{receiptId}': { get: { summary: 'Read a chain-neutral evidence envelope with the portable verification bundle (x402 when enabled)' } }, '/v1/evidence/receipts/{receiptId}/check': { get: { summary: 'Re-observe an authorization-bound transaction and return a newly signed fresh evidence check (x402 when enabled)' } }, '/v1/receipts/verify': { post: { summary: 'Convenience verification, not authority' } }, '/.well-known/priorseal-keys.json': { get: { summary: 'Read the issuer public-key registry' } }, '/.well-known/agent8004.json': { get: { summary: 'Read the ERC-8004 agent registration record' } }, '/.well-known/priorseal-agent.json': { get: { summary: 'Read safe Agent integration discovery' } }, '/v1/version': { get: { summary: 'Read service and protocol versions' } }, '/health/live': { get: { summary: 'Liveness' } }, '/health/ready': { get: { summary: 'Readiness' } } } };
 
 function openApiSpec() { return OPENAPI; }
 

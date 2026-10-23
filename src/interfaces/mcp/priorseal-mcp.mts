@@ -29,8 +29,9 @@ const TOOLS = Object.freeze([
   tool('priorseal_observe_execution', 'Persist an observation request for an already-submitted EVM or Solana transaction, then issue evidence when configured observation completes. This can consume configured Agent credits; send an idempotency key. It never broadcasts a transaction.', inputSchema('The complete PriorSeal execution-observation request.'), STATE_CHANGE_ANNOTATIONS),
   tool('priorseal_get_observation_job', 'Read the durable status of an automatic finality-observation job.', identifierSchema('jobId', 'PriorSeal observation job identifier.'), READ_ONLY_ANNOTATIONS),
   tool('priorseal_get_receipt', 'Read a signed execution receipt by its identifier.', identifierSchema('receiptId', 'PriorSeal receipt identifier.'), READ_ONLY_ANNOTATIONS),
-  tool('priorseal_get_evidence_bundle', 'Export the portable receipt evidence bundle and issuer key-discovery metadata.', identifierSchema('receiptId', 'PriorSeal receipt identifier.'), READ_ONLY_ANNOTATIONS),
-  tool('priorseal_get_evidence', 'Read the chain-neutral Evidence API envelope, including a portable receipt verification bundle.', identifierSchema('receiptId', 'PriorSeal receipt identifier.'), READ_ONLY_ANNOTATIONS),
+  tool('priorseal_get_evidence_bundle', 'Get a free x402 purchase handoff for the portable receipt evidence bundle. This MCP result never includes the paid bundle itself.', identifierSchema('receiptId', 'PriorSeal receipt identifier.'), READ_ONLY_ANNOTATIONS),
+  tool('priorseal_get_evidence', 'Get a free x402 purchase handoff for the chain-neutral Evidence API envelope. This MCP result never includes the paid envelope itself.', identifierSchema('receiptId', 'PriorSeal receipt identifier.'), READ_ONLY_ANNOTATIONS),
+  tool('priorseal_get_fresh_evidence_check', 'Get a free x402 purchase handoff for a newly signed, read-only chain re-observation of an authorization-bound receipt.', identifierSchema('receiptId', 'PriorSeal receipt identifier.'), READ_ONLY_ANNOTATIONS),
   tool('priorseal_verify_receipt', 'Convenience-verify a PriorSeal receipt with the deployment key registry. Independent local verification remains required for trust decisions.', {
     type: 'object', properties: { receipt: { type: 'object', description: 'Receipt object to verify.' } }, required: ['receipt'], additionalProperties: false,
   }, READ_ONLY_ANNOTATIONS),
@@ -145,8 +146,7 @@ function workflowResponse(name: string, result: JsonRecord) {
     return { status: 'observation_pending', nextAction: 'get_observation_job', requiresHumanSignature: false, risk: { level: 'read_only', reasonCode: state } };
   }
   if (name === 'priorseal_get_receipt') return { status: 'receipt_loaded', nextAction: 'verify_receipt_independently', requiresHumanSignature: false, risk: { level: 'read_only', reasonCode: 'RECEIPT_READ' } };
-  if (name === 'priorseal_get_evidence_bundle') return { status: 'evidence_bundle_loaded', nextAction: 'verify_evidence_bundle_locally', requiresHumanSignature: false, risk: { level: 'read_only', reasonCode: 'EVIDENCE_BUNDLE_READ' } };
-  if (name === 'priorseal_get_evidence') return { status: 'evidence_loaded', nextAction: 'verify_evidence_bundle_locally', requiresHumanSignature: false, risk: { level: 'read_only', reasonCode: 'EVIDENCE_READ' } };
+  if (name === 'priorseal_get_evidence_bundle' || name === 'priorseal_get_evidence' || name === 'priorseal_get_fresh_evidence_check') return { status: 'payment_handoff_ready', nextAction: 'pay_x402_and_request_paid_resource', requiresHumanSignature: false, risk: { level: 'read_only', reasonCode: 'PAID_EVIDENCE_HANDOFF' } };
   const verification = isRecord(result.result) ? result.result : {};
   const valid = verification.valid === true;
   return { status: valid ? 'receipt_verified' : 'receipt_not_verified', nextAction: 'verify_receipt_independently', requiresHumanSignature: false, risk: { level: 'verification_only', reasonCode: valid ? 'VERIFIED' : typeof verification.code === 'string' ? verification.code : 'NOT_VERIFIED' } };

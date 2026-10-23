@@ -11,7 +11,7 @@ principal authorization -> execution observation -> signed receipt
                                                 -> Evidence API envelope
 ```
 
-The API endpoint is:
+The static Evidence API endpoint is:
 
 ```text
 GET /v1/evidence/receipts/{receiptId}
@@ -21,6 +21,25 @@ When a deployment charges its receipt-bundle export through x402, this endpoint
 uses the same price and payment protection. It is not a free way to retrieve a
 portable bundle. Live discovery reports that status and price under
 `evidenceApi.commerce` in `/v1/capabilities`.
+
+## Fresh Evidence Check
+
+```text
+GET /v1/evidence/receipts/{receiptId}/check
+```
+
+This x402-paid read-only resource first verifies the stored authorization-bound
+v2/v3 receipt with the current issuer-key registry, then re-observes its named
+transaction against its original authorization constraints. It returns a new
+`priorseal.fresh-evidence-check.v1` Ed25519 statement stamped with `checkedAt`.
+It is intentionally a new product rather than a relabelled static export: the
+check reports current RPC/finality observation and rebinding outcome. It cannot
+submit a transaction, authorize a future transaction, custody keys, or replace
+an independent reviewer’s own RPC trust decision.
+
+The x402 challenge includes opt-in Bazaar discovery metadata. This makes an
+eligible paid resource indexable by compatible agent discovery clients while
+the free PriorSeal MCP server continues to return only a purchase handoff.
 
 The response contains the original portable verification bundle, a profile for
 the receipt's chain family, and compact claims copied from the receipt. It uses
@@ -61,12 +80,14 @@ verifiable fields rather than being inferred from the network name.
 
 ## Integration surfaces
 
-- REST: `GET /v1/evidence/receipts/{receiptId}`
+- REST: `GET /v1/evidence/receipts/{receiptId}` and `GET /v1/evidence/receipts/{receiptId}/check`
 - SDK: `client.getEvidence(receiptId)`
-- MCP: `priorseal_get_evidence`
+- MCP: `priorseal_get_evidence` and `priorseal_get_fresh_evidence_check` return
+  a free x402 purchase handoff only; they never include a free copy of a paid
+  envelope, bundle or fresh-check result.
 - Discovery: `/v1/capabilities`, `/openapi/v1.json`, and
   `/.well-known/priorseal-agent.json`
 
-The existing `GET /v1/receipts/{receiptId}/bundle` endpoint and
-`priorseal_get_evidence_bundle` MCP tool remain unchanged for integrations that
-already consume the lower-level bundle directly.
+The existing `GET /v1/receipts/{receiptId}/bundle` endpoint remains available
+for integrations that consume the lower-level bundle directly. Its MCP tool
+returns the same purchase handoff boundary rather than the bundle contents.

@@ -190,7 +190,10 @@ export function createX402PaymentService(config: X402Config) {
       if (paymentHeader) {
         try { payload = decodePaymentHeader(paymentHeader); } catch { malformed = true; }
       }
-      const paymentRequired = (error: string) => ({ x402Version: 2, error, resource, accepts: requirements });
+      // Bazaar uses this opt-in metadata to index a paid resource for agent
+      // discovery. It carries no purchaser, wallet, or payment payload data.
+      const extensions = { bazaar: { info: { input: { type: 'http', method: route.method } }, schema: {} } };
+      const paymentRequired = (error: string) => ({ x402Version: 2, error, resource, accepts: requirements, extensions });
       const response = paymentRequired(malformed ? 'Invalid PAYMENT-SIGNATURE header' : 'Payment required');
       const header = encodeBase64Json(response);
       if (malformed) return { kind: 'invalid', status: 400, response, header };
