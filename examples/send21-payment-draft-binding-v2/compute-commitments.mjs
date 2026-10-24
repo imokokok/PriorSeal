@@ -97,10 +97,10 @@ function jcs(value) {
 function validateCore(core) {
   requireRecord(core, "core");
   requireExactKeys(core, coreKeys, "core");
-  for (const field of ["id", "network", "currency", "paymentMethod", "receiverAddress", "tokenAddress", "schema"]) {
+  for (const field of ["id", "network", "currency", "paymentMethod", "schema"]) {
     requireString(core[field], `core.${field}`);
   }
-  for (const field of ["lightningAddress", "bolt11", "fiatCurrency", "memo", "paymentRequestId"]) {
+  for (const field of ["receiverAddress", "tokenAddress", "lightningAddress", "bolt11", "fiatCurrency", "memo", "paymentRequestId"]) {
     requireNullableString(core[field], `core.${field}`);
   }
   requireNullableBaseUnits(core.amountBaseUnits, "core.amountBaseUnits");
@@ -113,10 +113,12 @@ function validateCore(core) {
 function validateQuote(quote) {
   requireRecord(quote, "quote");
   requireExactKeys(quote, quoteKeys, "quote");
-  for (const field of ["id", "draftId", "rateSource", "fiatCurrency", "network", "currency", "tokenAddress", "source", "schema", "sha256"]) {
+  for (const field of ["id", "draftId", "network", "currency", "schema", "sha256"]) {
     requireString(quote[field], `quote.${field}`);
   }
-  requireNullableString(quote.bolt11, "quote.bolt11");
+  for (const field of ["bolt11", "rateSource", "fiatCurrency", "tokenAddress", "source"]) {
+    requireNullableString(quote[field], `quote.${field}`);
+  }
   requireNullableFiniteNumber(quote.rate, "quote.rate");
   requireNullableFiniteNumber(quote.fiatAmount, "quote.fiatAmount");
   for (const field of ["cryptoAmountBaseUnits", "platformFeeBaseUnits"]) {
@@ -154,11 +156,13 @@ function verifyQuoteDigest(quote) {
 }
 function contextCommitments(core, publishedCoreHash, quote) {
   const coreHash = verifyCoreDigest(core, publishedCoreHash);
-  const quoteHash = verifyQuoteDigest(quote);
-  return [
-    { namespace: CORE_NAMESPACE, algorithm: "sha256", digest: `0x${coreHash}` },
-    { namespace: QUOTE_NAMESPACE, algorithm: "sha256", digest: `0x${quoteHash}` }
+  const commitments = [
+    { namespace: CORE_NAMESPACE, algorithm: "sha256", digest: `0x${coreHash}` }
   ];
+  if (quote === null || quote === void 0) return commitments;
+  const quoteHash = verifyQuoteDigest(quote);
+  commitments.push({ namespace: QUOTE_NAMESPACE, algorithm: "sha256", digest: `0x${quoteHash}` });
+  return commitments;
 }
 const vectorCore = {
   amountBaseUnits: null,
@@ -221,6 +225,14 @@ function verify() {
   expectFailure("missing required null", () => coreDigest(missingRequiredNull));
   expectFailure("unexpected core member", () => coreDigest({ ...vectorCore, paymentUri: "derived-only" }));
   expectFailure("quote hash mismatch", () => verifyQuoteDigest({ ...vectorQuote, sha256: "0".repeat(64) }));
+  coreDigest({ ...vectorCore, receiverAddress: null });
+  coreDigest({ ...vectorCore, tokenAddress: null });
+  quoteDigest({ ...vectorQuote, fiatCurrency: null, rateSource: null, source: null, tokenAddress: null });
+  const exactCryptoCore = { ...vectorCore, amountBaseUnits: 27982986, fiatAmount: null, fiatCurrency: null };
+  const exactCryptoCommitments = contextCommitments(exactCryptoCore, coreDigest(exactCryptoCore));
+  if (exactCryptoCommitments.length !== 1 || exactCryptoCommitments[0].namespace !== CORE_NAMESPACE) {
+    throw new Error("exact-crypto drafts must carry the core commitment only");
+  }
   const withHashInPreimage = sha256(jcs(vectorQuote));
   if (withHashInPreimage === expectedQuoteHash) throw new Error("quote sha256 member was included in its own preimage");
   console.log("send21 v0.2 profile-conformance vectors and negative checks pass");
