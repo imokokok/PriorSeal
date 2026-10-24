@@ -10,27 +10,34 @@ async function runX402ProductionReadiness(environment = process.env, log = conso
   if (!config.x402 || !config.x402.networksExplicitlyConfigured || !config.x402.networks.length) throw new TypeError("Production x402 readiness requires an explicitly configured payment allowlist");
   if (config.x402.testnetNetworksEnabled || config.x402.networks.some((network) => network === "eip155:84532")) throw new TypeError("Production x402 readiness rejects testnet payment rails");
   const x402 = config.x402;
-  const probePath = x402.routes[0].path.replace(/:[A-Za-z][A-Za-z0-9_]*/g, "x402-production-probe");
-  const probeResourceUrl = new URL(probePath, x402.resourceOrigin).toString();
-  const localChallenge = await createX402PaymentService(x402).prepare(x402.routes[0], probeResourceUrl, void 0, AbortSignal.timeout(TIMEOUT_MS));
-  if (localChallenge.kind !== "required") throw new TypeError("Local production x402 probe did not produce a payment challenge");
-  assertBazaarDiscovery(localChallenge.response, x402.routes[0], probeResourceUrl);
+  const paymentService = createX402PaymentService(x402);
+  const probes = [];
+  for (const route of x402.routes) {
+    const probePath = route.path.replace(/:[A-Za-z][A-Za-z0-9_]*/g, "x402-production-probe");
+    const probeResourceUrl = new URL(probePath, x402.resourceOrigin).toString();
+    const localChallenge = await paymentService.prepare(route, probeResourceUrl, void 0, AbortSignal.timeout(TIMEOUT_MS));
+    if (localChallenge.kind !== "required") throw new TypeError("Local production x402 probe did not produce a payment challenge");
+    assertBazaarDiscovery(localChallenge.response, route, probeResourceUrl);
+    probes.push({ route, probeResourceUrl, localChallenge });
+  }
   const capabilities = await readJson(new URL("/v1/capabilities", x402.resourceOrigin).toString());
   const payments = nested(capabilities.body, ["payments", "x402"]);
   if (!payments || payments.configured !== true) throw new TypeError("Production API does not report x402 as configured");
   assertExactNetworks(networksFromCapabilities(payments), x402.networks, "production API capabilities");
   assertRoutes(payments.routes, x402.routes);
-  const remoteChallenge = await readJson(probeResourceUrl, { expectStatus: 402 });
-  if (remoteChallenge.headers.has("payment-response")) throw new TypeError("Unpaid production x402 probe unexpectedly returned PAYMENT-RESPONSE");
-  const encodedHeader = remoteChallenge.headers.get("payment-required");
-  if (!encodedHeader) throw new TypeError("Production x402 payment challenge is missing PAYMENT-REQUIRED");
-  assertEquivalentChallenges(localChallenge.response, remoteChallenge.body, x402.routes[0], probeResourceUrl);
-  assertEquivalentChallenges(decodeBase64Json(encodedHeader, "PAYMENT-REQUIRED"), remoteChallenge.body, x402.routes[0], probeResourceUrl);
+  for (const probe of probes) {
+    const remoteChallenge = await readJson(probe.probeResourceUrl, { expectStatus: 402 });
+    if (remoteChallenge.headers.has("payment-response")) throw new TypeError("Unpaid production x402 probe unexpectedly returned PAYMENT-RESPONSE");
+    const encodedHeader = remoteChallenge.headers.get("payment-required");
+    if (!encodedHeader) throw new TypeError("Production x402 payment challenge is missing PAYMENT-REQUIRED");
+    assertEquivalentChallenges(probe.localChallenge.response, remoteChallenge.body, probe.route, probe.probeResourceUrl);
+    assertEquivalentChallenges(decodeBase64Json(encodedHeader, "PAYMENT-REQUIRED"), remoteChallenge.body, probe.route, probe.probeResourceUrl);
+  }
   log(JSON.stringify({
     ready: true,
     environment: config.environment,
     resourceOrigin: new URL(x402.resourceOrigin).origin,
-    route: x402.routes[0].path,
+    routes: x402.routes.map((route) => route.path),
     networks: [...x402.networks].sort(),
     checks: ["facilitator-supported", "production-capabilities", "production-402-challenge", "payment-required-header-match", "bazaar-discovery-metadata"],
     settlementAttempted: false
@@ -115,6 +122,7 @@ function outputFormat(path) {
   if (path.endsWith("/bundle")) return "priorseal.verification-bundle.v1";
   if (path.endsWith("/check")) return "priorseal.fresh-evidence-check.v1";
   if (path.startsWith("/v1/evidence/receipts/")) return "priorseal.evidence.v1";
+  if (path === "/v1/integration-readiness") return "priorseal.integration-readiness.v1";
   return "application/json";
 }
 function normalizedRequirements(value) {
