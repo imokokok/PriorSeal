@@ -41,6 +41,34 @@ test('capability-aware navigation exposes the published action launcher and arch
 
 })
 
+test('published capability registry drives public claims and console authorization entry points', async ({ page }) => {
+  await page.goto('/capabilities')
+  await expect(page.getByRole('heading', { level: 1, name: /Only what this deployment publishes now/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Exact EVM call authorization' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Bounded authorization' })).toHaveCount(0)
+  await expect(page.getByText('No unavailable workflow is presented as ready.')).toBeVisible()
+
+  await page.goto('/app/actions/standard')
+  await expect(page.getByRole('heading', { name: 'Standard authorization is not published.' })).toBeVisible()
+  await expect(page.getByLabel('Intent ID')).toHaveCount(0)
+})
+
+test('an unavailable authorization profile removes primary action entry points without hiding verification', async ({ page }) => {
+  await page.route('**/v1/capabilities', (route) => route.fulfill({ json: { ...caps, executionProfiles: [] } }))
+  await page.goto('/app')
+  await expect(page.locator('#console-navigation a[href="/app/actions/new"]')).toHaveCount(0)
+  await expect(page.locator('.topbar-action')).toHaveCount(0)
+  await expect(page.locator('.console-feature').getByRole('link', { name: 'Review deployment' })).toBeVisible()
+
+  await page.goto('/app/actions/new')
+  await expect(page.getByRole('heading', { name: 'No authorization workflow is published' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Verify receipt' })).toBeVisible()
+
+  await page.goto('/capabilities')
+  await expect(page.getByRole('heading', { name: 'Portable receipt verification' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Exact EVM call authorization' })).toHaveCount(0)
+})
+
 test('verification errors move focus to the actionable feedback on narrow screens', async ({ page }, testInfo) => {
   await page.goto('/app/verify')
   await page.getByRole('textbox', { name: 'Evidence JSON', exact: true }).fill('{"incomplete":')

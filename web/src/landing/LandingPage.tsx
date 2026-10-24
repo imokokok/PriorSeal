@@ -92,7 +92,7 @@ export function LandingPage() {
         <InstitutionMark />
         <nav className={menuOpen ? 'is-open' : ''} aria-label="Homepage navigation" id="homepage-navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id} onClick={() => setMenuOpen(false)}>{label}</a>)}
-          <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/develop" onClick={() => setMenuOpen(false)}>Developers</Link>
+          <Link to="/capabilities" onClick={() => setMenuOpen(false)}>Capabilities</Link>
           <Link to="/monad" onClick={() => setMenuOpen(false)}>Monad proof</Link>
         </nav>
         <button className="museum-nav__menu" type="button" aria-controls="homepage-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? 'Close' : 'Menu'} <span aria-hidden="true">{menuOpen ? '×' : '+'}</span></button>
@@ -106,8 +106,8 @@ export function LandingPage() {
             <h1 data-route-heading tabIndex={-1}>Agent-ready.<br /><em>User-controlled.</em></h1>
             <p className="museum-hero__statement">Let an Agent prepare a bounded action, not hold a blank check. PriorSeal connects what a person or organization explicitly approved before action to observed EVM or Solana execution, with a signed receipt others can verify independently.</p>
             <div className="museum-actions">
-              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app/actions/new">Control an agent action <span>→</span></Link><Link className="museum-text-link" to="/monad">View Monad proof <span>↗</span></Link><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
-              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/develop">Build with PriorSeal <span>↗</span></Link>
+              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/monad">View Monad proof <span>↗</span></Link><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
+              <Link className="museum-text-link" to="/capabilities">Review capabilities <span>↗</span></Link>
             </div>
             <div className="museum-hero__foot"><span>01 / 06</span><p>Bounded authority and portable evidence for Agents and their users.<br />No custody. No transaction-signing keys.</p><a href="#system" aria-label="Explore the PriorSeal system">↓</a></div>
           </div>
@@ -212,9 +212,9 @@ export function LandingPage() {
             <p className="museum-kicker">DESIGN PARTNERS / AGENT SYSTEMS</p>
             <h2>Build one controlled<br />Agent flow.</h2>
             <p className="museum-closing__statement">Use PriorSeal to give an Agent explicit, bounded authority while its user retains the final signature and portable execution evidence. Pair it with Insight when you also need simulation or oracle transparency; each product remains independently usable.</p>
-            <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/integrations/mcp">Connect MCP <span>↗</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/develop">Open developer hub <span>↗</span></Link></div>
+            <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/integrations/mcp">Connect MCP <span>↗</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link className="museum-text-link" to="/capabilities">Review capabilities <span>↗</span></Link></div>
           </div>
-          <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for Agent-driven actions.</span><span><a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <Link className="museum-footer-link" to="/terms">Terms &amp; risk</Link> · <Link className="museum-footer-link" to="/support">Contact</Link> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
+          <footer><InstitutionMark inverse /><span>Portable authorization and execution evidence for Agent-driven actions.</span><span><Link className="museum-footer-link" to="/capabilities">Capabilities</Link> · <a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <Link className="museum-footer-link" to="/terms">Terms &amp; risk</Link> · <Link className="museum-footer-link" to="/support">Contact</Link> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
         </section>
       </main>
     </div>

@@ -78,8 +78,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .topbar-right { display: flex; align-items: center; gap: 27px; }
 .topbar-action { min-height: 34px; padding: 0 12px; font-size: 12px; }
 .api-state { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 500 12px "JetBrains Mono", monospace; letter-spacing: .04em; text-transform: uppercase; }
+.api-state:hover { color: var(--wine); }
 .api-state.online { color: var(--green); }
 .api-state.offline { color: var(--red); }
+.topbar-help { padding: 5px 0; color: var(--muted); border-bottom: 1px solid currentColor; font: 600 12px "JetBrains Mono", monospace; letter-spacing: .04em; text-transform: uppercase; }
+.topbar-help:hover { color: var(--wine); }
 
 /* Shared archive page language */
 .page { width: min(1490px, 100%); margin: 0 auto; padding: 44px clamp(24px, 3.6vw, 54px) 96px; animation: page-enter 160ms cubic-bezier(.22,1,.36,1); }
