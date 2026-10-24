@@ -1,13 +1,14 @@
-import { cloneElement, createContext, isValidElement, useContext, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { cloneElement, createContext, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PriorSealMark } from './brand'
 import { api, type Capabilities } from './lib/api'
 import { consoleNavigation, matchesConsoleNavigation } from './lib/console-navigation'
+import { hasPublishedAuthorization } from './features/capabilities/feature-registry'
 import { chains, dateTime, short } from './lib/format'
 import { openStoragePreferences } from './lib/storage'
 import type { Receipt } from './types'
 
-export function Logo({ compact = false }: { compact?: boolean }) { return <Link className="logo" to={compact ? '/app' : '/'} aria-label="PriorSeal home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Authority Evidence</small></span></Link> }
+export function Logo() { return <Link className="logo" to="/" aria-label="PriorSeal public home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Authority Evidence</small></span></Link> }
 export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) { const [copied, setCopied] = useState(false); return <button type="button" className="copy-button" aria-live="polite" onClick={async () => { try { await navigator.clipboard?.writeText(value); setCopied(true); window.setTimeout(() => setCopied(false), 1600) } catch { setCopied(false) } }}>{copied ? 'Copied' : label}</button> }
 export function CodeValue({ value, title }: { value?: string | null; title?: string }) { return <span className="code-value" title={title ?? value ?? ''}>{short(value)}{value && <CopyButton value={value} />}</span> }
 export function Status({ value, small = false }: { value?: string | null; small?: boolean }) {
@@ -32,10 +33,22 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
 }
 export function PageHeader({ eyebrow, title, children, actions }: { eyebrow?: string; title: string; children?: ReactNode; actions?: ReactNode }) { return <div className="page-header"><div className="page-heading">{eyebrow && <p className="eyebrow">{eyebrow}</p>}<h1 data-route-heading tabIndex={-1}>{title}</h1>{children && <p className="lede">{children}</p>}</div>{actions && <div className="header-actions">{actions}</div>}</div> }
 
-const AppShellContext = createContext(false)
+type ConsoleContextValue = {
+  inShell: boolean
+  capabilities: Capabilities | null
+  capabilitiesState: 'loading' | 'ready' | 'unavailable'
+  capabilitiesError: string
+  refreshCapabilities: () => void
+}
+
+const AppShellContext = createContext<ConsoleContextValue>({ inShell: false, capabilities: null, capabilitiesState: 'loading', capabilitiesError: '', refreshCapabilities: () => {} })
+
+export function useDeploymentCapabilities() {
+  return useContext(AppShellContext)
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
-  return useContext(AppShellContext) ? <>{children}</> : <AppShellFrame>{children}</AppShellFrame>
+  return useContext(AppShellContext).inShell ? <>{children}</> : <AppShellFrame>{children}</AppShellFrame>
 }
 
 function AppShellFrame({ children }: { children: ReactNode }) {
@@ -43,6 +56,8 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   const [compactNavigation, setCompactNavigation] = useState(false)
   const [apiState, setApiState] = useState<'checking' | 'online' | 'offline'>('checking')
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
+  const [capabilitiesState, setCapabilitiesState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
+  const [capabilitiesError, setCapabilitiesError] = useState('')
   const location = useLocation()
   const menuButton = useRef<HTMLButtonElement>(null)
   const sidebar = useRef<HTMLElement>(null)
@@ -64,11 +79,20 @@ function AppShellFrame({ children }: { children: ReactNode }) {
     return () => { active = false }
   }, [])
 
-  useEffect(() => {
-    let active = true
-    api.capabilities().then((value) => { if (active) setCapabilities(value) }).catch(() => { if (active) setCapabilities(null) })
-    return () => { active = false }
+  const refreshCapabilities = useCallback(() => {
+    setCapabilitiesState('loading')
+    setCapabilitiesError('')
+    api.capabilities().then((value) => {
+      setCapabilities(value)
+      setCapabilitiesState('ready')
+    }).catch((caught: Error) => {
+      setCapabilities(null)
+      setCapabilitiesState('unavailable')
+      setCapabilitiesError(caught.message)
+    })
   }, [])
+
+  useEffect(() => { refreshCapabilities() }, [refreshCapabilities])
 
   useEffect(() => {
     if (!compactNavigation || !open) return
@@ -101,15 +125,16 @@ function AppShellFrame({ children }: { children: ReactNode }) {
 
   const visibleNavigation = consoleNavigation.filter((item) => item.visible?.(capabilities) ?? true)
   const groups = [...new Set(visibleNavigation.map((item) => item.group))]
-  return <AppShellContext.Provider value><div className="shell">
+  const actionAvailable = hasPublishedAuthorization(capabilities)
+  return <AppShellContext.Provider value={{ inShell: true, capabilities, capabilitiesState, capabilitiesError, refreshCapabilities }}><div className="shell">
     {compactNavigation && open && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setOpen(false)} />}
     <aside ref={sidebar} id="console-navigation" className={open ? 'sidebar open' : 'sidebar'} aria-hidden={compactNavigation && !open} inert={compactNavigation && !open ? true : undefined}>
-      <div className="side-top"><Logo compact /><button type="button" className="mobile-close" onClick={() => setOpen(false)} aria-label="Close navigation">×</button></div>
+      <div className="side-top"><Logo /><button type="button" className="mobile-close" onClick={() => setOpen(false)} aria-label="Close navigation">×</button></div>
       <div className="environment"><span className={`live-dot ${apiState}`} /><span>Local collection</span><small>DEVICE SCOPE</small></div>
       <nav aria-label="Console navigation">{groups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{visibleNavigation.filter((item) => item.group === group).map((item) => <Link key={item.to} to={item.to} onClick={() => setOpen(false)} aria-current={matchesConsoleNavigation(item, location.pathname) ? 'page' : undefined} className={matchesConsoleNavigation(item, location.pathname) ? 'active' : undefined}><span className="nav-index">{item.index}</span><span>{item.label}</span></Link>)}</div>)}</nav>
       <div className="side-bottom"><span>Local evidence collection</span><small>Browser activity remains on this device when local saving is allowed. Project archive access appears above when the deployment enables it.</small><button type="button" className="side-privacy" onClick={() => { setOpen(false); openStoragePreferences() }}>Privacy &amp; storage</button><span className="side-accession">PRIORSEAL / LOCAL / 001</span></div>
   </aside>
-    <main id="main-content"><header className="app-topbar"><button ref={menuButton} type="button" className="menu" onClick={showNavigation} aria-label="Open navigation" aria-controls="console-navigation" aria-expanded={open}>☰</button><div className="top-title"><span>{current.group} / {current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className={`api-state ${apiState}`} aria-live="polite"><span className={`live-dot ${apiState}`} /> API {apiState}</span><Link className="button primary topbar-action" to="/app/actions/new">New action</Link></div></header><div key={location.pathname} className={`page page-${pageKey}`}>{children}</div></main>
+    <main id="main-content"><header className="app-topbar"><button ref={menuButton} type="button" className="menu" onClick={showNavigation} aria-label="Open navigation" aria-controls="console-navigation" aria-expanded={open}>☰</button><div className="top-title"><span>{current.group} / {current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><Link className={`api-state ${apiState}`} to="/app/quickstart" aria-label={`API ${apiState}. Open deployment status and readiness details.`}><span className={`live-dot ${apiState}`} /> API {apiState}</Link><Link className="topbar-help" to="/support">Help</Link>{actionAvailable && <Link className="button primary topbar-action" to="/app/actions/new">New action</Link>}</div></header><div key={location.pathname} className={`page page-${pageKey}`}>{children}</div></main>
   </div></AppShellContext.Provider>
 }
 

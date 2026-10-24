@@ -1,4 +1,5 @@
 import type { Capabilities } from './api'
+import { hasPublishedAuthorization } from '../features/capabilities/feature-registry'
 
 export type ConsoleNavigationItem = {
   index: string
@@ -14,7 +15,7 @@ export type ConsoleNavigationItem = {
 export const consoleNavigation: ConsoleNavigationItem[] = [
   { index: '01', key: 'overview', label: 'Overview', to: '/app', group: 'Workspace' },
   { index: '02', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Workspace' },
-  { index: '03', key: 'new-action', label: 'New action', to: '/app/actions/new', activePrefixes: ['/app/actions', '/app/intents'], pageKey: (pathname) => pathname === '/app/actions/new' ? 'new-action' : 'intent', group: 'Execute' },
+  { index: '03', key: 'new-action', label: 'New action', to: '/app/actions/new', activePrefixes: ['/app/actions', '/app/intents'], pageKey: (pathname) => pathname === '/app/actions/new' ? 'new-action' : 'intent', group: 'Execute', visible: hasPublishedAuthorization },
   { index: '04', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Execute' },
   { index: '05', key: 'evidence', label: 'Evidence library', to: '/app/evidence', activePrefixes: ['/app/evidence', '/app/audit', '/app/receipts'], pageKey: (pathname) => pathname.startsWith('/app/evidence/') || pathname.startsWith('/app/receipts/') ? 'receipts' : 'audit', group: 'Evidence' },
   { index: '06', key: 'archive', label: 'Project archive', to: '/app/archive', group: 'Evidence', visible: (capabilities) => Boolean(capabilities?.archive.enabled) },

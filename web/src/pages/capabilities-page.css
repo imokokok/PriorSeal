@@ -1,0 +1,59 @@
+.capabilities-hero { min-height: min(700px, calc(100svh - 86px)); padding: clamp(86px, 11vw, 180px) clamp(26px, 7vw, 118px); display: grid; grid-template-columns: minmax(500px, 1.12fr) minmax(300px, .58fr); align-items: end; gap: clamp(48px, 9vw, 160px); color: var(--gallery); background: #171715; }
+.capabilities-hero h1 { max-width: 900px; margin-top: 28px; font-size: clamp(67px, 8.2vw, 138px); }
+.capabilities-hero h1 em, .capabilities-boundary h2 em { color: #d9a6b2; font-weight: 400; }
+.capabilities-hero > p { max-width: 430px; margin: 0 0 7px; color: #b9b5ac; font-size: 17px; line-height: 1.7; }
+
+.capabilities-state { min-height: 154px; padding: 0 clamp(26px, 7vw, 118px); display: grid; grid-template-columns: repeat(3, 1fr); align-items: stretch; border-bottom: 1px solid var(--line); background: var(--gallery); }
+.capabilities-state > div { min-height: 154px; padding: 27px 30px 26px 0; display: grid; align-content: start; gap: 11px; border-right: 1px solid var(--line); }
+.capabilities-state > div + div { padding-left: 30px; }
+.capabilities-state > div:last-child { border-right: 0; }
+.capabilities-state span, .capability-register__index, .capabilities-state small { font: 600 11px/1.45 "JetBrains Mono", monospace; letter-spacing: .075em; text-transform: uppercase; }
+.capabilities-state span { color: var(--wine); }
+.capabilities-state strong { font: 400 24px/1.15 "Iowan Old Style", Baskerville, Georgia, serif; }
+.capabilities-state small { color: var(--quiet); letter-spacing: .02em; text-transform: none; }
+.capabilities-state > p { margin: 0; padding: 52px 0; color: var(--quiet); font: 500 13px "JetBrains Mono", monospace; }
+.capabilities-state > div:only-child { display: block; grid-column: 1 / -1; padding: 38px 0; border: 0; }
+.capabilities-state > div:only-child strong { display: block; font-family: Inter, sans-serif; font-size: 16px; }
+.capabilities-state > div:only-child p { max-width: 620px; color: var(--quiet); line-height: 1.6; }
+.capabilities-state button { padding: 0; color: var(--wine); background: transparent; border: 0; border-bottom: 1px solid currentColor; font: 600 12px "JetBrains Mono", monospace; }
+
+.capability-register { padding: clamp(105px, 11vw, 170px) clamp(26px, 7vw, 118px); background: var(--chalk); }
+.capability-register > header { display: grid; grid-template-columns: 230px 1fr; gap: clamp(45px, 8vw, 130px); }
+.capability-register h2 { margin-top: 24px; font-size: clamp(59px, 7vw, 110px); }
+.capability-register__list { max-width: 1170px; margin: 105px 0 0 auto; border-top: 1px solid var(--ink); }
+.capability-register__list article { padding: 31px 0 34px; display: grid; grid-template-columns: 110px minmax(370px, 1.28fr) auto; align-items: start; gap: 30px; border-bottom: 1px solid var(--line); }
+.capability-register__index { color: var(--wine); display: grid; gap: 8px; }
+.capability-register__index span { color: var(--quiet); font-size: 10px; }
+.capability-register h3 { margin: 0; font: 400 36px/1.05 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.04em; }
+.capability-register article > div > p { max-width: 650px; margin: 15px 0 0; color: var(--quiet); font-size: 16px; line-height: 1.68; }
+.capability-register dl { margin: 28px 0 0; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+.capability-register dl > div { min-width: 0; padding: 16px 18px 0 0; }
+.capability-register dl > div + div { padding-left: 18px; border-left: 1px solid var(--line); }
+.capability-register dt { color: var(--wine); font: 600 10px "JetBrains Mono", monospace; letter-spacing: .07em; text-transform: uppercase; }
+.capability-register dd { margin: 9px 0 0; color: var(--quiet); font-size: 13px; line-height: 1.55; }
+.capability-register .museum-text-link { margin-top: 5px; white-space: nowrap; }
+
+.capabilities-boundary { min-height: 510px; padding: clamp(88px, 10vw, 160px) clamp(26px, 7vw, 118px); display: grid; grid-template-columns: minmax(400px, 1fr) minmax(300px, .58fr); align-items: center; gap: clamp(55px, 10vw, 175px); color: var(--gallery); background: var(--wine-dark); }
+.capabilities-boundary h2 { margin-top: 25px; font-size: clamp(57px, 6.4vw, 104px); }
+.capabilities-boundary > p { max-width: 490px; color: #d6c9cb; font-size: 17px; line-height: 1.75; }
+
+@media (max-width: 850px) {
+  .capabilities-hero, .capabilities-boundary { grid-template-columns: 1fr; }
+  .capabilities-hero { min-height: auto; padding-top: 100px; padding-bottom: 86px; }
+  .capabilities-state { grid-template-columns: 1fr; padding: 0 26px; }
+  .capabilities-state > div, .capabilities-state > div + div { min-height: auto; padding: 22px 0; border-right: 0; border-bottom: 1px solid var(--line); }
+  .capabilities-state > div:last-child { border-bottom: 0; }
+  .capability-register > header { grid-template-columns: 1fr; gap: 28px; }
+  .capability-register__list { margin-top: 65px; }
+  .capability-register__list article { grid-template-columns: 76px 1fr; }
+  .capability-register .museum-text-link { grid-column: 2; }
+  .capability-register dl { grid-template-columns: 1fr; }
+  .capability-register dl > div, .capability-register dl > div + div { padding: 16px 0 0; border-left: 0; }
+}
+
+@media (max-width: 560px) {
+  .capabilities-hero h1 { font-size: clamp(54px, 15.5vw, 76px); }
+  .capability-register h2, .capabilities-boundary h2 { font-size: clamp(52px, 14vw, 72px); }
+  .capability-register__list article { grid-template-columns: 1fr; gap: 18px; }
+  .capability-register .museum-text-link { grid-column: auto; }
+}
