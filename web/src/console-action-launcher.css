@@ -1,0 +1,16 @@
+.action-launcher-intro { margin: -5px 0 22px; padding: 17px 20px; display: grid; grid-template-columns: minmax(180px, .55fr) minmax(0, 1.45fr); gap: 28px; color: var(--muted); background: #e4e1d8; border-left: 4px solid var(--wine); }
+.action-launcher-intro span, .action-choice__head > span, .action-launcher-note span { color: var(--wine); font: 600 11px "JetBrains Mono", monospace; letter-spacing: .09em; text-transform: uppercase; }
+.action-launcher-intro p { max-width: 700px; margin: 0; font-size: 14px; line-height: 1.62; }
+.action-choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; }
+.action-choice { min-height: 342px; display: flex; flex-direction: column; align-items: flex-start; }
+.action-choice__head { width: 100%; margin-bottom: 34px; padding-bottom: 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--rule); }
+.action-choice h2 { margin: 0; font: 400 36px/1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.045em; }
+.action-choice > p { margin: 14px 0 22px; color: var(--muted); font-size: 14px; line-height: 1.62; }
+.action-choice dl { width: 100%; margin: auto 0 22px; border-top: 1px solid var(--rule); }
+.action-choice dl > div { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--rule-soft); }
+.action-choice dt { color: var(--muted); font: 500 11px "JetBrains Mono", monospace; letter-spacing: .05em; text-transform: uppercase; }
+.action-choice dd { margin: 0; text-align: right; font-size: 12px; }
+.action-launcher-note { margin-top: 22px; padding: 25px 0; display: grid; grid-template-columns: minmax(230px, .8fr) minmax(280px, 1.5fr) auto; align-items: end; gap: 28px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.action-launcher-note h2 { margin: 9px 0 0; font: 400 29px/1.08 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.action-launcher-note p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.62; }
+@media (max-width: 760px) { .action-launcher-intro, .action-launcher-note { grid-template-columns: 1fr; gap: 14px; } .action-launcher-note { align-items: start; } }

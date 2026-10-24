@@ -4,7 +4,7 @@ import { AppShell, Empty, PageHeader, ReceiptSummary, receiptPrimaryStatus } fro
 import { downloadJson } from '../lib/download'
 import { chains } from '../lib/format'
 import { verifyTimestampProofOffline, type TimestampProofResult } from '../lib/offline-verify'
-import { getActivity } from '../lib/storage'
+import { activityChangeEvent, getActivity, session, storagePreferenceEvent } from '../lib/storage'
 import type { Receipt } from '../types'
 import '../console-audit-review.css'
 
@@ -38,7 +38,7 @@ async function verifyTimestampCached(receipt: Receipt) {
 }
 
 export function AuditPage() {
-  const [activity] = useState(getActivity)
+  const [activity, setActivity] = useState(getActivity)
   const [query, setQuery] = useState('')
   const [outcome, setOutcome] = useState('ALL')
   const [chain, setChain] = useState('ALL')
@@ -72,6 +72,16 @@ export function AuditPage() {
     return () => { active = false }
   }, [activity.receipts])
 
+  useEffect(() => {
+    const refresh = () => setActivity(getActivity())
+    window.addEventListener(activityChangeEvent, refresh)
+    window.addEventListener(storagePreferenceEvent, refresh)
+    return () => {
+      window.removeEventListener(activityChangeEvent, refresh)
+      window.removeEventListener(storagePreferenceEvent, refresh)
+    }
+  }, [])
+
   useEffect(() => { setVisibleCount(auditPageSize) }, [query, outcome, chain, timestampFilter])
 
   function clearFilters() { setQuery(''); setOutcome('ALL'); setChain('ALL'); setTimestampFilter('ALL') }
@@ -82,9 +92,13 @@ export function AuditPage() {
     downloadJson({ schema: 'priorseal.audit-bundle.v2', exportedAt: new Date().toISOString(), scope: { source: 'browser-local-session', filters: { query, outcome, chain, timestamp: timestampFilter } }, summary: { receipts: filtered.length, intents: intentHashes.size, authorizations: activity.authorizations.filter((record) => intentHashes.has(record.authorization.intentHash)).length, validTimestamps: filtered.filter((receipt) => timestampStatus(receipt) === 'VALID').length, attentionRequired: filtered.filter((receipt) => receiptPrimaryStatus(receipt) !== (receipt.compliance ? 'COMPLIANT' : 'COMPLETED') || ['INVALID', 'MISSING'].includes(timestampStatus(receipt))).length }, receipts: filtered, authorizations: activity.authorizations.filter((record) => intentHashes.has(record.authorization.intentHash)), intents: activity.intents.filter((intent) => intent.intentHash && intentHashes.has(intent.intentHash)), observations: activity.observations.filter((observation) => observation.txHash && txHashes.has(observation.txHash)) }, `priorseal-audit-${new Date().toISOString().slice(0, 10)}.json`)
   }
 
+  function clearLocalEvidence() {
+    if (window.confirm('Clear all local activity from this browser? This cannot be undone.')) session.clear()
+  }
+
   return <AppShell>
-    <PageHeader eyebrow="EVIDENCE" title="Evidence audit" actions={<button className="button secondary" disabled={!filtered.length} onClick={exportBundle}>Export evidence bundle</button>}>Search, filter and export signed evidence stored on this device. Server-side history is not included. Compliance counts are receipt claims; timestamp checks run locally, while issuer trust and the complete receipt require the verifier.</PageHeader>
-    <div className="audit-intro"><span>LOCAL EVIDENCE INDEX / 03</span><p>Each count reflects records available to this browser session. Timestamp proof is checked locally as records load.</p></div>
+    <PageHeader eyebrow="EVIDENCE" title="Evidence library" actions={<><button className="button secondary" disabled={!filtered.length} onClick={exportBundle}>Export filtered bundle</button><button className="button secondary" disabled={!activity.receipts.length} onClick={() => downloadJson(JSON.parse(session.export()), 'priorseal-local-session.json')}>Export local session</button><button className="text-link" disabled={!activity.receipts.length} onClick={clearLocalEvidence}>Clear local evidence</button></>}>Search, filter and export signed evidence stored on this device. Server-side history is not included. Compliance counts are receipt claims; timestamp checks run locally, while issuer trust and the complete receipt require the verifier.</PageHeader>
+    <div className="audit-intro"><span>LOCAL EVIDENCE LIBRARY / 03</span><p>Each count reflects records available to this browser session. Timestamp proof is checked locally as records load.</p></div>
     <section className="audit-stats" aria-label="Evidence summary"><article className="panel"><span className="audit-stat-index">01 / INVENTORY</span><small>Total receipts</small><strong>{activity.receipts.length}</strong></article><article className="panel"><span className="audit-stat-index">02 / CLAIMS</span><small>Compliance claims</small><strong>{activity.receipts.filter((receipt) => receiptPrimaryStatus(receipt) === (receipt.compliance ? 'COMPLIANT' : 'COMPLETED')).length}</strong></article><article className="panel"><span className="audit-stat-index">03 / TIME</span><small>Valid timestamps</small><strong>{validTimestamps}</strong></article><article className="panel"><span className="audit-stat-index">04 / REVIEW</span><small>Needs attention</small><strong>{attention}</strong></article><article className="panel"><span className="audit-stat-index">05 / VIEW</span><small>Filtered result</small><strong>{filtered.length}</strong></article></section>
     <section className="panel audit-panel">
       <div className="audit-panel-heading"><div><span>RECEIPT WORKTABLE</span><h2>Find the evidence</h2></div><p>Search identifiers or narrow the records by outcome, chain and timestamp state.</p></div>

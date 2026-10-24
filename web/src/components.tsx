@@ -1,7 +1,8 @@
 import { cloneElement, createContext, isValidElement, useContext, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react'
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PriorSealMark } from './brand'
 import { api, type Capabilities } from './lib/api'
+import { consoleNavigation, matchesConsoleNavigation } from './lib/console-navigation'
 import { chains, dateTime, short } from './lib/format'
 import { openStoragePreferences } from './lib/storage'
 import type { Receipt } from './types'
@@ -31,39 +32,6 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
 }
 export function PageHeader({ eyebrow, title, children, actions }: { eyebrow?: string; title: string; children?: ReactNode; actions?: ReactNode }) { return <div className="page-header"><div className="page-heading">{eyebrow && <p className="eyebrow">{eyebrow}</p>}<h1 data-route-heading tabIndex={-1}>{title}</h1>{children && <p className="lede">{children}</p>}</div>{actions && <div className="header-actions">{actions}</div>}</div> }
 
-type NavigationItem = {
-  index: string
-  key: string
-  label: string
-  to: string
-  group: string
-  visible?: (capabilities: Capabilities | null) => boolean
-}
-
-const nav: NavigationItem[] = [
-  { index: '01', key: 'overview', label: 'Overview', to: '/app', group: 'Start' },
-  { index: '02', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Start' },
-  { index: '03', key: 'intent', label: 'New authorization', to: '/app/intents/new', group: 'Execute' },
-  { index: '04', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Execute' },
-  { index: '05', key: 'exact-call', label: 'Exact-call authorization', to: '/app/intents/exact-call', group: 'Integrations' },
-  { index: '06', key: 'audit', label: 'Evidence audit', to: '/app/audit', group: 'Evidence & trust' },
-  { index: '07', key: 'receipts', label: 'Receipts', to: '/app/receipts', group: 'Evidence & trust' },
-  { index: '08', key: 'verify', label: 'Verify receipt', to: '/app/verify', group: 'Evidence & trust' },
-  { index: '09', key: 'archive', label: 'Project archive', to: '/app/archive', group: 'Evidence & trust', visible: (capabilities) => Boolean(capabilities?.archive.enabled) },
-  { index: '10', key: 'keys', label: 'Key registry', to: '/app/keys', group: 'Evidence & trust' },
-  { index: '11', key: 'sdk', label: 'SDK integration', to: '/app/sdk', group: 'Build' },
-  { index: '12', key: 'api', label: 'API reference', to: '/app/api', group: 'Build' },
-  { index: '13', key: 'mcp', label: 'MCP integration', to: '/integrations/mcp', group: 'Build' },
-  ...(import.meta.env.DEV ? [
-    { index: '14', key: 'erc4337-pilot', label: 'Safe 4337 pilot', to: '/app/erc4337-pilot', group: 'Experimental' },
-    { index: '15', key: 'eip7702-pilot', label: 'MetaMask 7702 pilot', to: '/app/eip7702-pilot', group: 'Experimental' },
-  ] : []),
-]
-
-function matchesNavigation(item: NavigationItem, pathname: string) {
-  return item.to === '/app' ? pathname === '/app' : pathname === item.to || pathname.startsWith(`${item.to}/`)
-}
-
 const AppShellContext = createContext(false)
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -79,7 +47,8 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   const menuButton = useRef<HTMLButtonElement>(null)
   const sidebar = useRef<HTMLElement>(null)
   const restoreFocus = useRef<HTMLElement | null>(null)
-  const current = [...nav].reverse().find((item) => matchesNavigation(item, location.pathname)) ?? { ...nav[0], key: 'missing', index: '—', label: 'Page not found' }
+  const current = [...consoleNavigation].reverse().find((item) => matchesConsoleNavigation(item, location.pathname)) ?? { ...consoleNavigation[0], key: 'missing', index: '—', label: 'Page not found' }
+  const pageKey = current.pageKey?.(location.pathname) ?? current.key
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 980px)')
@@ -130,19 +99,19 @@ function AppShellFrame({ children }: { children: ReactNode }) {
     setOpen(true)
   }
 
-  const visibleNavigation = nav.filter((item) => item.visible?.(capabilities) ?? true)
+  const visibleNavigation = consoleNavigation.filter((item) => item.visible?.(capabilities) ?? true)
   const groups = [...new Set(visibleNavigation.map((item) => item.group))]
   return <AppShellContext.Provider value><div className="shell">
     {compactNavigation && open && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setOpen(false)} />}
     <aside ref={sidebar} id="console-navigation" className={open ? 'sidebar open' : 'sidebar'} aria-hidden={compactNavigation && !open} inert={compactNavigation && !open ? true : undefined}>
       <div className="side-top"><Logo compact /><button type="button" className="mobile-close" onClick={() => setOpen(false)} aria-label="Close navigation">×</button></div>
       <div className="environment"><span className={`live-dot ${apiState}`} /><span>Local collection</span><small>DEVICE SCOPE</small></div>
-      <nav aria-label="Console navigation">{groups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{visibleNavigation.filter((item) => item.group === group).map((item) => <NavLink end={item.to === '/app'} key={item.to} to={item.to} onClick={() => setOpen(false)}><span className="nav-index">{item.index}</span><span>{item.label}</span></NavLink>)}</div>)}</nav>
+      <nav aria-label="Console navigation">{groups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{visibleNavigation.filter((item) => item.group === group).map((item) => <Link key={item.to} to={item.to} onClick={() => setOpen(false)} aria-current={matchesConsoleNavigation(item, location.pathname) ? 'page' : undefined} className={matchesConsoleNavigation(item, location.pathname) ? 'active' : undefined}><span className="nav-index">{item.index}</span><span>{item.label}</span></Link>)}</div>)}</nav>
       <div className="side-bottom"><span>Local evidence collection</span><small>Browser activity remains on this device when local saving is allowed. Project archive access appears above when the deployment enables it.</small><button type="button" className="side-privacy" onClick={() => { setOpen(false); openStoragePreferences() }}>Privacy &amp; storage</button><span className="side-accession">PRIORSEAL / LOCAL / 001</span></div>
   </aside>
-    <main id="main-content"><header className="app-topbar"><button ref={menuButton} type="button" className="menu" onClick={showNavigation} aria-label="Open navigation" aria-controls="console-navigation" aria-expanded={open}>☰</button><div className="top-title"><span>{current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className={`api-state ${apiState}`} aria-live="polite"><span className={`live-dot ${apiState}`} /> API {apiState}</span><Link className="text-link" to="/app/intents/exact-call">Exact call ↗</Link><Link className="text-link" to="/">Product ↗</Link></div></header><div key={location.pathname} className={`page page-${current.key}`}>{children}</div></main>
+    <main id="main-content"><header className="app-topbar"><button ref={menuButton} type="button" className="menu" onClick={showNavigation} aria-label="Open navigation" aria-controls="console-navigation" aria-expanded={open}>☰</button><div className="top-title"><span>{current.group} / {current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><span className={`api-state ${apiState}`} aria-live="polite"><span className={`live-dot ${apiState}`} /> API {apiState}</span><Link className="button primary topbar-action" to="/app/actions/new">New action</Link></div></header><div key={location.pathname} className={`page page-${pageKey}`}>{children}</div></main>
   </div></AppShellContext.Provider>
 }
 
 export const receiptPrimaryStatus = (receipt: Receipt) => receipt.compliance?.status ?? receipt.outcome
-export function ReceiptSummary({ receipt, timestampStatus }: { receipt: Receipt; timestampStatus?: 'VALID' | 'INVALID' | 'MISSING' | 'NOT_REQUIRED' | 'CHECKING' }) { const navigate = useNavigate(); const timestampLabel = timestampStatus === 'NOT_REQUIRED' ? 'TIMESTAMP N/A' : `TIMESTAMP ${timestampStatus ?? (receipt.authorizationEvidence?.timestamp ? 'ATTACHED' : 'N/A')}`; return <article className="receipt-row"><div><div className="receipt-badges"><Status value={receiptPrimaryStatus(receipt)} />{receipt.executionStatus && <Status value={receipt.executionStatus} small />}<Status value={timestampLabel} small /></div><strong>{receipt.receiptId}</strong><span>{chains[Number(receipt.execution.chainId)] ?? 'Chain ' + receipt.execution.chainId} · {dateTime(receipt.issuedAt)} · receipt claim</span></div><div className="receipt-row-actions"><CodeValue value={receipt.intentHash} /><button type="button" className="text-link" onClick={() => navigate('/app/receipts/' + encodeURIComponent(receipt.receiptId))}>View</button></div></article> }
+export function ReceiptSummary({ receipt, timestampStatus }: { receipt: Receipt; timestampStatus?: 'VALID' | 'INVALID' | 'MISSING' | 'NOT_REQUIRED' | 'CHECKING' }) { const navigate = useNavigate(); const timestampLabel = timestampStatus === 'NOT_REQUIRED' ? 'TIMESTAMP N/A' : `TIMESTAMP ${timestampStatus ?? (receipt.authorizationEvidence?.timestamp ? 'ATTACHED' : 'N/A')}`; return <article className="receipt-row"><div><div className="receipt-badges"><Status value={receiptPrimaryStatus(receipt)} />{receipt.executionStatus && <Status value={receipt.executionStatus} small />}<Status value={timestampLabel} small /></div><strong>{receipt.receiptId}</strong><span>{chains[Number(receipt.execution.chainId)] ?? 'Chain ' + receipt.execution.chainId} · {dateTime(receipt.issuedAt)} · receipt claim</span></div><div className="receipt-row-actions"><CodeValue value={receipt.intentHash} /><button type="button" className="text-link" onClick={() => navigate('/app/evidence/' + encodeURIComponent(receipt.receiptId))}>View</button></div></article> }
