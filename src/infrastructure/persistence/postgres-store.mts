@@ -18,7 +18,7 @@ type Observation = Parameters<MemoryStore['saveObservation']>[0];
 type AuthorizationRecord = Parameters<MemoryStore['saveAuthorization']>[0];
 type LogEntry = Awaited<ReturnType<MemoryStore['appendAuthorizationLog']>>;
 type Receipt = Parameters<MemoryStore['saveReceipt']>[0] & { intentHash: string; execution: { txHash: string }; schema: string; issuer: string; keyId: string; outcome: string; signature?: string };
-type PgJobRow = { job_id: string; idempotency_key: string; input_json: unknown; state: string; attempts: number; next_attempt_at: string | Date; observation_json: unknown; result_json: unknown; error_json: unknown; created_at: string | Date; lease_token: string; lease_expires_at: string | Date };
+type PgJobRow = { job_id: string; idempotency_key: string; coalesce_key: string | null; input_json: unknown; state: string; attempts: number; next_attempt_at: string | Date; observation_json: unknown; result_json: unknown; error_json: unknown; created_at: string | Date; lease_token: string; lease_expires_at: string | Date };
 type PgAuthorizationRow = { authorization_json: unknown; acceptance_json: unknown; policy_json: unknown; timestamp_evidence_json: unknown; witness_evidence_json: unknown; status: string; bound_tx_hash: string | null; uses: number };
 type PgAgentUsageRow = { usage_id: string; account_id: string; route_id: string; request_key: string; credits: string | number; reserved_at: string | Date; state: AgentUsageReservation['state'] };
 type PgAgentMeterAccountRow = { account_id: string; credential_hash: string; provisioned_credits: string | number; remaining_credits: string | number; status: AgentMeterAccount['status'] };
@@ -267,7 +267,17 @@ export function createPostgresStore(pool: Pool) {
       if (existing.rows[0].request_hash !== requestHash) { const error: Error & { code?: string } = new Error('Idempotency key was reused with a different request'); error.code = 'IDEMPOTENCY_CONFLICT'; throw error; }
       return { replay: true, response: persistedJson(existing.rows[0].response_json, 'idempotency response') as Response };
     },
-    async enqueueJob(job: ObservationJob) { const result = await pool.query<PgJobRow>(`INSERT INTO observation_jobs (job_id,idempotency_key,input_json,state,attempts,next_attempt_at) VALUES ($1,$2,$3,$4,$5,to_timestamp($6 / 1000.0)) ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key RETURNING *`, [job.jobId, job.idempotencyKey, job.input, job.state, job.attempts, job.nextAttemptAt]); return rowToJob(result.rows[0]); },
+    async enqueueJob(job: ObservationJob) {
+      const idempotencyKey = job.idempotencyKey ?? `${job.input.chainId}:${job.input.txHash}`;
+      const coalesceKey = job.coalesceKey ?? idempotencyKey;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const inserted = await pool.query<PgJobRow>(`INSERT INTO observation_jobs (job_id,idempotency_key,coalesce_key,input_json,state,attempts,next_attempt_at) VALUES ($1,$2,$3,$4,$5,$6,to_timestamp($7 / 1000.0)) ON CONFLICT DO NOTHING RETURNING *`, [job.jobId, idempotencyKey, coalesceKey, job.input, job.state, job.attempts, job.nextAttemptAt]);
+        if (inserted.rows[0]) return rowToJob(inserted.rows[0]);
+        const existing = await pool.query<PgJobRow>(`SELECT * FROM observation_jobs WHERE idempotency_key=$1 OR (coalesce_key=$2 AND state IN ('QUEUED','RUNNING','RETRY_WAIT')) ORDER BY CASE WHEN idempotency_key=$1 THEN 0 ELSE 1 END LIMIT 1`, [idempotencyKey, coalesceKey]);
+        if (existing.rows[0]) return rowToJob(existing.rows[0]);
+      }
+      throw new Error('Observation job enqueue conflict could not be resolved');
+    },
     async claimDueJobs(now: number, limit = 10, leaseDurationMs = 15 * 60_000) {
       const client = await pool.connect(); const leaseToken = randomUUID();
       try {
@@ -286,6 +296,6 @@ export function createPostgresStore(pool: Pool) {
   };
 }
 
-function rowToJob(row: PgJobRow, { includeLease = false } = {}): ObservationJob { return { jobId: persistedStatus(row.job_id, 'job.jobId'), idempotencyKey: row.idempotency_key, input: persistedJobInput(row.input_json), state: persistedStatus(row.state, 'job.state'), attempts: persistedCount(row.attempts, 'job.attempts'), nextAttemptAt: persistedTimestamp(row.next_attempt_at, 'job.nextAttemptAt'), observation: row.observation_json == null ? null : persistedWorkerObservation(row.observation_json), result: persistedJobResult(row.result_json), error: persistedJobError(row.error_json), createdAt: persistedTimestamp(row.created_at, 'job.createdAt'), ...(includeLease ? { leaseToken: row.lease_token, leaseExpiresAt: persistedTimestamp(row.lease_expires_at, 'job.leaseExpiresAt') } : {}) }; }
+function rowToJob(row: PgJobRow, { includeLease = false } = {}): ObservationJob { return { jobId: persistedStatus(row.job_id, 'job.jobId'), idempotencyKey: row.idempotency_key, ...(row.coalesce_key ? { coalesceKey: row.coalesce_key } : {}), input: persistedJobInput(row.input_json), state: persistedStatus(row.state, 'job.state'), attempts: persistedCount(row.attempts, 'job.attempts'), nextAttemptAt: persistedTimestamp(row.next_attempt_at, 'job.nextAttemptAt'), observation: row.observation_json == null ? null : persistedWorkerObservation(row.observation_json), result: persistedJobResult(row.result_json), error: persistedJobError(row.error_json), createdAt: persistedTimestamp(row.created_at, 'job.createdAt'), ...(includeLease ? { leaseToken: row.lease_token, leaseExpiresAt: persistedTimestamp(row.lease_expires_at, 'job.leaseExpiresAt') } : {}) }; }
 function rowToAgentUsage(row: PgAgentUsageRow): AgentUsageReservation { return { usageId: row.usage_id, accountId: row.account_id, routeId: row.route_id, requestKey: row.request_key, credits: String(row.credits), reservedAt: persistedTimestamp(row.reserved_at, 'agent usage reservedAt'), state: row.state }; }
 function rowToAuthorization(row: PgAuthorizationRow): AuthorizationRecord { const policyEvidence = persistedPolicy(row.policy_json); return { authorization: persistedAuthorization(row.authorization_json), acceptance: persistedAcceptance(row.acceptance_json), policy: policyEvidence?.result ?? policyEvidence, policyEvidence: policyEvidence?.schema === 'priorseal.policy-evidence.v1' ? policyEvidence : undefined, ...(row.timestamp_evidence_json ? { timestampEvidence: persistedJson(row.timestamp_evidence_json, 'timestamp evidence') } : {}), ...(row.witness_evidence_json ? { witnessEvidence: persistedJson(row.witness_evidence_json, 'witness evidence') } : {}), status: persistedStatus(row.status, 'authorization.status'), boundTxHash: row.bound_tx_hash, uses: persistedCount(row.uses, 'authorization.uses') }; }

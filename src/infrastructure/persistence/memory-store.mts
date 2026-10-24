@@ -193,7 +193,8 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
     idempotency.set(compound, { requestHash, response, expiresAt }); return { replay: false, response };
   },
   async enqueueJob(job: ObservationJob) {
-    const existing = [...jobs.values()].find((candidate) => candidate.idempotencyKey === job.idempotencyKey && !['FAILED', 'COMPLETED'].includes(candidate.state));
+    const existing = [...jobs.values()].find((candidate) => candidate.idempotencyKey === job.idempotencyKey
+      || candidate.coalesceKey === job.coalesceKey && ['QUEUED', 'RUNNING', 'RETRY_WAIT'].includes(candidate.state));
     if (existing) return existing;
     const saved = { ...job }; jobs.set(job.jobId, saved); return saved;
   },

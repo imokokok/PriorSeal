@@ -47,9 +47,10 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
   for (const [index, url] of urls.entries()) {
     try {
       const observationSource = safeSource(chainId, index);
-      const reportedChainId = await rpcClient.call(url, "eth_chainId", [], signal);
+      const call = (method, params) => rpcClient.call(url, method, params, signal, { chain: `eip155:${chainId}`, operation: "execution_observation", endpoint: String(index + 1) });
+      const reportedChainId = await call("eth_chainId", []);
       if (Number(BigInt(reportedChainId)) !== Number(chainId)) throw new PriorSealError("RPC_CHAIN_MISMATCH", "RPC endpoint reported an unexpected chain ID");
-      const tx = await rpcClient.call(url, "eth_getTransactionByHash", [txHash], signal);
+      const tx = await call("eth_getTransactionByHash", [txHash]);
       if (!tx) {
         fallbackObservation ??= normalizeExecution({ chainId, txHash, status: "NOT_FOUND", executionDataAvailable: false, observationSource });
         continue;
@@ -57,7 +58,7 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
       if (String(tx.hash).toLowerCase() !== txHash.toLowerCase()) throw new PriorSealError("RPC_INVALID_RESPONSE", "Transaction hash does not match request");
       const transactionNonce = hexBig(tx.nonce);
       if (transactionNonce === null) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC endpoint returned an invalid transaction nonce");
-      const receipt = await rpcClient.call(url, "eth_getTransactionReceipt", [txHash], signal);
+      const receipt = await call("eth_getTransactionReceipt", [txHash]);
       if (!receipt) {
         fallbackObservation = erc4337 ? normalizeExecution({ chainId, txHash, status: "PENDING", action: "ERC4337_USER_OPERATION", nonce: null, sender: null, recipient: null, target: erc4337.entryPoint, asset: `eip155:${chainId}/native`, amount: "0", executionDataAvailable: false, observationSource, finalityState: "PENDING", userOperationHash: erc4337.userOperationHash, entryPoint: erc4337.entryPoint, entryPointVersion: erc4337.entryPointVersion }) : normalizeExecution({ chainId, txHash, status: "PENDING", action: actionFor(tx), nonce: transactionNonce, sender: tx.from, recipient: tx.to, target: tx.to, calldataHash: keccak256(tx.input ?? "0x"), nativeValue: hexBig(tx.value), executionDataAvailable: true, observationSource, finalityState: "PENDING" });
         continue;
@@ -69,8 +70,8 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
       if (!["0x0", "0x1"].includes(receiptStatus)) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC endpoint returned an invalid transaction status");
       if (receiptBlockNumber === null || gasUsed === null || !BLOCK_HASH.test(receipt.blockHash ?? "")) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC endpoint returned invalid receipt block evidence");
       const [head, containingBlock] = await Promise.all([
-        rpcClient.call(url, "eth_blockNumber", [], signal),
-        rpcClient.call(url, "eth_getBlockByHash", [receipt.blockHash, false], signal)
+        call("eth_blockNumber", []),
+        call("eth_getBlockByHash", [receipt.blockHash, false])
       ]);
       const headNumber = hexBig(head);
       const containingBlockNumber = containingBlock?.number == null ? receiptBlockNumber : hexBig(containingBlock.number);
@@ -85,14 +86,14 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
       let observedHeadHash = null;
       let canonicalInclusion = true;
       if (finalityRequirement === "RPC_FINALIZED") {
-        const observedHead = await rpcClient.call(url, "eth_getBlockByNumber", [`0x${BigInt(headNumber).toString(16)}`, false], signal);
+        const observedHead = await call("eth_getBlockByNumber", [`0x${BigInt(headNumber).toString(16)}`, false]);
         if (!observedHead || !BLOCK_HASH.test(observedHead.hash ?? "") || hexBig(observedHead.number) !== headNumber) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC endpoint did not return the observed chain head");
         observedHeadHash = observedHead.hash.toLowerCase();
-        const canonical = await rpcClient.call(url, "eth_getBlockByNumber", [`0x${BigInt(receiptBlockNumber).toString(16)}`, false], signal);
+        const canonical = await call("eth_getBlockByNumber", [`0x${BigInt(receiptBlockNumber).toString(16)}`, false]);
         if (!canonical || !BLOCK_HASH.test(canonical.hash ?? "") || hexBig(canonical.number) !== receiptBlockNumber) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC endpoint did not return a canonical inclusion block");
         canonicalInclusion = clean(canonical.hash) === clean(receipt.blockHash);
         try {
-          const finalized2 = await rpcClient.call(url, "eth_getBlockByNumber", ["finalized", false], signal);
+          const finalized2 = await call("eth_getBlockByNumber", ["finalized", false]);
           if (finalized2 && BLOCK_HASH.test(finalized2.hash ?? "") && hexBig(finalized2.number) !== null && BigInt(finalized2.number) <= BigInt(headNumber)) {
             finalizedBlock = { number: Number(BigInt(finalized2.number)), hash: finalized2.hash.toLowerCase() };
           }
@@ -100,7 +101,7 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
           if (signal?.aborted) throw error;
         }
         if (finalizedBlock) {
-          const canonicalFinalized = await rpcClient.call(url, "eth_getBlockByNumber", [`0x${BigInt(finalizedBlock.number).toString(16)}`, false], signal);
+          const canonicalFinalized = await call("eth_getBlockByNumber", [`0x${BigInt(finalizedBlock.number).toString(16)}`, false]);
           if (!canonicalFinalized || hexBig(canonicalFinalized.number) !== String(finalizedBlock.number) || clean(canonicalFinalized.hash) !== finalizedBlock.hash) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC finalized block is not canonical at its height");
         }
         if (finalizedBlock && (canonicalInclusion && finalizedBlock.number === Number(BigInt(receiptBlockNumber)) && finalizedBlock.hash !== clean(receipt.blockHash) || finalizedBlock.number === Number(BigInt(headNumber)) && finalizedBlock.hash !== observedHeadHash)) throw new PriorSealError("RPC_INVALID_RESPONSE", "RPC finalized block conflicts with the observed chain");
@@ -118,7 +119,7 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
       if (erc4337) {
         if (clean(tx.to) !== clean(erc4337.entryPoint)) throw new PriorSealError("ERC4337_ENTRY_POINT_MISMATCH", "Bundler transaction target does not match the authorized EntryPoint");
         if (!/^0x[0-9a-fA-F]{64}$/.test(erc4337.userOperationHash) || !/^0x[0-9a-fA-F]{40}$/.test(erc4337.entryPoint) || !/^0x[0-9a-fA-F]{64}$/.test(erc4337.entryPointCodeHash)) throw new PriorSealError("INVALID_INTENT", "ERC-4337 observation profile is invalid");
-        const deployedCode = await rpcClient.call(url, "eth_getCode", [erc4337.entryPoint, receipt.blockNumber], signal);
+        const deployedCode = await call("eth_getCode", [erc4337.entryPoint, receipt.blockNumber]);
         if (deployedCode === "0x" || clean(keccak256(deployedCode)) !== clean(erc4337.entryPointCodeHash)) throw new PriorSealError("ERC4337_CODE_HASH_MISMATCH", "EntryPoint runtime code at the UserOperation block does not match the authorized code hash");
         const matches = logs.filter((log) => clean(log.address) === clean(erc4337.entryPoint) && clean(log.topics?.[0]) === USER_OPERATION_EVENT_TOPIC && clean(log.topics?.[1]) === clean(erc4337.userOperationHash));
         if (erc4337.eip7702) {
@@ -138,13 +139,13 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
             transactionHash: txHash,
             outerTransactionGasUsed: gasUsed,
             outerTransactionFee: gasPrice2 ? (BigInt(gasPrice2) * BigInt(gasUsed)).toString() : null,
-            readCode: (account, blockNumber) => rpcClient.call(url, "eth_getCode", [account, blockNumber], signal),
+            readCode: (account, blockNumber) => call("eth_getCode", [account, blockNumber]),
             readDelegateEntryPoint: async (delegate, blockNumber) => {
-              const result = await rpcClient.call(url, "eth_call", [{ to: delegate, data: DELEGATE_ENTRY_POINT_SELECTOR }, blockNumber], signal);
+              const result = await call("eth_call", [{ to: delegate, data: DELEGATE_ENTRY_POINT_SELECTOR }, blockNumber]);
               if (typeof result !== "string" || !ABI_WORD.test(result)) throw new PriorSealError("ERC4337_EIP7702_UNTRUSTED", "EIP-7702 delegate returned an invalid EntryPoint getter result");
               return `0x${result.slice(-40)}`;
             },
-            traceTransaction: (hash, diffMode) => rpcClient.call(url, "debug_traceTransaction", [hash, { tracer: "prestateTracer", tracerConfig: { diffMode } }], signal),
+            traceTransaction: (hash, diffMode) => call("debug_traceTransaction", [hash, { tracer: "prestateTracer", tracerConfig: { diffMode } }]),
             blockNumber: receipt.blockNumber
           });
         }
@@ -165,7 +166,7 @@ async function observeEvm({ chainId, txHash, confirmations = 0, finalityRequirem
           if (clean(safeTrust.entryPointAddress) !== clean(erc4337.entryPoint)) throw new PriorSealError("ERC4337_SAFE_ACCOUNT_UNTRUSTED", "Safe4337Module trust configuration targets a different EntryPoint");
           let prestate;
           try {
-            prestate = await rpcClient.call(url, "debug_traceTransaction", [txHash, { tracer: "prestateTracer", tracerConfig: { diffMode: false } }], signal);
+            prestate = await call("debug_traceTransaction", [txHash, { tracer: "prestateTracer", tracerConfig: { diffMode: false } }]);
           } catch (error) {
             if (signal?.aborted) throw error;
             throw new PriorSealError("ERC4337_SAFE_ACCOUNT_UNTRUSTED", "RPC endpoint must provide debug_traceTransaction prestate for Safe verification");

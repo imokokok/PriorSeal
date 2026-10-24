@@ -201,3 +201,19 @@ test('D1 targeted claims keep retry times, recover expired leases and reject sta
     assert.equal(await store.claimJob(job.jobId, 3000), undefined);
   } finally { fixture.sqlite.close(); }
 });
+
+test('D1 coalesces only active duplicate observation jobs', async () => {
+  const fixture = testD1();
+  try {
+    const store = createD1Store(fixture.database);
+    const first: ObservationJob = { jobId: 'first', idempotencyKey: 'request-a', coalesceKey: 'observation-fingerprint', input: { chainId: 143, txHash }, state: 'QUEUED', attempts: 0, nextAttemptAt: 0, createdAt: 0, observation: null, result: null, error: null };
+    assert.equal((await store.enqueueJob(first)).jobId, 'first');
+    const coalesced = await store.enqueueJob({ ...first, jobId: 'duplicate', idempotencyKey: 'request-b' });
+    assert.equal(coalesced.jobId, 'first');
+    const claimed = await store.claimJob('first', 0);
+    assert.ok(claimed);
+    await store.saveJob({ ...claimed, state: 'COMPLETED' });
+    const fresh = await store.enqueueJob({ ...first, jobId: 'fresh', idempotencyKey: 'request-d' });
+    assert.equal(fresh.jobId, 'fresh');
+  } finally { fixture.sqlite.close(); }
+});

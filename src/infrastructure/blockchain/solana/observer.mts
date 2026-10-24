@@ -1,5 +1,7 @@
 import { PriorSealError } from '../../../domain/errors.mjs';
 import { decodeBase58, isSolanaPublicKey, SOLANA_MAINNET_CAIP2, type SolanaTransactionMessage } from '../../../domain/solana.mjs';
+import { errorCode } from '../../../shared/error-code.mjs';
+import type { RpcMetrics } from '../evm/rpc-client.mjs';
 
 const MAINNET_GENESIS_HASH = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d';
 
@@ -14,21 +16,22 @@ type RpcMessage = {
   transactionConfig?: { computeUnitLimit: number | null; heapSize: number | null; loadedAccountsDataSizeLimit: number | null; priorityFeeLamports: string | null };
 };
 
-export async function observeSolana({ chainId, txHash, rpcUrls, confirmations = 0, finalityRequirement, expectedTransaction, signal, fetcher = fetch }:
-  { chainId: number; txHash: string; rpcUrls: string[]; confirmations?: number; finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'; expectedTransaction: SolanaTransactionMessage; signal?: AbortSignal; fetcher?: typeof fetch }) {
+export async function observeSolana({ chainId, txHash, rpcUrls, confirmations = 0, finalityRequirement, expectedTransaction, signal, fetcher = fetch, metrics = null }:
+  { chainId: number; txHash: string; rpcUrls: string[]; confirmations?: number; finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'; expectedTransaction: SolanaTransactionMessage; signal?: AbortSignal; fetcher?: typeof fetch; metrics?: RpcMetrics | null }) {
   if (chainId !== 0 || expectedTransaction.network !== 'mainnet-beta' || expectedTransaction.feePayer === '') throw new PriorSealError('INVALID_SOLANA_OBSERVATION', 'Solana observer requires a mainnet-beta transaction intent');
   if (finalityRequirement === 'RPC_FINALIZED') return pending(chainId, txHash, 'RPC_FINALIZED is not enabled for this Solana profile');
   if (!Array.isArray(rpcUrls) || rpcUrls.length === 0) throw new PriorSealError('RPC_UNAVAILABLE', 'No Solana RPC endpoint is configured');
   if (typeof txHash !== 'string' || decodeBase58(txHash).length !== 64) throw new PriorSealError('INVALID_TX_HASH', 'Solana transaction signature must be a 64-byte base58 value');
   let observedError: unknown;
-  for (const rpcUrl of rpcUrls) {
+  for (const [index, rpcUrl] of rpcUrls.entries()) {
     try {
-      const genesisHash = await rpc<string>(rpcUrl, 'getGenesisHash', [], fetcher, signal);
+      const context = { chain: SOLANA_MAINNET_CAIP2, operation: 'execution_observation', endpoint: String(index + 1) };
+      const genesisHash = await rpc<string>(rpcUrl, 'getGenesisHash', [], fetcher, signal, metrics, context);
       if (genesisHash !== MAINNET_GENESIS_HASH) throw new PriorSealError('SOLANA_CLUSTER_MISMATCH', 'RPC endpoint is not connected to Solana mainnet-beta');
-      const statusResult = asRecord(await rpc<unknown>(rpcUrl, 'getSignatureStatuses', [[txHash], { searchTransactionHistory: true }], fetcher, signal), 'getSignatureStatuses result');
+      const statusResult = asRecord(await rpc<unknown>(rpcUrl, 'getSignatureStatuses', [[txHash], { searchTransactionHistory: true }], fetcher, signal, metrics, context), 'getSignatureStatuses result');
       if (!Array.isArray(statusResult.value) || statusResult.value.length !== 1) throw new PriorSealError('RPC_INVALID_RESPONSE', 'getSignatureStatuses returned an invalid value list');
       const status = normalizeStatus(statusResult.value[0]);
-      const txResult = await rpc<Record<string, unknown> | null>(rpcUrl, 'getTransaction', [txHash, { encoding: 'json', commitment: 'confirmed', maxSupportedTransactionVersion: 1 }], fetcher, signal);
+      const txResult = await rpc<Record<string, unknown> | null>(rpcUrl, 'getTransaction', [txHash, { encoding: 'json', commitment: 'confirmed', maxSupportedTransactionVersion: 1 }], fetcher, signal, metrics, context);
       if (txResult === null) return { chainId, chainRef: SOLANA_MAINNET_CAIP2, txHash, status: status ? 'PENDING' : 'NOT_FOUND', blockNumber: status?.slot ?? null, blockHash: null, executedAt: null, observedAt: Math.floor(Date.now() / 1000), action: 'SOLANA_TRANSACTION', nonce: expectedTransaction.recentBlockhash, sender: expectedTransaction.feePayer, recipient: expectedTransaction.feePayer, asset: null, amount: null, transfers: [], transferMatchUnique: false, gasUsed: null, fee: null, executionDataAvailable: false, observationSource: 'solana-json-rpc', finalityState: status?.confirmationStatus ?? 'UNKNOWN', confirmations: Number(status?.confirmations ?? 0) };
       const transaction = asRecord(txResult.transaction, 'transaction');
       const messageVersion = normalizeTransactionVersion(txResult.version);
@@ -49,7 +52,7 @@ export async function observeSolana({ chainId, txHash, rpcUrls, confirmations = 
       const seenConfirmations = status?.confirmations === null ? 1 : Number(status?.confirmations ?? 0);
       const enoughConfirmations = confirmed && seenConfirmations >= confirmations;
       const executionStatus = enoughConfirmations ? meta.err == null ? 'CONFIRMED' : 'REVERTED' : 'PENDING';
-      const block = await rpc<Record<string, unknown> | null>(rpcUrl, 'getBlock', [slot, { commitment: 'confirmed', transactionDetails: 'none', rewards: false, maxSupportedTransactionVersion: 1 }], fetcher, signal);
+      const block = await rpc<Record<string, unknown> | null>(rpcUrl, 'getBlock', [slot, { commitment: 'confirmed', transactionDetails: 'none', rewards: false, maxSupportedTransactionVersion: 1 }], fetcher, signal, metrics, context);
       const blockHash = block === null ? null : publicKey(block.blockhash, 'block.blockhash');
       const messageMatched = canonicalJson(actualTransaction) === canonicalJson(expectedTransaction);
       return {
@@ -73,14 +76,24 @@ export async function observeSolana({ chainId, txHash, rpcUrls, confirmations = 
   throw new PriorSealError('RPC_UNAVAILABLE', 'All configured Solana RPC endpoints failed');
 }
 
-async function rpc<T>(url: string, method: string, params: unknown[], fetcher: typeof fetch, signal?: AbortSignal): Promise<T> {
-  const response = await fetcher(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 'priorseal-solana-observer', method, params }), signal: combineSignal(signal) });
-  if (!response.ok) throw new PriorSealError('RPC_HTTP_ERROR', `Solana RPC returned HTTP ${response.status} for ${method}`);
-  const body: unknown = await response.json();
-  if (!isRecord(body) || body.jsonrpc !== '2.0' || body.id !== 'priorseal-solana-observer') throw new PriorSealError('RPC_INVALID_RESPONSE', 'Solana RPC returned an invalid JSON-RPC envelope');
-  if (body.error != null) throw new PriorSealError('RPC_CALL_FAILED', 'Solana RPC rejected the observation request');
-  if (!Object.hasOwn(body, 'result')) throw new PriorSealError('RPC_INVALID_RESPONSE', 'Solana RPC response is missing result');
-  return body.result as T;
+async function rpc<T>(url: string, method: string, params: unknown[], fetcher: typeof fetch, signal: AbortSignal | undefined, metrics: RpcMetrics | null, context: Record<string, string>): Promise<T> {
+  const tags = { method, ...context };
+  const started = Date.now();
+  try {
+    if (signal?.aborted) throw new PriorSealError('REQUEST_ABORTED', 'Request was aborted');
+    metrics?.count?.('priorseal_rpc_requests_total', tags);
+    const response = await fetcher(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 'priorseal-solana-observer', method, params }), signal: combineSignal(signal) });
+    if (!response.ok) throw new PriorSealError('RPC_HTTP_ERROR', `Solana RPC returned HTTP ${response.status} for ${method}`);
+    const body: unknown = await response.json();
+    if (!isRecord(body) || body.jsonrpc !== '2.0' || body.id !== 'priorseal-solana-observer') throw new PriorSealError('RPC_INVALID_RESPONSE', 'Solana RPC returned an invalid JSON-RPC envelope');
+    if (body.error != null) throw new PriorSealError('RPC_CALL_FAILED', 'Solana RPC rejected the observation request');
+    if (!Object.hasOwn(body, 'result')) throw new PriorSealError('RPC_INVALID_RESPONSE', 'Solana RPC response is missing result');
+    metrics?.timing?.('priorseal_rpc_latency_ms', Date.now() - started, { ...tags, outcome: 'ok' });
+    return body.result as T;
+  } catch (error) {
+    metrics?.increment?.('priorseal_rpc_errors_total', { ...tags, code: errorCode(error) ?? 'RPC_FAILURE' });
+    throw error;
+  }
 }
 
 function normalizeRpcMessage(value: Record<string, unknown>, messageVersion: RpcMessage['messageVersion']): RpcMessage {

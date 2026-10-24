@@ -96,7 +96,7 @@ test('Postgres observation claims recover expired leases and reject a stale owne
 test('Postgres targeted claims respect backoff, lease ownership and terminal state', async () => {
   const database = new PGlite();
   try {
-    for (const migration of ['001_init.sql', '002_runtime_state.sql', '007_observation_job_results.sql', '008_observation_job_leases.sql']) {
+    for (const migration of ['001_init.sql', '002_runtime_state.sql', '007_observation_job_results.sql', '008_observation_job_leases.sql', '017_observation_job_coalescing.sql']) {
       await database.exec(await readFile(new URL(`../../migrations/${migration}`, import.meta.url), 'utf8'));
     }
     const store = createPostgresStore(pglitePool(database));
@@ -120,5 +120,24 @@ test('Postgres targeted claims respect backoff, lease ownership and terminal sta
     assert.ok(retry);
     await store.saveJob({ ...retry, state: 'COMPLETED' });
     assert.equal(await store.claimJob(job.jobId, 3000), undefined);
+  } finally { await database.close(); }
+});
+
+test('Postgres coalesces active observation jobs and permits a fresh terminal follow-up', async () => {
+  const database = new PGlite();
+  try {
+    for (const migration of ['001_init.sql', '002_runtime_state.sql', '007_observation_job_results.sql', '008_observation_job_leases.sql', '017_observation_job_coalescing.sql']) {
+      await database.exec(await readFile(new URL(`../../migrations/${migration}`, import.meta.url), 'utf8'));
+    }
+    const store = createPostgresStore(pglitePool(database));
+    const first = { jobId: 'first', idempotencyKey: 'request-a', coalesceKey: 'observation-fingerprint', input: { chainId: 143, txHash: '0x1' }, state: 'QUEUED', attempts: 0, nextAttemptAt: 0, createdAt: 0, observation: null, result: null, error: null } as const;
+    assert.equal((await store.enqueueJob(first)).jobId, first.jobId);
+    const coalesced = await store.enqueueJob({ ...first, jobId: 'duplicate', idempotencyKey: 'request-b' });
+    assert.equal(coalesced.jobId, first.jobId);
+    const claim = await store.claimJob(first.jobId, 0);
+    assert.ok(claim);
+    await store.saveJob({ ...claim, state: 'COMPLETED' });
+    const fresh = await store.enqueueJob({ ...first, jobId: 'fresh', idempotencyKey: 'request-c' });
+    assert.equal(fresh.jobId, 'fresh');
   } finally { await database.close(); }
 });
