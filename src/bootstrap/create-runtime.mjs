@@ -10,7 +10,7 @@ import { createRpcClient } from "../infrastructure/blockchain/evm/rpc-client.mjs
 import { getRpcUrls, SUPPORTED_CHAINS } from "../infrastructure/blockchain/evm/chains.mjs";
 import { PriorSealError } from "../domain/errors.mjs";
 import { parsePolicyDocument, readPolicyFile } from "../infrastructure/policy/file-policy-provider.mjs";
-import { createObservationWorker } from "../application/observations/observation-worker.mjs";
+import { chainObservationRetryPolicy, createObservationWorker } from "../application/observations/observation-worker.mjs";
 import { observeExecution } from "../application/observations/observe-execution.mjs";
 import { observeEvm } from "../infrastructure/blockchain/evm/observer.mjs";
 import { createIntegrationReadinessInspector } from "../infrastructure/blockchain/evm/integration-readiness.mjs";
@@ -57,7 +57,12 @@ async function composeRuntime({ config, environment = process.env, database, d1,
     const witnessEndpoints = config.witnessEndpointsJson ? parseWitnessEndpoints(config.witnessEndpointsJson, { requireHttps: config.environment === "production" }) : readWitnessEndpoints(config.witnessEndpointsFile, { requireHttps: config.environment === "production" });
     const witnessProvider = config.preExecutionProofMode === "witness-quorum" ? createHttpWitnessProvider({ policy: policy?.witnessQuorum, endpoints: witnessEndpoints, requester: config.issuer }) : null;
     const timestampProvider = config.preExecutionProofMode === "rfc3161" ? createDigiCertTimestampProvider() : null;
-    const rpcClient = createRpcClient();
+    const rpcMetrics = logger ? {
+      count: (metric, tags) => logger.info?.({ event: "rpc_metric", metric, ...tags }),
+      timing: (metric, durationMs, tags) => logger.info?.({ event: "rpc_metric", metric, durationMs, ...tags }),
+      increment: (metric, tags) => logger.info?.({ event: "rpc_metric", metric, ...tags })
+    } : null;
+    const rpcClient = createRpcClient({ metrics: rpcMetrics });
     const rpcUrls = (chainId) => getRpcUrls(chainId ?? -1, environment) ?? [];
     const selfserveClaim = store && config.selfserveClaim ? createSelfserveClaim(config.selfserveClaim, { store, rpc: rpcClient, rpcUrls }) : null;
     const loadTransparencyAnchor = async () => {
@@ -75,9 +80,9 @@ async function composeRuntime({ config, environment = process.env, database, d1,
       if (config.requireExternalAnchor && !evidence.checkpoint.anchor) throw new PriorSealError("TRANSPARENCY_ANCHOR_REQUIRED", "A verified external anchor covering this authorization is required before execution");
       return evidence;
     } : null;
-    const observer = (input) => input.chainId === 0 && input.solanaTransaction ? observeSolana({ chainId: input.chainId, txHash: input.txHash, rpcUrls: rpcUrls(input.chainId), confirmations: input.confirmations, finalityRequirement: input.finalityRequirement ?? "CONFIRMATIONS", expectedTransaction: input.solanaTransaction, signal: input.signal }) : observeEvm({ ...input, rpcUrls: rpcUrls(input.chainId), rpcClient, erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates });
+    const observer = (input) => input.chainId === 0 && input.solanaTransaction ? observeSolana({ chainId: input.chainId, txHash: input.txHash, rpcUrls: rpcUrls(input.chainId), confirmations: input.confirmations, finalityRequirement: input.finalityRequirement ?? "CONFIRMATIONS", expectedTransaction: input.solanaTransaction, signal: input.signal, metrics: rpcMetrics }) : observeEvm({ ...input, rpcUrls: rpcUrls(input.chainId), rpcClient, erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates });
     const integrationReadinessInspector = createIntegrationReadinessInspector({ rpcClient, rpcUrls: (chainId) => rpcUrls(chainId) });
-    const baseObservationWorker = store ? createObservationWorker({ store, observerManagesEvidence: true, observe: async (input) => (await observeExecution({ input, store, observer, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response, saveObservation: (observation) => store.saveObservation(observation) }) : null;
+    const baseObservationWorker = store ? createObservationWorker({ store, observerManagesEvidence: true, retryPolicy: chainObservationRetryPolicy, observe: async (input) => (await observeExecution({ input, store, observer, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response, saveObservation: (observation) => store.saveObservation(observation) }) : null;
     const observationWorker = baseObservationWorker && dispatchObservationJob ? {
       ...baseObservationWorker,
       async enqueuePersistent(input) {

@@ -294,7 +294,7 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
       return { replay: false, response };
     },
     async enqueueJob(job) {
-      const existing = [...jobs.values()].find((candidate) => candidate.idempotencyKey === job.idempotencyKey && !["FAILED", "COMPLETED"].includes(candidate.state));
+      const existing = [...jobs.values()].find((candidate) => candidate.idempotencyKey === job.idempotencyKey || candidate.coalesceKey === job.coalesceKey && ["QUEUED", "RUNNING", "RETRY_WAIT"].includes(candidate.state));
       if (existing) return existing;
       const saved = { ...job };
       jobs.set(job.jobId, saved);

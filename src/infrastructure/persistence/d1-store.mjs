@@ -29,6 +29,7 @@ function jobRecord(row, includeLease = false) {
   return {
     jobId: persistedStatus(row.job_id, "job.jobId"),
     idempotencyKey: row.idempotency_key,
+    ...row.coalesce_key ? { coalesceKey: row.coalesce_key } : {},
     input: persistedJobInput(row.input_json),
     state: persistedStatus(row.state, "job.state"),
     attempts: persistedCount(row.attempts, "job.attempts"),
@@ -370,8 +371,15 @@ function createD1Store(database) {
       return { replay: true, response: existing.response };
     },
     async enqueueJob(job) {
-      const row = await first(`INSERT INTO observation_jobs (job_id,idempotency_key,input_json,state,attempts,next_attempt_at) VALUES (?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO UPDATE SET idempotency_key=excluded.idempotency_key RETURNING *`, job.jobId, job.idempotencyKey ?? `${job.input.chainId}:${job.input.txHash}`, json(job.input), job.state, job.attempts, job.nextAttemptAt);
-      return jobRecord(row);
+      const idempotencyKey = job.idempotencyKey ?? `${job.input.chainId}:${job.input.txHash}`;
+      const coalesceKey = job.coalesceKey ?? idempotencyKey;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const inserted = await first(`INSERT INTO observation_jobs (job_id,idempotency_key,coalesce_key,input_json,state,attempts,next_attempt_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING *`, job.jobId, idempotencyKey, coalesceKey, json(job.input), job.state, job.attempts, job.nextAttemptAt);
+        if (inserted) return jobRecord(inserted);
+        const existing = await first(`SELECT * FROM observation_jobs WHERE idempotency_key=? OR (coalesce_key=? AND state IN ('QUEUED','RUNNING','RETRY_WAIT')) ORDER BY CASE WHEN idempotency_key=? THEN 0 ELSE 1 END LIMIT 1`, idempotencyKey, coalesceKey, idempotencyKey);
+        if (existing) return jobRecord(existing);
+      }
+      throw failed("JOB_ENQUEUE_CONFLICT", "Observation job enqueue conflict could not be resolved");
     },
     async claimDueJobs(now, limit = 10, leaseDurationMs = 15 * 6e4) {
       const leaseToken = randomUUID();

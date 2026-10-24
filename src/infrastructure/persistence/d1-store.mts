@@ -19,7 +19,7 @@ type ArchiveEntry = Parameters<MemoryStore['saveArchiveEntry']>[0];
 type D1Value = string | number | boolean | null;
 type LogRow = { sequence: number; authorization_hash: string; accepted_at: number; previous_entry_hash: string | null; entry_hash: string };
 type AuthorizationRow = { authorization_json: string; acceptance_json: string; policy_json: string; timestamp_evidence_json: string | null; witness_evidence_json: string | null; status: string; bound_tx_hash: string | null; uses: number };
-type JobRow = { job_id: string; idempotency_key: string; input_json: string; state: ObservationJob['state']; attempts: number; next_attempt_at: number; observation_json: string | null; result_json: string | null; error_json: string | null; created_at: number; lease_token: string | null; lease_expires_at: number | null };
+type JobRow = { job_id: string; idempotency_key: string; coalesce_key: string | null; input_json: string; state: ObservationJob['state']; attempts: number; next_attempt_at: number; observation_json: string | null; result_json: string | null; error_json: string | null; created_at: number; lease_token: string | null; lease_expires_at: number | null };
 type AgentUsageRow = { usage_id: string; account_id: string; route_id: string; request_key: string; credits: number; reserved_at: number; state: AgentUsageReservation['state'] };
 type AgentMeterAccountRow = { account_id: string; credential_hash: string; provisioned_credits: number; remaining_credits: number; status: AgentMeterAccount['status'] };
 type AgentCreditOperationRow = { operation_id: string; account_id: string; request_key: string; credits: number; reference: string | null; credited_at: number };
@@ -45,7 +45,7 @@ function authorizationRecord(row: AuthorizationRow): AuthorizationRecord {
 }
 function jobRecord(row: JobRow, includeLease = false): ObservationJob {
   return {
-    jobId: persistedStatus(row.job_id, 'job.jobId'), idempotencyKey: row.idempotency_key, input: persistedJobInput(row.input_json),
+    jobId: persistedStatus(row.job_id, 'job.jobId'), idempotencyKey: row.idempotency_key, ...(row.coalesce_key ? { coalesceKey: row.coalesce_key } : {}), input: persistedJobInput(row.input_json),
     state: persistedStatus(row.state, 'job.state'), attempts: persistedCount(row.attempts, 'job.attempts'), nextAttemptAt: persistedCount(row.next_attempt_at, 'job.nextAttemptAt'),
     observation: row.observation_json == null ? null : persistedWorkerObservation(row.observation_json),
     result: persistedJobResult(row.result_json), error: persistedJobError(row.error_json),
@@ -347,8 +347,15 @@ export function createD1Store(database: D1Database) {
       return { replay: true, response: existing.response };
     },
     async enqueueJob(job: ObservationJob) {
-      const row = await first<JobRow>(`INSERT INTO observation_jobs (job_id,idempotency_key,input_json,state,attempts,next_attempt_at) VALUES (?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO UPDATE SET idempotency_key=excluded.idempotency_key RETURNING *`, job.jobId, job.idempotencyKey ?? `${job.input.chainId}:${job.input.txHash}`, json(job.input), job.state, job.attempts, job.nextAttemptAt);
-      return jobRecord(row!);
+      const idempotencyKey = job.idempotencyKey ?? `${job.input.chainId}:${job.input.txHash}`;
+      const coalesceKey = job.coalesceKey ?? idempotencyKey;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const inserted = await first<JobRow>(`INSERT INTO observation_jobs (job_id,idempotency_key,coalesce_key,input_json,state,attempts,next_attempt_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING *`, job.jobId, idempotencyKey, coalesceKey, json(job.input), job.state, job.attempts, job.nextAttemptAt);
+        if (inserted) return jobRecord(inserted);
+        const existing = await first<JobRow>(`SELECT * FROM observation_jobs WHERE idempotency_key=? OR (coalesce_key=? AND state IN ('QUEUED','RUNNING','RETRY_WAIT')) ORDER BY CASE WHEN idempotency_key=? THEN 0 ELSE 1 END LIMIT 1`, idempotencyKey, coalesceKey, idempotencyKey);
+        if (existing) return jobRecord(existing);
+      }
+      throw failed('JOB_ENQUEUE_CONFLICT', 'Observation job enqueue conflict could not be resolved');
     },
     async claimDueJobs(now: number, limit = 10, leaseDurationMs = 15 * 60_000) {
       const leaseToken = randomUUID();

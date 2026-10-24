@@ -1,7 +1,9 @@
 import { errorCode } from '../../../shared/error-code.mjs';
 import { PriorSealError } from '../../../domain/errors.mjs';
 
-type RpcMetrics = {
+export type RpcCallContext = { chain?: string; operation?: string; endpoint?: string };
+export type RpcMetrics = {
+  count?: (name: string, tags: Record<string, string>) => void;
   timing?: (name: string, duration: number, tags: Record<string, string>) => void;
   increment?: (name: string, tags: Record<string, string>) => void;
 };
@@ -19,6 +21,15 @@ const hash = (value: unknown): value is string => typeof value === 'string' && /
 const data = (value: unknown): value is string => typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2})*$/.test(value);
 const nonce = (value: unknown): boolean => hex(value) || typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const optional = (value: unknown, guard: (value: unknown) => boolean): boolean => value === undefined || value === null || guard(value);
+const safeMetricValue = (value: unknown): string | null => typeof value === 'string' && /^[a-zA-Z0-9:._-]{1,96}$/.test(value) ? value : null;
+function metricTags(method: string, context: RpcCallContext | undefined, extra: Record<string, string> = {}) {
+  const tags: Record<string, string> = { method: safeMetricValue(method) ?? 'unknown', ...extra };
+  for (const [key, value] of Object.entries(context ?? {})) {
+    const safe = safeMetricValue(value);
+    if (safe) tags[key] = safe;
+  }
+  return tags;
+}
 
 function rpcError(code: string, message: string): PriorSealError {
   return new PriorSealError(code, message);
@@ -118,17 +129,19 @@ export function createRpcClient({
   }
 
   return {
-    async call<T = unknown>(url: string, method: string, params: unknown[], signal?: AbortSignal): Promise<T> {
+    async call<T = unknown>(url: string, method: string, params: unknown[], signal?: AbortSignal, context?: RpcCallContext): Promise<T> {
       let lastError: unknown;
       for (let attempt = 0; attempt <= retries; attempt += 1) {
         const started = Date.now();
         try {
+          if (signal?.aborted) throw aborted();
+          metrics?.count?.('priorseal_rpc_requests_total', metricTags(method, context, { attempt: String(attempt + 1) }));
           const result = await request(url, method, params, signal);
-          metrics?.timing?.('priorseal_rpc_latency_ms', Date.now() - started, { method, outcome: 'ok' });
+          metrics?.timing?.('priorseal_rpc_latency_ms', Date.now() - started, metricTags(method, context, { outcome: 'ok', attempt: String(attempt + 1) }));
           return result as T;
         } catch (error) {
           lastError = error;
-          metrics?.increment?.('priorseal_rpc_errors_total', { method, code: errorCode(error) ?? 'RPC_FAILURE' });
+          metrics?.increment?.('priorseal_rpc_errors_total', metricTags(method, context, { code: errorCode(error) ?? 'RPC_FAILURE', attempt: String(attempt + 1) }));
           if (errorCode(error) === 'REQUEST_ABORTED') throw error;
           if (attempt < retries) await retryDelay(Math.min(100 * 2 ** attempt, 1_000), signal);
         }

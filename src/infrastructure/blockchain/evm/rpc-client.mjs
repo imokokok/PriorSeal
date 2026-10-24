@@ -7,6 +7,15 @@ const hash = (value) => typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(
 const data = (value) => typeof value === "string" && /^0x(?:[0-9a-fA-F]{2})*$/.test(value);
 const nonce = (value) => hex(value) || typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 const optional = (value, guard) => value === void 0 || value === null || guard(value);
+const safeMetricValue = (value) => typeof value === "string" && /^[a-zA-Z0-9:._-]{1,96}$/.test(value) ? value : null;
+function metricTags(method, context, extra = {}) {
+  const tags = { method: safeMetricValue(method) ?? "unknown", ...extra };
+  for (const [key, value] of Object.entries(context ?? {})) {
+    const safe = safeMetricValue(value);
+    if (safe) tags[key] = safe;
+  }
+  return tags;
+}
 function rpcError(code, message) {
   return new PriorSealError(code, message);
 }
@@ -99,17 +108,19 @@ function createRpcClient({
     }
   }
   return {
-    async call(url, method, params, signal) {
+    async call(url, method, params, signal, context) {
       let lastError;
       for (let attempt = 0; attempt <= retries; attempt += 1) {
         const started = Date.now();
         try {
+          if (signal?.aborted) throw aborted();
+          metrics?.count?.("priorseal_rpc_requests_total", metricTags(method, context, { attempt: String(attempt + 1) }));
           const result = await request(url, method, params, signal);
-          metrics?.timing?.("priorseal_rpc_latency_ms", Date.now() - started, { method, outcome: "ok" });
+          metrics?.timing?.("priorseal_rpc_latency_ms", Date.now() - started, metricTags(method, context, { outcome: "ok", attempt: String(attempt + 1) }));
           return result;
         } catch (error) {
           lastError = error;
-          metrics?.increment?.("priorseal_rpc_errors_total", { method, code: errorCode(error) ?? "RPC_FAILURE" });
+          metrics?.increment?.("priorseal_rpc_errors_total", metricTags(method, context, { code: errorCode(error) ?? "RPC_FAILURE", attempt: String(attempt + 1) }));
           if (errorCode(error) === "REQUEST_ABORTED") throw error;
           if (attempt < retries) await retryDelay(Math.min(100 * 2 ** attempt, 1e3), signal);
         }

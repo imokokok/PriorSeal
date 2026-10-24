@@ -1,6 +1,6 @@
 // Generated from index.mts by npm run core:build. Do not edit directly.
 import { createHttpServer } from "./interfaces/http/create-http-server.mjs";
-import { createObservationWorker } from "./application/observations/observation-worker.mjs";
+import { chainObservationRetryPolicy, createObservationWorker } from "./application/observations/observation-worker.mjs";
 import { createMemoryStore } from "./infrastructure/persistence/memory-store.mjs";
 import { createPostgresStore } from "./infrastructure/persistence/postgres-store.mjs";
 import { buildIntent } from "./domain/intent.mjs";
@@ -67,6 +67,7 @@ export {
   buildX402PaymentLedgerEvent,
   buildX402PaymentRefundLedgerEvent,
   canonicalize,
+  chainObservationRetryPolicy,
   classifyExecutionOutcome,
   createAgentMeter,
   createDigiCertTimestampProvider,
