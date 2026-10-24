@@ -119,25 +119,36 @@ function catalogResources(catalog) {
 }
 function matchesCatalogEntry(entry, route, resourceOrigin) {
   try {
-    const resource = requireRecord(entry.resource, "CDP Bazaar catalog contains a resource without metadata");
+    const fields = catalogResourceFields(entry);
+    if (typeof fields.url !== "string" || new URL(fields.url).origin !== resourceOrigin) return false;
+    if (fields.serviceName !== BAZAAR_SERVICE.serviceName || JSON.stringify(fields.tags) !== JSON.stringify(BAZAAR_SERVICE.tags)) return false;
+    if (fields.iconUrl !== void 0 && fields.iconUrl !== new URL(BAZAAR_SERVICE.iconPath, resourceOrigin).toString()) return false;
     const extensions = requireRecord(entry.extensions, "CDP Bazaar catalog contains a resource without extensions");
     const bazaar = requireRecord(extensions.bazaar, "CDP Bazaar catalog contains a resource without Bazaar metadata");
-    if (typeof resource.url !== "string" || new URL(resource.url).origin !== resourceOrigin) return false;
-    if (resource.serviceName !== BAZAAR_SERVICE.serviceName || JSON.stringify(resource.tags) !== JSON.stringify(BAZAAR_SERVICE.tags) || resource.iconUrl !== new URL(BAZAAR_SERVICE.iconPath, resourceOrigin).toString()) return false;
-    if (bazaar.routeTemplate !== route.path) return false;
+    const expectedPathParams = examplePathParams(route.path, fields.url);
+    const hasPathParams = Object.keys(expectedPathParams).length > 0;
+    if (hasPathParams && bazaar.routeTemplate !== route.path) return false;
+    if (!hasPathParams && (bazaar.routeTemplate !== void 0 || new URL(fields.url).pathname.replace(/\/+$/, "") !== route.path)) return false;
     const info = requireRecord(bazaar.info, "CDP Bazaar entry has invalid discovery info");
     const input = requireRecord(info.input, "CDP Bazaar entry has invalid input metadata");
     const output = requireRecord(info.output, "CDP Bazaar entry has invalid output metadata");
     const schema = requireRecord(bazaar.schema, "CDP Bazaar entry has invalid schema metadata");
-    const expectedPathParams = examplePathParams(route.path, resource.url);
-    if (input.type !== "http" || input.method !== route.method || JSON.stringify(input.pathParams) !== JSON.stringify(expectedPathParams)) return false;
+    if (input.type !== "http" || input.method !== route.method) return false;
+    if (hasPathParams && JSON.stringify(input.pathParams) !== JSON.stringify(expectedPathParams)) return false;
+    if (!hasPathParams && !isRecord(input.queryParams)) return false;
     if (output.type !== "json" || output.format !== outputFormat(route.path) || !isRecord(output.example)) return false;
     if (schema.$schema !== "https://json-schema.org/draft/2020-12/schema" || schema.type !== "object" || !Array.isArray(schema.required) || !schema.required.includes("input") || !isRecord(schema.properties)) return false;
     const inputSchema = requireRecord(schema.properties.input, "CDP Bazaar entry has an invalid input schema");
-    return Array.isArray(inputSchema.required) && inputSchema.required.includes("type") && inputSchema.required.includes("method") && inputSchema.required.includes("pathParams");
+    if (!Array.isArray(inputSchema.required) || !inputSchema.required.includes("type") || !inputSchema.required.includes("method")) return false;
+    return hasPathParams ? inputSchema.required.includes("pathParams") : inputSchema.required.includes("queryParams");
   } catch {
     return false;
   }
+}
+function catalogResourceFields(entry) {
+  if (typeof entry.resource === "string") return { url: entry.resource, serviceName: entry.serviceName, tags: entry.tags, iconUrl: entry.iconUrl };
+  const resource = requireRecord(entry.resource, "CDP Bazaar catalog contains a resource without metadata");
+  return { url: resource.url, serviceName: resource.serviceName, tags: resource.tags, iconUrl: resource.iconUrl };
 }
 function examplePathParams(routeTemplate, resourceUrl) {
   const template = routeTemplate.replace(/\/+$/, "").split("/");
@@ -154,6 +165,7 @@ function outputFormat(path) {
   if (path.endsWith("/bundle")) return "priorseal.verification-bundle.v1";
   if (path.endsWith("/check")) return "priorseal.fresh-evidence-check.v1";
   if (path.startsWith("/v1/evidence/receipts/")) return "priorseal.evidence.v1";
+  if (path === "/v1/integration-readiness") return "priorseal.integration-readiness.v1";
   return "application/json";
 }
 function isRecord(value) {
