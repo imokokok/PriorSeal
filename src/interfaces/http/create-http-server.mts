@@ -350,6 +350,30 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
       if (req.method === 'GET' && path === '/.well-known/priorseal-agent.json') {
         return respond(200, agentIntegrationManifest({ version }), { 'cache-control': 'public, max-age=300' });
       }
+      if (req.method === 'GET' && path === '/.well-known/x402.json') {
+        if (!x402 || !x402Payments) throw new PriorSealError('NOT_FOUND', 'Route not found');
+        const entries: Record<string, unknown>[] = [];
+        for (const route of x402.routes) {
+          const resourceUrl = new URL(route.path.replace(/:[A-Za-z][A-Za-z0-9_]*/g, 'example'), x402.resourceOrigin).toString();
+          const prepared = await x402Payments.prepare(route, resourceUrl, undefined, deadline.signal);
+          if (prepared.kind !== 'required') continue;
+          const response = prepared.response as Record<string, unknown>;
+          const resource = response.resource as Record<string, unknown> | undefined;
+          if (!Array.isArray(response.accepts) || !resource) continue;
+          entries.push({
+            resource: resourceUrl,
+            method: route.method,
+            description: route.description,
+            mimeType: 'application/json',
+            serviceName: resource.serviceName,
+            tags: resource.tags,
+            iconUrl: resource.iconUrl,
+            accepts: response.accepts,
+            extensions: response.extensions,
+          });
+        }
+        return respond(200, { x402Version: 2, resources: entries }, { 'cache-control': 'public, max-age=300' });
+      }
       throw new PriorSealError('NOT_FOUND', 'Route not found');
     };
     let paymentContext: X402PaymentContext | undefined;
