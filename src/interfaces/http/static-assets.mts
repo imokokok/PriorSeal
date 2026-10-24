@@ -43,7 +43,8 @@ function isApplicationPath(pathname: string) {
   return !pathname.startsWith('/v1/')
     && !pathname.startsWith('/health/')
     && !pathname.startsWith('/.well-known/')
-    && pathname !== '/openapi/v1.json';
+    && pathname !== '/openapi/v1.json'
+    && pathname !== '/openapi.json';
 }
 
 function safeAssetPath(root: string, pathname: string) {

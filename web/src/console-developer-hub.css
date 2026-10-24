@@ -1,0 +1,15 @@
+.developer-path { margin-bottom: 22px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--ink); border: 1px solid var(--ink); }
+.developer-path > div { min-height: 116px; padding: 20px; display: grid; gap: 9px; background: var(--porcelain); }
+.developer-path span, .developer-resource > span, .developer-boundary span { color: var(--wine); font: 600 11px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.developer-path strong { font: 400 25px/1.05 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.03em; }
+.developer-resource-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.developer-resource { min-height: 278px; display: flex; flex-direction: column; align-items: flex-start; }
+.developer-resource h2 { margin: 32px 0 0; font: 400 31px/1.05 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.04em; }
+.developer-resource p { margin: 13px 0 24px; color: var(--muted); font-size: 14px; line-height: 1.62; }
+.developer-resource .text-link { margin-top: auto; }
+.developer-boundary { margin-top: 22px; display: grid; grid-template-columns: minmax(260px, .8fr) minmax(280px, 1.35fr) auto; align-items: end; gap: 28px; }
+.developer-boundary h2 { margin: 10px 0 0; font: 400 29px/1.08 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.035em; }
+.developer-boundary > p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.62; }
+.developer-boundary > div:last-child { display: grid; gap: 9px; }
+@media (max-width: 920px) { .developer-resource-grid { grid-template-columns: 1fr; } .developer-boundary { grid-template-columns: 1fr; align-items: start; } }
+@media (max-width: 620px) { .developer-path { grid-template-columns: 1fr; } }

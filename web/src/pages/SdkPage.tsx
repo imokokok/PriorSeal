@@ -87,7 +87,7 @@ export function SdkPage() {
   }, [])
 
   return <AppShell>
-    <PageHeader eyebrow="TYPESCRIPT SDK" title="Connect authorization to execution." actions={<CopyButton value={install} label="Copy install command" />}>One typed client prepares explicit authorization, collects the wallet signature, observes EVM execution and retrieves independently verifiable receipts. It never submits a transaction or receives a transaction-signing key.</PageHeader>
+    <PageHeader eyebrow="TYPESCRIPT SDK" title="Connect authorization to execution." actions={<><Link className="button secondary" to="/app/develop">Developer hub</Link><CopyButton value={install} label="Copy install command" /></>}>One typed client prepares explicit authorization, collects the wallet signature, observes EVM execution and retrieves independently verifiable receipts. It never submits a transaction or receives a transaction-signing key.</PageHeader>
 
     <div className="sdk-path" aria-label="Integration path"><div><span>01 / INSTALL</span><strong>Add the typed client</strong></div><div><span>02 / INTEGRATE</span><strong>Bind authority to execution</strong></div><div><span>03 / VERIFY</span><strong>Check evidence locally</strong></div></div>
 

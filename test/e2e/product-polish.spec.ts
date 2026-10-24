@@ -23,14 +23,18 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/v1/capabilities', (route) => route.fulfill({ json: caps }))
 })
 
-test('capability-aware navigation exposes the configured authorization and archive surfaces', async ({ page }) => {
+test('capability-aware navigation exposes the published action launcher and archive surfaces', async ({ page }) => {
   await page.goto('/app')
   await expect(page.getByRole('link', { name: 'Quickstart' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Exact-call authorization' })).toBeVisible()
+  await expect(page.locator('#console-navigation a[href="/app/actions/new"]')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Project archive' })).toBeVisible()
 
-  await page.goto('/app/intents/exact-call')
-  await expect(page.getByRole('link', { name: 'Exact-call authorization' })).toHaveAttribute('aria-current', 'page')
+  await page.goto('/app/actions/new')
+  await expect(page.getByRole('heading', { name: 'Choose an authorization.' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Import exact call' })).toBeVisible()
+
+  await page.goto('/app/actions/exact-call')
+  await expect(page.locator('#console-navigation a[href="/app/actions/new"]')).toHaveAttribute('aria-current', 'page')
 
   await page.goto('/app/archive')
   await expect(page.getByRole('link', { name: 'Project archive' })).toHaveAttribute('aria-current', 'page')
