@@ -20,6 +20,7 @@ import { createDigiCertTimestampProvider } from "./infrastructure/timestamp/digi
 import { buildVerificationBundle, VERIFICATION_BUNDLE_SCHEMA, VERIFICATION_BUNDLE_TRUST } from "./domain/verification-bundle.mjs";
 import { buildEvidenceEnvelope, evidenceProfilesForChains, evidenceProfileForExecution, EVIDENCE_API_SCHEMA, EVIDENCE_PROFILE_SCHEMA } from "./domain/evidence-api.mjs";
 import { buildFreshEvidenceCheck, signFreshEvidenceCheck, verifyFreshEvidenceCheck, FRESH_EVIDENCE_CHECK_SCHEMA, FRESH_EVIDENCE_CHECK_DOMAIN } from "./domain/fresh-evidence-check.mjs";
+import { buildIntegrationReadiness, signIntegrationReadiness, verifyIntegrationReadiness, INTEGRATION_READINESS_SCHEMA, INTEGRATION_READINESS_DOMAIN } from "./domain/integration-readiness.mjs";
 import { buildX402PaymentEvidence, signX402PaymentEvidence, verifyX402PaymentEvidence, X402_PAYMENT_EVIDENCE_SCHEMA, X402_PAYMENT_EVIDENCE_DOMAIN } from "./domain/x402-payment-evidence.mjs";
 import { buildX402PaymentLedgerEvent, buildX402PaymentRefundLedgerEvent, assertX402PaymentLedgerEvent, x402PaymentLedgerId, X402_PAYMENT_LEDGER_SCHEMA } from "./domain/x402-payment-ledger.mjs";
 import { agentCredentialHash, createAgentMeter, parseAgentMeterConfig } from "./application/commerce/agent-meter.mjs";
@@ -32,6 +33,8 @@ export {
   EVIDENCE_PROFILE_SCHEMA,
   FRESH_EVIDENCE_CHECK_DOMAIN,
   FRESH_EVIDENCE_CHECK_SCHEMA,
+  INTEGRATION_READINESS_DOMAIN,
+  INTEGRATION_READINESS_SCHEMA,
   LEGACY_AUTHORIZED_RECEIPT_SCHEMA,
   VERIFICATION_BUNDLE_SCHEMA,
   VERIFICATION_BUNDLE_TRUST,
@@ -48,6 +51,7 @@ export {
   buildAuthorizedReceipt,
   buildEvidenceEnvelope,
   buildFreshEvidenceCheck,
+  buildIntegrationReadiness,
   buildIntent,
   buildMerkleTransparencyEvidence,
   buildReceipt,
@@ -81,6 +85,7 @@ export {
   readWitnessEndpoints,
   sha256Hex,
   signFreshEvidenceCheck,
+  signIntegrationReadiness,
   signReceipt,
   signWitnessAttestation,
   signX402PaymentEvidence,
@@ -90,6 +95,7 @@ export {
   verifyAuthorizationReceipt,
   verifyAuthorizedReceipt,
   verifyFreshEvidenceCheck,
+  verifyIntegrationReadiness,
   verifyReceipt,
   verifySignature,
   verifyTimestampEvidence,

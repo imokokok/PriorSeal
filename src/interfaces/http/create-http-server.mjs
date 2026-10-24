@@ -23,6 +23,7 @@ import { createStaticAssetHandler } from "./static-assets.mjs";
 import { buildVerificationBundle } from "../../domain/verification-bundle.mjs";
 import { buildEvidenceEnvelope } from "../../domain/evidence-api.mjs";
 import { buildFreshEvidenceCheck, signFreshEvidenceCheck } from "../../domain/fresh-evidence-check.mjs";
+import { buildIntegrationReadiness, signIntegrationReadiness } from "../../domain/integration-readiness.mjs";
 import { assertIssuableIntentInput } from "../../domain/intent.mjs";
 import { evaluateAuthorizationPolicy, evaluateNewIntentPolicyCompatibility } from "../../domain/intent-policy.mjs";
 import { assertEd25519KeyPair } from "../../domain/ed25519.mjs";
@@ -31,13 +32,14 @@ import { deploymentCapabilities } from "../../application/capabilities.mjs";
 import { createRequestDeadline } from "./request-deadline.mjs";
 import { createX402PaymentService, discoverX402AvailableNetworks, matchX402Route } from "../../infrastructure/payments/x402-exact-evm.mjs";
 import { handlePriorSealMcpRequest } from "../mcp/priorseal-mcp.mjs";
+import { getAddress } from "viem";
 const ERROR_STATUS = Object.freeze({ ARCHIVE_UNAUTHORIZED: 401, ARCHIVE_FORBIDDEN: 403, ARCHIVE_CONFLICT: 409, AGENT_CREDENTIAL_REQUIRED: 401, AGENT_CREDENTIAL_INVALID: 403, AGENT_CREDITS_EXHAUSTED: 402, INVALID_JSON: 400, INVALID_REQUEST: 400, UNKNOWN_FIELD: 400, DANGEROUS_JSON_KEY: 400, JSON_TOO_DEEP: 400, INVALID_INTENT: 400, INVALID_AUTHORIZATION: 400, MISSING_AUTHORIZATION_SIGNATURE: 400, INVALID_AUTHORIZATION_SIGNATURE: 400, AUTHORIZATION_AUDIENCE_MISMATCH: 400, AUTHORIZATION_NOT_YET_VALID: 400, AUTHORIZATION_ISSUED_IN_FUTURE: 400, AUTHORIZATION_POLICY_MISMATCH: 409, AUTHORIZATION_EXPIRED: 410, AUTHORIZATION_ALREADY_USED: 409, AUTHORIZATION_NONCE_REUSED: 409, INVALID_TIMESTAMP_EVIDENCE: 400, INVALID_TIMESTAMP_PROFILE: 400, TIMESTAMP_POLICY_MISMATCH: 409, TIMESTAMP_AUTHORIZATION_MISMATCH: 409, TIMESTAMP_RESPONSE_HASH_MISMATCH: 409, TIMESTAMP_METADATA_MISMATCH: 409, INVALID_TIMESTAMP_POLICY: 400, TIMESTAMP_CLOCK_SKEW: 409, TIMESTAMP_AFTER_EXECUTION: 409, INVALID_TIMESTAMP_SIGNATURE: 409, INVALID_TIMESTAMP_CERTIFICATE_USAGE: 409, UNTRUSTED_TIMESTAMP_ROOT: 409, TIMESTAMP_SERVICE_UNAVAILABLE: 503, TIMESTAMP_NOT_CONFIGURED: 503, INVALID_TIMESTAMP_RESPONSE: 502, INVALID_WITNESS_POLICY: 400, INVALID_WITNESS_EVIDENCE: 400, WITNESS_POLICY_MISMATCH: 409, WITNESS_AUTHORIZATION_MISMATCH: 409, WITNESS_ACCEPTANCE_MISMATCH: 409, WITNESS_QUORUM_NOT_MET: 409, WITNESS_QUORUM_UNAVAILABLE: 503, WITNESS_NOT_CONFIGURED: 503, TRANSPARENCY_ANCHOR_REQUIRED: 409, TRANSPARENCY_AFTER_EXECUTION: 409, INVALID_CHAIN_ID: 400, INVALID_TX_HASH: 400, INVALID_ADDRESS: 400, INVALID_ASSET: 400, INVALID_UINT: 400, INVALID_TIME: 400, INVALID_IDENTIFIER: 400, INVALID_CONSTRAINT: 400, ERC4337_ENTRY_POINT_NOT_TRUSTED: 403, ERC4337_ENTRY_POINT_MISMATCH: 409, ERC4337_CODE_HASH_MISMATCH: 409, ERC4337_ACCOUNT_CALL_UNSUPPORTED: 409, ERC4337_ACCOUNT_CALL_MISMATCH: 409, ERC4337_SAFE_ACCOUNT_UNTRUSTED: 409, ERC4337_EVENT_MISMATCH: 409, ERC4337_EIP7702_UNTRUSTED: 403, ERC4337_EIP7702_AUTH_MISMATCH: 409, ERC4337_EIP7702_OPERATION_MISMATCH: 409, ERC4337_EIP7702_TRACE_UNAVAILABLE: 503, INVALID_IDEMPOTENCY_KEY: 400, UNSUPPORTED_MEDIA_TYPE: 415, REQUEST_TOO_LARGE: 413, IDEMPOTENCY_CONFLICT: 409, POLICY_REJECTED: 403, INTENT_NOT_FOUND: 404, AUTHORIZATION_NOT_FOUND: 404, RECEIPT_NOT_FOUND: 404, FRESH_CHECK_UNSUPPORTED: 409, NOT_FOUND: 404, REQUEST_TIMEOUT: 504, ISSUER_NOT_CONFIGURED: 503, AUTHORIZATION_VERIFIER_UNAVAILABLE: 503, RATE_LIMITER_UNAVAILABLE: 503, RPC_NOT_CONFIGURED: 503, RPC_TIMEOUT: 503, RPC_FAILURE: 503, RPC_UNAVAILABLE: 503, RPC_HTTP_ERROR: 502, RPC_CALL_FAILED: 502, RPC_INVALID_RESPONSE: 502, SOLANA_CLUSTER_MISMATCH: 502 });
 const AGENT_ACCOUNT_ERROR_STATUS = Object.freeze({ AGENT_OPERATOR_CREDENTIAL_INVALID: 403, AGENT_ACCOUNT_INVALID: 400, AGENT_ACCOUNT_NOT_FOUND: 404, AGENT_ACCOUNT_EXISTS: 409, AGENT_IDEMPOTENCY_REQUIRED: 400 });
 const CLAIM_ERROR_STATUS = Object.freeze({ CLAIM_INVALID_REQUEST: 400, CLAIM_SIGNATURE_INVALID: 400, CLAIM_TX_NOT_FOUND: 404, CLAIM_TX_NOT_ACCEPTED: 400, CLAIM_TX_SENDER_MISMATCH: 403, CLAIM_TX_FAILED: 400, CLAIM_BELOW_MINIMUM: 400, CLAIM_ACCOUNT_PREEXISTING: 409, CLAIM_ACCOUNT_REVOKED: 403, CLAIM_CHAIN_UNAVAILABLE: 503 });
 function requester(req, trustProxy) {
   return trustProxy ? String(req.headers["cf-connecting-ip"] ?? "").trim() || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress || "unknown" : req.socket.remoteAddress || "unknown";
 }
-function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, observer = observeEvm, corsOrigins = [], trustProxy = false, publicPaidCommerceEnabled = true, x402, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
+function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, issuer = "priorseal-local", privateKeyPem, publicKeyPem, keyId = "default", keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: "Ed25519", publicKey: publicKeyPem, status: "active", validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15e3, observer = observeEvm, integrationReadinessInspector, corsOrigins = [], trustProxy = false, publicPaidCommerceEnabled = true, x402, version = process.env.PRIORSEAL_BUILD_VERSION ?? "dev", staticDir, logger = null, now = () => Date.now() } = {}) {
   if (privateKeyPem || publicKeyPem) {
     if (!privateKeyPem || !publicKeyPem) throw new TypeError("Issuer private and public keys must be configured together");
     assertEd25519KeyPair(privateKeyPem, publicKeyPem);
@@ -184,6 +186,24 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         return respond(response.status, response.body, response.headers);
       }
       if (req.method === "GET" && path === "/v1/capabilities") return respond(200, await readDeploymentCapabilities(), { "cache-control": "no-store" });
+      if (req.method === "GET" && path === "/v1/integration-readiness") {
+        if (paidRoute?.path !== "/v1/integration-readiness") throw new PriorSealError("NOT_FOUND", "Route not found");
+        if (!privateKeyPem || !publicKeyPem) throw new PriorSealError("ISSUER_NOT_CONFIGURED", "Integration readiness requires a configured issuer key");
+        if (!integrationReadinessInspector || !x402) throw new PriorSealError("RPC_UNAVAILABLE", "Integration readiness inspection is not configured");
+        const input = integrationReadinessInput(new URL(req.url ?? path, "http://priorseal.local"));
+        const inspected = await integrationReadinessInspector({ ...input, signal: deadline.signal });
+        const registry = keyRegistryDocument(issuer, keyRegistry);
+        const report = buildIntegrationReadiness({
+          ...input,
+          inspection: inspected,
+          issuer,
+          keyId,
+          issuedAt: Math.floor(now() / 1e3),
+          keyRegistry: { schema: registry.schema, hash: hashJson(registry), url: new URL("/.well-known/priorseal-keys.json", x402.resourceOrigin).toString() },
+          payment: { protocol: "x402", method: "GET", path: "/v1/integration-readiness", price: paidRoute.price }
+        });
+        return respond(200, signIntegrationReadiness(report, privateKeyPem));
+      }
       if (agentMeter && req.method === "GET" && path === "/v1/agent-accounts/self/usage") {
         const limit = agentUsageLimit(new URL(req.url ?? "/", "http://priorseal.local").searchParams.get("limit"));
         return respond(200, { items: await agentMeter.usage(typeof req.headers["x-priorseal-agent-key"] === "string" ? req.headers["x-priorseal-agent-key"] : void 0, limit), requestId }, { "cache-control": "private, no-store" });
@@ -239,7 +259,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         }
         throw new PriorSealError("NOT_FOUND", "Archive route not found");
       }
-      if (req.method === "GET" && path === "/v1/version") return respond(200, { service: "priorseal", version, protocol: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.witness-attestation.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1", "priorseal.evidence.v1", "priorseal.evidence-profile.v1", "priorseal.fresh-evidence-check.v1"], requestId });
+      if (req.method === "GET" && path === "/v1/version") return respond(200, { service: "priorseal", version, protocol: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.witness-attestation.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1", "priorseal.evidence.v1", "priorseal.evidence-profile.v1", "priorseal.fresh-evidence-check.v1", "priorseal.integration-readiness.v1"], requestId });
       if (req.method === "GET" && path === "/openapi/v1.json") {
         return respond(200, openApiSpec(), { "cache-control": "public, max-age=300" });
       }
@@ -606,15 +626,15 @@ const AGENT8004_REGISTRATION = Object.freeze({
   supportedTrust: []
 });
 function keyRegistryDocument(issuer, keyRegistry) {
-  return { schema: "priorseal.keys.v1", issuer, keys: keyRegistry.list(), verifierVersion: "3.0.0", schemaVersions: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1", "priorseal.evidence.v1", "priorseal.evidence-profile.v1", "priorseal.fresh-evidence-check.v1"] };
+  return { schema: "priorseal.keys.v1", issuer, keys: keyRegistry.list(), verifierVersion: "3.0.0", schemaVersions: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1", "priorseal.evidence.v1", "priorseal.evidence-profile.v1", "priorseal.fresh-evidence-check.v1", "priorseal.integration-readiness.v1"] };
 }
 function agentIntegrationManifest({ version }) {
   return {
     schema: "priorseal.agent-integration.v1",
     service: "PriorSeal",
     version,
-    discovery: { capabilities: "/v1/capabilities", openapi: "/openapi/v1.json", mcp: "/mcp", issuerKeys: "/.well-known/priorseal-keys.json", evidence: "/v1/evidence/receipts/{receiptId}", freshEvidenceCheck: "/v1/evidence/receipts/{receiptId}/check" },
-    commerce: { x402: { discovery: "/v1/capabilities", paidResources: ["verification_bundle_export", "evidence_envelope_export", "fresh_evidence_check"], mcpBehavior: "FREE_DISCOVERY_AND_PURCHASE_HANDOFF_ONLY" } },
+    discovery: { capabilities: "/v1/capabilities", openapi: "/openapi/v1.json", mcp: "/mcp", issuerKeys: "/.well-known/priorseal-keys.json", evidence: "/v1/evidence/receipts/{receiptId}", freshEvidenceCheck: "/v1/evidence/receipts/{receiptId}/check", integrationReadiness: "/v1/integration-readiness?chainId={chainId}&subjectAddress={address}" },
+    commerce: { x402: { discovery: "/v1/capabilities", paidResources: ["verification_bundle_export", "evidence_envelope_export", "fresh_evidence_check", "integration_readiness_report"], mcpBehavior: "FREE_DISCOVERY_AND_PURCHASE_HANDOFF_ONLY" } },
     safety: {
       executionMode: "PROPOSAL_AND_PRINCIPAL_CONFIRMATION",
       principalSignature: "REQUIRED_FOR_EVERY_EXACT_ACTION",
@@ -624,7 +644,7 @@ function agentIntegrationManifest({ version }) {
     }
   };
 }
-const OPENAPI = { openapi: "3.1.0", info: { title: "PriorSeal API", version: "2.0.0", description: "Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts." }, paths: { "/v1/capabilities": { get: { summary: "Deployment configuration and workflow capabilities" } }, "/v1/archive": { get: { summary: "List private uploaded evidence with a project bearer credential" }, post: { summary: "Archive immutable evidence with a writer credential" } }, "/v1/archive/export": { get: { summary: "Export a private snapshot page including raw artifacts" } }, "/v1/archive/{entryId}": { get: { summary: "Read private project evidence" } }, "/v1/intents": { post: { summary: "Create a legacy unsigned intent draft", deprecated: true, responses: { "201": { description: "Created" } } } }, "/v1/authorizations/prepare": { post: { summary: "Canonicalize an authorization and return EIP-712 typed data or a Solana message" } }, "/v1/authorizations": { post: { summary: "Verify and accept a signed authorization" } }, "/v1/authorizations/{authorizationId}": { get: { summary: "Read authorization state" } }, "/v1/authorizations/{authorizationId}/transparency": { get: { summary: "Read signed transparency evidence and any verified external anchor" } }, "/v1/executions/observe": { post: { summary: "Observe EVM or Solana execution against an authorization" } }, "/v1/observation-jobs/{jobId}": { get: { summary: "Read automatic finality observation job" } }, "/v1/receipts/{receiptId}": { get: { summary: "Read receipt" } }, "/v1/receipts/{receiptId}/bundle": { get: { summary: "Export portable receipt evidence and key-discovery metadata (x402 when enabled)" } }, "/v1/evidence/receipts/{receiptId}": { get: { summary: "Read a chain-neutral evidence envelope with the portable verification bundle (x402 when enabled)" } }, "/v1/evidence/receipts/{receiptId}/check": { get: { summary: "Re-observe an authorization-bound transaction and return a newly signed fresh evidence check (x402 when enabled)" } }, "/v1/receipts/verify": { post: { summary: "Convenience verification, not authority" } }, "/.well-known/priorseal-keys.json": { get: { summary: "Read the issuer public-key registry" } }, "/.well-known/agent8004.json": { get: { summary: "Read the ERC-8004 agent registration record" } }, "/.well-known/priorseal-agent.json": { get: { summary: "Read safe Agent integration discovery" } }, "/v1/version": { get: { summary: "Read service and protocol versions" } }, "/health/live": { get: { summary: "Liveness" } }, "/health/ready": { get: { summary: "Readiness" } } } };
+const OPENAPI = { openapi: "3.1.0", info: { title: "PriorSeal API", version: "2.0.0", description: "Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts." }, paths: { "/v1/capabilities": { get: { summary: "Deployment configuration and workflow capabilities" } }, "/v1/integration-readiness": { get: { summary: "Issue a signed, read-only EVM integration-readiness report (x402 when enabled)" } }, "/v1/archive": { get: { summary: "List private uploaded evidence with a project bearer credential" }, post: { summary: "Archive immutable evidence with a writer credential" } }, "/v1/archive/export": { get: { summary: "Export a private snapshot page including raw artifacts" } }, "/v1/archive/{entryId}": { get: { summary: "Read private project evidence" } }, "/v1/intents": { post: { summary: "Create a legacy unsigned intent draft", deprecated: true, responses: { "201": { description: "Created" } } } }, "/v1/authorizations/prepare": { post: { summary: "Canonicalize an authorization and return EIP-712 typed data or a Solana message" } }, "/v1/authorizations": { post: { summary: "Verify and accept a signed authorization" } }, "/v1/authorizations/{authorizationId}": { get: { summary: "Read authorization state" } }, "/v1/authorizations/{authorizationId}/transparency": { get: { summary: "Read signed transparency evidence and any verified external anchor" } }, "/v1/executions/observe": { post: { summary: "Observe EVM or Solana execution against an authorization" } }, "/v1/observation-jobs/{jobId}": { get: { summary: "Read automatic finality observation job" } }, "/v1/receipts/{receiptId}": { get: { summary: "Read receipt" } }, "/v1/receipts/{receiptId}/bundle": { get: { summary: "Export portable receipt evidence and key-discovery metadata (x402 when enabled)" } }, "/v1/evidence/receipts/{receiptId}": { get: { summary: "Read a chain-neutral evidence envelope with the portable verification bundle (x402 when enabled)" } }, "/v1/evidence/receipts/{receiptId}/check": { get: { summary: "Re-observe an authorization-bound transaction and return a newly signed fresh evidence check (x402 when enabled)" } }, "/v1/receipts/verify": { post: { summary: "Convenience verification, not authority" } }, "/.well-known/priorseal-keys.json": { get: { summary: "Read the issuer public-key registry" } }, "/.well-known/agent8004.json": { get: { summary: "Read the ERC-8004 agent registration record" } }, "/.well-known/priorseal-agent.json": { get: { summary: "Read safe Agent integration discovery" } }, "/v1/version": { get: { summary: "Read service and protocol versions" } }, "/health/live": { get: { summary: "Liveness" } }, "/health/ready": { get: { summary: "Readiness" } } } };
 function openApiSpec() {
   return OPENAPI;
 }
@@ -641,6 +661,21 @@ function mcpIdentifier(argumentsValue, field, context) {
   const value = argumentsValue[field];
   if (typeof value !== "string" || value.length === 0 || value.length > 512) throw new PriorSealError("INVALID_REQUEST", `PriorSeal MCP ${context} requires a valid ${field}`);
   return value;
+}
+function integrationReadinessInput(url) {
+  const allowed = /* @__PURE__ */ new Set(["chainId", "subjectAddress"]);
+  const values = [...url.searchParams.entries()];
+  if (values.length !== 2 || values.some(([name]) => !allowed.has(name)) || new Set(values.map(([name]) => name)).size !== 2) throw new PriorSealError("INVALID_REQUEST", "Integration readiness requires exactly one chainId and one subjectAddress query parameter");
+  const chainIdRaw = url.searchParams.get("chainId") ?? "";
+  if (!/^[1-9][0-9]{0,9}$/.test(chainIdRaw)) throw new PriorSealError("INVALID_REQUEST", "Integration readiness chainId must be a positive EVM chain ID");
+  const chainId = Number(chainIdRaw);
+  if (!Number.isSafeInteger(chainId)) throw new PriorSealError("INVALID_REQUEST", "Integration readiness chainId must be a safe integer");
+  const subjectAddressRaw = url.searchParams.get("subjectAddress") ?? "";
+  try {
+    return { chainId, subjectAddress: getAddress(subjectAddressRaw).toLowerCase() };
+  } catch {
+    throw new PriorSealError("INVALID_REQUEST", "Integration readiness subjectAddress must be a valid EVM address");
+  }
 }
 function controlledExecutionWorkflow() {
   return {

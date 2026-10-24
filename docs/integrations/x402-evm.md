@@ -58,6 +58,42 @@ Example route configuration (choose the price and routes for the deployment):
 ]
 ```
 
+`bazaar` is optional route metadata. Use it for a paid route with query input
+so an agent can construct a purchase request without guessing the parameters.
+For example, the receipt-independent integration-readiness product declares
+both its exact input and its signed output format:
+
+```json
+{
+  "method": "GET",
+  "path": "/v1/integration-readiness",
+  "description": "Issue a signed read-only EVM integration-readiness report",
+  "price": "$0.02",
+  "bazaar": {
+    "input": {
+      "queryParams": {
+        "chainId": "8453",
+        "subjectAddress": "0x0000000000000000000000000000000000000000"
+      },
+      "querySchema": {
+        "properties": {
+          "chainId": { "type": "string", "pattern": "^[1-9][0-9]{0,9}$" },
+          "subjectAddress": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" }
+        },
+        "required": ["chainId", "subjectAddress"]
+      }
+    },
+    "output": {
+      "format": "priorseal.integration-readiness.v1",
+      "example": { "schema": "priorseal.integration-readiness.v1" }
+    }
+  }
+}
+```
+
+The static route deliberately has no `routeTemplate`: that field describes
+dynamic path parameters such as `:receiptId`, not query parameters.
+
 Prices are exact USD strings with up to six decimal places and are converted
 into each rail's settlement-token atomic units: the canonical micro-USDC grid
 (6 decimals) is used as-is on 6-decimal tokens and shifted losslessly on
@@ -168,6 +204,31 @@ facilitator URL can be deployed as environment vars.
   payment response headers to configured browser origins.
 - Facilitator errors fail closed with HTTP 503. Neither its credentials nor raw
   response body are included in API errors or logs.
+
+## Signed integration-readiness report
+
+When the deployment includes `GET /v1/integration-readiness` in its paid route
+configuration, a buyer can request:
+
+```text
+GET /v1/integration-readiness?chainId=8453&subjectAddress=0x...
+```
+
+The response is a short-lived, issuer-signed
+`priorseal.integration-readiness.v1` report. It performs only two EVM JSON-RPC
+reads on a configured supported chain: `eth_chainId` and `eth_getCode`. The
+report records whether the chain/RPC is configured and currently reachable,
+whether the supplied public address had empty code or contract bytecode, the
+input hash, issuer/key identifier, expiration, and a hash of the public key
+registry. It is useful as a portable integration preflight without needing an
+earlier PriorSeal receipt.
+
+It is not an ownership proof, contract audit, safety rating, authorization, or
+transaction right. It never requests a wallet key, signs a subject-chain
+transaction, broadcasts a transaction, or treats payment as execution
+authority. Unsupported or unavailable chains still receive a signed negative
+readiness result when the route can deliver one; callers should independently
+verify the report signature and apply their own RPC and security review.
 
 ## Payment-to-evidence binding for paid receipt bundles
 

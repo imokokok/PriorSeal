@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { createHttpServer, createMemoryStore, verifyFreshEvidenceCheck, x402PaymentLedgerId } from '../../src/index.mjs';
+import { createHttpServer, createMemoryStore, verifyFreshEvidenceCheck, verifyIntegrationReadiness, x402PaymentLedgerId } from '../../src/index.mjs';
 import { authorizationTypedData, buildAuthorization, hashJson } from '../../src/index.mjs';
 import { parseX402Config } from '../../src/infrastructure/payments/x402-exact-evm.mjs';
 import { verifyX402PaymentEvidence } from '../../src/domain/x402-payment-evidence.mjs';
@@ -310,6 +310,93 @@ test('x402 Monad mainnet is advertised, verified, and settled through the HTTP l
   assert.equal(capabilities.payments.x402.configured, true);
   assert.ok(capabilities.payments.x402.networks.some(network => network.network === 'eip155:143'));
 });
+
+test('x402 integration readiness is receipt-independent, exposes Bazaar query metadata, and signs the delivered report', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    calls.push(`${init?.method ?? 'GET'} ${url.pathname}`);
+    if (url.pathname === '/supported') return Response.json({ kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:8453' }] });
+    if (url.pathname === '/verify') return Response.json({ isValid: true });
+    if (url.pathname === '/settle') return Response.json({ success: true, network: 'eip155:8453', transaction: `0x${'1'.repeat(64)}`, amount: '20000' });
+    throw new Error(`Unexpected facilitator request: ${url.pathname}`);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://readiness-facilitator.test',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test',
+    PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'eip155:8453',
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{
+      method: 'GET', path: '/v1/integration-readiness', description: 'Issue a signed read-only EVM integration-readiness report', price: '$0.02',
+      bazaar: {
+        input: {
+          queryParams: { chainId: '8453', subjectAddress: `0x${'a'.repeat(40)}` },
+          querySchema: { properties: { chainId: { type: 'string', pattern: '^[1-9][0-9]{0,9}$' }, subjectAddress: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' } }, required: ['chainId', 'subjectAddress'] },
+        },
+        output: { format: 'priorseal.integration-readiness.v1', example: { schema: 'priorseal.integration-readiness.v1' } },
+      },
+    }]),
+  });
+  assert.ok(x402);
+  const store = createMemoryStore();
+  const server = createHttpServer({
+    x402,
+    store,
+    privateKeyPem,
+    publicKeyPem,
+    issuer: 'priorseal.test',
+    keyId: 'test-1',
+    now: () => 1_000_000,
+    integrationReadinessInspector: async () => ({
+      chain: { support: 'SUPPORTED', rpc: 'AVAILABLE', observedChainId: 8453, source: 'evm-json-rpc' },
+      subject: { kind: 'CONTRACT', codeHash: `0x${'c'.repeat(64)}`, codeBytes: 1 },
+    }),
+  });
+  t.after(() => server.close());
+  const path = `/v1/integration-readiness?chainId=8453&subjectAddress=0x${'a'.repeat(40)}`;
+  const unpaid = await request(server, path);
+  assert.equal(unpaid.status, 402);
+  const challenge = unpaid.json() as unknown as {
+    accepts: Array<Record<string, unknown>>;
+    extensions: {
+      bazaar: {
+        info: { input: { queryParams: Record<string, string> }; output: { format: string } };
+        schema: { properties: { input: { required: string[]; properties: { queryParams: { required: string[] } } } } };
+        routeTemplate?: string;
+      };
+    };
+  };
+  assert.deepEqual(challenge.extensions.bazaar.info.input.queryParams, { chainId: '8453', subjectAddress: `0x${'a'.repeat(40)}` });
+  assert.deepEqual(challenge.extensions.bazaar.schema.properties.input.required, ['type', 'method', 'queryParams']);
+  assert.deepEqual(challenge.extensions.bazaar.schema.properties.input.properties.queryParams.required, ['chainId', 'subjectAddress']);
+  assert.equal(challenge.extensions.bazaar.info.output.format, 'priorseal.integration-readiness.v1');
+  assert.equal(challenge.extensions.bazaar.routeTemplate, undefined, 'a static route must not claim a dynamic route template');
+  const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: challenge.accepts[0], payload: {}, resource: { url: `https://api.example.test${path}` }, extensions: challenge.extensions })).toString('base64');
+  const paid = await request(server, path, { headers: { 'payment-signature': paymentHeader } });
+  assert.equal(paid.status, 200);
+  assert.equal(paid.headers['cache-control'], 'private, no-store');
+  const report = paid.json() as unknown as { schema: string; input: { chainId: number; subjectAddress: string; inputHash: string }; inspection: { subject: { kind: string } }; payment: { price: string }; expiresAt: number };
+  assert.equal(report.schema, 'priorseal.integration-readiness.v1');
+  assert.equal(report.input.chainId, 8453);
+  assert.equal(report.input.subjectAddress, `0x${'a'.repeat(40)}`);
+  assert.match(report.input.inputHash, /^[0-9a-f]{64}$/);
+  assert.equal(report.inspection.subject.kind, 'CONTRACT');
+  assert.equal(report.payment.price, '$0.02');
+  assert.equal(report.expiresAt, 1_300);
+  assert.equal(verifyIntegrationReadiness(paid.json() as unknown as Record<string, unknown>, publicKeyPem), true);
+  assert.deepEqual(calls, ['GET /supported', 'POST /verify', 'POST /settle']);
+  const ledger = await store.listX402PaymentLedgerEvents(x402PaymentLedgerId({ payload: { x402Version: 2, accepted: challenge.accepts[0] as never, payload: {}, resource: { url: `https://api.example.test${path}` }, extensions: challenge.extensions }, requirement: challenge.accepts[0] as never }, `https://api.example.test${path}`));
+  assert.deepEqual(ledger.map(event => event.type), ['PAYMENT_AUTHORIZED', 'DELIVERED']);
+  const invalid = await request(server, `/v1/integration-readiness?chainId=bad&subjectAddress=0x${'a'.repeat(40)}`, { headers: { 'payment-signature': paymentHeader } });
+  assert.equal(invalid.status, 400);
+  assert.equal(calls.filter((call) => call === 'POST /settle').length, 1, 'an invalid report input must withhold the resource without settlement');
+});
+
 test('capability discovery advertises only rails supported by the current facilitator', async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {

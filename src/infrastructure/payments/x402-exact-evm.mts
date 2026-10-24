@@ -76,7 +76,12 @@ export type X402PaymentPayload = {
   extensions?: Record<string, unknown>;
 };
 
-export type X402Route = { method: 'GET'; path: string; description: string; price: string; regex: RegExp };
+type BazaarQueryProperty = { type: 'string'; pattern?: string; minLength?: number; maxLength?: number; description?: string };
+type BazaarDiscovery = {
+  input?: { queryParams: Record<string, string>; querySchema: { properties: Record<string, BazaarQueryProperty>; required: string[] } };
+  output?: { format: string; example: Record<string, unknown> };
+};
+export type X402Route = { method: 'GET'; path: string; description: string; price: string; bazaar?: BazaarDiscovery; regex: RegExp };
 export type X402Config = {
   facilitatorUrl: string;
   /** Per-network facilitator overrides parsed from PRIORSEAL_X402_FACILITATOR_URLS; absent when every rail shares the default facilitator. */
@@ -334,7 +339,7 @@ function parseRoutes(value: string) {
   if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 64) throw new TypeError('PRIORSEAL_X402_ROUTES_JSON must be an array with 1 to 64 GET routes');
   const seen = new Set<string>();
   return parsed.map((entry, index): X402Route => {
-    if (!isRecord(entry) || Object.keys(entry).sort().join(',') !== 'description,method,path,price') throw new TypeError(`x402 route ${index} must contain exactly method, path, description, and price`);
+    if (!isRecord(entry) || !sameKeys(entry, ['method', 'path', 'description', 'price'], ['bazaar'])) throw new TypeError(`x402 route ${index} must contain method, path, description, price, and optional bazaar metadata only`);
     if (entry.method !== 'GET') throw new TypeError(`x402 route ${index} must use GET so a failed settlement cannot follow a write operation`);
     if (typeof entry.path !== 'string' || !entry.path.startsWith('/v1/') || entry.path.includes('?') || entry.path.includes('#') || entry.path.includes('\\') || entry.path.includes('//')) throw new TypeError(`x402 route ${index} must be a clean /v1/ path pattern`);
     const path = entry.path.replace(/\/$/, '');
@@ -346,8 +351,59 @@ function parseRoutes(value: string) {
     if (typeof entry.price !== 'string') throw new TypeError(`x402 route ${index} must have a USD price string`);
     priceToAtomicUnits(entry.price);
     const regex = new RegExp(`^${path.split('/').map(segment => segment.startsWith(':') ? '[^/]+' : escapeRegex(segment)).join('/')}/?$`);
-    return { method: 'GET', path, description: entry.description.trim(), price: entry.price, regex };
+    const bazaar = entry.bazaar === undefined ? undefined : parseBazaarDiscovery(entry.bazaar, index);
+    return { method: 'GET', path, description: entry.description.trim(), price: entry.price, ...(bazaar ? { bazaar } : {}), regex };
   });
+}
+
+function sameKeys(value: Record<string, unknown>, required: string[], optional: string[]) {
+  const keys = Object.keys(value);
+  return required.every(key => keys.includes(key)) && keys.every(key => required.includes(key) || optional.includes(key));
+}
+
+function parseBazaarDiscovery(value: unknown, index: number): BazaarDiscovery {
+  if (!isRecord(value) || !sameKeys(value, [], ['input', 'output']) || value.input === undefined && value.output === undefined) throw new TypeError(`x402 route ${index} Bazaar metadata must contain input and/or output`);
+  const input = value.input === undefined ? undefined : parseBazaarInput(value.input, index);
+  const output = value.output === undefined ? undefined : parseBazaarOutput(value.output, index);
+  return { ...(input ? { input } : {}), ...(output ? { output } : {}) };
+}
+
+function parseBazaarInput(value: unknown, index: number): NonNullable<BazaarDiscovery['input']> {
+  if (!isRecord(value) || !sameKeys(value, ['queryParams', 'querySchema'], [])) throw new TypeError(`x402 route ${index} Bazaar input must contain queryParams and querySchema`);
+  const queryParams = value.queryParams;
+  const querySchema = value.querySchema;
+  if (!isRecord(queryParams) || !isRecord(querySchema) || !sameKeys(querySchema, ['properties', 'required'], []) || !isRecord(querySchema.properties) || !Array.isArray(querySchema.required)) throw new TypeError(`x402 route ${index} Bazaar query metadata is invalid`);
+  const propertiesValue = querySchema.properties;
+  const names = Object.keys(queryParams);
+  const propertyNames = Object.keys(propertiesValue);
+  if (names.length < 1 || names.length > 16 || names.some(name => !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) || typeof queryParams[name] !== 'string' || !(queryParams[name] as string).trim() || (queryParams[name] as string).length > 512) || names.some(name => !propertyNames.includes(name)) || propertyNames.some(name => !names.includes(name))) throw new TypeError(`x402 route ${index} Bazaar query parameters are invalid`);
+  const required = querySchema.required;
+  if (required.length > names.length || required.some(name => typeof name !== 'string' || !names.includes(name)) || new Set(required).size !== required.length) throw new TypeError(`x402 route ${index} Bazaar required query parameters are invalid`);
+  const properties: Record<string, BazaarQueryProperty> = {};
+  for (const name of names) {
+    const property = propertiesValue[name];
+    if (!isRecord(property) || !sameKeys(property, ['type'], ['pattern', 'minLength', 'maxLength', 'description']) || property.type !== 'string') throw new TypeError(`x402 route ${index} Bazaar query property ${name} is invalid`);
+    const minLength = property.minLength as unknown;
+    const maxLength = property.maxLength as unknown;
+    if (property.pattern !== undefined && (typeof property.pattern !== 'string' || property.pattern.length < 1 || property.pattern.length > 256)
+      || minLength !== undefined && (typeof minLength !== 'number' || !Number.isSafeInteger(minLength) || minLength < 0 || minLength > 4096)
+      || maxLength !== undefined && (typeof maxLength !== 'number' || !Number.isSafeInteger(maxLength) || maxLength < 1 || maxLength > 4096)
+      || typeof minLength === 'number' && typeof maxLength === 'number' && minLength > maxLength
+      || property.description !== undefined && (typeof property.description !== 'string' || property.description.length < 1 || property.description.length > 300)) throw new TypeError(`x402 route ${index} Bazaar query property ${name} is invalid`);
+    properties[name] = {
+      type: 'string',
+      ...(typeof property.pattern === 'string' ? { pattern: property.pattern } : {}),
+      ...(typeof minLength === 'number' ? { minLength } : {}),
+      ...(typeof maxLength === 'number' ? { maxLength } : {}),
+      ...(typeof property.description === 'string' ? { description: property.description } : {}),
+    };
+  }
+  return { queryParams: Object.fromEntries(names.map(name => [name, String(queryParams[name])])), querySchema: { properties, required: [...required] as string[] } };
+}
+
+function parseBazaarOutput(value: unknown, index: number): NonNullable<BazaarDiscovery['output']> {
+  if (!isRecord(value) || !sameKeys(value, ['format', 'example'], []) || typeof value.format !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(value.format) || !isRecord(value.example)) throw new TypeError(`x402 route ${index} Bazaar output is invalid`);
+  return { format: value.format, example: value.example };
 }
 
 function priceToAtomicUnits(price: string) {
@@ -365,18 +421,20 @@ function priceToAtomicUnits(price: string) {
  */
 function bazaarDiscovery(route: X402Route, resourceUrl: string) {
   const pathParams = bazaarPathParams(route.path, resourceUrl);
+  const query = route.bazaar?.input;
   const input = {
     type: 'http',
     method: route.method,
     ...(Object.keys(pathParams).length ? { pathParams } : {}),
+    ...(query ? { queryParams: query.queryParams } : {}),
   };
   const pathParamNames = Object.keys(pathParams);
   return {
     info: {
       input,
-      output: bazaarOutput(route.path),
+      output: route.bazaar?.output ? { type: 'json', ...route.bazaar.output } : bazaarOutput(route.path),
     },
-    schema: bazaarSchema(pathParamNames),
+    schema: bazaarSchema(pathParamNames, query?.querySchema),
     ...(pathParamNames.length ? { routeTemplate: route.path } : {}),
   };
 }
@@ -396,7 +454,7 @@ function bazaarPathParams(routePath: string, resourceUrl: string) {
   return params;
 }
 
-function bazaarSchema(pathParamNames: string[]) {
+function bazaarSchema(pathParamNames: string[], querySchema?: NonNullable<BazaarDiscovery['input']>['querySchema']) {
   const pathParams = pathParamNames.length
     ? {
       type: 'object',
@@ -415,8 +473,9 @@ function bazaarSchema(pathParamNames: string[]) {
           type: { type: 'string', const: 'http' },
           method: { type: 'string', enum: ['GET', 'HEAD', 'DELETE'] },
           ...(pathParams ? { pathParams } : {}),
+          ...(querySchema ? { queryParams: { type: 'object', properties: querySchema.properties, required: querySchema.required, additionalProperties: false } } : {}),
         },
-        required: ['type', 'method', ...(pathParams ? ['pathParams'] : [])],
+        required: ['type', 'method', ...(pathParams ? ['pathParams'] : []), ...(querySchema ? ['queryParams'] : [])],
         additionalProperties: false,
       },
       output: {
