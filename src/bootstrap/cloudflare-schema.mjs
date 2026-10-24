@@ -3,7 +3,7 @@ const SCHEMA_CACHE_TTL_MS = 3e5;
 function createSchemaGuard(now = Date.now) {
   const readyUntil = /* @__PURE__ */ new Map();
   return async (database, config, context, cache) => {
-    const cacheUrl = `https://priorseal.internal/schema/d1-0007/${config.preExecutionProofMode}/${config.archiveCredentials ? "archive" : "public"}/${config.x402 ? "x402" : "unpaid"}/${config.agentMeter ? "agent-meter" : "unmetered"}`;
+    const cacheUrl = `https://priorseal.internal/schema/d1-0008/${config.preExecutionProofMode}/${config.archiveCredentials ? "archive" : "public"}/${config.x402 ? "x402" : "unpaid"}/${config.agentMeter ? "agent-meter" : "unmetered"}`;
     const currentTime = now();
     if ((readyUntil.get(cacheUrl) ?? 0) > currentTime) return;
     const cacheKey = new Request(cacheUrl);
@@ -22,6 +22,8 @@ function createSchemaGuard(now = Date.now) {
     if (config.preExecutionProofMode === "witness-quorum") required.push("witness_attestations");
     const rows = await database.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${required.map(() => "?").join(",")})`).bind(...required).all();
     if (rows.results.length !== required.length) throw new TypeError("Required D1 production tables are missing");
+    const columns = await database.prepare("PRAGMA table_info(observation_jobs)").all();
+    if (!columns.results.some((column) => column.name === "coalesce_key")) throw new TypeError("Durable observation coalescing column is missing");
     const checkedAt = now();
     readyUntil.set(cacheUrl, checkedAt + SCHEMA_CACHE_TTL_MS);
     context.waitUntil(cache.put(cacheKey, new Response("ready", { headers: { "cache-control": "public, max-age=300", "x-schema-checked-at": String(checkedAt) } })));

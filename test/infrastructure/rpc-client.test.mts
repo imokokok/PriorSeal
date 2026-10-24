@@ -12,6 +12,22 @@ test('RPC client retries invalid envelopes and returns a valid JSON-RPC result',
   assert.equal(metrics.ok, 1);
 });
 
+test('RPC client counts physical requests with safe structured source tags', async () => {
+  const requests: Record<string, string>[] = [];
+  let calls = 0;
+  const client = createRpcClient({
+    retries: 1,
+    sleep: async () => {},
+    metrics: { count: (_metric, tags) => requests.push(tags) },
+    fetchImpl: async () => new Response(JSON.stringify(calls++ === 0 ? { jsonrpc: '2.0', id: 1, error: { code: -1, message: 'retry' } } : { jsonrpc: '2.0', id: 1, result: '0x8f' })),
+  });
+  await client.call('https://rpc.example.invalid/secret', 'eth_chainId', [], undefined, { chain: 'eip155:143', operation: 'execution_observation', endpoint: '1', ...({ ignored: 'https://rpc.example.invalid/secret' } as Record<string, string>) });
+  assert.deepEqual(requests, [
+    { method: 'eth_chainId', attempt: '1', chain: 'eip155:143', operation: 'execution_observation', endpoint: '1' },
+    { method: 'eth_chainId', attempt: '2', chain: 'eip155:143', operation: 'execution_observation', endpoint: '1' },
+  ]);
+});
+
 test('RPC client converts fetch failures to a stable non-sensitive error', async () => {
   const client = createRpcClient({ retries: 0, fetchImpl: async () => { throw new Error('https://rpc.invalid/private-token'); } });
   await assert.rejects(() => client.call('https://rpc.invalid/private-token', 'eth_chainId', []), (error: unknown) => error instanceof Error && 'code' in error && error.code === 'RPC_FAILURE' && !error.message.includes('private-token'));
@@ -53,10 +69,11 @@ test('RPC client rejects invalid retry and timeout settings before network use',
 test('RPC client does not send a pre-aborted request or retry after cancellation', async () => {
   const controller = new AbortController();
   controller.abort();
-  let calls = 0;
-  const client = createRpcClient({ retries: 2, fetchImpl: async () => { calls += 1; return Response.json({ jsonrpc: '2.0', id: 1, result: '0x1' }); } });
+  let calls = 0; let counted = 0;
+  const client = createRpcClient({ retries: 2, metrics: { count: () => { counted += 1; } }, fetchImpl: async () => { calls += 1; return Response.json({ jsonrpc: '2.0', id: 1, result: '0x1' }); } });
   await assert.rejects(() => client.call('https://rpc.invalid', 'eth_chainId', [], controller.signal), (error: unknown) => error instanceof Error && 'code' in error && error.code === 'REQUEST_ABORTED');
   assert.equal(calls, 0);
+  assert.equal(counted, 0);
 });
 
 test('RPC client reports malformed response JSON as invalid wire data', async () => {

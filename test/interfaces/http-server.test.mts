@@ -722,7 +722,8 @@ test('pending observations return a durable job handle', async (t) => {
   const txHash = `0x${'7'.repeat(64)}`;
   const queued = { jobId: 'job-pending-1', state: 'QUEUED', attempts: 0, input: { intentId: intent.intentId, chainId: 8453, txHash }, observation: null, result: null, error: null };
   const jobKeys: string[] = [];
-  const observationWorker = { async enqueuePersistent(input: { idempotencyKey: string }) { jobKeys.push(input.idempotencyKey); return { ...queued, jobId: `job-pending-${jobKeys.length}` }; }, async get() { return queued; } };
+  const coalesceKeys: string[] = [];
+  const observationWorker = { async enqueuePersistent(input: { idempotencyKey: string; coalesceKey: string }) { jobKeys.push(input.idempotencyKey); coalesceKeys.push(input.coalesceKey); return { ...queued, jobId: `job-pending-${jobKeys.length}` }; }, async get() { return queued; } };
   const server = createHttpServer({ observationWorker: observationWorker as unknown as ServerOptions['observationWorker'], observer: async () => ({ chainId: 8453, txHash, status: 'PENDING', action: 'TRANSFER', sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 0, transfers: [], finalityState: 'PENDING' }) as unknown as ObserverResult });
   t.after(() => server.close());
   await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
@@ -737,6 +738,8 @@ test('pending observations return a durable job handle', async (t) => {
   assert.equal(restarted.json().observationJob.jobId, 'job-pending-3');
   assert.equal(jobKeys[0], jobKeys[1]);
   assert.notEqual(jobKeys[1], jobKeys[2]);
+  assert.equal(coalesceKeys[0], coalesceKeys[1]);
+  assert.equal(coalesceKeys[1], coalesceKeys[2]);
 });
 test('signed authorization is accepted before execution and produces a v3 compliance receipt', async (t) => {
   const keys = generateKeyPairSync('ed25519');

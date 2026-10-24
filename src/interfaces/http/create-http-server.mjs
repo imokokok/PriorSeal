@@ -152,7 +152,8 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
                 if (observationWorker && ["PENDING", "NOT_FOUND", "RPC_ERROR", "RPC_TIMEOUT"].includes(response2.observation.status)) {
                   if (typeof input.txHash !== "string") throw new PriorSealError("INVALID_REQUEST", "Observation transaction hash is required");
                   const observationCycle = typeof req.headers["idempotency-key"] === "string" ? req.headers["idempotency-key"] : requestId;
-                  observationJob = await observationWorker.enqueuePersistent({ ...input, txHash: input.txHash, idempotencyKey: `observation:${hashJson(input)}:${observationCycle}` });
+                  const observationFingerprint = hashJson(input);
+                  observationJob = await observationWorker.enqueuePersistent({ ...input, txHash: input.txHash, idempotencyKey: `observation:${observationFingerprint}:${observationCycle}`, coalesceKey: `observation:${observationFingerprint}` });
                 }
                 return { ...response2, ...observationJob ? { observationJob } : {} };
               });
@@ -298,7 +299,8 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         let observationJob = null;
         if (observationWorker && ["PENDING", "NOT_FOUND", "RPC_ERROR", "RPC_TIMEOUT"].includes(response.observation.status)) {
           if (typeof body.txHash !== "string") throw new PriorSealError("INVALID_REQUEST", "Observation transaction hash is required");
-          observationJob = await observationWorker.enqueuePersistent({ ...body, txHash: body.txHash, idempotencyKey: `observation:${hashJson(body)}:${observationCycle}` });
+          const observationFingerprint = hashJson(body);
+          observationJob = await observationWorker.enqueuePersistent({ ...body, txHash: body.txHash, idempotencyKey: `observation:${observationFingerprint}:${observationCycle}`, coalesceKey: `observation:${observationFingerprint}` });
         }
         return respond(200, { ...response, ...observationJob ? { observationJob } : {}, requestId }, result.replay ? { "idempotency-replayed": "true" } : {});
       }

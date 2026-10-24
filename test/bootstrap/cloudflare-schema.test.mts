@@ -26,23 +26,23 @@ test('schema readiness skips repeated cache I/O and expires with the edge entry'
     await firstIsolate(fixture.database, config, context, cache);
     assert.equal(matches, 1);
     assert.equal(puts, 1);
-    assert.equal(fixture.calls.length, 1);
+    assert.equal(fixture.calls.length, 2);
 
     await firstIsolate(fixture.database, config, context, cache);
     assert.equal(matches, 1);
-    assert.equal(fixture.calls.length, 1);
+    assert.equal(fixture.calls.length, 2);
 
     const secondIsolate = createSchemaGuard(() => now);
     await secondIsolate(fixture.database, config, context, cache);
     await secondIsolate(fixture.database, config, context, cache);
     assert.equal(matches, 2);
-    assert.equal(fixture.calls.length, 1);
+    assert.equal(fixture.calls.length, 2);
 
     now += 300_000;
     await firstIsolate(fixture.database, config, context, cache);
     assert.equal(matches, 3);
     assert.equal(puts, 2);
-    assert.equal(fixture.calls.length, 2);
+    assert.equal(fixture.calls.length, 4);
   } finally { fixture.sqlite.close(); }
 });
 test('missing schema never enters the in-isolate or edge cache', async () => {
@@ -56,6 +56,22 @@ test('missing schema never enters the in-isolate or edge cache', async () => {
   await assert.rejects(() => guard(database, config, context, cache), /Required D1 production tables are missing/);
   await assert.rejects(() => guard(database, config, context, cache), /Required D1 production tables are missing/);
   assert.equal(matches, 2);
+  assert.equal(puts, 0);
+});
+
+test('missing observation coalescing column never enters the cache', async () => {
+  const guard = createSchemaGuard();
+  let puts = 0;
+  const cache = { async match() { return undefined; }, async put() { puts += 1; } } as unknown as Cache;
+  const requiredTables = ['authorization_log', 'authorization_log_merkle_nodes', 'authorizations', 'observation_jobs', 'receipts'];
+  const database = {
+    prepare(sql: string) {
+      const all = async () => ({ results: sql.startsWith('PRAGMA') ? [] : requiredTables.map((name) => ({ name })) });
+      return { bind() { return { all }; }, all };
+    },
+  } as unknown as D1Database;
+  const context = { waitUntil(promise: Promise<unknown>) { void promise; } } as ExecutionContext;
+  await assert.rejects(() => guard(database, loadRuntimeConfig(), context, cache), /coalescing column/);
   assert.equal(puts, 0);
 });
 

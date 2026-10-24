@@ -6,6 +6,7 @@ import { createD1Store } from '../src/infrastructure/persistence/d1-store.mjs';
 const sqlite = new DatabaseSync(':memory:');
 sqlite.exec('PRAGMA foreign_keys=ON;');
 sqlite.exec(readFileSync(new URL('../d1/migrations/0001_initial.sql', import.meta.url), 'utf8'));
+sqlite.exec(readFileSync(new URL('../d1/migrations/0008_observation_job_coalescing.sql', import.meta.url), 'utf8'));
 type MockStatement = D1PreparedStatement & { execute(): { results: unknown[]; meta?: { changes: number | bigint } } };
 const prepared = (sql: string, values: SQLInputValue[] = []): MockStatement => ({
   bind: (...next: unknown[]) => prepared(sql, next as SQLInputValue[]),

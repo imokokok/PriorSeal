@@ -1,6 +1,6 @@
 /** Public, stable library surface. Internal modules are intentionally not re-exported. */
 export { createHttpServer } from './interfaces/http/create-http-server.mjs';
-export { createObservationWorker } from './application/observations/observation-worker.mjs';
+export { chainObservationRetryPolicy, createObservationWorker } from './application/observations/observation-worker.mjs';
 export { createMemoryStore } from './infrastructure/persistence/memory-store.mjs';
 export { createPostgresStore } from './infrastructure/persistence/postgres-store.mjs';
 export { buildIntent } from './domain/intent.mjs';

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createObservationWorker } from '../../src/index.mjs';
+import { chainObservationRetryPolicy, createObservationWorker } from '../../src/index.mjs';
 import { detectReorg } from '../../src/domain/execution.mjs';
 import type { ObservationJob } from '../../src/application/observations/observation-worker.mjs';
 import { createMemoryStore } from '../../src/infrastructure/persistence/memory-store.mjs';
@@ -11,6 +11,25 @@ test('observation worker is idempotent and retries pending observations', async 
   await worker.runOnce(); assert.equal((await worker.get(first.jobId))?.state, 'RETRY_WAIT'); now += 10; await worker.runOnce(); assert.equal((await worker.get(first.jobId))?.state, 'COMPLETED'); assert.equal(saved.length, 2);
   assert.equal(worker.enqueue({ chainId: 8453, txHash: '0x1', idempotencyKey: 'same' }).jobId, first.jobId);
   assert.notEqual(worker.enqueue({ chainId: 8453, txHash: '0x1', idempotencyKey: 'different' }).jobId, first.jobId);
+});
+
+test('observation worker coalesces active duplicate work without suppressing a later fresh observation', async () => {
+  const worker = createObservationWorker({ observe: async () => ({ status: 'CONFIRMED', txHash: '0x1' }), saveObservation: async () => {} });
+  const first = worker.enqueue({ chainId: 143, txHash: '0x1', idempotencyKey: 'request-a', coalesceKey: 'same-observation' });
+  const duplicate = worker.enqueue({ chainId: 143, txHash: '0x1', idempotencyKey: 'request-b', coalesceKey: 'same-observation' });
+  assert.equal(duplicate.jobId, first.jobId);
+  await worker.runOnce();
+  const fresh = worker.enqueue({ chainId: 143, txHash: '0x1', idempotencyKey: 'request-c', coalesceKey: 'same-observation' });
+  assert.notEqual(fresh.jobId, first.jobId);
+});
+
+test('chain retry policy bounds background observation windows by chain family', async () => {
+  const solana = chainObservationRetryPolicy({ chainId: 0, txHash: 'solana' });
+  const evm = chainObservationRetryPolicy({ chainId: 143, txHash: '0x1' });
+  assert.equal(solana.maxAttempts, 6);
+  assert.deepEqual([1, 2, 3, 4, 5].map(solana.retryDelayMs), [5_000, 15_000, 45_000, 90_000, 180_000]);
+  assert.equal(evm.maxAttempts, 5);
+  assert.deepEqual([1, 2, 3, 4].map(evm.retryDelayMs), [8_000, 24_000, 72_000, 180_000]);
 });
 test('re-observation detects changed blocks and transactions removed by a reorg', () => { assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', blockHash: '0xb' }), true); assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', status: 'NOT_FOUND', blockHash: null }), true); assert.equal(detectReorg({ txHash: '0x1', blockHash: '0xa' }, { txHash: '0x1', blockHash: '0xa' }), false); });
 test('persistent worker does not double-count atomically claimed attempts', async () => {
@@ -83,6 +102,14 @@ test('observer-managed evidence is not read, rewritten or mutated after receipt 
   assert.equal(result?.state, 'UNDETERMINED');
   assert.deepEqual(result?.result?.receipt, receipt);
   assert.deepEqual(result?.observation, observation);
+});
+
+test('persistent worker coalesces active jobs even when request idempotency keys differ', async () => {
+  const store = createMemoryStore();
+  const worker = createObservationWorker({ store, observe: async () => ({ status: 'PENDING', txHash: '0x1' }), saveObservation: async () => {} });
+  const first = await worker.enqueuePersistent({ chainId: 8453, txHash: '0x1', idempotencyKey: 'request-a', coalesceKey: 'observe:one' });
+  const duplicate = await worker.enqueuePersistent({ chainId: 8453, txHash: '0x1', idempotencyKey: 'request-b', coalesceKey: 'observe:one' });
+  assert.equal(duplicate.jobId, first.jobId);
 });
 
 test('an observer-managed persistence failure remains retryable without a successful job result', async () => {
