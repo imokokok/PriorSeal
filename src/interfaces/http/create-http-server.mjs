@@ -260,7 +260,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         throw new PriorSealError("NOT_FOUND", "Archive route not found");
       }
       if (req.method === "GET" && path === "/v1/version") return respond(200, { service: "priorseal", version, protocol: ["priorseal.intent.v1", "priorseal.intent.v2", "priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.context-commitment.v1", "priorseal.authorization.v1", "priorseal.authorization.v2", "priorseal.rfc3161-evidence.v1", "priorseal.witness-attestation.v1", "priorseal.execution-receipt.v1", "priorseal.execution-receipt.v2", "priorseal.execution-receipt.v3", "priorseal.temporal-evidence.v1", "priorseal.compliance-assessment.v1", "priorseal.x402-payment-evidence.v1", "priorseal.verification-bundle.v1", "priorseal.evidence.v1", "priorseal.evidence-profile.v1", "priorseal.fresh-evidence-check.v1", "priorseal.integration-readiness.v1"], requestId });
-      if (req.method === "GET" && path === "/openapi/v1.json") {
+      if (req.method === "GET" && (path === "/openapi/v1.json" || path === "/openapi.json")) {
         return respond(200, openApiSpec(), { "cache-control": "public, max-age=300" });
       }
       if (req.method === "POST" && path === "/v1/intents") {
