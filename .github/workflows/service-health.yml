@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
       - name: Check portfolio public surfaces; confirm failures after one minute
         shell: bash
         run: |
@@ -41,11 +41,15 @@ jobs:
   agent-retail-readiness:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    # Production has completed the operator-managed pilot: public paid routes,
+    # self-service claims, and x402 are intentionally enabled.
+    env:
+      PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE: 'true'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
       - name: Check Agent-retail public surfaces; confirm failures after one minute
         shell: bash
         run: |
