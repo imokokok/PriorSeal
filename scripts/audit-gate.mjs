@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Generated from audit-gate.mts by npm run core:build. Do not edit directly.
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 const ALLOWLIST = /* @__PURE__ */ new Map([
   [
     "GHSA-mrhx-c7xc-m3w5",
@@ -14,24 +15,47 @@ const ALLOWLIST = /* @__PURE__ */ new Map([
     }
   ]
 ]);
-let raw;
-try {
-  raw = execFileSync("npm", ["audit", "--omit=dev", "--json"], { encoding: "utf8" });
-} catch (error) {
-  raw = error.stdout ?? "";
-  if (!raw) throw error;
+function parseAuditReport(raw) {
+  const report = JSON.parse(raw);
+  if (!report || typeof report !== "object" || Array.isArray(report)) {
+    throw new Error("audit gate: npm audit returned an invalid report");
+  }
+  const error = report.error;
+  if (error) {
+    const details = error;
+    const message = [details.code, details.summary, details.detail].filter((value) => typeof value === "string" && value.length > 0).join(": ");
+    throw new Error(`audit gate: npm audit could not complete${message ? ` (${message})` : ""}`);
+  }
+  return report;
 }
-const report = JSON.parse(raw);
-const violations = [];
-for (const [name, vuln] of Object.entries(report.vulnerabilities ?? {})) {
-  if (!["high", "critical"].includes(vuln.severity ?? "")) continue;
-  const ids = (vuln.via ?? []).filter((entry) => typeof entry === "object" && Boolean(entry?.url)).map((entry) => String(entry.url).split("/").pop() ?? "");
-  const blocked = ids.filter((id) => !ALLOWLIST.has(id));
-  if (blocked.length > 0) violations.push(`${name} (${vuln.severity}): ${blocked.join(", ")}`);
+function auditViolations(report) {
+  const violations = [];
+  for (const [name, vuln] of Object.entries(report.vulnerabilities ?? {})) {
+    if (!["high", "critical"].includes(vuln.severity ?? "")) continue;
+    const ids = (vuln.via ?? []).filter((entry) => typeof entry === "object" && Boolean(entry?.url)).map((entry) => String(entry.url).split("/").pop() ?? "");
+    const blocked = ids.filter((id) => !ALLOWLIST.has(id));
+    if (blocked.length > 0) violations.push(`${name} (${vuln.severity}): ${blocked.join(", ")}`);
+  }
+  return violations;
 }
-if (violations.length > 0) {
-  console.error("audit gate: BLOCKED \u2014 non-exempt high/critical advisories:");
-  for (const v of violations) console.error(`- ${v}`);
-  process.exit(1);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  let raw;
+  try {
+    raw = execFileSync("npm", ["audit", "--omit=dev", "--json"], { encoding: "utf8" });
+  } catch (error) {
+    raw = error.stdout ?? "";
+    if (!raw) throw error;
+  }
+  const violations = auditViolations(parseAuditReport(raw));
+  if (violations.length > 0) {
+    console.error("audit gate: BLOCKED \u2014 non-exempt high/critical advisories:");
+    for (const v of violations) console.error(`- ${v}`);
+    process.exitCode = 1;
+  } else {
+    console.log("audit gate: pass (only allowlisted advisories present; see scripts/audit-gate.mts ALLOWLIST)");
+  }
 }
-console.log("audit gate: pass (only allowlisted advisories present; see scripts/audit-gate.mts ALLOWLIST)");
+export {
+  auditViolations,
+  parseAuditReport
+};
