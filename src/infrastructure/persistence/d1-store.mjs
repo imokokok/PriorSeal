@@ -5,6 +5,7 @@ import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from "../../domain/merkle-log.mjs";
 import { assertReceiptIdentity } from "./receipt-identity.mjs";
 import { assertX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
+import { hyperliquidCloidReservation } from "../../domain/hyperliquid.mjs";
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedWorkerObservation } from "./persisted-records.mjs";
 const json = (value) => value == null ? null : JSON.stringify(value);
 const parsed = (value, label) => value == null ? null : persistedJson(value, label);
@@ -49,6 +50,10 @@ function creditOperationRecord(row) {
 }
 function agentAccountState(row) {
   return { accountId: row.account_id, provisionedCredits: String(row.provisioned_credits), remainingCredits: String(row.remaining_credits), status: row.status };
+}
+function hyperliquidReservationValues(intent) {
+  const reservation = hyperliquidCloidReservation(intent);
+  return [reservation?.networkRef ?? null, reservation?.account ?? null, reservation?.clientOrderId ?? null];
 }
 function createD1Store(database) {
   if (!database?.prepare || !database?.batch) throw new TypeError("createD1Store requires a D1 binding");
@@ -109,7 +114,7 @@ function createD1Store(database) {
     const value = record.authorization;
     return [
       statement(`INSERT INTO intents (intent_id,intent_hash,schema_version,chain_id,action,sender,recipient,asset,amount,nonce,valid_until,constraints_json,intent_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(intent_id) DO UPDATE SET intent_id=excluded.intent_id WHERE intents.intent_hash=excluded.intent_hash`, intent.intentId, intent.intentHash, intent.schema, Number(intent.chainId), intent.action, intent.sender, intent.recipient, intent.asset, intent.amount, intent.nonce, Number(intent.validUntil), json(intent.constraints), json(intent)),
-      statement(`INSERT INTO authorizations (authorization_id,authorization_hash,intent_hash,principal_id,principal_account,authorizer_address,authorizer_type,executor_address,authorization_nonce,expires_at,max_uses,uses,status,bound_tx_hash,authorization_json,acceptance_json,policy_json,witness_evidence_json,timestamp_evidence_json,log_sequence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, value.authorizationId, hashJson(value), value.intentHash, value.principal.id, value.principal.account, value.authorizer.address, value.authorizer.type, value.delegate.executor, value.authorizationNonce, Number(value.expiresAt), Number(value.maxUses), Number(record.uses), record.status, record.boundTxHash, json(value), json(record.acceptance), json(record.policyEvidence ?? record.policy), json(record.witnessEvidence), json(record.timestampEvidence), sequence)
+      statement(`INSERT INTO authorizations (authorization_id,authorization_hash,intent_hash,principal_id,principal_account,authorizer_address,authorizer_type,executor_address,authorization_nonce,expires_at,max_uses,uses,status,bound_tx_hash,authorization_json,acceptance_json,policy_json,witness_evidence_json,timestamp_evidence_json,log_sequence,hyperliquid_network_ref,hyperliquid_account,hyperliquid_cloid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, value.authorizationId, hashJson(value), value.intentHash, value.principal.id, value.principal.account, value.authorizer.address, value.authorizer.type, value.delegate.executor, value.authorizationNonce, Number(value.expiresAt), Number(value.maxUses), Number(record.uses), record.status, record.boundTxHash, json(value), json(record.acceptance), json(record.policyEvidence ?? record.policy), json(record.witnessEvidence), json(record.timestampEvidence), sequence, ...hyperliquidReservationValues(value.intent))
     ];
   }
   const store = {
@@ -266,6 +271,8 @@ function createD1Store(database) {
       const saved = await this.getAuthorization(authorization.authorizationId);
       if (saved) return saved;
       if (await first("SELECT authorization_id FROM authorizations WHERE authorization_nonce=?", authorization.authorizationNonce)) throw failed("AUTHORIZATION_NONCE_REUSED", "Authorization nonce has already been used");
+      const reservation = hyperliquidCloidReservation(authorization.intent);
+      if (reservation && await first("SELECT authorization_id FROM authorizations WHERE hyperliquid_network_ref=? AND hyperliquid_account=? AND hyperliquid_cloid=?", reservation.networkRef, reservation.account, reservation.clientOrderId)) throw failed("HYPERLIQUID_CLOID_ALREADY_AUTHORIZED", "Hyperliquid client order id has already been authorized");
       if (await first("SELECT intent_hash FROM intents WHERE intent_id=? AND intent_hash<>?", authorization.intent.intentId, authorization.intentHash)) throw failed("DUPLICATE_INTENT");
       const authorizationHash = hashJson(authorization);
       const existing = await first("SELECT * FROM authorization_log WHERE authorization_hash=?", authorizationHash);
@@ -294,6 +301,7 @@ function createD1Store(database) {
           const winner = await this.getAuthorization(authorization.authorizationId);
           if (winner) return winner;
           if (await first("SELECT authorization_id FROM authorizations WHERE authorization_nonce=?", authorization.authorizationNonce)) throw failed("AUTHORIZATION_NONCE_REUSED", "Authorization nonce has already been used");
+          if (reservation && await first("SELECT authorization_id FROM authorizations WHERE hyperliquid_network_ref=? AND hyperliquid_account=? AND hyperliquid_cloid=?", reservation.networkRef, reservation.account, reservation.clientOrderId)) throw failed("HYPERLIQUID_CLOID_ALREADY_AUTHORIZED", "Hyperliquid client order id has already been authorized");
           if (await first("SELECT intent_hash FROM intents WHERE intent_id=? AND intent_hash<>?", authorization.intent.intentId, authorization.intentHash)) throw failed("DUPLICATE_INTENT");
           if (await first("SELECT sequence FROM authorization_log WHERE sequence=?", sequence)) continue;
           throw error;
@@ -304,11 +312,14 @@ function createD1Store(database) {
     async saveAuthorization(record) {
       const existing = await this.getAuthorization(record.authorization.authorizationId);
       if (existing) return existing;
+      const reservation = hyperliquidCloidReservation(record.authorization.intent);
+      if (reservation && await first("SELECT authorization_id FROM authorizations WHERE hyperliquid_network_ref=? AND hyperliquid_account=? AND hyperliquid_cloid=?", reservation.networkRef, reservation.account, reservation.clientOrderId)) throw failed("HYPERLIQUID_CLOID_ALREADY_AUTHORIZED", "Hyperliquid client order id has already been authorized");
       try {
         await batch(authorizationStatements(record, record.authorization.intent, record.acceptance.sequence));
       } catch (error) {
         const winner = await this.getAuthorization(record.authorization.authorizationId);
         if (winner) return winner;
+        if (reservation && await first("SELECT authorization_id FROM authorizations WHERE hyperliquid_network_ref=? AND hyperliquid_account=? AND hyperliquid_cloid=?", reservation.networkRef, reservation.account, reservation.clientOrderId)) throw failed("HYPERLIQUID_CLOID_ALREADY_AUTHORIZED", "Hyperliquid client order id has already been authorized");
         throw error;
       }
       return record;
@@ -316,6 +327,10 @@ function createD1Store(database) {
     async getAuthorization(id) {
       const row = await first("SELECT * FROM authorizations WHERE authorization_id=?", id);
       return row ? authorizationRecord(row) : void 0;
+    },
+    async findHyperliquidCloidAuthorization(input) {
+      const row = await first("SELECT authorization_id FROM authorizations WHERE hyperliquid_network_ref=? AND hyperliquid_account=? AND hyperliquid_cloid=?", input.networkRef, input.account, input.clientOrderId);
+      return row?.authorization_id ?? null;
     },
     async claimAuthorization(id, txHash) {
       const row = await first(`UPDATE authorizations SET bound_tx_hash=?,uses=1,status='BOUND' WHERE authorization_id=? AND bound_tx_hash IS NULL AND uses=0 AND status='ACCEPTED' RETURNING *`, txHash, id);

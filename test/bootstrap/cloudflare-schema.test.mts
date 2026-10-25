@@ -26,23 +26,23 @@ test('schema readiness skips repeated cache I/O and expires with the edge entry'
     await firstIsolate(fixture.database, config, context, cache);
     assert.equal(matches, 1);
     assert.equal(puts, 1);
-    assert.equal(fixture.calls.length, 2);
+    assert.equal(fixture.calls.length, 3);
 
     await firstIsolate(fixture.database, config, context, cache);
     assert.equal(matches, 1);
-    assert.equal(fixture.calls.length, 2);
+    assert.equal(fixture.calls.length, 3);
 
     const secondIsolate = createSchemaGuard(() => now);
     await secondIsolate(fixture.database, config, context, cache);
     await secondIsolate(fixture.database, config, context, cache);
     assert.equal(matches, 2);
-    assert.equal(fixture.calls.length, 2);
+    assert.equal(fixture.calls.length, 3);
 
     now += 300_000;
     await firstIsolate(fixture.database, config, context, cache);
     assert.equal(matches, 3);
     assert.equal(puts, 2);
-    assert.equal(fixture.calls.length, 4);
+    assert.equal(fixture.calls.length, 6);
   } finally { fixture.sqlite.close(); }
 });
 test('missing schema never enters the in-isolate or edge cache', async () => {

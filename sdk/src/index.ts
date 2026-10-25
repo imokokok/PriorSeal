@@ -10,6 +10,8 @@ export { AGENT_PROPOSAL_NAMESPACE, agentProposalCommitment, assertAgentId, canon
 export type { AgentProposal } from './agent-proposal.js'
 export { buildSolanaTransactionIntent, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
 export type { SolanaTransactionIntentInput } from './solana-transaction.js'
+export { buildHyperliquidSpotIocIntent, buildHyperliquidSpotIocSubmission, HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS, HYPERLIQUID_OUTCOME_ASSET_ID_MIN, HYPERLIQUID_SPOT_IOC_ACTION, HYPERLIQUID_SPOT_IOC_PROFILE } from './hyperliquid-spot.js'
+export type { HyperliquidSpotIocIntentInput, HyperliquidSpotIocSubmission } from './hyperliquid-spot.js'
 export { ERC4337_USER_OPERATION_NAMESPACE, ERC4337_EXECUTION_EVENT_NAMESPACE, ERC4337_EXECUTION_PROFILE, ERC4337_EIP7702_FACTORY_MARKER, computeERC4337EntryPointCodeHash, computeEIP7702AuthorizationTupleHash, decodeSafe4337CallData, parseERC4337UserOperationInput, bindERC4337UserOperation, buildERC4337UserOperationIntent, verifyERC4337ExecutionEvidence } from './erc4337.js'
 export type { ERC4337Version, ERC4337UserOperationInput, ERC4337AuthorizationIntentInput, ERC4337OperationBinding, ERC4337ExecutionEvidence, ERC4337EIP7702DelegationEvidence } from './erc4337.js'
 export * from './rwa-binding.js'

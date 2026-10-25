@@ -18,7 +18,7 @@ const POLICY_CODES = Object.freeze({
 const listHas = (list, value, caseSensitive = false) => Array.isArray(list) && !(caseSensitive ? list.map(String).includes(String(value)) : list.map(String).map((x) => x.toLowerCase()).includes(String(value).toLowerCase()));
 function evaluateIntentPolicy(intent, policy = {}, now = Math.floor(Date.now() / 1e3)) {
   const reasonCodes = [];
-  const caseSensitiveChain = intent.chainId === 0 || intent.chainId === "0";
+  const caseSensitiveChain = intent.chainRef?.startsWith("solana:") === true;
   if (!validRuntimePolicy(policy)) reasonCodes.push(POLICY_CODES.INVALID_POLICY);
   const chainAdmitted = Array.isArray(policy.allowedChainIds) && (policy.allowedChainIds.map(String).includes(String(intent.chainId)) || typeof intent.chainRef === "string" && policy.allowedChainIds.includes(intent.chainRef));
   if (Array.isArray(policy.allowedChainIds) && !chainAdmitted) reasonCodes.push(POLICY_CODES.CHAIN_NOT_ALLOWED);
@@ -54,7 +54,7 @@ function evaluateAuthorizationPolicy(authorization, policy = {}, now = Math.floo
   return { ...intentResult, allowed: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
 }
 function evaluateNewIntentPolicyCompatibility(intent, policy = {}) {
-  const exactCall = ["priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2"].includes(String(intent?.executionProfile ?? ""));
+  const exactCall = ["priorseal.execution-profile.exact-call.v1", "priorseal.execution-profile.erc4337-user-operation.v1", "priorseal.execution-profile.solana-transaction.v2", "priorseal.execution-profile.hyperliquid-spot-ioc.v1"].includes(String(intent?.executionProfile ?? ""));
   const semanticRestrictionsConfigured = policy.allowedAssets !== void 0 || policy.allowedRecipients !== void 0 || policy.maxAmount !== void 0;
   return exactCall && semanticRestrictionsConfigured ? { allowed: false, reasonCodes: [POLICY_CODES.EXACT_CALL_SEMANTICS_UNSUPPORTED] } : { allowed: true, reasonCodes: [] };
 }

@@ -25,6 +25,9 @@ function loadRuntimeConfig(environment = process.env) {
   const erc4337EntryPoints = parseErc4337EntryPoints(optionalJson(environment.PRIORSEAL_ERC4337_ENTRY_POINTS_JSON, "PRIORSEAL_ERC4337_ENTRY_POINTS_JSON"));
   const eip7702Delegates = parseEip7702DelegateTrust(optionalJson(environment.PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON, "PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON"));
   const safe4337Trust = parseSafe4337Trust(optionalJson(environment.PRIORSEAL_SAFE_4337_TRUST_JSON, "PRIORSEAL_SAFE_4337_TRUST_JSON"));
+  const hyperliquidInfoUrl = optionalHttpsUrl(environment.PRIORSEAL_HYPERLIQUID_INFO_URL, "PRIORSEAL_HYPERLIQUID_INFO_URL");
+  const hyperliquidEnabled = booleanValue(environment.PRIORSEAL_HYPERLIQUID_ENABLED, "PRIORSEAL_HYPERLIQUID_ENABLED", Boolean(hyperliquidInfoUrl));
+  if (hyperliquidEnabled && !hyperliquidInfoUrl) throw new TypeError("PRIORSEAL_HYPERLIQUID_ENABLED requires PRIORSEAL_HYPERLIQUID_INFO_URL");
   const publicPaidCommerceEnabled = booleanValue(environment.PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED, "PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED", runtimeEnvironment !== "production");
   const x402 = publicPaidCommerceEnabled ? parseX402Config(environment) : void 0;
   const selfserveClaim = publicPaidCommerceEnabled ? selfserveClaimConfig(environment, agentMeter, privateKeyPem) : void 0;
@@ -53,6 +56,7 @@ function loadRuntimeConfig(environment = process.env) {
     erc4337EntryPoints,
     eip7702Delegates,
     safe4337Trust,
+    ...hyperliquidInfoUrl && hyperliquidEnabled ? { hyperliquidInfoUrl } : {},
     ...runtime !== "node" ? { runtime } : {},
     port: portValue(environment.PORT),
     issuer: identifierValue(environment.PRIORSEAL_ISSUER, "PRIORSEAL_ISSUER", "priorseal-local"),
@@ -205,6 +209,18 @@ function optionalJson(value, name) {
   } catch {
     throw new TypeError(`${name} must be valid JSON`);
   }
+}
+function optionalHttpsUrl(value, name) {
+  const raw = optionalValue(value);
+  if (!raw) return void 0;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new TypeError(`${name} must be an HTTPS URL`);
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new TypeError(`${name} must be an HTTPS URL without credentials, query, or fragment`);
+  return url.toString();
 }
 function runtimeValue(value) {
   const runtime = optionalValue(value) ?? "node";

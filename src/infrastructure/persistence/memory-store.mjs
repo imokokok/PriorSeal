@@ -4,13 +4,14 @@ import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from "../../domain/merkle-log.mjs";
 import { assertReceiptIdentity } from "./receipt-identity.mjs";
 import { assertX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
+import { hyperliquidCloidReservation } from "../../domain/hyperliquid.mjs";
 function paymentLedgerEventOrder(type) {
   return type === "PAYMENT_AUTHORIZED" ? 0 : type === "REFUND_RECORDED" ? 2 : 1;
 }
 function createMemoryStore({ clock = () => Date.now() } = {}) {
   const intents = /* @__PURE__ */ new Map(), receipts = /* @__PURE__ */ new Map(), observations = /* @__PURE__ */ new Map(), idempotency = /* @__PURE__ */ new Map(), jobs = /* @__PURE__ */ new Map(), authorizations = /* @__PURE__ */ new Map(), archive = /* @__PURE__ */ new Map();
   const archiveEntries = [], authorizationLog = [];
-  const logByAuthorizationHash = /* @__PURE__ */ new Map(), merkleNodes = /* @__PURE__ */ new Map(), usedAuthorizationNonces = /* @__PURE__ */ new Set();
+  const logByAuthorizationHash = /* @__PURE__ */ new Map(), merkleNodes = /* @__PURE__ */ new Map(), usedAuthorizationNonces = /* @__PURE__ */ new Set(), hyperliquidCloids = /* @__PURE__ */ new Map();
   const x402PaymentLedger = /* @__PURE__ */ new Map();
   const agentMeterAccounts = /* @__PURE__ */ new Map();
   const agentMeterUsage = /* @__PURE__ */ new Map();
@@ -200,6 +201,13 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
         error.code = "AUTHORIZATION_NONCE_REUSED";
         throw error;
       }
+      const reservation = hyperliquidCloidReservation(authorization.intent);
+      const reservationKey = reservation && `${reservation.networkRef}:${reservation.account}:${reservation.clientOrderId}`;
+      if (reservationKey && hyperliquidCloids.has(reservationKey)) {
+        const error = new Error("Hyperliquid client order id has already been authorized");
+        error.code = "HYPERLIQUID_CLOID_ALREADY_AUTHORIZED";
+        throw error;
+      }
       const existingIntent = intents.get(authorization.intent.intentId);
       if (existingIntent && existingIntent.intentHash !== authorization.intentHash) throw new Error("DUPLICATE_INTENT");
       const authorizationHash = hashJson(authorization);
@@ -213,6 +221,7 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
       intents.set(authorization.intent.intentId, structuredClone(authorization.intent));
       authorizations.set(authorization.authorizationId, cloned);
       usedAuthorizationNonces.add(authorization.authorizationNonce);
+      if (reservationKey) hyperliquidCloids.set(reservationKey, authorization.authorizationId);
       return structuredClone(cloned);
     },
     async saveAuthorization(record) {
@@ -222,13 +231,24 @@ function createMemoryStore({ clock = () => Date.now() } = {}) {
         error.code = "AUTHORIZATION_NONCE_REUSED";
         throw error;
       }
+      const reservation = hyperliquidCloidReservation(record.authorization.intent);
+      const reservationKey = reservation && `${reservation.networkRef}:${reservation.account}:${reservation.clientOrderId}`;
+      if (reservationKey && hyperliquidCloids.has(reservationKey)) {
+        const error = new Error("Hyperliquid client order id has already been authorized");
+        error.code = "HYPERLIQUID_CLOID_ALREADY_AUTHORIZED";
+        throw error;
+      }
       authorizations.set(record.authorization.authorizationId, structuredClone(record));
       usedAuthorizationNonces.add(record.authorization.authorizationNonce);
+      if (reservationKey) hyperliquidCloids.set(reservationKey, record.authorization.authorizationId);
       return structuredClone(record);
     },
     async getAuthorization(id) {
       const record = authorizations.get(id);
       return record && structuredClone(record);
+    },
+    async findHyperliquidCloidAuthorization(input) {
+      return hyperliquidCloids.get(`${input.networkRef}:${input.account}:${input.clientOrderId}`) ?? null;
     },
     async claimAuthorization(id, txHash) {
       const record = authorizations.get(id);

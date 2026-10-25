@@ -1,6 +1,7 @@
 // Generated from evidence-api.mts by npm run core:build. Do not edit directly.
 import { hashJson } from "./hashing.mjs";
 import { SOLANA_MAINNET_CAIP2 } from "./solana.mjs";
+import { HYPERLIQUID_MAINNET_CHAIN_REF } from "./hyperliquid.mjs";
 import { VERIFICATION_BUNDLE_SCHEMA } from "./verification-bundle.mjs";
 const EVIDENCE_API_SCHEMA = "priorseal.evidence.v1";
 const EVIDENCE_PROFILE_SCHEMA = "priorseal.evidence-profile.v1";
@@ -48,8 +49,10 @@ function buildEvidenceEnvelope(bundleValue) {
   };
   return { ...unsigned, evidenceHash: hashJson(unsigned) };
 }
-function evidenceProfilesForChains(chainIds) {
-  return [...new Set(chainIds.map(Number).filter(Number.isSafeInteger))].sort((left, right) => left - right).map((chainId) => evidenceProfileForChain(chainId, chainId === 0 ? SOLANA_MAINNET_CAIP2 : `eip155:${chainId}`));
+function evidenceProfilesForChains(chainIds, nonEvmNetworks = []) {
+  const evmAndSolana = [...new Set(chainIds.map(Number).filter(Number.isSafeInteger))].sort((left, right) => left - right).map((chainId) => evidenceProfileForChain(chainId, chainId === 0 ? SOLANA_MAINNET_CAIP2 : `eip155:${chainId}`));
+  const nonEvm = [...new Set(nonEvmNetworks)].map((network) => evidenceProfileForChain(0, network));
+  return [...evmAndSolana, ...nonEvm.filter((profile) => profile.id !== "priorseal.evidence-profile.unsupported.v1")];
 }
 function evidenceProfileForExecution(execution) {
   const chainId = safeIntegerOrNull(execution?.chainId);
@@ -63,6 +66,17 @@ function evidenceProfileForChain(chainId, chainRef) {
   };
   if (chainId === 0 && chainRef === SOLANA_MAINNET_CAIP2) {
     return { ...common, id: "priorseal.evidence-profile.solana-transaction.v1", family: "svm", network: SOLANA_MAINNET_CAIP2, chainId };
+  }
+  if (chainId === 0 && chainRef === HYPERLIQUID_MAINNET_CHAIN_REF) {
+    return {
+      ...common,
+      id: "priorseal.evidence-profile.hyperliquid-spot-ioc.v1",
+      family: "hypercore",
+      network: HYPERLIQUID_MAINNET_CHAIN_REF,
+      chainId,
+      capabilities: [...common.capabilities, "cloid_order_status", "fill_aggregation"],
+      limitations: [...common.limitations, "The execution reference is a Hyperliquid client order id (cloid), not an EVM transaction hash.", "Only HyperCore spot IOC limit orders are profile-bound."]
+    };
   }
   if (chainId != null && chainId > 0) {
     return { ...common, id: "priorseal.evidence-profile.evm.v1", family: "evm", network: chainRef ?? `eip155:${chainId}`, chainId };

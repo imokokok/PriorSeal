@@ -6,6 +6,7 @@ import { verifyTimestampEvidence } from '../../domain/rfc3161.mjs';
 import { verifyWitnessEvidence, type WitnessEvidence } from '../../domain/witness.mjs';
 import { findIdempotentReplay, reserveIdempotentResponse } from '../idempotency.mjs';
 import { assertIssuableIntentInput } from '../../domain/intent.mjs';
+import { hyperliquidCloidReservation } from '../../domain/hyperliquid.mjs';
 import type { Authorization, AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { TimestampEvidence, TimestampPolicy } from '../../domain/rfc3161.mjs';
 import type { IdempotencyStore } from '../idempotency.mjs';
@@ -21,6 +22,7 @@ type AuthorizationStore = IdempotencyStore<AuthorizationResponse> & {
   appendAuthorizationLog: (input: { authorizationHash: string; acceptedAt: number }) => Promise<LogEntry>;
   saveIntent: (intent: Authorization['intent']) => Promise<unknown>;
   saveAuthorization: (record: AuthorizationRecord) => Promise<AuthorizationRecord | undefined>;
+  findHyperliquidCloidAuthorization?: (input: { networkRef: string; account: string; clientOrderId: string }) => Promise<string | null | undefined>;
 };
 type ContractSignatureVerifier = NonNullable<NonNullable<Parameters<typeof verifyAuthorization>[1]>['verifyContractSignature']>;
 
@@ -46,6 +48,11 @@ export async function authorizeIntent({ input, idempotencyKey, store, privateKey
   if (existing) {
     const existingWitnessEvidence = verifiedWitnessEvidence(existing.witnessEvidence, existing.authorization, witnessPolicy, existing.acceptance.acceptedAt);
     return { replay: true, response: { authorization: existing.authorization, acceptance: existing.acceptance, policy: existing.policyEvidence?.result ?? existing.policy, policyEvidence: existing.policyEvidence, ...(existing.timestampEvidence ? { timestampEvidence: existing.timestampEvidence } : {}), ...(existingWitnessEvidence ? { witnessEvidence: existingWitnessEvidence } : {}) } };
+  }
+  const cloid = hyperliquidCloidReservation(authorization.intent);
+  if (cloid) {
+    const existingAuthorizationId = await store.findHyperliquidCloidAuthorization?.(cloid);
+    if (existingAuthorizationId && existingAuthorizationId !== authorization.authorizationId) throw new PriorSealError('HYPERLIQUID_CLOID_ALREADY_AUTHORIZED', 'Hyperliquid client order id is already reserved by another authorization');
   }
   const orderingReference = { acceptedAt };
   const policyEvidence = { schema: 'priorseal.policy-evidence.v1', policyHash: expectedPolicyHash, document: policy, result: policyResult };

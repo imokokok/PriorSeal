@@ -25,9 +25,10 @@ export function assessCompliance({ authorization, execution, binding }: { author
   if (unavailableBindingReasons.length) return assessment('NOT_ASSESSABLE', unavailableBindingReasons);
 
   const correlationReasons: string[] = [];
-  const solana = authorization.intent.chainRef?.startsWith('solana:') ?? false;
-  if (String(execution.chainId) !== String(authorization.intent.chainId) || (solana && execution.chainRef !== authorization.intent.chainRef)) correlationReasons.push('CHAIN_MISMATCH');
-  if (solana ? String(execution.sender ?? '') !== authorization.delegate.executor : String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor) correlationReasons.push('EXECUTOR_MISMATCH');
+  const solana = authorization.intent.chainRef?.startsWith('solana:') === true;
+  const nonEvm = solana || authorization.intent.chainRef === 'hyperliquid:mainnet';
+  if (String(execution.chainId) !== String(authorization.intent.chainId) || (nonEvm && execution.chainRef !== authorization.intent.chainRef)) correlationReasons.push('CHAIN_MISMATCH');
+  if (solana ? String(execution.sender ?? '') !== authorization.delegate.executor : String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor.toLowerCase()) correlationReasons.push('EXECUTOR_MISMATCH');
   if (String(execution.nonce ?? '') !== String(authorization.intent.nonce)) correlationReasons.push('NONCE_MISMATCH');
   if (correlationReasons.length) return assessment('NOT_ASSESSABLE', correlationReasons);
 

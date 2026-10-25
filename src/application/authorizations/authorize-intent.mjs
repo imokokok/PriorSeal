@@ -7,6 +7,7 @@ import { verifyTimestampEvidence } from "../../domain/rfc3161.mjs";
 import { verifyWitnessEvidence } from "../../domain/witness.mjs";
 import { findIdempotentReplay, reserveIdempotentResponse } from "../idempotency.mjs";
 import { assertIssuableIntentInput } from "../../domain/intent.mjs";
+import { hyperliquidCloidReservation } from "../../domain/hyperliquid.mjs";
 async function authorizeIntent({ input, idempotencyKey, store, privateKeyPem, issuer, keyId, policy = null, audience = "priorseal", verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, now = () => Date.now() }) {
   const idempotency = await findIdempotentReplay({ scope: "authorize-intent", key: idempotencyKey, request: input, store, now });
   if (idempotency.replay) return idempotency.replay;
@@ -29,6 +30,11 @@ async function authorizeIntent({ input, idempotencyKey, store, privateKeyPem, is
   if (existing) {
     const existingWitnessEvidence = verifiedWitnessEvidence(existing.witnessEvidence, existing.authorization, witnessPolicy, existing.acceptance.acceptedAt);
     return { replay: true, response: { authorization: existing.authorization, acceptance: existing.acceptance, policy: existing.policyEvidence?.result ?? existing.policy, policyEvidence: existing.policyEvidence, ...existing.timestampEvidence ? { timestampEvidence: existing.timestampEvidence } : {}, ...existingWitnessEvidence ? { witnessEvidence: existingWitnessEvidence } : {} } };
+  }
+  const cloid = hyperliquidCloidReservation(authorization.intent);
+  if (cloid) {
+    const existingAuthorizationId = await store.findHyperliquidCloidAuthorization?.(cloid);
+    if (existingAuthorizationId && existingAuthorizationId !== authorization.authorizationId) throw new PriorSealError("HYPERLIQUID_CLOID_ALREADY_AUTHORIZED", "Hyperliquid client order id is already reserved by another authorization");
   }
   const orderingReference = { acceptedAt };
   const policyEvidence = { schema: "priorseal.policy-evidence.v1", policyHash: expectedPolicyHash, document: policy, result: policyResult };

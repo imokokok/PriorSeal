@@ -11,6 +11,8 @@ import { verifyTimestampEvidence } from '../../domain/rfc3161.mjs';
 import { txHash as normalizeTxHash } from '../../domain/values.mjs';
 import { decodeBase58, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from '../../domain/solana.mjs';
 import type { SolanaTransactionMessage } from '../../domain/solana.mjs';
+import { HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_SPOT_IOC_PROFILE, isHyperliquidCloid } from '../../domain/hyperliquid.mjs';
+import type { HyperliquidSpotIocOrder } from '../../domain/hyperliquid.mjs';
 import { assertOnlyFields } from '../../shared/safe-json.mjs';
 import { findIdempotentReplay, reserveIdempotentResponse } from '../idempotency.mjs';
 import type { Authorization } from '../../domain/authorization.mjs';
@@ -21,7 +23,7 @@ import type { WorkerObservation } from './observation-worker.mjs';
 import type { IdempotencyStore } from '../idempotency.mjs';
 
 type CorrelatedObservation = BindingExecution & { txHash?: string | null; intentHash?: string | null; executionDataAvailable?: boolean; userOperationHash?: string | null; entryPoint?: string | null; entryPointCodeHash?: string | null; entryPointVersion?: string | null; eip7702Delegation?: BindingExecution['eip7702Delegation'] };
-type Observation = WorkerObservation & { chainId: number | string; chainRef?: string; intentHash?: string; executedAt?: number | null; observedAt?: number | null; confirmations?: number; sender?: string | null; nonce?: string | null; action?: string | null; recipient?: string | null; target?: string | null; calldataHash?: string | null; nativeValue?: string | null; asset?: string | null; amount?: string | null; status: string; solanaTransaction?: SolanaTransactionMessage };
+type Observation = WorkerObservation & { chainId: number | string; chainRef?: string; intentHash?: string; executedAt?: number | null; observedAt?: number | null; confirmations?: number; sender?: string | null; nonce?: string | null; action?: string | null; recipient?: string | null; target?: string | null; calldataHash?: string | null; nativeValue?: string | null; asset?: string | null; amount?: string | null; status: string; solanaTransaction?: SolanaTransactionMessage; hyperliquidOrder?: import('../../domain/hyperliquid.mjs').HyperliquidSpotIocExecution; hyperliquidInfoObservation?: import('../../domain/hyperliquid.mjs').HyperliquidInfoObservationEvidence };
 type PolicyEvidence = NonNullable<Parameters<typeof buildAuthorizedReceipt>[0]['policyEvidence']>;
 type TimestampEvidence = NonNullable<Parameters<typeof buildAuthorizedReceipt>[0]['timestampEvidence']>;
 type TransparencyEvidence = NonNullable<Parameters<typeof buildAuthorizedReceipt>[0]['transparency']>;
@@ -44,7 +46,7 @@ type ObservationStore = IdempotencyStore<ObservationResponse> & {
   saveObservation: (observation: Observation) => Promise<unknown>;
   saveReceipt: (receipt: SignedReceipt) => Promise<unknown>;
 };
-export type ExecutionObserver = (input: { chainId: number; txHash: string; confirmations: number; finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'; maxToleratedReorgDepth: number | null; solanaTransaction?: SolanaTransactionMessage; erc4337?: { entryPoint: string; entryPointCodeHash: string; entryPointVersion: '0.6' | '0.7' | '0.8' | '0.9'; userOperationHash: string; accountCallProfile?: 'safe-4337.v1'; accountCallTarget?: string; accountCallValue?: string; accountCallDataHash?: string; eip7702?: { delegateAddress: string; delegateCodeHash: string; authorizationTupleHash?: string } }; signal?: AbortSignal }) => Promise<ExecutionInput>;
+export type ExecutionObserver = (input: { chainId: number; txHash: string; confirmations: number; finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'; maxToleratedReorgDepth: number | null; solanaTransaction?: SolanaTransactionMessage; hyperliquidOrder?: HyperliquidSpotIocOrder; hyperliquidNonce?: string; hyperliquidUser?: string; erc4337?: { entryPoint: string; entryPointCodeHash: string; entryPointVersion: '0.6' | '0.7' | '0.8' | '0.9'; userOperationHash: string; accountCallProfile?: 'safe-4337.v1'; accountCallTarget?: string; accountCallValue?: string; accountCallDataHash?: string; eip7702?: { delegateAddress: string; delegateCodeHash: string; authorizationTupleHash?: string } }; signal?: AbortSignal }) => Promise<ExecutionInput>;
 type ContractSignatureVerifier = NonNullable<NonNullable<Parameters<typeof verifyAuthorizedReceipt>[2]>['verifyContractSignature']>;
 
 /** Observes an execution, records evidence, and optionally issues a signed receipt. */
@@ -60,7 +62,8 @@ export async function observeExecution({ input: inputValue, store, observer, sig
   const intent = authorizationRecord?.authorization.intent ?? (input.intent ? buildIntent(input.intent) : input.intentId ? await store.getIntent(input.intentId) : null);
   if (!intent) throw new PriorSealError('INTENT_NOT_FOUND', 'Intent not found');
   const solana = intent.executionProfile === SOLANA_TRANSACTION_PROFILE;
-  const requestedTxHash = solana ? normalizeSolanaSignature(input.txHash) : normalizeTxHash(input.txHash);
+  const hyperliquid = intent.executionProfile === HYPERLIQUID_SPOT_IOC_PROFILE;
+  const requestedTxHash = solana ? normalizeSolanaSignature(input.txHash) : hyperliquid ? normalizeHyperliquidCloid(input.txHash) : normalizeTxHash(input.txHash);
   if (input.intentId && input.intentId !== intent.intentId) throw new PriorSealError('INVALID_REQUEST', 'intentId must match the authorization');
   if (input.chainId !== undefined && String(input.chainId) !== String(intent.chainId)) {
     throw new PriorSealError('INVALID_REQUEST', 'chainId must match the intent');
@@ -71,7 +74,7 @@ export async function observeExecution({ input: inputValue, store, observer, sig
   const constraints = intent.constraints as { minConfirmations?: number; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' } | undefined;
   const maxToleratedReorgDepth = constraints?.maxToleratedReorgDepth ?? null;
   const finalityRequirement = constraints?.finalityRequirement ?? 'CONFIRMATIONS';
-  const confirmations = solana ? Math.max(requestedConfirmations, Number(constraints?.minConfirmations ?? 0)) : Math.max(requestedConfirmations, Number(constraints?.minConfirmations ?? 0), maxToleratedReorgDepth == null ? 0 : maxToleratedReorgDepth + 1);
+  const confirmations = solana || hyperliquid ? Math.max(requestedConfirmations, Number(constraints?.minConfirmations ?? 0)) : Math.max(requestedConfirmations, Number(constraints?.minConfirmations ?? 0), maxToleratedReorgDepth == null ? 0 : maxToleratedReorgDepth + 1);
   const erc4337 = intent.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1'
     ? { entryPoint: String(intent.entryPoint), entryPointCodeHash: String(intent.entryPointCodeHash), entryPointVersion: intent.entryPointVersion as '0.6' | '0.7' | '0.8' | '0.9', userOperationHash: String(intent.userOperationHash), ...(intent.accountCallProfile ? { accountCallProfile: intent.accountCallProfile as 'safe-4337.v1', accountCallTarget: String(intent.accountCallTarget), accountCallValue: String(intent.accountCallValue), accountCallDataHash: String(intent.accountCallDataHash) } : {}), ...(intent.eip7702 ? { eip7702: intent.eip7702 } : {}) }
     : undefined;
@@ -83,12 +86,13 @@ export async function observeExecution({ input: inputValue, store, observer, sig
     finalityRequirement,
     maxToleratedReorgDepth,
     ...(solana ? { solanaTransaction: intent.solanaTransaction } : {}),
+    ...(hyperliquid ? { hyperliquidOrder: intent.hyperliquidOrder, hyperliquidNonce: intent.nonce, hyperliquidUser: intent.sender } : {}),
     ...(erc4337 ? { erc4337 } : {}),
     signal,
   });
-  const observedTxHash = solana ? normalizeSolanaSignature(observed?.txHash) : normalizeTxHash(observed?.txHash);
+  const observedTxHash = solana ? normalizeSolanaSignature(observed?.txHash) : hyperliquid ? normalizeHyperliquidCloid(observed?.txHash) : normalizeTxHash(observed?.txHash);
   if (observedTxHash !== requestedTxHash) throw new PriorSealError('OBSERVATION_TX_HASH_MISMATCH', 'Observer transaction hash does not match the requested transaction');
-  if (String(observed?.chainId) !== String(intent.chainId) || (solana && observed?.chainRef !== SOLANA_MAINNET_CAIP2)) throw new PriorSealError('OBSERVATION_CHAIN_MISMATCH', 'Observer chain does not match the authorized intent');
+  if (String(observed?.chainId) !== String(intent.chainId) || (solana && observed?.chainRef !== SOLANA_MAINNET_CAIP2) || (hyperliquid && observed?.chainRef !== HYPERLIQUID_MAINNET_CHAIN_REF)) throw new PriorSealError('OBSERVATION_CHAIN_MISMATCH', 'Observer chain does not match the authorized intent');
   if (typeof observed.status !== 'string') throw new PriorSealError('RPC_INVALID_RESPONSE', 'Observer status is missing');
   let observation = { ...observed, txHash: observedTxHash, intentHash: intent.intentHash } as Observation;
   const observedConfirmations = Number(observation.confirmations ?? 0);
@@ -159,10 +163,12 @@ export function classifyAuthorizationAssociation(authorization: Authorization | 
   if (!authorization || !observation || observation.executionDataAvailable === false) return 'UNRELATED';
   if (!validateTemporalEvidence(authorization.intent, observation)) return 'UNRELATED';
   const solana = authorization.intent.executionProfile === SOLANA_TRANSACTION_PROFILE;
-  const correlated = validTransactionSignature(observation.txHash, solana)
+  const hyperliquid = authorization.intent.executionProfile === HYPERLIQUID_SPOT_IOC_PROFILE;
+  const correlated = validTransactionSignature(observation.txHash, solana, hyperliquid)
     && observation.intentHash === authorization.intentHash
     && String(observation.chainId) === String(authorization.intent.chainId)
     && (!solana || observation.chainRef === SOLANA_MAINNET_CAIP2)
+    && (!hyperliquid || observation.chainRef === HYPERLIQUID_MAINNET_CHAIN_REF)
     && sameAddress(observation.sender, authorization.delegate.executor, solana)
     && String(observation.nonce ?? '') === String(authorization.intent.nonce)
     && (authorization.intent.executionProfile !== 'priorseal.execution-profile.erc4337-user-operation.v1'
@@ -185,15 +191,20 @@ export function classifyExecutionCorrelation(authorization: Authorization | null
   const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1';
   const erc4337 = intent.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1';
   const solana = intent.executionProfile === SOLANA_TRANSACTION_PROFILE;
-  const matches = validTransactionSignature(observation.txHash, solana)
+  const hyperliquid = intent.executionProfile === HYPERLIQUID_SPOT_IOC_PROFILE;
+  const matches = validTransactionSignature(observation.txHash, solana, hyperliquid)
     && observation.intentHash === authorization.intentHash
     && String(observation.chainId) === String(intent.chainId)
     && (!solana || observation.chainRef === SOLANA_MAINNET_CAIP2)
+    && (!hyperliquid || observation.chainRef === HYPERLIQUID_MAINNET_CHAIN_REF)
     && sameAddress(observation.sender, authorization.delegate.executor, solana)
     && same(observation.action, intent.action)
     && String(observation.nonce ?? '') === String(intent.nonce)
     && (solana
       ? Boolean(observation.solanaTransaction && intent.solanaTransaction && canonicalize(observation.solanaTransaction) === canonicalize(intent.solanaTransaction))
+      : hyperliquid
+      ? Boolean(observation.hyperliquidOrder && intent.hyperliquidOrder
+        && canonicalize({ assetId: observation.hyperliquidOrder.assetId, isBuy: observation.hyperliquidOrder.isBuy, limitPrice: observation.hyperliquidOrder.limitPrice, size: observation.hyperliquidOrder.size, timeInForce: observation.hyperliquidOrder.timeInForce, clientOrderId: observation.hyperliquidOrder.clientOrderId, expiresAfter: observation.hyperliquidOrder.expiresAfter }) === canonicalize(intent.hyperliquidOrder))
       : exactCall
       ? same(observation.target, intent.callTarget)
         && same(observation.calldataHash, intent.calldataHash)
@@ -218,7 +229,8 @@ function sameAddress(left: unknown, right: unknown, caseSensitive: boolean) {
   return caseSensitive ? String(left ?? '') === String(right ?? '') : same(left, right);
 }
 
-function validTransactionSignature(value: string | null | undefined, solana: boolean): boolean {
+function validTransactionSignature(value: string | null | undefined, solana: boolean, hyperliquid = false): boolean {
+  if (hyperliquid) return isHyperliquidCloid(value);
   if (!solana) return /^0x[0-9a-fA-F]{64}$/.test(value ?? '');
   try { return typeof value === 'string' && decodeBase58(value).length === 64; } catch { return false; }
 }
@@ -226,6 +238,11 @@ function validTransactionSignature(value: string | null | undefined, solana: boo
 function normalizeSolanaSignature(value: unknown): string {
   if (typeof value !== 'string' || !validTransactionSignature(value, true)) throw new PriorSealError('INVALID_TX_HASH', 'Solana transaction signature must be a 64-byte base58 value');
   return value;
+}
+
+function normalizeHyperliquidCloid(value: unknown): string {
+  if (!isHyperliquidCloid(value)) throw new PriorSealError('INVALID_HYPERLIQUID_CLOID', 'Hyperliquid observations use the authorized 16-byte client order id as txHash');
+  return value.toLowerCase();
 }
 
 function matchesEip7702(expected: Authorization['intent']['eip7702'], evidence: CorrelatedObservation['eip7702Delegation']): boolean {

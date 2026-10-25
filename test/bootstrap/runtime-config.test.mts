@@ -103,6 +103,14 @@ test('runtime configuration rejects ambiguous or invalid values before startup',
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_EIP7702_DELEGATE_TRUST_JSON: delegateTrust.replace('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '0x0000000000000000000000000000000000000000') }), /invalid address/);
 });
 
+test('Hyperliquid observation is an explicit, fail-closed runtime dependency', () => {
+  const configured = loadRuntimeConfig({ PRIORSEAL_HYPERLIQUID_INFO_URL: 'https://api.hyperliquid.xyz/info' });
+  assert.equal(configured.hyperliquidInfoUrl, 'https://api.hyperliquid.xyz/info');
+  assert.equal(loadRuntimeConfig({ PRIORSEAL_HYPERLIQUID_INFO_URL: 'https://api.hyperliquid.xyz/info', PRIORSEAL_HYPERLIQUID_ENABLED: 'false' }).hyperliquidInfoUrl, undefined);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_HYPERLIQUID_ENABLED: 'true' }), /requires PRIORSEAL_HYPERLIQUID_INFO_URL/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_HYPERLIQUID_ENABLED: 'enabled' }), /true or false/);
+});
+
 test('production runtime fails closed unless security dependencies are explicit', () => {
   const base = {
     PRIORSEAL_ENVIRONMENT: 'production', PRIORSEAL_ISSUER: 'priorseal-prod', PRIORSEAL_KEY_ID: 'prod-1', PRIORSEAL_BUILD_VERSION: '0.2.0',
