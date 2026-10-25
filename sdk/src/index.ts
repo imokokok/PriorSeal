@@ -22,6 +22,30 @@ export * from './insight-rwa-call.js'
 export * from './insight-rwa-v2.js'
 export { matchContextCommitment, matchUniqueContextCommitment } from './context-commitment.js'
 export {
+  BASE_LENDING_GUARD_INTENT_ASSET_PREFIX,
+  INSIGHT_BASE_LENDING_GUARD_NAMESPACE,
+  INSIGHT_BASE_LENDING_GUARD_SCHEMA,
+  baseLendingGuardCommitment,
+  baseLendingGuardIntentAsset,
+  buildBaseLendingGuardBoundIntent,
+  verifyBaseLendingGuardAuthorizationBinding,
+  verifyBaseLendingGuardReceiptBundle,
+  verifyInsightBaseLendingGuardDecision,
+} from './insight-base-lending-guard.js'
+export type { InsightBaseLendingGuardDecision, InsightBaseLendingGuardVerification } from './insight-base-lending-guard.js'
+export {
+  INSIGHT_MONAD_LENDING_GUARD_NAMESPACE,
+  INSIGHT_MONAD_LENDING_GUARD_SCHEMA,
+  MONAD_LENDING_GUARD_INTENT_ASSET_PREFIX,
+  monadLendingGuardCommitment,
+  monadLendingGuardIntentAsset,
+  buildMonadLendingGuardBoundIntent,
+  verifyMonadLendingGuardAuthorizationBinding,
+  verifyMonadLendingGuardReceiptBundle,
+  verifyInsightMonadLendingGuardDecision,
+} from './insight-monad-lending-guard.js'
+export type { InsightMonadLendingGuardDecision, InsightMonadLendingGuardVerification } from './insight-monad-lending-guard.js'
+export {
   ERC8004_IDENTITY_COMMITMENT_NAMESPACE,
   ERC8004_IDENTITY_REGISTRY_ABI,
   ERC8004_IDENTITY_SNAPSHOT_SCHEMA,
