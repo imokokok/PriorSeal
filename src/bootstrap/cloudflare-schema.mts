@@ -7,7 +7,7 @@ type Config = ReturnType<typeof loadRuntimeConfig>;
 export function createSchemaGuard(now: () => number = Date.now) {
   const readyUntil = new Map<string, number>();
   return async (database: D1Database, config: Config, context: ExecutionContext, cache: Cache) => {
-    const cacheUrl = `https://priorseal.internal/schema/d1-0008/${config.preExecutionProofMode}/${config.archiveCredentials ? 'archive' : 'public'}/${config.x402 ? 'x402' : 'unpaid'}/${config.agentMeter ? 'agent-meter' : 'unmetered'}`;
+    const cacheUrl = `https://priorseal.internal/schema/d1-0009/${config.preExecutionProofMode}/${config.archiveCredentials ? 'archive' : 'public'}/${config.x402 ? 'x402' : 'unpaid'}/${config.agentMeter ? 'agent-meter' : 'unmetered'}`;
     const currentTime = now();
     if ((readyUntil.get(cacheUrl) ?? 0) > currentTime) return;
     const cacheKey = new Request(cacheUrl);
@@ -29,6 +29,8 @@ export function createSchemaGuard(now: () => number = Date.now) {
     if (rows.results.length !== required.length) throw new TypeError('Required D1 production tables are missing');
     const columns = await database.prepare('PRAGMA table_info(observation_jobs)').all<{ name: string }>();
     if (!columns.results.some((column) => column.name === 'coalesce_key')) throw new TypeError('Durable observation coalescing column is missing');
+    const authorizationColumns = await database.prepare('PRAGMA table_info(authorizations)').all<{ name: string }>();
+    if (!['hyperliquid_network_ref', 'hyperliquid_account', 'hyperliquid_cloid'].every(name => authorizationColumns.results.some((column) => column.name === name))) throw new TypeError('Hyperliquid cloid reservation columns are missing');
     const checkedAt = now();
     readyUntil.set(cacheUrl, checkedAt + SCHEMA_CACHE_TTL_MS);
     context.waitUntil(cache.put(cacheKey, new Response('ready', { headers: { 'cache-control': 'public, max-age=300', 'x-schema-checked-at': String(checkedAt) } })));

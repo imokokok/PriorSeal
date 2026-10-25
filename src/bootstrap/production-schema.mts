@@ -1,4 +1,4 @@
-export const REQUIRED_PRODUCTION_MIGRATION = '010_authorization_merkle_index.sql';
+export const REQUIRED_PRODUCTION_MIGRATION = '018_hyperliquid_cloid_uniqueness.sql';
 export const REQUIRED_X402_PAYMENT_LEDGER_MIGRATION = '012_x402_payment_ledger.sql';
 export const REQUIRED_AGENT_METER_MIGRATION = '013_agent_meter.sql';
 export const REQUIRED_AGENT_METER_CREDIT_OPERATIONS_MIGRATION = '014_agent_meter_credit_operations.sql';
@@ -25,9 +25,10 @@ export async function assertProductionSchema(pool: Pool | null, { preExecutionPr
   const tables = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY($1)", [requiredTables]);
   if (tables.rowCount !== requiredTables.length) throw new TypeError('Required authorization and observation tables are missing');
 
-  const requiredColumns = await pool.query<{ table_name: string; column_name: string }>("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND ((table_name='authorizations' AND column_name='timestamp_evidence_json') OR (table_name='observation_jobs' AND column_name IN ('result_json','lease_token','lease_expires_at','coalesce_key')))");
+  const requiredColumns = await pool.query<{ table_name: string; column_name: string }>("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND ((table_name='authorizations' AND column_name IN ('timestamp_evidence_json','hyperliquid_network_ref','hyperliquid_account','hyperliquid_cloid')) OR (table_name='observation_jobs' AND column_name IN ('result_json','lease_token','lease_expires_at','coalesce_key')))");
   const columns = new Set(requiredColumns.rows.map((row) => `${row.table_name}.${row.column_name}`));
   if (!columns.has('authorizations.timestamp_evidence_json')) throw new TypeError('RFC 3161 timestamp evidence column is missing');
+  if (!['hyperliquid_network_ref', 'hyperliquid_account', 'hyperliquid_cloid'].every(column => columns.has(`authorizations.${column}`))) throw new TypeError('Hyperliquid cloid reservation columns are missing');
   if (!columns.has('observation_jobs.result_json')) throw new TypeError('Durable observation result column is missing');
   if (!columns.has('observation_jobs.lease_token') || !columns.has('observation_jobs.lease_expires_at')) throw new TypeError('Durable observation lease columns are missing');
   if (!columns.has('observation_jobs.coalesce_key')) throw new TypeError('Durable observation coalescing column is missing');

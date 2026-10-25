@@ -6,12 +6,23 @@ import { archivePage } from "../../application/archive/evidence-archive.mjs";
 import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNodes } from "../../domain/merkle-log.mjs";
 import { assertReceiptIdentity } from "./receipt-identity.mjs";
 import { assertX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
+import { hyperliquidCloidReservation } from "../../domain/hyperliquid.mjs";
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedTimestamp, persistedWorkerObservation } from "./persisted-records.mjs";
 function agentAccountState(row) {
   return { accountId: row.account_id, provisionedCredits: String(row.provisioned_credits), remainingCredits: String(row.remaining_credits), status: row.status };
 }
 function creditOperationRecord(row) {
   return { operationId: row.operation_id, accountId: row.account_id, requestKey: row.request_key, credits: String(row.credits), reference: row.reference, creditedAt: row.credited_at instanceof Date ? row.credited_at.getTime() : new Date(row.credited_at).getTime() };
+}
+function hyperliquidReservationValues(intent) {
+  const reservation = hyperliquidCloidReservation(intent);
+  return [reservation?.networkRef ?? null, reservation?.account ?? null, reservation?.clientOrderId ?? null];
+}
+function hyperliquidCloidConflict(error) {
+  return Boolean(error && typeof error === "object" && error.code === "23505" && String(error.constraint ?? "").includes("hyperliquid_cloid"));
+}
+function hyperliquidCloidError() {
+  return Object.assign(new Error("Hyperliquid client order id has already been authorized"), { code: "HYPERLIQUID_CLOID_ALREADY_AUTHORIZED" });
 }
 async function appendMerkleIndex(client, sequence, entryHash) {
   const siblings = [];
@@ -283,11 +294,12 @@ function createPostgresStore(pool) {
         }
         const record = createRecord(log);
         const value = record.authorization;
-        const result = await client.query(`INSERT INTO authorizations (authorization_id,authorization_hash,intent_hash,principal_id,principal_account,authorizer_address,authorizer_type,executor_address,authorization_nonce,expires_at,max_uses,uses,status,bound_tx_hash,authorization_json,acceptance_json,policy_json,witness_evidence_json,timestamp_evidence_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`, [value.authorizationId, hashJson(value), value.intentHash, value.principal.id, value.principal.account, value.authorizer.address, value.authorizer.type, value.delegate.executor, value.authorizationNonce, value.expiresAt, Number(value.maxUses), record.uses, record.status, record.boundTxHash, value, record.acceptance, record.policyEvidence ?? record.policy, record.witnessEvidence ?? null, record.timestampEvidence ?? null]);
+        const result = await client.query(`INSERT INTO authorizations (authorization_id,authorization_hash,intent_hash,principal_id,principal_account,authorizer_address,authorizer_type,executor_address,authorization_nonce,expires_at,max_uses,uses,status,bound_tx_hash,authorization_json,acceptance_json,policy_json,witness_evidence_json,timestamp_evidence_json,hyperliquid_network_ref,hyperliquid_account,hyperliquid_cloid) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`, [value.authorizationId, hashJson(value), value.intentHash, value.principal.id, value.principal.account, value.authorizer.address, value.authorizer.type, value.delegate.executor, value.authorizationNonce, value.expiresAt, Number(value.maxUses), record.uses, record.status, record.boundTxHash, value, record.acceptance, record.policyEvidence ?? record.policy, record.witnessEvidence ?? null, record.timestampEvidence ?? null, ...hyperliquidReservationValues(value.intent)]);
         await client.query("COMMIT");
         return rowToAuthorization(result.rows[0]);
       } catch (error) {
         await client.query("ROLLBACK");
+        if (hyperliquidCloidConflict(error)) throw hyperliquidCloidError();
         throw error;
       } finally {
         client.release();
@@ -295,13 +307,23 @@ function createPostgresStore(pool) {
     },
     async saveAuthorization(record) {
       const value = record.authorization;
-      const result = await pool.query(`INSERT INTO authorizations (authorization_id,authorization_hash,intent_hash,principal_id,principal_account,authorizer_address,authorizer_type,executor_address,authorization_nonce,expires_at,max_uses,uses,status,bound_tx_hash,authorization_json,acceptance_json,policy_json,witness_evidence_json,timestamp_evidence_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ON CONFLICT (authorization_id) DO NOTHING RETURNING *`, [value.authorizationId, hashJson(value), value.intentHash, value.principal.id, value.principal.account, value.authorizer.address, value.authorizer.type, value.delegate.executor, value.authorizationNonce, value.expiresAt, Number(value.maxUses), record.uses, record.status, record.boundTxHash, value, record.acceptance, record.policyEvidence ?? record.policy, record.witnessEvidence ?? null, record.timestampEvidence ?? null]);
+      let result;
+      try {
+        result = await pool.query(`INSERT INTO authorizations (authorization_id,authorization_hash,intent_hash,principal_id,principal_account,authorizer_address,authorizer_type,executor_address,authorization_nonce,expires_at,max_uses,uses,status,bound_tx_hash,authorization_json,acceptance_json,policy_json,witness_evidence_json,timestamp_evidence_json,hyperliquid_network_ref,hyperliquid_account,hyperliquid_cloid) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) ON CONFLICT (authorization_id) DO NOTHING RETURNING *`, [value.authorizationId, hashJson(value), value.intentHash, value.principal.id, value.principal.account, value.authorizer.address, value.authorizer.type, value.delegate.executor, value.authorizationNonce, value.expiresAt, Number(value.maxUses), record.uses, record.status, record.boundTxHash, value, record.acceptance, record.policyEvidence ?? record.policy, record.witnessEvidence ?? null, record.timestampEvidence ?? null, ...hyperliquidReservationValues(value.intent)]);
+      } catch (error) {
+        if (hyperliquidCloidConflict(error)) throw hyperliquidCloidError();
+        throw error;
+      }
       if (result.rows[0]) return rowToAuthorization(result.rows[0]);
       return this.getAuthorization(value.authorizationId);
     },
     async getAuthorization(id) {
       const result = await pool.query("SELECT * FROM authorizations WHERE authorization_id=$1", [id]);
       return result.rows[0] && rowToAuthorization(result.rows[0]);
+    },
+    async findHyperliquidCloidAuthorization(input) {
+      const result = await pool.query("SELECT authorization_id FROM authorizations WHERE hyperliquid_network_ref=$1 AND hyperliquid_account=$2 AND hyperliquid_cloid=$3", [input.networkRef, input.account, input.clientOrderId]);
+      return result.rows[0]?.authorization_id ?? null;
     },
     async claimAuthorization(id, txHash) {
       const result = await pool.query(`UPDATE authorizations SET bound_tx_hash=$2,uses=1,status='BOUND' WHERE authorization_id=$1 AND bound_tx_hash IS NULL AND uses=0 AND status='ACCEPTED' RETURNING *`, [id, txHash]);

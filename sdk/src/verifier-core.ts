@@ -1,6 +1,7 @@
 import type { Intent, KeyEntry, Receipt, TimestampPolicy, VerificationResult } from './types.js'
 import { verifyTypedData } from 'viem'
 import { solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
+import { HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS, HYPERLIQUID_OUTCOME_ASSET_ID_MIN, HYPERLIQUID_SPOT_IOC_ACTION, HYPERLIQUID_SPOT_IOC_PROFILE } from './hyperliquid-spot.js'
 
 const forbidden = new Set(['__proto__', 'prototype', 'constructor'])
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
@@ -10,7 +11,7 @@ const hashPattern = /^[0-9a-f]{64}$/
 const authorizedReceiptFields = ['algorithm', 'authorizationEvidence', 'authorizationHash', 'binding', 'compliance', 'domain', 'execution', 'executionHash', 'executionStatus', 'intentHash', 'issuedAt', 'issuer', 'keyId', 'outcome', 'reasonCodes', 'receiptId', 'schema', 'signature', 'validUntil', 'verifierVersion']
 const legacyReceiptFields = ['algorithm', 'binding', 'domain', 'execution', 'executionHash', 'intentHash', 'issuedAt', 'issuer', 'keyId', 'outcome', 'reasonCodes', 'receiptId', 'schema', 'signature', 'validUntil', 'verifierVersion']
 const authorizationFields = ['audience', 'authorizationId', 'authorizationNonce', 'authorizer', 'delegate', 'domain', 'expiresAt', 'intent', 'intentHash', 'issuedAt', 'maxUses', 'notBefore', 'policyHash', 'principal', 'schema', 'signature']
-const intentFields = ['action', 'amount', 'asset', 'calldataHash', 'chainId', 'chainRef', 'chainIds', 'constraints', 'contextCommitments', 'entryPoint', 'entryPointCodeHash', 'entryPointVersion', 'executionProfile', 'intentHash', 'intentId', 'nonce', 'recipient', 'schema', 'sender', 'transactionValue', 'userOperationHash', 'validUntil', 'callTarget', 'accountCallProfile', 'accountCallTarget', 'accountCallValue', 'accountCallDataHash', 'solanaTransaction']
+const intentFields = ['action', 'amount', 'asset', 'calldataHash', 'chainId', 'chainRef', 'chainIds', 'constraints', 'contextCommitments', 'entryPoint', 'entryPointCodeHash', 'entryPointVersion', 'executionProfile', 'intentHash', 'intentId', 'nonce', 'recipient', 'schema', 'sender', 'transactionValue', 'userOperationHash', 'validUntil', 'callTarget', 'accountCallProfile', 'accountCallTarget', 'accountCallValue', 'accountCallDataHash', 'solanaTransaction', 'hyperliquidOrder']
 
 function canonicalize(value: unknown): string {
   if (value === undefined) throw new TypeError('undefined is not valid canonical JSON')
@@ -194,10 +195,22 @@ function validIntentShape(value: Intent) {
   const erc4337 = value.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1'
   const exactCallProfile = value.executionProfile === 'priorseal.execution-profile.exact-call.v1'
   const solanaTransaction = value.executionProfile === SOLANA_TRANSACTION_PROFILE
+  const hyperliquidSpotIoc = value.executionProfile === HYPERLIQUID_SPOT_IOC_PROFILE
   if (!exactCall && value.schema !== 'priorseal.intent.v1') return false
-  if (exactCall !== (exactCallProfile || erc4337 || solanaTransaction) || (exactCallProfile && value.action !== 'CONTRACT_CALL') || (erc4337 && value.action !== 'ERC4337_USER_OPERATION') || (solanaTransaction && value.action !== 'SOLANA_TRANSACTION')) return false
+  if (exactCall !== (exactCallProfile || erc4337 || solanaTransaction || hyperliquidSpotIoc) || (exactCallProfile && value.action !== 'CONTRACT_CALL') || (erc4337 && value.action !== 'ERC4337_USER_OPERATION') || (solanaTransaction && value.action !== 'SOLANA_TRANSACTION') || (hyperliquidSpotIoc && value.action !== HYPERLIQUID_SPOT_IOC_ACTION)) return false
   if (!identifierPattern.test(value.intentId) || !identifierPattern.test(value.action) || !positiveUnixSeconds(value.validUntil)) return false
-  if (solanaTransaction) {
+  if (hyperliquidSpotIoc) {
+    if (value.chainId !== 0 || value.chainRef !== HYPERLIQUID_MAINNET_CHAIN_REF || !canonicalAddress(value.sender) || value.recipient !== value.sender
+      || !uintPattern.test(value.amount) || !uintPattern.test(value.nonce ?? '') || BigInt(value.nonce ?? '0') < 1_000_000_000_000n
+      || !hashPattern.test(value.intentHash ?? '') || !validHyperliquidSpotIocOrder(value.hyperliquidOrder)
+      || value.asset !== `hyperliquid:mainnet/spot:${value.hyperliquidOrder.assetId}` || value.validUntil > Math.floor(value.hyperliquidOrder.expiresAfter / 1000)
+      || BigInt(value.nonce ?? '0') >= BigInt(value.hyperliquidOrder.expiresAfter)
+      || BigInt(value.hyperliquidOrder.expiresAfter) - BigInt(value.nonce ?? '0') > BigInt(HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS)
+      || record.chainIds != null || value.callTarget != null || value.calldataHash != null || value.transactionValue != null
+      || value.entryPoint != null || value.entryPointCodeHash != null || value.entryPointVersion != null || value.userOperationHash != null
+      || value.accountCallProfile != null || value.accountCallTarget != null || value.accountCallValue != null || value.accountCallDataHash != null || value.eip7702 != null || value.solanaTransaction != null
+      || !validContextCommitments(value.contextCommitments)) return false
+  } else if (solanaTransaction) {
     if (value.chainId !== 0 || value.chainRef !== SOLANA_MAINNET_CAIP2 || !solanaPublicKey(value.sender) || value.recipient !== value.sender
       || !uintPattern.test(value.amount) || value.nonce !== value.solanaTransaction?.recentBlockhash || !hashPattern.test(value.intentHash ?? '')
       || !/^solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp\/(?:slip44:501|spl:[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(value.asset)
@@ -225,7 +238,67 @@ function validIntentShape(value: Intent) {
     if (value.constraints.finalityRequirement != null && !['CONFIRMATIONS', 'RPC_FINALIZED'].includes(value.constraints.finalityRequirement)) return false
     if (value.constraints.maxGasUsed != null && !uintPattern.test(value.constraints.maxGasUsed)) return false
   }
+  if (hyperliquidSpotIoc && (value.constraints?.maxGasUsed != null || value.constraints?.finalityRequirement === 'RPC_FINALIZED' || Number(value.constraints?.minConfirmations ?? 0) > 1 || (value.constraints?.maxToleratedReorgDepth != null && value.constraints.maxToleratedReorgDepth !== 0))) return false
   return true
+}
+
+function validHyperliquidSpotIocOrder(value: unknown): value is NonNullable<Intent['hyperliquidOrder']> {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !hasOnlyFields(value, ['assetId', 'isBuy', 'limitPrice', 'size', 'timeInForce', 'clientOrderId', 'expiresAfter'])) return false
+  const order = value as NonNullable<Intent['hyperliquidOrder']>
+  return Number.isSafeInteger(order.assetId) && order.assetId >= 10_000 && order.assetId < HYPERLIQUID_OUTCOME_ASSET_ID_MIN
+    && typeof order.isBuy === 'boolean'
+    && canonicalDecimal(order.limitPrice, false)
+    && canonicalDecimal(order.size, true)
+    && order.timeInForce === 'Ioc'
+    && /^0x[0-9a-f]{32}$/.test(order.clientOrderId)
+    && Number.isSafeInteger(order.expiresAfter) && order.expiresAfter > 0
+}
+
+function validHyperliquidSpotIocExecution(value: unknown, expected: NonNullable<Intent['hyperliquidOrder']>): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !hasOnlyFields(value, ['assetId', 'isBuy', 'limitPrice', 'size', 'timeInForce', 'clientOrderId', 'expiresAfter', 'orderId', 'orderStatus', 'filledSize', 'averagePrice', 'fee', 'statusTimestamp'])) return false
+  const execution = value as Record<string, unknown>
+  const orderInput = { assetId: execution.assetId, isBuy: execution.isBuy, limitPrice: execution.limitPrice, size: execution.size, timeInForce: execution.timeInForce, clientOrderId: execution.clientOrderId, expiresAfter: execution.expiresAfter }
+  if (!validHyperliquidSpotIocOrder(orderInput) || !/^(0|[1-9][0-9]*)$/.test(String(execution.orderId ?? '')) || !hyperliquidTerminalDisposition(execution.orderStatus) || !Number.isSafeInteger(execution.statusTimestamp) || Number(execution.statusTimestamp) <= 0 || !canonicalDecimal(execution.filledSize, false) || (execution.averagePrice !== null && !canonicalDecimal(execution.averagePrice, true)) || (execution.fee !== null && !canonicalDecimal(execution.fee, false))) return false
+  const actual = execution as unknown as NonNullable<Receipt['execution']['hyperliquidOrder']>
+  if (actual.assetId !== expected.assetId || actual.isBuy !== expected.isBuy || actual.limitPrice !== expected.limitPrice || actual.size !== expected.size || actual.timeInForce !== expected.timeInForce || actual.clientOrderId !== expected.clientOrderId || actual.expiresAfter !== expected.expiresAfter) return false
+  const filledSize = actual.filledSize
+  const averagePrice = actual.averagePrice
+  const disposition = hyperliquidTerminalDisposition(actual.orderStatus)
+  if (compareDecimal(filledSize, actual.size) > 0 || (disposition === 'FILLED' && compareDecimal(filledSize, actual.size) !== 0) || (disposition === 'REJECTED' && compareDecimal(filledSize, '0') !== 0) || (compareDecimal(filledSize, '0') === 0 && averagePrice !== null) || (compareDecimal(filledSize, '0') > 0 && averagePrice === null)) return false
+  return averagePrice === null || (actual.isBuy ? compareDecimal(averagePrice, actual.limitPrice) <= 0 : compareDecimal(averagePrice, actual.limitPrice) >= 0)
+}
+
+function hyperliquidTerminalDisposition(value: unknown): 'FILLED' | 'CANCELED' | 'REJECTED' | null {
+  if (value === 'filled') return 'FILLED'
+  const statuses = new Set(['canceled', 'marginCanceled', 'vaultWithdrawalCanceled', 'openInterestCapCanceled', 'selfTradeCanceled', 'reduceOnlyCanceled', 'siblingFilledCanceled', 'delistedCanceled', 'liquidatedCanceled', 'scheduledCancel', 'rejected', 'tickRejected', 'minTradeNtlRejected', 'perpMarginRejected', 'reduceOnlyRejected', 'badAloPxRejected', 'iocCancelRejected', 'badTriggerPxRejected', 'marketOrderNoLiquidityRejected', 'positionIncreaseAtOpenInterestCapRejected', 'positionFlipAtOpenInterestCapRejected', 'tooAggressiveAtOpenInterestCapRejected', 'openInterestIncreaseRejected', 'insufficientSpotBalanceRejected', 'oracleRejected', 'perpMaxPositionRejected'])
+  if (typeof value !== 'string' || !statuses.has(value)) return null
+  return value.endsWith('Rejected') || value === 'rejected' ? 'REJECTED' : 'CANCELED'
+}
+
+function validHyperliquidInfoObservation(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !hasOnlyFields(value, ['schema', 'endpointHash', 'orderStatusRequestHash', 'orderStatusResponseHash', 'fillRequestHashes', 'fillResponseHashes', 'fillPageCount', 'fillResponseCount', 'relevantFillCount', 'fillsComplete', 'observedAtMillis'])) return false
+  const evidence = value as Record<string, unknown>
+  const digest = (candidate: unknown) => typeof candidate === 'string' && /^[0-9a-f]{64}$/.test(candidate)
+  const count = (candidate: unknown) => Number.isSafeInteger(candidate) && Number(candidate) >= 0 && Number(candidate) <= 1_000_000
+  return evidence.schema === 'priorseal.hyperliquid-info-observation.v1' && digest(evidence.endpointHash) && digest(evidence.orderStatusRequestHash) && digest(evidence.orderStatusResponseHash)
+    && Array.isArray(evidence.fillRequestHashes) && Array.isArray(evidence.fillResponseHashes) && evidence.fillRequestHashes.length <= 100 && evidence.fillRequestHashes.length === evidence.fillResponseHashes.length
+    && evidence.fillRequestHashes.every(digest) && evidence.fillResponseHashes.every(digest) && count(evidence.fillPageCount) && evidence.fillPageCount === evidence.fillRequestHashes.length
+    && count(evidence.fillResponseCount) && count(evidence.relevantFillCount) && typeof evidence.fillsComplete === 'boolean' && Number.isSafeInteger(evidence.observedAtMillis) && Number(evidence.observedAtMillis) > 0
+}
+
+function canonicalDecimal(value: unknown, positive: boolean): value is string {
+  if (typeof value !== 'string' || !/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,18})?$/.test(value) || /\.0+$/.test(value)) return false
+  return !positive || compareDecimal(value, '0') > 0
+}
+
+function compareDecimal(left: string, right: string): number {
+  const [leftWhole, leftFraction = ''] = left.split('.')
+  const [rightWhole, rightFraction = ''] = right.split('.')
+  const scale = Math.max(leftFraction.length, rightFraction.length)
+  const factor = 10n ** BigInt(scale)
+  const integer = (whole: string, fraction: string) => BigInt(whole) * factor + BigInt((fraction + '0'.repeat(scale)).slice(0, scale) || '0')
+  const difference = integer(leftWhole, leftFraction) - integer(rightWhole, rightFraction)
+  return difference === 0n ? 0 : difference < 0n ? -1 : 1
 }
 
 function validTemporalEvidence(intent: Intent, execution: Receipt['execution']): boolean {
@@ -384,8 +457,9 @@ function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
   const reasons: string[] = []
   const same = (left: unknown, right: unknown) => String(left ?? '').toLowerCase() === String(right ?? '').toLowerCase()
   const solana = intent.executionProfile === SOLANA_TRANSACTION_PROFILE
+  const hyperliquid = intent.executionProfile === HYPERLIQUID_SPOT_IOC_PROFILE
   const sameIdentity = (left: unknown, right: unknown) => solana ? String(left ?? '') === String(right ?? '') : same(left, right)
-  const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1' || solana
+  const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1' || solana || hyperliquid
   const erc4337 = intent.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1'
   if (execution.executionDataAvailable === false) reasons.push('EXECUTION_UNAVAILABLE')
   if (Number(execution.chainId) !== Number(intent.chainId)) reasons.push('CHAIN_MISMATCH')
@@ -400,6 +474,8 @@ function bindingFor(intent: NonNullable<Receipt['authorizationEvidence']>['autho
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push('CALLDATA_MISMATCH')
   if (intent.transactionValue != null && String(execution.nativeValue ?? '') !== String(intent.transactionValue)) reasons.push('TRANSACTION_VALUE_MISMATCH')
   if (solana && (!intent.solanaTransaction || !execution.solanaTransaction || canonicalize(intent.solanaTransaction) !== canonicalize(execution.solanaTransaction))) reasons.push('SOLANA_MESSAGE_MISMATCH')
+  if (hyperliquid && (!intent.hyperliquidOrder || !validHyperliquidSpotIocExecution(execution.hyperliquidOrder, intent.hyperliquidOrder))) reasons.push('HYPERLIQUID_ORDER_MISMATCH')
+  if (hyperliquid && (!validHyperliquidInfoObservation(execution.hyperliquidInfoObservation) || !execution.hyperliquidInfoObservation?.fillsComplete)) reasons.push('EXECUTION_UNAVAILABLE')
   if (erc4337 && !same(execution.userOperationHash, intent.userOperationHash)) reasons.push('USER_OPERATION_HASH_MISMATCH')
   if (erc4337 && !same(execution.entryPoint, intent.entryPoint)) reasons.push('ENTRY_POINT_MISMATCH')
   if (erc4337 && !same(execution.entryPointCodeHash, intent.entryPointCodeHash)) reasons.push('ENTRY_POINT_CODE_HASH_MISMATCH')
@@ -466,8 +542,9 @@ function complianceFor(authorization: NonNullable<Receipt['authorizationEvidence
   if (unavailableBindingReasons.length) return assessment('NOT_ASSESSABLE', unavailableBindingReasons)
   const correlationReasons: string[] = []
   const solana = authorization.authorizer.type === 'solana-ed25519'
+  const hyperliquid = authorization.intent.executionProfile === HYPERLIQUID_SPOT_IOC_PROFILE
   if (Number(execution.chainId) !== Number(authorization.intent.chainId)) correlationReasons.push('CHAIN_MISMATCH')
-  if (solana && execution.chainRef !== authorization.intent.chainRef) correlationReasons.push('CHAIN_MISMATCH')
+  if ((solana || hyperliquid) && execution.chainRef !== authorization.intent.chainRef) correlationReasons.push('CHAIN_MISMATCH')
   if (solana ? String(execution.sender ?? '') !== authorization.delegate.executor : String(execution.sender ?? '').toLowerCase() !== authorization.delegate.executor.toLowerCase()) correlationReasons.push('EXECUTOR_MISMATCH')
   if (String(execution.nonce ?? '') !== String(authorization.intent.nonce)) correlationReasons.push('NONCE_MISMATCH')
   if (correlationReasons.length) return assessment('NOT_ASSESSABLE', correlationReasons)

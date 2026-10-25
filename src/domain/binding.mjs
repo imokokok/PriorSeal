@@ -1,5 +1,6 @@
 // Generated from binding.mts by npm run core:build. Do not edit directly.
 import { canonicalize } from "./hashing.mjs";
+import { HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_SPOT_IOC_PROFILE, normalizeHyperliquidInfoObservationEvidence, normalizeHyperliquidSpotIocExecution, sameHyperliquidSpotIocOrder } from "./hyperliquid.mjs";
 const BINDING_CODES = Object.freeze({
   CHAIN_MISMATCH: "CHAIN_MISMATCH",
   SENDER_MISMATCH: "SENDER_MISMATCH",
@@ -25,7 +26,8 @@ const BINDING_CODES = Object.freeze({
   AUTHORIZATION_AFTER_EXECUTION: "AUTHORIZATION_AFTER_EXECUTION",
   OUTSIDE_AUTHORIZATION_WINDOW: "OUTSIDE_AUTHORIZATION_WINDOW",
   CHAINREF_MISMATCH: "CHAINREF_MISMATCH",
-  SOLANA_MESSAGE_MISMATCH: "SOLANA_MESSAGE_MISMATCH"
+  SOLANA_MESSAGE_MISMATCH: "SOLANA_MESSAGE_MISMATCH",
+  HYPERLIQUID_ORDER_MISMATCH: "HYPERLIQUID_ORDER_MISMATCH"
 });
 const same = (a, b) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
 function bindIntentExecution(intent, execution, now = execution.observedAt ?? Math.floor(Date.now() / 1e3)) {
@@ -33,7 +35,8 @@ function bindIntentExecution(intent, execution, now = execution.observedAt ?? Ma
   const exactCall = intent.executionProfile === "priorseal.execution-profile.exact-call.v1";
   const erc4337 = intent.executionProfile === "priorseal.execution-profile.erc4337-user-operation.v1";
   const solanaTransaction = intent.executionProfile === "priorseal.execution-profile.solana-transaction.v2";
-  const exactProfile = exactCall || solanaTransaction;
+  const hyperliquidSpotIoc = intent.executionProfile === HYPERLIQUID_SPOT_IOC_PROFILE;
+  const exactProfile = exactCall || solanaTransaction || hyperliquidSpotIoc;
   if (execution?.executionDataAvailable === false) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
   if (execution.chainId !== intent.chainId) reasons.push(BINDING_CODES.CHAIN_MISMATCH);
   if ((execution.chainRef ?? null) !== (intent.chainRef ?? null)) reasons.push(BINDING_CODES.CHAINREF_MISMATCH);
@@ -47,6 +50,21 @@ function bindIntentExecution(intent, execution, now = execution.observedAt ?? Ma
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
   if (intent.transactionValue != null && String(execution.nativeValue ?? "") !== String(intent.transactionValue)) reasons.push(BINDING_CODES.TRANSACTION_VALUE_MISMATCH);
   if (solanaTransaction && (!intent.solanaTransaction || !execution.solanaTransaction || canonicalize(intent.solanaTransaction) !== canonicalize(execution.solanaTransaction))) reasons.push(BINDING_CODES.SOLANA_MESSAGE_MISMATCH);
+  let hyperliquidOrderMatches = false;
+  if (hyperliquidSpotIoc) {
+    try {
+      hyperliquidOrderMatches = sameHyperliquidSpotIocOrder(intent.hyperliquidOrder, normalizeHyperliquidSpotIocExecution(execution.hyperliquidOrder));
+    } catch {
+      hyperliquidOrderMatches = false;
+    }
+    if (intent.chainRef !== HYPERLIQUID_MAINNET_CHAIN_REF || !hyperliquidOrderMatches) reasons.push(BINDING_CODES.HYPERLIQUID_ORDER_MISMATCH);
+    try {
+      const evidence = normalizeHyperliquidInfoObservationEvidence(execution.hyperliquidInfoObservation);
+      if (!evidence.fillsComplete) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
+    } catch {
+      reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
+    }
+  }
   if (erc4337 && !same(execution.userOperationHash, intent.userOperationHash)) reasons.push(BINDING_CODES.USER_OPERATION_HASH_MISMATCH);
   if (erc4337 && !same(execution.entryPoint, intent.entryPoint)) reasons.push(BINDING_CODES.ENTRY_POINT_MISMATCH);
   if (erc4337 && !same(execution.entryPointVersion, intent.entryPointVersion)) reasons.push(BINDING_CODES.ENTRY_POINT_VERSION_MISMATCH);

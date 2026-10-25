@@ -1,5 +1,7 @@
 import { canonicalize } from './hashing.mjs';
 import type { SolanaTransactionMessage } from './solana.mjs';
+import { HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_SPOT_IOC_PROFILE, normalizeHyperliquidInfoObservationEvidence, normalizeHyperliquidSpotIocExecution, sameHyperliquidSpotIocOrder } from './hyperliquid.mjs';
+import type { HyperliquidInfoObservationEvidence, HyperliquidSpotIocExecution, HyperliquidSpotIocOrder } from './hyperliquid.mjs';
 
 export const BINDING_CODES = Object.freeze({
   CHAIN_MISMATCH: 'CHAIN_MISMATCH', SENDER_MISMATCH: 'SENDER_MISMATCH', RECIPIENT_MISMATCH: 'RECIPIENT_MISMATCH',
@@ -14,6 +16,7 @@ export const BINDING_CODES = Object.freeze({
   OUTSIDE_AUTHORIZATION_WINDOW: 'OUTSIDE_AUTHORIZATION_WINDOW',
   CHAINREF_MISMATCH: 'CHAINREF_MISMATCH',
   SOLANA_MESSAGE_MISMATCH: 'SOLANA_MESSAGE_MISMATCH',
+  HYPERLIQUID_ORDER_MISMATCH: 'HYPERLIQUID_ORDER_MISMATCH',
 } as const);
 
 export type BindingCode = (typeof BINDING_CODES)[keyof typeof BINDING_CODES];
@@ -43,6 +46,7 @@ export type BindingIntent = {
   eip7702?: { delegateAddress: string; delegateCodeHash: string; authorizationTupleHash?: string } | null;
   constraints?: { minConfirmations?: number | string | null; maxGasUsed?: number | string | null; maxToleratedReorgDepth?: number | null; finalityRequirement?: string | null } | null;
   solanaTransaction?: SolanaTransactionMessage | null;
+  hyperliquidOrder?: HyperliquidSpotIocOrder | null;
 };
 
 export type BindingExecution = {
@@ -86,6 +90,8 @@ export type BindingExecution = {
   transfers?: unknown[] | null;
   transferMatchUnique?: boolean;
   solanaTransaction?: SolanaTransactionMessage | null;
+  hyperliquidOrder?: HyperliquidSpotIocExecution | null;
+  hyperliquidInfoObservation?: HyperliquidInfoObservationEvidence | null;
 };
 
 export type BindingResult = { bound: boolean; reasonCodes: BindingCode[] };
@@ -97,7 +103,8 @@ export function bindIntentExecution(intent: BindingIntent, execution: BindingExe
   const exactCall = intent.executionProfile === 'priorseal.execution-profile.exact-call.v1';
   const erc4337 = intent.executionProfile === 'priorseal.execution-profile.erc4337-user-operation.v1';
   const solanaTransaction = intent.executionProfile === 'priorseal.execution-profile.solana-transaction.v2';
-  const exactProfile = exactCall || solanaTransaction;
+  const hyperliquidSpotIoc = intent.executionProfile === HYPERLIQUID_SPOT_IOC_PROFILE;
+  const exactProfile = exactCall || solanaTransaction || hyperliquidSpotIoc;
   if (execution?.executionDataAvailable === false) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
   if (execution.chainId !== intent.chainId) reasons.push(BINDING_CODES.CHAIN_MISMATCH);
   if ((execution.chainRef ?? null) !== (intent.chainRef ?? null)) reasons.push(BINDING_CODES.CHAINREF_MISMATCH);
@@ -111,6 +118,15 @@ export function bindIntentExecution(intent: BindingIntent, execution: BindingExe
   if (intent.calldataHash != null && !same(execution.calldataHash, intent.calldataHash)) reasons.push(BINDING_CODES.CALLDATA_MISMATCH);
   if (intent.transactionValue != null && String(execution.nativeValue ?? '') !== String(intent.transactionValue)) reasons.push(BINDING_CODES.TRANSACTION_VALUE_MISMATCH);
   if (solanaTransaction && (!intent.solanaTransaction || !execution.solanaTransaction || canonicalize(intent.solanaTransaction) !== canonicalize(execution.solanaTransaction))) reasons.push(BINDING_CODES.SOLANA_MESSAGE_MISMATCH);
+  let hyperliquidOrderMatches = false;
+  if (hyperliquidSpotIoc) {
+    try { hyperliquidOrderMatches = sameHyperliquidSpotIocOrder(intent.hyperliquidOrder, normalizeHyperliquidSpotIocExecution(execution.hyperliquidOrder)); } catch { hyperliquidOrderMatches = false; }
+    if (intent.chainRef !== HYPERLIQUID_MAINNET_CHAIN_REF || !hyperliquidOrderMatches) reasons.push(BINDING_CODES.HYPERLIQUID_ORDER_MISMATCH);
+    try {
+      const evidence = normalizeHyperliquidInfoObservationEvidence(execution.hyperliquidInfoObservation);
+      if (!evidence.fillsComplete) reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE);
+    } catch { reasons.push(BINDING_CODES.EXECUTION_UNAVAILABLE); }
+  }
   if (erc4337 && !same(execution.userOperationHash, intent.userOperationHash)) reasons.push(BINDING_CODES.USER_OPERATION_HASH_MISMATCH);
   if (erc4337 && !same(execution.entryPoint, intent.entryPoint)) reasons.push(BINDING_CODES.ENTRY_POINT_MISMATCH);
   if (erc4337 && !same(execution.entryPointVersion, intent.entryPointVersion)) reasons.push(BINDING_CODES.ENTRY_POINT_VERSION_MISMATCH);

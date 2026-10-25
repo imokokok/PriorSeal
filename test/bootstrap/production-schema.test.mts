@@ -14,14 +14,14 @@ function database({ migration = true, coalescingMigration = true, resultColumn =
         const tables = parameters[0] as string[];
         return { rowCount: tables.length, rows: tables.map((table_name) => ({ table_name })) };
       }
-      if (sql.includes('information_schema.columns')) return { rows: [{ table_name: 'authorizations', column_name: 'timestamp_evidence_json' }, ...(resultColumn ? [{ table_name: 'observation_jobs', column_name: 'result_json' }] : []), ...(leaseColumns ? [{ table_name: 'observation_jobs', column_name: 'lease_token' }, { table_name: 'observation_jobs', column_name: 'lease_expires_at' }] : []), ...(coalesceColumn ? [{ table_name: 'observation_jobs', column_name: 'coalesce_key' }] : [])] };
+      if (sql.includes('information_schema.columns')) return { rows: [{ table_name: 'authorizations', column_name: 'timestamp_evidence_json' }, { table_name: 'authorizations', column_name: 'hyperliquid_network_ref' }, { table_name: 'authorizations', column_name: 'hyperliquid_account' }, { table_name: 'authorizations', column_name: 'hyperliquid_cloid' }, ...(resultColumn ? [{ table_name: 'observation_jobs', column_name: 'result_json' }] : []), ...(leaseColumns ? [{ table_name: 'observation_jobs', column_name: 'lease_token' }, { table_name: 'observation_jobs', column_name: 'lease_expires_at' }] : []), ...(coalesceColumn ? [{ table_name: 'observation_jobs', column_name: 'coalesce_key' }] : [])] };
       throw new Error(`Unexpected query: ${sql}`);
     },
   } as unknown as ProductionDatabase;
 }
 
-test('production schema requires the Merkle index migration and durable observation columns', async () => {
-  await assert.rejects(() => assertProductionSchema(database({ migration: false }), { preExecutionProofMode: 'rfc3161' }), /010_authorization_merkle_index/);
+test('production schema requires Hyperliquid cloid reservation and durable observation columns', async () => {
+  await assert.rejects(() => assertProductionSchema(database({ migration: false }), { preExecutionProofMode: 'rfc3161' }), /018_hyperliquid_cloid_uniqueness/);
   await assert.rejects(() => assertProductionSchema(database({ coalescingMigration: false }), { preExecutionProofMode: 'rfc3161' }), /017_observation_job_coalescing/);
   await assert.rejects(() => assertProductionSchema(database({ resultColumn: false }), { preExecutionProofMode: 'rfc3161' }), /Durable observation result column/);
   await assert.rejects(() => assertProductionSchema(database({ leaseColumns: false }), { preExecutionProofMode: 'rfc3161' }), /lease columns/);

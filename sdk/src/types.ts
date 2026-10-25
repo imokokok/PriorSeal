@@ -90,9 +90,51 @@ export type SolanaTransactionMessage = {
   instructions: Array<{ programIdIndex: number; accountIndexes: number[]; data: string }>
 }
 
+/** A HyperCore spot IOC limit order. `clientOrderId` is Hyperliquid's 16-byte cloid. */
+export type HyperliquidSpotIocOrder = {
+  assetId: number
+  isBuy: boolean
+  limitPrice: string
+  size: string
+  timeInForce: 'Ioc'
+  clientOrderId: string
+  expiresAfter: number
+}
+
+export type HyperliquidSpotIocExecution = HyperliquidSpotIocOrder & {
+  orderId: string
+  orderStatus: HyperliquidTerminalOrderStatus
+  filledSize: string
+  averagePrice: string | null
+  fee: string | null
+  statusTimestamp: number
+}
+
+export type HyperliquidTerminalOrderStatus =
+  | 'filled' | 'canceled' | 'marginCanceled' | 'vaultWithdrawalCanceled' | 'openInterestCapCanceled'
+  | 'selfTradeCanceled' | 'reduceOnlyCanceled' | 'siblingFilledCanceled' | 'delistedCanceled' | 'liquidatedCanceled' | 'scheduledCancel'
+  | 'rejected' | 'tickRejected' | 'minTradeNtlRejected' | 'perpMarginRejected' | 'reduceOnlyRejected' | 'badAloPxRejected'
+  | 'iocCancelRejected' | 'badTriggerPxRejected' | 'marketOrderNoLiquidityRejected' | 'positionIncreaseAtOpenInterestCapRejected'
+  | 'positionFlipAtOpenInterestCapRejected' | 'tooAggressiveAtOpenInterestCapRejected' | 'openInterestIncreaseRejected'
+  | 'insufficientSpotBalanceRejected' | 'oracleRejected' | 'perpMaxPositionRejected'
+
+export type HyperliquidInfoObservationEvidence = {
+  schema: 'priorseal.hyperliquid-info-observation.v1'
+  endpointHash: string
+  orderStatusRequestHash: string
+  orderStatusResponseHash: string
+  fillRequestHashes: string[]
+  fillResponseHashes: string[]
+  fillPageCount: number
+  fillResponseCount: number
+  relevantFillCount: number
+  fillsComplete: boolean
+  observedAtMillis: number
+}
+
 export type Intent = {
   schema?: 'priorseal.intent.v1' | 'priorseal.intent.v2'
-  executionProfile?: 'priorseal.execution-profile.exact-call.v1' | 'priorseal.execution-profile.erc4337-user-operation.v1' | 'priorseal.execution-profile.solana-transaction.v2'
+  executionProfile?: 'priorseal.execution-profile.exact-call.v1' | 'priorseal.execution-profile.erc4337-user-operation.v1' | 'priorseal.execution-profile.solana-transaction.v2' | 'priorseal.execution-profile.hyperliquid-spot-ioc.v1'
   intentId: string
   intentHash?: string
   chainId: number | string
@@ -117,6 +159,7 @@ export type Intent = {
   accountCallDataHash?: string
   eip7702?: { delegateAddress: string; delegateCodeHash: string; authorizationTupleHash?: string }
   solanaTransaction?: SolanaTransactionMessage
+  hyperliquidOrder?: HyperliquidSpotIocOrder
   contextCommitments?: ContextCommitment[]
   constraints?: { minConfirmations?: number; maxGasUsed?: string; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' }
 }
@@ -188,6 +231,8 @@ export type Execution = {
   }
   previousBlockHash?: string
   solanaTransaction?: SolanaTransactionMessage
+  hyperliquidOrder?: HyperliquidSpotIocExecution
+  hyperliquidInfoObservation?: HyperliquidInfoObservationEvidence
 }
 
 export type Binding = { bound: boolean; reasonCodes: string[]; [key: string]: unknown }
@@ -299,8 +344,8 @@ export type VerificationBundle = {
  */
 export type EvidenceProfile = {
   schema: 'priorseal.evidence-profile.v1'
-  id: 'priorseal.evidence-profile.evm.v1' | 'priorseal.evidence-profile.solana-transaction.v1' | 'priorseal.evidence-profile.unsupported.v1'
-  family: 'evm' | 'svm' | 'unsupported'
+  id: 'priorseal.evidence-profile.evm.v1' | 'priorseal.evidence-profile.solana-transaction.v1' | 'priorseal.evidence-profile.hyperliquid-spot-ioc.v1' | 'priorseal.evidence-profile.unsupported.v1'
+  family: 'evm' | 'svm' | 'hypercore' | 'unsupported'
   network: string | null
   chainId: number | null
   capabilities: string[]
@@ -427,6 +472,8 @@ export type DeploymentCapabilities = {
   audience: string
   executionProfiles: string[]
   chains: number[]
+  /** Non-EVM network references for profiles that cannot use an EIP-155 id. */
+  networks?: string[]
   authorizers: string[]
   proofMode: string
   policyHash: string

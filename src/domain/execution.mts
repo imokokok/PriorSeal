@@ -1,6 +1,7 @@
 export const EXECUTION_SCHEMA = 'priorseal.execution-observation.v1';
 export const EXECUTION_STATUSES = ['PENDING', 'CONFIRMED', 'REVERTED', 'REORGED', 'NOT_FOUND', 'RPC_ERROR', 'UNSUPPORTED_CHAIN'] as const;
 import type { SolanaTransactionMessage } from './solana.mjs';
+import type { HyperliquidInfoObservationEvidence, HyperliquidSpotIocExecution } from './hyperliquid.mjs';
 
 export type ExecutionInput = {
   chainId?: number | string;
@@ -65,10 +66,12 @@ export type ExecutionInput = {
     finalizedBlock: { number: number; hash: string } | null;
   };
   solanaTransaction?: SolanaTransactionMessage | null;
+  hyperliquidOrder?: HyperliquidSpotIocExecution | null;
+  hyperliquidInfoObservation?: HyperliquidInfoObservationEvidence | null;
 };
 
 export function normalizeExecution(input: ExecutionInput) {
-  const solana = input.chainId === 0 || String(input.chainRef ?? '').startsWith('solana:');
+  const solana = String(input.chainRef ?? '').startsWith('solana:');
   return {
     schema: EXECUTION_SCHEMA,
     chainId: input.chainId,
@@ -105,6 +108,8 @@ export function normalizeExecution(input: ExecutionInput) {
     ...(input.accountCallDataHash ? { accountCallDataHash: input.accountCallDataHash.toLowerCase() } : {}),
     ...(input.eip7702Delegation ? { eip7702Delegation: { ...input.eip7702Delegation, delegateAddress: input.eip7702Delegation.delegateAddress.toLowerCase(), delegateCodeHash: input.eip7702Delegation.delegateCodeHash.toLowerCase(), ...(input.eip7702Delegation.delegateObservedForExecution ? { delegateObservedForExecution: input.eip7702Delegation.delegateObservedForExecution.toLowerCase() } : {}), ...(input.eip7702Delegation.delegateAfter ? { delegateAfter: input.eip7702Delegation.delegateAfter.toLowerCase() } : {}) } } : {}),
     ...(input.solanaTransaction ? { solanaTransaction: input.solanaTransaction } : {}),
+    ...(input.hyperliquidOrder ? { hyperliquidOrder: input.hyperliquidOrder } : {}),
+    ...(input.hyperliquidInfoObservation ? { hyperliquidInfoObservation: input.hyperliquidInfoObservation } : {}),
     executionDataAvailable: input.executionDataAvailable ?? true,
     observationSource: input.observationSource ?? 'unknown',
     finalityState: input.finalityState ?? 'UNKNOWN',

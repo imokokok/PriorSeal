@@ -43,7 +43,7 @@ const listHas = (list: unknown, value: unknown, caseSensitive = false): boolean 
 
 export function evaluateIntentPolicy(intent: IntentForPolicy, policy: RuntimePolicy = {}, now = Math.floor(Date.now() / 1000)) {
   const reasonCodes: PolicyCode[] = [];
-  const caseSensitiveChain = intent.chainId === 0 || intent.chainId === '0';
+  const caseSensitiveChain = intent.chainRef?.startsWith('solana:') === true;
   if (!validRuntimePolicy(policy)) reasonCodes.push(POLICY_CODES.INVALID_POLICY);
   // Non-EVM intents (chainId 0) carry a CAIP-2 chainRef that cannot be
   // expressed as a positive EIP-155 id, so a policy may admit the chain by
@@ -95,7 +95,7 @@ export function evaluateAuthorizationPolicy(authorization: AuthorizationForPolic
  * authorizations whose policy would appear to enforce those descriptive fields.
  */
 export function evaluateNewIntentPolicyCompatibility(intent: { executionProfile?: string | null } | null | undefined, policy: RuntimePolicy = {}) {
-  const exactCall = ['priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1', 'priorseal.execution-profile.solana-transaction.v2'].includes(String(intent?.executionProfile ?? ''));
+  const exactCall = ['priorseal.execution-profile.exact-call.v1', 'priorseal.execution-profile.erc4337-user-operation.v1', 'priorseal.execution-profile.solana-transaction.v2', 'priorseal.execution-profile.hyperliquid-spot-ioc.v1'].includes(String(intent?.executionProfile ?? ''));
   const semanticRestrictionsConfigured = policy.allowedAssets !== undefined || policy.allowedRecipients !== undefined || policy.maxAmount !== undefined;
   return exactCall && semanticRestrictionsConfigured
     ? { allowed: false, reasonCodes: [POLICY_CODES.EXACT_CALL_SEMANTICS_UNSUPPORTED] }
