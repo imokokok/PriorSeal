@@ -2,7 +2,10 @@ name: Public service health
 
 on:
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    # Each run confirms a failure after one minute. Hourly sampling keeps
+    # durable health regressions visible without emitting four identical
+    # failure notifications per hour.
+    - cron: '7 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -14,7 +17,7 @@ concurrency:
 
 jobs:
   portfolio-readiness:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Five concurrent reads with 30-second timeouts, one-minute confirmation delay, then a full retry.
     timeout-minutes: 8
     steps:
@@ -25,11 +28,21 @@ jobs:
       - name: Check portfolio public surfaces; confirm failures after one minute
         shell: bash
         run: |
+          set -uo pipefail
           if node scripts/integration-doctor.mjs > health-portfolio-first.json; then
             exit 0
           fi
           sleep 60
+          set +e
           node scripts/integration-doctor.mjs > health-portfolio-confirmation.json
+          confirmation_status=$?
+          set -e
+          if [ "$confirmation_status" -ne 0 ]; then
+            # Keep raw evidence in the artifact while exposing only a safe,
+            # endpoint-level summary in the Actions log.
+            node scripts/summarize-health-diagnostic.mjs health-portfolio-confirmation.json portfolio-readiness || true
+          fi
+          exit "$confirmation_status"
       - name: Retain diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -39,7 +52,11 @@ jobs:
           retention-days: 14
 
   agent-retail-readiness:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    # Production is explicitly configured for public paid commerce in
+    # wrangler.jsonc. Keep the public check aligned with that declared mode.
+    env:
+      PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE: 'true'
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v5

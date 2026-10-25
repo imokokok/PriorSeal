@@ -60,6 +60,7 @@ const onDemandOperationSources = [
   "scripts/production-readiness.mts",
   "scripts/production-smoke-readonly.mts",
   "scripts/production-smoke.mts",
+  "scripts/summarize-health-diagnostic.mts",
   "scripts/agent-retail-readiness.mts",
   "scripts/mcp-compatibility-proof.mts",
   "scripts/rotation-impact.mts",
