@@ -46,6 +46,21 @@ export {
 } from './insight-monad-lending-guard.js'
 export type { InsightMonadLendingGuardDecision, InsightMonadLendingGuardVerification } from './insight-monad-lending-guard.js'
 export {
+  INSIGHT_MULTICHAIN_EVM_LENDING_GUARD_NAMESPACE,
+  INSIGHT_MULTICHAIN_EVM_LENDING_GUARD_SCHEMA,
+  MULTICHAIN_EVM_LENDING_GUARD_INTENT_ASSET_PREFIX,
+  multichainEvmLendingGuardCommitment,
+  multichainEvmLendingGuardIntentAsset,
+  buildMultichainEvmLendingGuardBoundIntent,
+  verifyMultichainEvmLendingGuardAuthorizationBinding,
+  verifyMultichainEvmLendingGuardReceiptBundle,
+  verifyInsightMultichainEvmLendingGuardDecision,
+} from './insight-multichain-evm-lending-guard.js'
+export type {
+  InsightMultichainEvmLendingGuardDecision,
+  InsightMultichainEvmLendingGuardVerification,
+} from './insight-multichain-evm-lending-guard.js'
+export {
   ERC8004_IDENTITY_COMMITMENT_NAMESPACE,
   ERC8004_IDENTITY_REGISTRY_ABI,
   ERC8004_IDENTITY_SNAPSHOT_SCHEMA,
