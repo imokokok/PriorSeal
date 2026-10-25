@@ -139,8 +139,8 @@ jobs:
           npm run sdk:build
           npm run example:receipt
           npm run verify:receipt
-      - name: Run non-browser release gates
-        run: npm run release:check:pre-browser
+      - name: Run non-browser release gates against the prepared SDK
+        run: npm run release:check:pre-browser:prepared
       - name: Verify APS producer inputs and adapter boundaries
         run: npm run test:aps-priorseal
       - name: RWA v2 durable authorization and receipt workflow (simulation)
@@ -185,8 +185,14 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      # System dependencies belong to the disposable Linux runner and must be
+      # installed every time. The Chromium binary is safe to reuse from the
+      # versioned cache, so avoid re-downloading it when the cache hits.
+      - name: Install Chromium system dependencies
+        run: npx playwright install-deps chromium
+      - name: Install Chromium when the browser cache misses
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
       - name: Cache Playwright Chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
