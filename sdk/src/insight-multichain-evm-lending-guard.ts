@@ -16,8 +16,22 @@ const TYPES = { MultichainEvmLendingGuardDecision: [
   { name: 'verdict', type: 'uint8' }, { name: 'issuedAt', type: 'uint256' },
   { name: 'validUntil', type: 'uint256' }, { name: 'schemaVersion', type: 'uint256' },
 ] } as const
-const CHAINS = [137, 42161, 56] as const
-const PROTOCOLS = ['aave-v3-polygon', 'aave-v3-arbitrum', 'aave-v3-bnb', 'venus-core-bnb'] as const
+const CHAINS = [137, 42161, 56, 8453] as const
+const PROTOCOLS = [
+  'aave-v3-polygon',
+  'aave-v3-arbitrum',
+  'aave-v3-bnb',
+  'venus-core-bnb',
+  'compound-v3-arbitrum',
+  'morpho-blue-polygon',
+  'morpho-blue-arbitrum',
+  'lista-moolah-bnb',
+  'euler-v2-base',
+  'euler-v2-arbitrum',
+  'dolomite-arbitrum',
+  'fluid-vault-t1-base',
+  'fluid-vault-t1-arbitrum',
+] as const
 const HEX32 = /^0x[0-9a-fA-F]{64}$/
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/
 const SIGNATURE = /^0x[0-9a-fA-F]{130}$/
@@ -40,7 +54,7 @@ export type InsightMultichainEvmLendingGuardDecision = {
   transaction: { chainId: GuardChain; from: string; to: string; data: `0x${string}`; nonce: string | number; value: string | number }
   action: {
     protocolId: GuardProtocol; action: 'supply' | 'borrow'; target: string; calldataHash: `0x${string}`
-    amount: string; account: string; receiver: string | null; asset: string | null; marketId: null
+    amount: string; account: string; receiver: string | null; asset: string | null; marketId: string | null
   }
   decisionHash: `0x${string}`
   attestation: {
@@ -81,7 +95,40 @@ function uint(value: unknown): string | null {
 }
 function verdictCode(value: string): 0 | 1 | 2 | null { return value === 'ALLOW' ? 0 : value === 'CAUTION' ? 1 : value === 'BLOCK' ? 2 : null }
 function expectedChain(protocol: GuardProtocol): GuardChain {
-  return protocol === 'aave-v3-polygon' ? 137 : protocol === 'aave-v3-arbitrum' ? 42161 : 56
+  return protocol === 'aave-v3-polygon' || protocol === 'morpho-blue-polygon'
+    ? 137
+    : protocol === 'euler-v2-base' || protocol === 'fluid-vault-t1-base'
+      ? 8453
+      : protocol === 'aave-v3-arbitrum' || protocol === 'compound-v3-arbitrum' || protocol === 'morpho-blue-arbitrum' || protocol === 'euler-v2-arbitrum' || protocol === 'dolomite-arbitrum' || protocol === 'fluid-vault-t1-arbitrum'
+      ? 42161
+      : 56
+}
+function requiresMarketId(protocol: GuardProtocol): boolean {
+  return protocol === 'morpho-blue-polygon' || protocol === 'morpho-blue-arbitrum' || protocol === 'lista-moolah-bnb'
+}
+function requiresMarketAddress(protocol: GuardProtocol): boolean {
+  return protocol === 'euler-v2-base' || protocol === 'euler-v2-arbitrum' || protocol === 'fluid-vault-t1-base' || protocol === 'fluid-vault-t1-arbitrum'
+}
+function requiresDolomiteScope(protocol: GuardProtocol): boolean {
+  return protocol === 'dolomite-arbitrum'
+}
+const DOLOMITE_ARBITRUM_MARGIN = '0x6bd780e7fdf01d77e4d475c821f1e7ae05409072'
+function validDolomiteScope(action: InsightMultichainEvmLendingGuardDecision['action'], market: Record<string, unknown>): boolean {
+  return action.target.toLowerCase() === DOLOMITE_ARBITRUM_MARGIN &&
+    ['collateralMarketId', 'loanMarketId', 'accountNumber'].every((key) => UINT.test(String(market[key])))
+}
+const EULER_EVCS: Partial<Record<GuardProtocol, string>> = {
+  'euler-v2-base': '0x5301c7dd20bd945d2013b48ed0dee3a284ca8989',
+  'euler-v2-arbitrum': '0x6302ef0f34100cddfb5489fbcb6ee1aa95cd1066',
+}
+function validVaultActionScope(protocol: GuardProtocol, action: InsightMultichainEvmLendingGuardDecision['action'], market: Record<string, unknown>): boolean {
+  if (!requiresMarketAddress(protocol) || !ADDRESS.test(String(market.marketAddress))) return false
+  if (protocol === 'fluid-vault-t1-base' || protocol === 'fluid-vault-t1-arbitrum') {
+    return action.action === 'supply' && action.target.toLowerCase() === String(market.marketAddress).toLowerCase()
+  }
+  if (action.action === 'supply') return action.target.toLowerCase() === String(market.marketAddress).toLowerCase()
+  const evc = EULER_EVCS[protocol]
+  return ADDRESS.test(String(market.collateralVaultAddress)) && !!evc && action.target.toLowerCase() === evc
 }
 function validVerificationUrl(value: unknown): value is string {
   try {
@@ -131,7 +178,7 @@ export async function verifyInsightMultichainEvmLendingGuardDecision(value: unkn
     const nonce = uint(transaction.nonce), valueString = uint(transaction.value), expectedVerdict = verdictCode(guard.verdict)
     if (guard.schema !== 'insight.multichain-evm-lending-guard.v1' || !CHAINS.includes(guard.chainId) || !PROTOCOLS.includes(guard.protocolId) || expectedChain(guard.protocolId) !== guard.chainId || !['supply', 'borrow'].includes(guard.action) || !isRecord(guard.scope) || guard.scope.chainId !== guard.chainId || !isRecord(guard.market) || typeof guard.market.collateralSymbol !== 'string' || typeof guard.market.loanSymbol !== 'string' ||
       transaction.chainId !== guard.chainId || !ADDRESS.test(transaction.from) || !ADDRESS.test(transaction.to) || !/^0x(?:[0-9a-fA-F]{2})*$/.test(transaction.data) || nonce === null || valueString === null ||
-      action.protocolId !== guard.protocolId || action.action !== guard.action || !ADDRESS.test(action.target) || action.target.toLowerCase() !== transaction.to.toLowerCase() || !HEX32.test(action.calldataHash) || action.calldataHash.toLowerCase() !== keccak256(transaction.data).toLowerCase() || !UINT.test(action.amount) || !ADDRESS.test(action.account) || action.account.toLowerCase() !== transaction.from.toLowerCase() || (action.receiver !== null && (!ADDRESS.test(action.receiver) || action.receiver.toLowerCase() !== transaction.from.toLowerCase())) || (action.asset !== null && !ADDRESS.test(action.asset)) || action.marketId !== null ||
+      action.protocolId !== guard.protocolId || action.action !== guard.action || !ADDRESS.test(action.target) || action.target.toLowerCase() !== transaction.to.toLowerCase() || !HEX32.test(action.calldataHash) || action.calldataHash.toLowerCase() !== keccak256(transaction.data).toLowerCase() || !UINT.test(action.amount) || !ADDRESS.test(action.account) || action.account.toLowerCase() !== transaction.from.toLowerCase() || (action.receiver !== null && (!ADDRESS.test(action.receiver) || action.receiver.toLowerCase() !== transaction.from.toLowerCase())) || (action.asset !== null && !ADDRESS.test(action.asset)) || (action.marketId !== null && !HEX32.test(action.marketId)) || (requiresMarketId(guard.protocolId) && (!HEX32.test(String(guard.market.marketId)) || action.marketId?.toLowerCase() !== String(guard.market.marketId).toLowerCase())) || (!requiresMarketId(guard.protocolId) && action.marketId !== null) || (requiresMarketAddress(guard.protocolId) && !validVaultActionScope(guard.protocolId, action, guard.market)) || (requiresDolomiteScope(guard.protocolId) && !validDolomiteScope(action, guard.market)) || (!requiresMarketAddress(guard.protocolId) && (guard.market.marketAddress !== null && guard.market.marketAddress !== undefined || guard.market.collateralVaultAddress !== null && guard.market.collateralVaultAddress !== undefined)) ||
       !HEX32.test(decision.decisionHash) || !HEX32.test(data.decisionHash) || !HEX32.test(data.calldataHash) || !ADDRESS.test(data.account) || data.chainId !== guard.chainId || data.verdict !== expectedVerdict || !Number.isSafeInteger(data.issuedAt) || !Number.isSafeInteger(data.validUntil) || data.schemaVersion !== 1 ||
       attestation.type !== 'MultichainEvmLendingGuardDecision' || attestation.schemaVersion !== 1 || attestation.attesterLabel !== LABEL || !HEX32.test(attestation.uid) || !ADDRESS.test(attestation.attester) || !SIGNATURE.test(attestation.signature) || !validVerificationUrl(attestation.verifyUrl) || attestation.validForSeconds !== VALID_FOR_SECONDS || attestation.signedAt !== new Date(data.issuedAt * 1000).toISOString() || data.validUntil - data.issuedAt !== VALID_FOR_SECONDS || canonicalJson(attestation.eip712) !== canonicalJson({ domain: DOMAIN, types: TYPES, primaryType: 'MultichainEvmLendingGuardDecision' })) return { ...empty, reason: 'MALFORMED' }
     const decisionHash = keccak256(toBytes(canonicalJson(unsignedDecision(decision))))
