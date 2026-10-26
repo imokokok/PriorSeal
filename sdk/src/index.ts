@@ -10,19 +10,6 @@ export { AGENT_PROPOSAL_NAMESPACE, agentProposalCommitment, assertAgentId, canon
 export type { AgentProposal } from './agent-proposal.js'
 export { buildSolanaTransactionIntent, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
 export type { SolanaTransactionIntentInput } from './solana-transaction.js'
-export {
-  INSIGHT_SOLANA_LENDING_GUARD_NAMESPACE,
-  INSIGHT_SOLANA_LENDING_GUARD_SCHEMA,
-  buildSolanaLendingGuardBoundIntent,
-  solanaLendingGuardCommitment,
-  verifyInsightSolanaLendingGuardDecision,
-  verifySolanaLendingGuardAuthorizationBinding,
-} from './insight-solana-lending-guard.js'
-export type {
-  InsightSolanaLendingGuardDecision,
-  InsightSolanaLendingGuardVerification,
-  SolanaLendingGuardVerificationOptions,
-} from './insight-solana-lending-guard.js'
 export { buildHyperliquidSpotIocIntent, buildHyperliquidSpotIocSubmission, HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS, HYPERLIQUID_OUTCOME_ASSET_ID_MIN, HYPERLIQUID_SPOT_IOC_ACTION, HYPERLIQUID_SPOT_IOC_PROFILE } from './hyperliquid-spot.js'
 export type { HyperliquidSpotIocIntentInput, HyperliquidSpotIocSubmission } from './hyperliquid-spot.js'
 export { ERC4337_USER_OPERATION_NAMESPACE, ERC4337_EXECUTION_EVENT_NAMESPACE, ERC4337_EXECUTION_PROFILE, ERC4337_EIP7702_FACTORY_MARKER, computeERC4337EntryPointCodeHash, computeEIP7702AuthorizationTupleHash, decodeSafe4337CallData, parseERC4337UserOperationInput, bindERC4337UserOperation, buildERC4337UserOperationIntent, verifyERC4337ExecutionEvidence } from './erc4337.js'
@@ -73,6 +60,20 @@ export type {
   InsightMultichainEvmLendingGuardDecision,
   InsightMultichainEvmLendingGuardVerification,
 } from './insight-multichain-evm-lending-guard.js'
+export {
+  INSIGHT_SOLANA_LENDING_GUARD_NAMESPACE,
+  INSIGHT_SOLANA_LENDING_GUARD_SCHEMA,
+  buildSolanaLendingGuardBoundIntent,
+  solanaLendingGuardCommitment,
+  solanaLendingGuardIntentAsset,
+  verifyInsightSolanaLendingGuardDecision,
+  verifySolanaLendingGuardAuthorizationBinding,
+} from './insight-solana-lending-guard.js'
+export type {
+  InsightSolanaLendingGuardDecision,
+  InsightSolanaLendingGuardVerification,
+  SolanaLendingGuardVerificationOptions,
+} from './insight-solana-lending-guard.js'
 export {
   ERC8004_IDENTITY_COMMITMENT_NAMESPACE,
   ERC8004_IDENTITY_REGISTRY_ABI,
