@@ -6,6 +6,11 @@ PriorSeal 当前可作为受限自动化的付费设计伙伴试点独立交付�
 仍受生产 x402 Go/No-Go 约束。详见
 [独立商业化就绪度](standalone-commercial-readiness.md)。
 
+Insight + PriorSeal 在 Monad 上以 x402 商业化时，使用
+[Monad x402 commercialisation gate](../runbooks/monad-x402-commercialization-gate.md)
+分别验证报价、两项产品的结算，以及组合证据路径；不得以一方产品或另一
+条支付网络的付款记录替代。
+
 PriorSeal 的长期商业方向是 Agent 按调用使用的授权与证据层；当前单次授权
 不等同于可重复的自动授权，服务付款也不构成链上行动权限。详见
 [Agent usage and payment model](agent-usage-model.md)。
