@@ -14,6 +14,9 @@ function agentAccountState(row) {
 function creditOperationRecord(row) {
   return { operationId: row.operation_id, accountId: row.account_id, requestKey: row.request_key, credits: String(row.credits), reference: row.reference, creditedAt: row.credited_at instanceof Date ? row.credited_at.getTime() : new Date(row.credited_at).getTime() };
 }
+function x402CreditPurchaseRecord(row) {
+  return { purchaseId: row.purchase_id, paymentLedgerId: row.payment_ledger_id, accountId: row.account_id, packId: row.pack_id, credits: String(row.credits), priceUsd: row.price_usd, resourceUrl: row.resource_url, authorizedAt: row.authorized_at instanceof Date ? row.authorized_at.getTime() : new Date(row.authorized_at).getTime(), state: row.state, settledAt: row.settled_at == null ? null : row.settled_at instanceof Date ? row.settled_at.getTime() : new Date(row.settled_at).getTime(), settlementNetwork: row.settlement_network, settlementTransaction: row.settlement_transaction };
+}
 function hyperliquidReservationValues(intent) {
   const reservation = hyperliquidCloidReservation(intent);
   return [reservation?.networkRef ?? null, reservation?.account ?? null, reservation?.clientOrderId ?? null];
@@ -102,6 +105,74 @@ function createPostgresStore(pool) {
       } finally {
         client.release();
       }
+    },
+    async authorizeX402CreditPurchase(input) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const account = await client.query("SELECT * FROM agent_meter_accounts WHERE account_id=$1 FOR UPDATE", [input.accountId]);
+        if (!account.rows[0]) throw commercialError("AGENT_ACCOUNT_NOT_FOUND", "Agent service account was not found");
+        const inserted = await client.query(`INSERT INTO x402_credit_purchases (purchase_id,payment_ledger_id,account_id,pack_id,credits,price_usd,resource_url,authorized_at,state) VALUES ($1,$2,$3,$4,$5,$6,$7,to_timestamp($8 / 1000.0),'AUTHORIZED') ON CONFLICT DO NOTHING RETURNING *`, [input.purchaseId, input.paymentLedgerId, input.accountId, input.packId, input.credits, input.priceUsd, input.resourceUrl, input.authorizedAt]);
+        if (inserted.rows[0]) {
+          await client.query("COMMIT");
+          return x402CreditPurchaseRecord(inserted.rows[0]);
+        }
+        const existing = await client.query("SELECT * FROM x402_credit_purchases WHERE purchase_id=$1 OR payment_ledger_id=$2 FOR UPDATE", [input.purchaseId, input.paymentLedgerId]);
+        if (!existing.rows[0]) throw new Error("x402 credit purchase disappeared during insert");
+        const result = x402CreditPurchaseRecord(existing.rows[0]);
+        assertSameX402CreditPurchase(result, input);
+        await client.query("COMMIT");
+        return result;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async settleX402CreditPurchase({ purchaseId, settledAt, settlementNetwork, settlementTransaction }) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const found = await client.query("SELECT * FROM x402_credit_purchases WHERE purchase_id=$1 FOR UPDATE", [purchaseId]);
+        if (!found.rows[0]) {
+          await client.query("COMMIT");
+          return null;
+        }
+        const purchase = x402CreditPurchaseRecord(found.rows[0]);
+        const account = await client.query("SELECT * FROM agent_meter_accounts WHERE account_id=$1 AND status='active' FOR UPDATE", [purchase.accountId]);
+        if (!account.rows[0]) {
+          await client.query("COMMIT");
+          return null;
+        }
+        if (purchase.state === "CREDITED") {
+          await client.query("COMMIT");
+          return { purchase, account: agentAccountState(account.rows[0]) };
+        }
+        const requestKey = `x402-pack-${purchase.purchaseId}`;
+        const reference = `x402-credit-pack:${purchase.packId}:${purchase.paymentLedgerId}`;
+        const operationId = `aco_${hashJson({ accountId: purchase.accountId, requestKey }).slice(0, 32)}`;
+        const inserted = await client.query("INSERT INTO agent_meter_credit_operations (operation_id,account_id,request_key,credits,reference,credited_at) VALUES ($1,$2,$3,$4,$5,to_timestamp($6 / 1000.0)) ON CONFLICT(account_id,request_key) DO NOTHING RETURNING *", [operationId, purchase.accountId, requestKey, purchase.credits, reference, settledAt]);
+        if (!inserted.rows[0]) {
+          const existing = await client.query("SELECT * FROM agent_meter_credit_operations WHERE account_id=$1 AND request_key=$2 FOR UPDATE", [purchase.accountId, requestKey]);
+          if (!existing.rows[0] || String(existing.rows[0].credits) !== purchase.credits || existing.rows[0].reference !== reference) throw commercialError("IDEMPOTENCY_CONFLICT", "x402 credit purchase conflicts with an existing credit operation");
+        } else {
+          await client.query("UPDATE agent_meter_accounts SET provisioned_credits=provisioned_credits+$2,remaining_credits=remaining_credits+$2 WHERE account_id=$1", [purchase.accountId, purchase.credits]);
+        }
+        const saved = await client.query("UPDATE x402_credit_purchases SET state='CREDITED',settled_at=to_timestamp($2 / 1000.0),settlement_network=$3,settlement_transaction=$4 WHERE purchase_id=$1 RETURNING *", [purchaseId, settledAt, settlementNetwork, settlementTransaction]);
+        const updatedAccount = await client.query("SELECT * FROM agent_meter_accounts WHERE account_id=$1", [purchase.accountId]);
+        await client.query("COMMIT");
+        return { purchase: x402CreditPurchaseRecord(saved.rows[0]), account: agentAccountState(updatedAccount.rows[0]) };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async getX402CreditPurchase(purchaseId) {
+      const result = await pool.query("SELECT * FROM x402_credit_purchases WHERE purchase_id=$1", [purchaseId]);
+      return result.rows[0] ? x402CreditPurchaseRecord(result.rows[0]) : null;
     },
     async revokeAgentMeterAccount(accountId) {
       const result = await pool.query("UPDATE agent_meter_accounts SET status='revoked' WHERE account_id=$1 RETURNING *", [accountId]);
@@ -450,6 +521,12 @@ function rowToJob(row, { includeLease = false } = {}) {
 }
 function rowToAgentUsage(row) {
   return { usageId: row.usage_id, accountId: row.account_id, routeId: row.route_id, requestKey: row.request_key, credits: String(row.credits), reservedAt: persistedTimestamp(row.reserved_at, "agent usage reservedAt"), state: row.state };
+}
+function assertSameX402CreditPurchase(existing, input) {
+  for (const key of ["purchaseId", "paymentLedgerId", "accountId", "packId", "credits", "priceUsd", "resourceUrl"]) if (existing[key] !== input[key]) throw commercialError("IDEMPOTENCY_CONFLICT", "x402 credit purchase identifier was reused with different purchase details");
+}
+function commercialError(code, message) {
+  return Object.assign(new Error(message), { code });
 }
 function rowToAuthorization(row) {
   const policyEvidence = persistedPolicy(row.policy_json);

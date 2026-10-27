@@ -19,7 +19,7 @@ import { readJsonBody, requestPath } from './request-parser.mjs';
 import { errorBody, sendJson } from './response-writer.mjs';
 import { hashJson } from '../../domain/hashing.mjs';
 import { buildX402PaymentEvidence, signX402PaymentEvidence } from '../../domain/x402-payment-evidence.mjs';
-import { buildX402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
+import { buildX402PaymentLedgerEvent, x402PaymentLedgerId } from '../../domain/x402-payment-ledger.mjs';
 import { createStaticAssetHandler } from './static-assets.mjs';
 import { buildVerificationBundle } from '../../domain/verification-bundle.mjs';
 import { buildEvidenceEnvelope } from '../../domain/evidence-api.mjs';
@@ -39,6 +39,7 @@ import type { parsePolicyDocument } from '../../infrastructure/policy/file-polic
 import { createX402PaymentService, discoverX402AvailableNetworks, matchX402Route, type X402Config, type X402PaymentContext } from '../../infrastructure/payments/x402-exact-evm.mjs';
 import type { AgentMeter, AgentUsageReservation } from '../../application/commerce/agent-meter.mjs';
 import type { SelfserveClaim } from '../../application/commerce/selfserve-claim.mjs';
+import { x402CreditPurchaseId, type X402CreditPacks } from '../../application/commerce/x402-credit-packs.mjs';
 import { handlePriorSealMcpRequest } from '../mcp/priorseal-mcp.mjs';
 import { getAddress } from 'viem';
 
@@ -50,9 +51,9 @@ const CLAIM_ERROR_STATUS = Object.freeze({ CLAIM_INVALID_REQUEST: 400, CLAIM_SIG
 function requester(req: IncomingMessage, trustProxy: boolean) { return trustProxy ? String(req.headers['cf-connecting-ip'] ?? '').trim() || String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown' : req.socket.remoteAddress || 'unknown'; }
 
 type HttpStore = ReturnType<typeof createMemoryStore> | ReturnType<typeof createPostgresStore> | ReturnType<typeof createD1Store>;
-type HttpServerOptions = { archiveCredentials?: unknown; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; hyperliquidSpotIocConfigured?: boolean; proofMode?: string; store?: HttpStore; agentMeter?: AgentMeter | null; selfserveClaim?: SelfserveClaim | null; issuer?: string; privateKeyPem?: string; publicKeyPem?: string; keyId?: string; keyRegistry?: ReturnType<typeof createKeyRegistry>; policy?: ReturnType<typeof parsePolicyDocument>; authorizationAudience?: string; verifyContractSignature?: (input: { authorization: ReturnType<typeof buildAuthorization>; digest: `0x${string}`; signature: string }) => Promise<boolean> | boolean; timestampProvider?: ReturnType<typeof createDigiCertTimestampProvider> | null; requireTimestamp?: boolean; witnessProvider?: ReturnType<typeof createHttpWitnessProvider> | null; requireWitnessQuorum?: boolean; transparencyProvider?: ((acceptance: AuthorizationAcceptance, options?: { before?: number }) => Promise<{ checkpoint?: { anchor?: { anchoredAt: number } | null } | null }>) | null; observationWorker?: ReturnType<typeof createObservationWorker> | null; maxBodyBytes?: number; rateLimit?: number; rateLimiter?: { allow: (key: string, now: number) => boolean | Promise<boolean> }; requestTimeoutMs?: number; observer?: ExecutionObserver; integrationReadinessInspector?: (input: { chainId: number; subjectAddress: string; signal?: AbortSignal }) => Promise<IntegrationReadinessInspection>; corsOrigins?: string[]; trustProxy?: boolean; publicPaidCommerceEnabled?: boolean; x402?: X402Config; version?: string; staticDir?: string; logger?: { error?: (entry: Record<string, unknown>) => void; info?: (entry: Record<string, unknown>) => void } | null; now?: () => number };
+type HttpServerOptions = { archiveCredentials?: unknown; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; hyperliquidSpotIocConfigured?: boolean; proofMode?: string; store?: HttpStore; agentMeter?: AgentMeter | null; selfserveClaim?: SelfserveClaim | null; x402CreditPacks?: X402CreditPacks; issuer?: string; privateKeyPem?: string; publicKeyPem?: string; keyId?: string; keyRegistry?: ReturnType<typeof createKeyRegistry>; policy?: ReturnType<typeof parsePolicyDocument>; authorizationAudience?: string; verifyContractSignature?: (input: { authorization: ReturnType<typeof buildAuthorization>; digest: `0x${string}`; signature: string }) => Promise<boolean> | boolean; timestampProvider?: ReturnType<typeof createDigiCertTimestampProvider> | null; requireTimestamp?: boolean; witnessProvider?: ReturnType<typeof createHttpWitnessProvider> | null; requireWitnessQuorum?: boolean; transparencyProvider?: ((acceptance: AuthorizationAcceptance, options?: { before?: number }) => Promise<{ checkpoint?: { anchor?: { anchoredAt: number } | null } | null }>) | null; observationWorker?: ReturnType<typeof createObservationWorker> | null; maxBodyBytes?: number; rateLimit?: number; rateLimiter?: { allow: (key: string, now: number) => boolean | Promise<boolean> }; requestTimeoutMs?: number; observer?: ExecutionObserver; integrationReadinessInspector?: (input: { chainId: number; subjectAddress: string; signal?: AbortSignal }) => Promise<IntegrationReadinessInspection>; corsOrigins?: string[]; trustProxy?: boolean; publicPaidCommerceEnabled?: boolean; x402?: X402Config; version?: string; staticDir?: string; logger?: { error?: (entry: Record<string, unknown>) => void; info?: (entry: Record<string, unknown>) => void } | null; now?: () => number };
 
-export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], hyperliquidSpotIocConfigured = false, proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, issuer = 'priorseal-local', privateKeyPem, publicKeyPem, keyId = 'default', keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = 'priorseal', verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15_000, observer = observeEvm, integrationReadinessInspector, corsOrigins = [], trustProxy = false, publicPaidCommerceEnabled = true, x402, version = process.env.PRIORSEAL_BUILD_VERSION ?? 'dev', staticDir, logger = null, now = () => Date.now() }: HttpServerOptions = {}) {
+export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], hyperliquidSpotIocConfigured = false, proofMode, store = createMemoryStore(), agentMeter = null, selfserveClaim = null, x402CreditPacks, issuer = 'priorseal-local', privateKeyPem, publicKeyPem, keyId = 'default', keyRegistry = createKeyRegistry(publicKeyPem ? [{ issuer, keyId, algorithm: 'Ed25519', publicKey: publicKeyPem, status: 'active', validFrom: null, validUntil: null }] : []), policy = null, authorizationAudience = 'priorseal', verifyContractSignature, timestampProvider = null, requireTimestamp = false, witnessProvider = null, requireWitnessQuorum = false, transparencyProvider = null, observationWorker = null, maxBodyBytes = 64 * 1024, rateLimit = 60, rateLimiter = createMemoryRateLimiter({ limit: rateLimit }), requestTimeoutMs = 15_000, observer = observeEvm, integrationReadinessInspector, corsOrigins = [], trustProxy = false, publicPaidCommerceEnabled = true, x402, version = process.env.PRIORSEAL_BUILD_VERSION ?? 'dev', staticDir, logger = null, now = () => Date.now() }: HttpServerOptions = {}) {
   if (privateKeyPem || publicKeyPem) {
     if (!privateKeyPem || !publicKeyPem) throw new TypeError('Issuer private and public keys must be configured together');
     assertEd25519KeyPair(privateKeyPem, publicKeyPem);
@@ -65,7 +66,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
     // payment claim. The payment route remains fail-closed and discovery
     // reports no currently available rail until facilitator discovery recovers.
     const x402AvailableNetworks = x402 ? await discoverX402AvailableNetworks(x402).catch(() => []) : undefined;
-    return deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? 'rfc3161' : requireWitnessQuorum ? 'witness-quorum' : 'issuer'), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, hyperliquidSpotIocConfigured, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === 'function', publicPaidCommerceEnabled, x402, x402AvailableNetworks, agentMeter, selfserveClaim, now: now() });
+    return deploymentCapabilities({ issuer, audience: authorizationAudience, keyConfigured: Boolean(privateKeyPem && publicKeyPem), policy, proofMode: proofMode ?? (requireTimestamp ? 'rfc3161' : requireWitnessQuorum ? 'witness-quorum' : 'issuer'), timestampConfigured: Boolean(timestampProvider), witnessConfigured: Boolean(witnessProvider), anchorConfigured: Boolean(transparencyProvider), rpcChainIds, erc4337EntryPoints, safe4337Trust, eip7702Delegates, hyperliquidSpotIocConfigured, store, archiveEnabled: Boolean(archiveAccess), contractSignatureConfigured: typeof verifyContractSignature === 'function', publicPaidCommerceEnabled, x402, x402AvailableNetworks, agentMeter, selfserveClaim, x402CreditPacks, now: now() });
   };
   return createServer({ requestTimeout: requestTimeoutMs }, async (req, res) => {
     const requestId = typeof req.headers['x-request-id'] === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(req.headers['x-request-id']) ? req.headers['x-request-id'] : randomUUID();
@@ -164,7 +165,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
                   const observationFingerprint = hashJson(input);
                   observationJob = await observationWorker.enqueuePersistent({ ...input, txHash: input.txHash, idempotencyKey: `observation:${observationFingerprint}:${observationCycle}`, coalesceKey: `observation:${observationFingerprint}` });
                 }
-                return { ...response, ...(observationJob ? { observationJob } : {}) };
+                return includeEvidenceBundleForMeteredObservation({ ...response, ...(observationJob ? { observationJob } : {}) }, meterReservation, issuer, keyRegistry, Math.floor(now() / 1000));
               });
             }
             if (name === 'priorseal_get_observation_job') {
@@ -248,6 +249,33 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
         const result = await selfserveClaim.claim({ txHash: String(body.txHash ?? ''), signature: String(body.signature ?? '') });
         return respond(result.replay ? 200 : 201, { account: result.account, credential: result.credential, credits: result.credits, txHash: result.txHash, requestId }, { 'cache-control': 'no-store' });
       }
+      const creditPurchaseMatch = agentMeter && req.method === 'GET' && path.match(/^\/v1\/agent-credit-packs\/purchases\/(xcp_[0-9a-f]{32})$/);
+      if (creditPurchaseMatch) {
+        const purchase = await agentMeter.commerce.getX402CreditPackPurchase({ credential: typeof req.headers['x-priorseal-agent-key'] === 'string' ? req.headers['x-priorseal-agent-key'] : undefined, purchaseId: creditPurchaseMatch[1] });
+        return respond(200, { purchase, requestId }, { 'cache-control': 'private, no-store' });
+      }
+      const creditPack = req.method === 'GET' ? x402CreditPacks?.findByPath(path) : undefined;
+      if (creditPack) {
+        if (!agentMeter || !paymentContext || !paymentResourceUrl) throw new PriorSealError('NOT_FOUND', 'Credit-pack checkout is not configured');
+        const paymentLedgerId = x402PaymentLedgerId(paymentContext, paymentResourceUrl);
+        const purchase = await agentMeter.commerce.authorizeX402CreditPack({
+          credential: typeof req.headers['x-priorseal-agent-key'] === 'string' ? req.headers['x-priorseal-agent-key'] : undefined,
+          purchaseId: x402CreditPurchaseId(paymentLedgerId),
+          paymentLedgerId,
+          packId: creditPack.packId,
+          credits: creditPack.credits,
+          priceUsd: creditPack.priceUsd,
+          resourceUrl: paymentResourceUrl,
+          authorizedAt: now(),
+        });
+        return respond(200, {
+          schema: 'priorseal.x402-credit-pack-checkout.v1',
+          status: 'PAYMENT_SETTLEMENT_PENDING',
+          purchase: { purchaseId: purchase.purchaseId, packId: purchase.packId, credits: purchase.credits, priceUsd: purchase.priceUsd },
+          delivery: 'After successful x402 settlement, PriorSeal credits the authenticated Agent account exactly once. This checkout cannot authorize a subject-chain action.',
+          requestId,
+        }, { 'cache-control': 'no-store' });
+      }
       if (path === '/v1/archive' || path.startsWith('/v1/archive/')) {
         if (!archiveAccess) throw new PriorSealError('NOT_FOUND', 'Project archive is not enabled');
         const access = archiveAccess.authenticate(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined);
@@ -311,7 +339,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
           const observationFingerprint = hashJson(body);
           observationJob = await observationWorker.enqueuePersistent({ ...body, txHash: body.txHash, idempotencyKey: `observation:${observationFingerprint}:${observationCycle}`, coalesceKey: `observation:${observationFingerprint}` });
         }
-        return respond(200, { ...response, ...(observationJob ? { observationJob } : {}), requestId }, result.replay ? { 'idempotency-replayed': 'true' } : {});
+        return respond(200, { ...includeEvidenceBundleForMeteredObservation({ ...response, ...(observationJob ? { observationJob } : {}) }, meterReservation, issuer, keyRegistry, Math.floor(now() / 1000)), requestId }, result.replay ? { 'idempotency-replayed': 'true' } : {});
       }
       const transparencyMatch = req.method === 'GET' && path.match(/^\/v1\/authorizations\/([^/]+)\/transparency$/);
       if (transparencyMatch) { const record = await store.getAuthorization?.(decodeURIComponent(transparencyMatch[1])); if (!record) throw new PriorSealError('AUTHORIZATION_NOT_FOUND', 'Authorization not found'); if (!transparencyProvider) throw new PriorSealError('ISSUER_NOT_CONFIGURED', 'Transparency checkpoint signing is unavailable'); return respond(200, await transparencyProvider(record.acceptance)); }
@@ -394,7 +422,10 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
       }
     };
     try {
-      if (agentMeter && path !== '/mcp') {
+      // A Credit-pack checkout is x402-funded capacity acquisition, never a
+      // metered API call itself. Exclude it even if an operator accidentally
+      // includes the checkout path in the Agent Meter route list.
+      if (agentMeter && path !== '/mcp' && !x402CreditPacks?.findByPath(path)) {
         try {
           const credential = typeof req.headers['x-priorseal-agent-key'] === 'string' ? req.headers['x-priorseal-agent-key'] : undefined;
           const requestKey = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : undefined;
@@ -481,6 +512,31 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
           }
           let paymentBoundBody = completedResponse.body;
           logger?.info?.({ event: 'x402.settlement_succeeded', route: paidRoute.path, price: paidRoute.price, network: paymentContext.requirement.network, attempts: settlement.attempts });
+          const creditPack = x402CreditPacks?.findByPath(path);
+          if (creditPack) {
+            let pendingPurchaseId: string | undefined;
+            try {
+              const checkout = x402CreditPackCheckout(completedResponse.body);
+              pendingPurchaseId = checkout.purchase.purchaseId;
+              const credited = await agentMeter?.commerce.settleX402CreditPack({ purchaseId: checkout.purchase.purchaseId, settledAt: now(), settlementNetwork: settlement.settlement.network, settlementTransaction: settlement.settlement.transaction });
+              if (!credited) throw new PriorSealError('AGENT_ACCOUNT_NOT_FOUND', 'The Agent service account is unavailable for this settled credit purchase');
+              paymentBoundBody = {
+                ...checkout.body,
+                status: 'CREDITS_GRANTED',
+                purchase: { ...checkout.purchase, state: credited.purchase.state, settlement: { network: credited.purchase.settlementNetwork, transaction: credited.purchase.settlementTransaction } },
+                account: credited.account,
+                delivery: 'Credits were granted to the authenticated Agent account. They meter PriorSeal service work and do not grant authority to sign or broadcast a subject-chain action.',
+              };
+            } catch (error) {
+              // The external payment is already final. Keep the durable
+              // authorized purchase for operator reconciliation instead of
+              // falsely claiming the payment failed or issuing a duplicate.
+              const code = errorCode(error) || 'CREDIT_PURCHASE_PENDING';
+              logger?.error?.({ event: 'x402.credit_purchase_pending', requestId, method: req.method, path, code });
+              respond(503, { ...errorBody('CREDIT_PURCHASE_PENDING', 'Payment settled, but credit delivery is pending reconciliation', requestId), ...(pendingPurchaseId ? { purchaseId: pendingPurchaseId } : {}) }, { 'payment-response': settlement.header, 'cache-control': 'no-store' });
+              return;
+            }
+          }
           if (privateKeyPem && paymentResourceUrl) {
             try {
               paymentBoundBody = bindX402PaymentEvidenceToBundle({ body: completedResponse.body, resourceUrl: paymentResourceUrl, status: completedResponse.status, context: paymentContext, settlement: settlement.settlement, issuer, keyId, privateKeyPem, issuedAt: Math.floor(now() / 1000) });
@@ -526,6 +582,44 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
 }
 
 function jsonSafe(value: unknown) { return JSON.parse(JSON.stringify(value, (_, item: unknown) => typeof item === 'bigint' ? item.toString() : item)); }
+
+function x402CreditPackCheckout(value: unknown) {
+  if (!isRecord(value) || value.schema !== 'priorseal.x402-credit-pack-checkout.v1' || !isRecord(value.purchase)
+    || typeof value.purchase.purchaseId !== 'string' || !/^xcp_[0-9a-f]{32}$/.test(value.purchase.purchaseId)
+    || typeof value.purchase.packId !== 'string' || typeof value.purchase.credits !== 'string' || typeof value.purchase.priceUsd !== 'string') {
+    throw new TypeError('x402 credit-pack checkout response is invalid');
+  }
+  return {
+    body: value,
+    purchase: {
+      purchaseId: value.purchase.purchaseId,
+      packId: value.purchase.packId,
+      credits: value.purchase.credits,
+      priceUsd: value.purchase.priceUsd,
+    },
+  };
+}
+
+/**
+ * A completed, metered observation includes its first portable evidence bundle
+ * in the paid workflow response. A later independent export stays an x402
+ * product, so callers are never charged twice for the same delivery while
+ * reviewers can still obtain a standalone bundle when needed.
+ */
+function includeEvidenceBundleForMeteredObservation(response: Record<string, unknown>, reservation: AgentUsageReservation | undefined, issuer: string, keyRegistry: ReturnType<typeof createKeyRegistry>, assembledAt: number) {
+  if (!reservation || !isRecord(response.receipt)) return response;
+  const bundle = buildVerificationBundle({ receipt: response.receipt, keyRegistry: keyRegistryDocument(issuer, keyRegistry), assembledAt });
+  return {
+    ...response,
+    includedEvidenceBundle: bundle,
+    evidenceDelivery: {
+      model: 'INCLUDED_WITH_METERED_EXECUTION_OBSERVATION',
+      usageId: reservation.usageId,
+      recovery: 'Repeat the same observation request with its idempotency key to recover this included delivery. Independent or later standalone exports remain available through x402.',
+      boundaries: 'The included bundle is evidence only. It does not grant transaction, custody, or signing authority.',
+    },
+  };
+}
 
 function agentUsageLimit(value: string | null) {
   if (value === null) return 25;
@@ -676,7 +770,7 @@ function agentIntegrationManifest({ version }: { version: string }) {
     service: 'PriorSeal',
     version,
     discovery: { capabilities: '/v1/capabilities', openapi: '/openapi/v1.json', mcp: '/mcp', issuerKeys: '/.well-known/priorseal-keys.json', evidence: '/v1/evidence/receipts/{receiptId}', freshEvidenceCheck: '/v1/evidence/receipts/{receiptId}/check', integrationReadiness: '/v1/integration-readiness?chainId={chainId}&subjectAddress={address}' },
-    commerce: { x402: { discovery: '/v1/capabilities', paidResources: ['verification_bundle_export', 'evidence_envelope_export', 'fresh_evidence_check', 'integration_readiness_report'], mcpBehavior: 'FREE_DISCOVERY_AND_PURCHASE_HANDOFF_ONLY' } },
+    commerce: { x402: { discovery: '/v1/capabilities', paidResources: ['verification_bundle_export', 'evidence_envelope_export', 'fresh_evidence_check', 'integration_readiness_report', 'agent_credit_pack_checkout'], mcpBehavior: 'FREE_DISCOVERY_AND_PURCHASE_HANDOFF_ONLY', creditPacks: 'A fixed x402 credit pack tops up an existing authenticated Agent account only after settlement. It is never subject-transaction authority.' } },
     safety: {
       executionMode: 'PROPOSAL_AND_PRINCIPAL_CONFIRMATION',
       principalSignature: 'REQUIRED_FOR_EVERY_EXACT_ACTION',
@@ -687,7 +781,7 @@ function agentIntegrationManifest({ version }: { version: string }) {
   };
 }
 
-const OPENAPI = { openapi: '3.1.0', info: { title: 'PriorSeal API', version: '2.0.0', description: 'Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts.' }, paths: { '/v1/capabilities': { get: { summary: 'Deployment configuration and workflow capabilities' } }, '/v1/integration-readiness': { get: { summary: 'Issue a signed, read-only EVM integration-readiness report (x402 when enabled)' } }, '/v1/archive': { get: { summary: 'List private uploaded evidence with a project bearer credential' }, post: { summary: 'Archive immutable evidence with a writer credential' } }, '/v1/archive/export': { get: { summary: 'Export a private snapshot page including raw artifacts' } }, '/v1/archive/{entryId}': { get: { summary: 'Read private project evidence' } }, '/v1/intents': { post: { summary: 'Create a legacy unsigned intent draft', deprecated: true, responses: { '201': { description: 'Created' } } } }, '/v1/authorizations/prepare': { post: { summary: 'Canonicalize an authorization and return EIP-712 typed data or a Solana message' } }, '/v1/authorizations': { post: { summary: 'Verify and accept a signed authorization' } }, '/v1/authorizations/{authorizationId}': { get: { summary: 'Read authorization state' } }, '/v1/authorizations/{authorizationId}/transparency': { get: { summary: 'Read signed transparency evidence and any verified external anchor' } }, '/v1/executions/observe': { post: { summary: 'Observe EVM or Solana execution against an authorization' } }, '/v1/observation-jobs/{jobId}': { get: { summary: 'Read automatic finality observation job' } }, '/v1/receipts/{receiptId}': { get: { summary: 'Read receipt' } }, '/v1/receipts/{receiptId}/bundle': { get: { summary: 'Export portable receipt evidence and key-discovery metadata (x402 when enabled)' } }, '/v1/evidence/receipts/{receiptId}': { get: { summary: 'Read a chain-neutral evidence envelope with the portable verification bundle (x402 when enabled)' } }, '/v1/evidence/receipts/{receiptId}/check': { get: { summary: 'Re-observe an authorization-bound transaction and return a newly signed fresh evidence check (x402 when enabled)' } }, '/v1/receipts/verify': { post: { summary: 'Convenience verification, not authority' } }, '/.well-known/priorseal-keys.json': { get: { summary: 'Read the issuer public-key registry' } }, '/.well-known/agent8004.json': { get: { summary: 'Read the ERC-8004 agent registration record' } }, '/.well-known/priorseal-agent.json': { get: { summary: 'Read safe Agent integration discovery' } }, '/v1/version': { get: { summary: 'Read service and protocol versions' } }, '/health/live': { get: { summary: 'Liveness' } }, '/health/ready': { get: { summary: 'Readiness' } } } };
+const OPENAPI = { openapi: '3.1.0', info: { title: 'PriorSeal API', version: '2.0.0', description: 'Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts.' }, paths: { '/v1/capabilities': { get: { summary: 'Deployment configuration and workflow capabilities' } }, '/v1/integration-readiness': { get: { summary: 'Issue a signed, read-only EVM integration-readiness report (x402 when enabled)' } }, '/v1/agent-credit-packs/{packId}/checkout': { get: { summary: 'Purchase a fixed Agent Credits pack with x402 for an existing authenticated Agent account' } }, '/v1/agent-credit-packs/purchases/{purchaseId}': { get: { summary: 'Read the authenticated account’s x402 Credit-pack delivery status' } }, '/v1/archive': { get: { summary: 'List private uploaded evidence with a project bearer credential' }, post: { summary: 'Archive immutable evidence with a writer credential' } }, '/v1/archive/export': { get: { summary: 'Export a private snapshot page including raw artifacts' } }, '/v1/archive/{entryId}': { get: { summary: 'Read private project evidence' } }, '/v1/intents': { post: { summary: 'Create a legacy unsigned intent draft', deprecated: true, responses: { '201': { description: 'Created' } } } }, '/v1/authorizations/prepare': { post: { summary: 'Canonicalize an authorization and return EIP-712 typed data or a Solana message' } }, '/v1/authorizations': { post: { summary: 'Verify and accept a signed authorization' } }, '/v1/authorizations/{authorizationId}': { get: { summary: 'Read authorization state' } }, '/v1/authorizations/{authorizationId}/transparency': { get: { summary: 'Read signed transparency evidence and any verified external anchor' } }, '/v1/executions/observe': { post: { summary: 'Observe EVM or Solana execution against an authorization; metered success includes its first portable evidence bundle' } }, '/v1/observation-jobs/{jobId}': { get: { summary: 'Read automatic finality observation job' } }, '/v1/receipts/{receiptId}': { get: { summary: 'Read receipt' } }, '/v1/receipts/{receiptId}/bundle': { get: { summary: 'Export portable receipt evidence and key-discovery metadata (x402 when enabled)' } }, '/v1/evidence/receipts/{receiptId}': { get: { summary: 'Read a chain-neutral evidence envelope with the portable verification bundle (x402 when enabled)' } }, '/v1/evidence/receipts/{receiptId}/check': { get: { summary: 'Re-observe an authorization-bound transaction and return a newly signed fresh evidence check (x402 when enabled)' } }, '/v1/receipts/verify': { post: { summary: 'Convenience verification, not authority' } }, '/.well-known/priorseal-keys.json': { get: { summary: 'Read the issuer public-key registry' } }, '/.well-known/agent8004.json': { get: { summary: 'Read the ERC-8004 agent registration record' } }, '/.well-known/priorseal-agent.json': { get: { summary: 'Read safe Agent integration discovery' } }, '/v1/version': { get: { summary: 'Read service and protocol versions' } }, '/health/live': { get: { summary: 'Liveness' } }, '/health/ready': { get: { summary: 'Readiness' } } } };
 
 function openApiSpec() { return OPENAPI; }
 
@@ -730,7 +824,7 @@ function controlledExecutionWorkflow() {
       { order: 3, tool: 'priorseal_accept_authorization', status: 'REQUIRED', requiredActor: 'agent', requiredHeaders: ['idempotency-key'], conditionalHeaders: { 'x-priorseal-agent-key': 'Required only when the deployment meters this route.' }, safeguard: 'Acceptance persists service evidence but never signs or broadcasts a transaction.' },
       { order: 4, action: 'submit_exact_authorized_action', status: 'EXTERNAL', requiredActor: 'separate_executor', safeguard: 'Only submit the exact, still-valid action that matches the signed authorization. PriorSeal does not submit it.' },
       { order: 5, tool: 'priorseal_observe_execution', status: 'REQUIRED', requiredActor: 'agent', requiredHeaders: ['idempotency-key'], conditionalHeaders: { 'x-priorseal-agent-key': 'Required only when the deployment meters this route.' }, safeguard: 'Observation can persist a job or issue evidence, but never broadcasts a transaction.' },
-      { order: 6, tool: 'priorseal_get_evidence_bundle', status: 'REQUIRED', requiredActor: 'agent_or_reviewer', safeguard: 'Verify the exported evidence bundle using independently established issuer-key trust.' },
+      { order: 6, tool: 'priorseal_get_evidence_bundle', status: 'CONDITIONAL', requiredActor: 'agent_or_reviewer', safeguard: 'Use includedEvidenceBundle from a successful metered observation for the original workflow. Call this paid x402 export only for an independent or later standalone copy, then verify it using independently established issuer-key trust.' },
     ],
   };
 }

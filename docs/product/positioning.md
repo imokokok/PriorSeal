@@ -28,10 +28,12 @@ accounts:
 | Principal / authorizer | The bounded action the agent may take | Settlement of a PriorSeal service charge |
 | Executor | Submission of the subject transaction | A broader authorization than the signed intent |
 
-The eventual self-serve payment mechanism can be x402 or another reviewed
-prepaid-usage design, but it does not replace principal authorization. A
-payment rail is separate from the subject-execution chain and never proves
-that the subject action was authorized.
+An existing Agent account can buy a fixed prepaid Credits pack through x402;
+those credits then meter stateful authorization and observation work. Public,
+independent evidence resources remain per-request x402 products. Neither
+payment form replaces principal authorization. A payment rail is separate from
+the subject-execution chain and never proves that the subject action was
+authorized.
 
 中文：**PriorSeal 是 Agent 按调用使用的授权与证据层；Agent 可以自动为服务
 付费，但只能在授权人可独立证明的边界内行动。**

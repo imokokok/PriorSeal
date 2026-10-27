@@ -58,7 +58,10 @@ test('production x402 readiness is quote-only and rejects any settlement path', 
   }) as typeof fetch;
   t.after(() => { globalThis.fetch = originalFetch; });
   const logged: string[] = [];
-  await runX402ProductionReadiness(environment as NodeJS.ProcessEnv, message => { logged.push(message); });
+  // This is a deliberately partial Node fixture, not a deployed Worker Env.
+  // Wrangler's generated ProcessEnv declaration includes all Worker-required
+  // secrets, which this quote-only unit test intentionally does not model.
+  await runX402ProductionReadiness(environment as unknown as NodeJS.ProcessEnv, message => { logged.push(message); });
   assert.deepEqual(requests.map(request => request.method), ['GET', 'GET', 'GET']);
   assert.ok(requests.every(request => request.paymentSignature === null));
   assert.equal(logged.length, 1);

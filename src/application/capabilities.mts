@@ -6,10 +6,11 @@ import { SUPPORTED_CHAINS } from '../infrastructure/blockchain/evm/chains.mjs';
 import { matchX402Route, X402_STAGING_NETWORKS, type X402Config, type X402NetworkDescriptor } from '../infrastructure/payments/x402-exact-evm.mjs';
 import type { AgentMeter } from './commerce/agent-meter.mjs';
 import type { SelfserveClaim } from './commerce/selfserve-claim.mjs';
+import type { X402CreditPacks } from './commerce/x402-credit-packs.mjs';
 
 type CapabilityPolicy = { allowedChainIds?: (number | string)[]; allowedActions?: unknown; allowedAssets?: string[]; allowedRecipients?: string[]; maxAmount?: string; minConfirmations?: number; maxToleratedReorgDepth?: number; finalityRequirement?: 'CONFIRMATIONS' | 'RPC_FINALIZED' };
 type CapabilityStore = { health?: () => Promise<unknown> | unknown; archiveRetention?: string };
-export async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], hyperliquidSpotIocConfigured = false, store, archiveEnabled, contractSignatureConfigured = false, publicPaidCommerceEnabled = true, x402, x402AvailableNetworks, agentMeter = null, selfserveClaim = null, now }: { issuer: string; audience: string; keyConfigured: boolean; policy?: CapabilityPolicy | null; proofMode: string; timestampConfigured: boolean; witnessConfigured: boolean; anchorConfigured: boolean; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; hyperliquidSpotIocConfigured?: boolean; store: CapabilityStore; archiveEnabled: boolean; contractSignatureConfigured?: boolean; publicPaidCommerceEnabled?: boolean; x402?: X402Config; x402AvailableNetworks?: X402NetworkDescriptor[]; agentMeter?: AgentMeter | null; selfserveClaim?: SelfserveClaim | null; now: number }) {
+export async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], hyperliquidSpotIocConfigured = false, store, archiveEnabled, contractSignatureConfigured = false, publicPaidCommerceEnabled = true, x402, x402AvailableNetworks, agentMeter = null, selfserveClaim = null, x402CreditPacks, now }: { issuer: string; audience: string; keyConfigured: boolean; policy?: CapabilityPolicy | null; proofMode: string; timestampConfigured: boolean; witnessConfigured: boolean; anchorConfigured: boolean; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; hyperliquidSpotIocConfigured?: boolean; store: CapabilityStore; archiveEnabled: boolean; contractSignatureConfigured?: boolean; publicPaidCommerceEnabled?: boolean; x402?: X402Config; x402AvailableNetworks?: X402NetworkDescriptor[]; agentMeter?: AgentMeter | null; selfserveClaim?: SelfserveClaim | null; x402CreditPacks?: X402CreditPacks; now: number }) {
   let storage = 'available';
   try { if (store.health) await store.health(); } catch { storage = 'unavailable'; }
   // Non-EVM profiles use explicit network references rather than a numeric
@@ -37,13 +38,14 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
   const chains = [...evmChains, ...(solanaTransaction ? [0] : [])];
   const evidenceBundleRoute = x402 ? matchX402Route(x402, 'GET', '/v1/receipts/evidence/bundle') : undefined;
   const integrationReadinessRoute = x402 ? matchX402Route(x402, 'GET', '/v1/integration-readiness') : undefined;
+  const verifiedAction = agentMeter ? verifiedActionProduct(agentMeter.routes) : undefined;
   const proofConfigured = proofMode === 'issuer' || (proofMode === 'rfc3161' ? timestampConfigured : proofMode === 'witness-quorum' ? witnessConfigured : anchorConfigured);
   const rpc = rpcChainIds === undefined ? 'unknown' : chains.some(id => rpcChainIds.includes(id)) ? 'configured' : 'unavailable';
   return {
     schema: 'priorseal.capabilities.v1', issuer, audience,
     payments: { publicPaidCommerce: { enabled: publicPaidCommerceEnabled, mode: publicPaidCommerceEnabled ? 'PUBLIC_PAID' : 'PILOT_OPERATOR_MANAGED' }, x402: { configured: Boolean(x402), networks: x402 ? x402AvailableNetworks ?? X402_STAGING_NETWORKS
       .filter(network => x402.networks.includes(network.network) && (network.family === 'evm' ? Boolean(x402.payTo) : Boolean(x402.solanaPayTo)))
-      .map(({ family, network, chainId, name, asset, assetName }) => ({ family, network, chainId, name, asset, assetName })) : [], routes: x402?.routes.map(({ method, path, description, price }) => ({ method, path, description, price })) ?? [] }, agentCredits: { configured: Boolean(agentMeter), creditUnitUsd: agentMeter?.config.creditUnitUsd ?? null, credentialHeader: agentMeter ? 'x-priorseal-agent-key' : null, accountStatusPath: agentMeter ? '/v1/agent-accounts/self' : null, usagePath: agentMeter ? '/v1/agent-accounts/self/usage' : null, routes: agentMeter?.routes.map(({ routeId, method, path, credits, priceUsd }) => ({ routeId, method, path, credits, priceUsd })) ?? [] }, selfserveClaim: selfserveClaim ? { configured: true, method: 'POST', path: '/v1/selfserve/claim', chainId: selfserveClaim.config.chainId, asset: selfserveClaim.config.usdcAddress, payTo: selfserveClaim.config.payTo, minPayUsd: selfserveClaim.config.minPayUsd, creditUnitUsd: selfserveClaim.config.creditUnitUsd } : { configured: false } },
+      .map(({ family, network, chainId, name, asset, assetName }) => ({ family, network, chainId, name, asset, assetName })) : [], routes: x402?.routes.map(({ method, path, description, price }) => ({ method, path, description, price })) ?? [] }, agentCredits: { configured: Boolean(agentMeter), creditUnitUsd: agentMeter?.config.creditUnitUsd ?? null, credentialHeader: agentMeter ? 'x-priorseal-agent-key' : null, accountStatusPath: agentMeter ? '/v1/agent-accounts/self' : null, usagePath: agentMeter ? '/v1/agent-accounts/self/usage' : null, products: verifiedAction ? [verifiedAction] : [], creditPacks: x402CreditPacks ? { checkoutProtocol: 'x402', requiresAgentCredential: true, packs: x402CreditPacks.packs.map(({ packId, credits, priceUsd, checkoutPath }) => ({ packId, credits, priceUsd, method: 'GET', checkoutPath })) } : { configured: false }, routes: agentMeter?.routes.map(({ routeId, method, path, credits, priceUsd }) => ({ routeId, method, path, credits, priceUsd })) ?? [] }, selfserveClaim: selfserveClaim ? { configured: true, method: 'POST', path: '/v1/selfserve/claim', chainId: selfserveClaim.config.chainId, asset: selfserveClaim.config.usdcAddress, payTo: selfserveClaim.config.payTo, minPayUsd: selfserveClaim.config.minPayUsd, creditUnitUsd: selfserveClaim.config.creditUnitUsd } : { configured: false } },
     executionProfiles: [...(transfer ? ['priorseal.intent.v1'] : []), ...(exactCall ? ['priorseal.execution-profile.exact-call.v1'] : []), ...(erc4337 ? ['priorseal.execution-profile.erc4337-user-operation.v1'] : []), ...(solanaTransaction ? ['priorseal.execution-profile.solana-transaction.v2'] : []), ...(hyperliquidSpotIoc ? [HYPERLIQUID_SPOT_IOC_PROFILE] : [])],
     erc4337EntryPoints: erc4337EntryPoints.filter(entry => chains.includes(entry.chainId)),
     safe4337Trust: safe4337Trust.filter(entry => evmChains.includes(entry.chainId)),
@@ -78,6 +80,39 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
     } : { enabled: false },
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? 'operator_defined', scope: 'project_uploaded_evidence' },
   };
+}
+
+/**
+ * This is discovery-only: acceptance and observation remain separate
+ * idempotent state transitions. Publishing a product must never imply that a
+ * single payment can safely force both writes to happen.
+ */
+function verifiedActionProduct(routes: readonly { routeId: string; method: string; path: string; credits: string; priceUsd: string }[]) {
+  const acceptance = routes.find(route => route.routeId === 'authorization-acceptance' && route.method === 'POST' && route.path === '/v1/authorizations');
+  const observation = routes.find(route => route.routeId === 'execution-observation' && route.method === 'POST' && route.path === '/v1/executions/observe');
+  if (!acceptance || !observation) return undefined;
+  return {
+    productId: 'verified_action',
+    name: 'Verified Action',
+    priceMechanism: 'AGENT_CREDITS',
+    credits: (BigInt(acceptance.credits) + BigInt(observation.credits)).toString(),
+    priceUsd: addUsd(acceptance.priceUsd, observation.priceUsd),
+    components: [
+      { routeId: acceptance.routeId, method: acceptance.method, path: acceptance.path, credits: acceptance.credits, priceUsd: acceptance.priceUsd },
+      { routeId: observation.routeId, method: observation.method, path: observation.path, credits: observation.credits, priceUsd: observation.priceUsd },
+    ],
+    included: ['first_portable_evidence_bundle'],
+    boundary: 'Discovery only. Each component remains an independently idempotent state transition; x402 is not accepted on these POST routes.',
+  };
+}
+
+function addUsd(left: string, right: string) {
+  const [leftWhole, leftFraction = ''] = left.split('.');
+  const [rightWhole, rightFraction = ''] = right.split('.');
+  const scale = Math.max(leftFraction.length, rightFraction.length);
+  const units = BigInt(`${leftWhole}${leftFraction.padEnd(scale, '0')}`) + BigInt(`${rightWhole}${rightFraction.padEnd(scale, '0')}`);
+  const value = units.toString().padStart(scale + 1, '0');
+  return `${value.slice(0, -scale)}.${value.slice(-scale)}`;
 }
 
 function policyAllowsChain(policy: CapabilityPolicy | null | undefined, chainId: number): boolean {

@@ -76,6 +76,15 @@ For Cloudflare D1, new databases include the table in
 D1 migration procedure. Do not enable x402 until that migration is confirmed
 in the target environment.
 
+If `PRIORSEAL_X402_CREDIT_PACKS_JSON` is enabled, apply the additional
+Credit-pack migration before deploying the route: PostgreSQL
+`migrations/019_x402_credit_purchases.sql` and D1
+`d1/migrations/0010_x402_credit_purchases.sql`. The runtime checks both the
+migration record and the table before it accepts a configured Credit-pack SKU.
+The Agent Meter tables and its operator credential must already be present; a
+Credit pack is an account top-up for an existing Agent account, not an account
+creation flow.
+
 The ledger intentionally stores a hash of `PAYMENT-SIGNATURE`, not the raw
 buyer payload. A paid attempt can contain these events:
 
@@ -92,6 +101,14 @@ Writes after a successful settlement are logged and alerted if unavailable, but
 the API does not turn a successful payment into a false delivery failure.
 Treat a missing terminal event as an operations incident and reconcile with the
 facilitator and the chain before contacting the buyer.
+
+For a fixed Credit-pack checkout, also reconcile the `x402_credit_purchases`
+record and its linked `agent_meter_credit_operations` record. A purchase is
+`AUTHORIZED` before settlement and `CREDITED` only after its account balance
+has been increased exactly once. If the API returns
+`CREDIT_PURCHASE_PENDING` after a settlement, preserve the facilitator result
+and payment-ledger identity; do not ask for a second buyer payment while the
+operator completes that reconciliation.
 
 ## 3. Run the no-charge staging check
 
@@ -124,6 +141,32 @@ when the environment is already loaded by the calling shell.
 If the check fails, leave the allowlist unchanged, investigate the specific
 facilitator/API discrepancy, and rerun only after the deployment has been
 corrected. Do not silently fall back to another chain or a broader allowlist.
+
+### Fixed Credit-pack checkout
+
+Before enabling a fixed x402 Credit-pack SKU in staging, install the isolated
+Agent Meter secret generated from the already dedicated Base Sepolia test
+wallet. The generator writes only SHA-256 credential digests to stdout; pipe
+it straight into Wrangler and never save or print its output:
+
+```sh
+npm run x402:staging:credit-pack:meter-secret | npx wrangler secret bulk --env staging
+```
+
+After the Worker carrying the Credit-pack route is deployed and the no-charge
+check has passed, this confirmation-gated rehearsal requests exactly one
+`staging-10` pack: 10 Credits for `100000` Base Sepolia test-USDC atomic units
+($0.10). It checks the authenticated starting balance, permits one signed GET
+only, verifies the payment receipt, and confirms that the durable purchase
+record has state `CREDITED` with a balance increase of exactly 10 Credits:
+
+```sh
+npm run x402:staging:credit-pack
+```
+
+It is a staging testnet operation, not a production customer purchase. Never
+substitute a production, issuer, or operational wallet, alter its target or
+amount, or treat a `CREDIT_PURCHASE_PENDING` reply as permission to pay again.
 
 ## 4. Single small-value paid rehearsal
 

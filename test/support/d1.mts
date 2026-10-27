@@ -10,6 +10,7 @@ export function testD1() {
   sqlite.exec(readFileSync(new URL('../../d1/migrations/0004_agent_meter_credit_operations.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../../d1/migrations/0008_observation_job_coalescing.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../../d1/migrations/0009_hyperliquid_cloid_uniqueness.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../../d1/migrations/0010_x402_credit_purchases.sql', import.meta.url), 'utf8'));
   const calls: { sql: string; values: SQLInputValue[] }[] = [];
   const batches: number[] = [];
   type Statement = D1PreparedStatement & { execute(): { results: unknown[] } };

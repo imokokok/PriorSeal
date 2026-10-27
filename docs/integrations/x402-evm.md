@@ -42,7 +42,8 @@ secrets/vars:
 | `PRIORSEAL_X402_SOLANA_PAY_TO` | One payee required | Solana merchant public key that receives mainnet USDC. |
 | `PRIORSEAL_X402_NETWORKS` | Yes in staging/production | Comma-separated, exact CAIP-2 payment-rail allowlist. |
 | `PRIORSEAL_X402_RESOURCE_ORIGIN` | Yes | Public HTTPS API origin used in the x402 resource URL. |
-| `PRIORSEAL_X402_ROUTES_JSON` | Yes | Explicit list of paid, read-only GET routes and their prices. |
+| `PRIORSEAL_X402_ROUTES_JSON` | Yes | Explicit list of paid GET routes and their prices. Public evidence routes are read-only; a fixed Credit-pack checkout is the narrowly constrained checkout exception described below. |
+| `PRIORSEAL_X402_CREDIT_PACKS_JSON` | No | Fixed x402-to-Credits SKU list. Requires `PRIORSEAL_AGENT_METER_JSON`, and every SKU must have an exactly matching `GET /v1/agent-credit-packs/{packId}/checkout` route and price. |
 | `PRIORSEAL_X402_TIMEOUT_MS` | No | Facilitator request timeout; defaults to 15000, allowed range 1000–2147483647. |
 
 Example route configuration (choose the price and routes for the deployment):
@@ -98,10 +99,15 @@ Prices are exact USD strings with up to six decimal places and are converted
 into each rail's settlement-token atomic units: the canonical micro-USDC grid
 (6 decimals) is used as-is on 6-decimal tokens and shifted losslessly on
 deviating tokens such as BNB Smart Chain's 18-decimal bridged USDC. Only
-`/v1/` GET routes are accepted. POST routes remain
-outside x402 because the default `exact` flow can settle after the resource
-handler; keeping the allowlist read-only avoids charging around a write request
-whose response later fails.
+`/v1/` GET routes are accepted. POST routes remain outside x402 because the
+default `exact` flow can settle after the resource handler; keeping ordinary
+state-changing APIs on credits avoids charging around a write request whose
+response later fails. The sole commerce exception is a fixed Credit-pack
+checkout GET: it first records a payment-ledger-bound, idempotent pending
+purchase and credits an already authenticated Agent account only after the
+facilitator reports settlement. It cannot create an authorization, sign or
+broadcast a subject-chain transaction, or select an arbitrary price or credit
+quantity.
 
 `PRIORSEAL_X402_NETWORKS` is intentionally a deployment rollout control, not
 a list of every rail the binary understands. Staging and production reject an
@@ -204,6 +210,49 @@ facilitator URL can be deployed as environment vars.
   payment response headers to configured browser origins.
 - Facilitator errors fail closed with HTTP 503. Neither its credentials nor raw
   response body are included in API errors or logs.
+
+## Fixed Agent Credit packs
+
+PriorSeal has two distinct payment layers, with deliberately different safety
+properties:
+
+| Customer need | Payment | Why it is separate |
+|---|---|---|
+| Read a readiness report or obtain an independent/later evidence export | Per-request x402 payment | The result is a self-contained, read-only digital good. |
+| Accept a signed authorization and observe an execution | Agent Credits | These are stateful, idempotent workflow operations; a reservation is consumed only after successful work. The standard 12-credit action includes its first portable evidence bundle. |
+| Add capacity to an existing Agent account | Fixed x402 Credit-pack checkout | x402 is used only to buy a predefined prepaid SKU, then credits continue to meter the stateful workflow. |
+
+Credit packs are configured, not client-selected. For example, this
+configuration exposes a 100-credit, $1.00 SKU only when the matching x402 route
+also quotes `$1.00`:
+
+```json
+{
+  "schema": "priorseal.x402-credit-packs.v1",
+  "packs": [
+    { "packId": "standard-100", "credits": "100", "priceUsd": "1.00" }
+  ]
+}
+```
+
+An existing Agent account calls `GET
+/v1/agent-credit-packs/standard-100/checkout` with its
+`X-PRIORSEAL-AGENT-KEY`. It receives the normal x402 challenge, pays one of the
+currently advertised rails, and receives `CREDITS_GRANTED` after settlement.
+The response has an opaque `purchaseId`; only the same authenticated account
+may inspect `GET /v1/agent-credit-packs/purchases/{purchaseId}`. A successful
+retry cannot create more credits because the purchase ID is deterministically
+bound to the immutable x402 payment-ledger identity.
+
+If settlement succeeds but credit delivery cannot be completed, the API returns
+`503 CREDIT_PURCHASE_PENDING` rather than falsely declaring payment failure or
+crediting twice. The durable `AUTHORIZED` purchase is then reconciled by an
+operator against the facilitator's settlement and credit-operation records.
+That error includes the opaque `purchaseId` so the authenticated account holder
+can inspect its delivery state without exposing a payment signature.
+Do not ask the buyer to make another payment for that same purchase. A credit
+pack grants only PriorSeal service capacity. It never supplies wallet custody,
+principal authorization, transaction signing, or transaction broadcast power.
 
 ## Signed integration-readiness report
 

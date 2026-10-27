@@ -4,7 +4,7 @@ import { createMerkleProof, merkleAppendNodes, merkleNodeKey } from '../../domai
 import { assertReceiptIdentity } from './receipt-identity.mjs';
 import { assertX402PaymentLedgerEvent, type X402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
 import { hyperliquidCloidReservation } from '../../domain/hyperliquid.mjs';
-import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation } from '../../application/commerce/agent-meter.mjs';
+import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation, X402CreditPurchase } from '../../application/commerce/agent-meter.mjs';
 import type { Authorization, AuthorizationAcceptance } from '../../domain/authorization.mjs';
 import type { ObservationJob, WorkerObservation } from '../../application/observations/observation-worker.mjs';
 import type { buildIntent } from '../../domain/intent.mjs';
@@ -28,6 +28,8 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
   const agentMeterAccounts = new Map<string, { credentialHash: string; provisionedCredits: bigint; remainingCredits: bigint; status: AgentMeterAccount['status'] }>();
   const agentMeterUsage = new Map<string, AgentUsageReservation>();
   const agentMeterCreditOperations = new Map<string, AgentCreditOperation>();
+  const x402CreditPurchases = new Map<string, X402CreditPurchase>();
+  const x402CreditPurchaseByLedgerId = new Map<string, string>();
 
   function appendLogEntry(entry: LogEntry) {
     const nodes = merkleAppendNodes(entry.sequence, entry.entryHash, (start, level) => merkleNodes.get(merkleNodeKey(start, level)));
@@ -87,6 +89,43 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
     agentMeterCreditOperations.set(key, structuredClone(input));
     return { replay: false, operation: structuredClone(input), account: { accountId: input.accountId, provisionedCredits: String(account.provisionedCredits), remainingCredits: String(account.remainingCredits), status: account.status } };
   },
+  async authorizeX402CreditPurchase(input: X402CreditPurchase) {
+    const existing = x402CreditPurchases.get(input.purchaseId);
+    if (existing) {
+      assertSameX402CreditPurchase(existing, input);
+      return structuredClone(existing);
+    }
+    const existingPurchaseId = x402CreditPurchaseByLedgerId.get(input.paymentLedgerId);
+    if (existingPurchaseId && existingPurchaseId !== input.purchaseId) throw commercialConflict('x402 payment ledger was already bound to a different credit purchase');
+    if (!agentMeterAccounts.has(input.accountId)) throw commercialNotFound('Agent service account was not found');
+    const saved = structuredClone(input);
+    x402CreditPurchases.set(saved.purchaseId, saved);
+    x402CreditPurchaseByLedgerId.set(saved.paymentLedgerId, saved.purchaseId);
+    return structuredClone(saved);
+  },
+  async settleX402CreditPurchase({ purchaseId, settledAt, settlementNetwork, settlementTransaction }: { purchaseId: string; settledAt: number; settlementNetwork: string; settlementTransaction: string }) {
+    const purchase = x402CreditPurchases.get(purchaseId);
+    if (!purchase) return null;
+    const account = agentMeterAccounts.get(purchase.accountId);
+    if (!account || account.status !== 'active') return null;
+    if (purchase.state === 'CREDITED') return { purchase: structuredClone(purchase), account: { accountId: purchase.accountId, provisionedCredits: String(account.provisionedCredits), remainingCredits: String(account.remainingCredits), status: account.status } };
+    const requestKey = `x402-pack-${purchase.purchaseId}`;
+    const operationKey = `${purchase.accountId}:${requestKey}`;
+    const reference = `x402-credit-pack:${purchase.packId}:${purchase.paymentLedgerId}`;
+    const existingOperation = agentMeterCreditOperations.get(operationKey);
+    if (existingOperation) {
+      if (existingOperation.credits !== purchase.credits || existingOperation.reference !== reference) throw commercialConflict('x402 credit purchase conflicts with an existing credit operation');
+    } else {
+      const operation: AgentCreditOperation = { operationId: `aco_${hashJson({ accountId: purchase.accountId, requestKey }).slice(0, 32)}`, accountId: purchase.accountId, requestKey, credits: purchase.credits, reference, creditedAt: settledAt };
+      account.provisionedCredits += BigInt(purchase.credits);
+      account.remainingCredits += BigInt(purchase.credits);
+      agentMeterCreditOperations.set(operationKey, operation);
+    }
+    const credited: X402CreditPurchase = { ...purchase, state: 'CREDITED', settledAt, settlementNetwork, settlementTransaction };
+    x402CreditPurchases.set(purchaseId, credited);
+    return { purchase: structuredClone(credited), account: { accountId: purchase.accountId, provisionedCredits: String(account.provisionedCredits), remainingCredits: String(account.remainingCredits), status: account.status } };
+  },
+  async getX402CreditPurchase(purchaseId: string) { const purchase = x402CreditPurchases.get(purchaseId); return purchase ? structuredClone(purchase) : null; },
   async revokeAgentMeterAccount(accountId: string) { const account = agentMeterAccounts.get(accountId); if (!account) return null; account.status = 'revoked'; return { accountId, provisionedCredits: String(account.provisionedCredits), remainingCredits: String(account.remainingCredits), status: account.status }; },
   async listAgentMeterUsage(accountId: string, limit: number) { return [...agentMeterUsage.values()].filter(entry => entry.accountId === accountId).sort((left, right) => right.reservedAt - left.reservedAt || right.usageId.localeCompare(left.usageId)).slice(0, limit).map(value => structuredClone(value)); },
   async reserveAgentUsage(input: Omit<AgentUsageReservation, 'usageId' | 'state'>) {
@@ -216,3 +255,11 @@ export function createMemoryStore({ clock = () => Date.now() } = {}) {
   async getJob(jobId: string) { return jobs.get(jobId); },
   async listJobs() { return [...jobs.values()]; },
 }; }
+
+function assertSameX402CreditPurchase(existing: X402CreditPurchase, input: X402CreditPurchase) {
+  for (const key of ['purchaseId', 'paymentLedgerId', 'accountId', 'packId', 'credits', 'priceUsd', 'resourceUrl'] as const) {
+    if (existing[key] !== input[key]) throw commercialConflict('x402 credit purchase identifier was reused with different purchase details');
+  }
+}
+function commercialConflict(message: string) { return Object.assign(new Error(message), { code: 'IDEMPOTENCY_CONFLICT' }); }
+function commercialNotFound(message: string) { return Object.assign(new Error(message), { code: 'AGENT_ACCOUNT_NOT_FOUND' }); }
