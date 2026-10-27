@@ -6,7 +6,7 @@ import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNode
 import { assertReceiptIdentity } from './receipt-identity.mjs';
 import { assertX402PaymentLedgerEvent, type X402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
 import { hyperliquidCloidReservation } from '../../domain/hyperliquid.mjs';
-import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation } from '../../application/commerce/agent-meter.mjs';
+import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation, X402CreditPurchase } from '../../application/commerce/agent-meter.mjs';
 import type { Pool, PoolClient } from 'pg';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
@@ -24,9 +24,11 @@ type PgAuthorizationRow = { authorization_json: unknown; acceptance_json: unknow
 type PgAgentUsageRow = { usage_id: string; account_id: string; route_id: string; request_key: string; credits: string | number; reserved_at: string | Date; state: AgentUsageReservation['state'] };
 type PgAgentMeterAccountRow = { account_id: string; credential_hash: string; provisioned_credits: string | number; remaining_credits: string | number; status: AgentMeterAccount['status'] };
 type PgAgentCreditOperationRow = { operation_id: string; account_id: string; request_key: string; credits: string | number; reference: string | null; credited_at: string | Date };
+type PgX402CreditPurchaseRow = { purchase_id: string; payment_ledger_id: string; account_id: string; pack_id: string; credits: string | number; price_usd: string; resource_url: string; authorized_at: string | Date; state: X402CreditPurchase['state']; settled_at: string | Date | null; settlement_network: string | null; settlement_transaction: string | null };
 type MerkleAcceptance = Pick<AuthorizationRecord['acceptance'], 'sequence' | 'entryHash'>;
 function agentAccountState(row: PgAgentMeterAccountRow) { return { accountId: row.account_id, provisionedCredits: String(row.provisioned_credits), remainingCredits: String(row.remaining_credits), status: row.status }; }
 function creditOperationRecord(row: PgAgentCreditOperationRow): AgentCreditOperation { return { operationId: row.operation_id, accountId: row.account_id, requestKey: row.request_key, credits: String(row.credits), reference: row.reference, creditedAt: row.credited_at instanceof Date ? row.credited_at.getTime() : new Date(row.credited_at).getTime() }; }
+function x402CreditPurchaseRecord(row: PgX402CreditPurchaseRow): X402CreditPurchase { return { purchaseId: row.purchase_id, paymentLedgerId: row.payment_ledger_id, accountId: row.account_id, packId: row.pack_id, credits: String(row.credits), priceUsd: row.price_usd, resourceUrl: row.resource_url, authorizedAt: row.authorized_at instanceof Date ? row.authorized_at.getTime() : new Date(row.authorized_at).getTime(), state: row.state, settledAt: row.settled_at == null ? null : row.settled_at instanceof Date ? row.settled_at.getTime() : new Date(row.settled_at).getTime(), settlementNetwork: row.settlement_network, settlementTransaction: row.settlement_transaction }; }
 function hyperliquidReservationValues(intent: AuthorizationRecord['authorization']['intent']) { const reservation = hyperliquidCloidReservation(intent); return [reservation?.networkRef ?? null, reservation?.account ?? null, reservation?.clientOrderId ?? null]; }
 function hyperliquidCloidConflict(error: unknown): boolean { return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === '23505' && String((error as { constraint?: unknown }).constraint ?? '').includes('hyperliquid_cloid')); }
 function hyperliquidCloidError(): Error & { code: string } { return Object.assign(new Error('Hyperliquid client order id has already been authorized'), { code: 'HYPERLIQUID_CLOID_ALREADY_AUTHORIZED' }); }
@@ -89,6 +91,49 @@ export function createPostgresStore(pool: Pool) {
         await client.query('COMMIT'); return { replay: false, operation: creditOperationRecord(inserted.rows[0]), account: agentAccountState(credited.rows[0]) };
       } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
     },
+    async authorizeX402CreditPurchase(input: X402CreditPurchase) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const account = await client.query<PgAgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=$1 FOR UPDATE', [input.accountId]);
+        if (!account.rows[0]) throw commercialError('AGENT_ACCOUNT_NOT_FOUND', 'Agent service account was not found');
+        const inserted = await client.query<PgX402CreditPurchaseRow>(`INSERT INTO x402_credit_purchases (purchase_id,payment_ledger_id,account_id,pack_id,credits,price_usd,resource_url,authorized_at,state) VALUES ($1,$2,$3,$4,$5,$6,$7,to_timestamp($8 / 1000.0),'AUTHORIZED') ON CONFLICT DO NOTHING RETURNING *`, [input.purchaseId, input.paymentLedgerId, input.accountId, input.packId, input.credits, input.priceUsd, input.resourceUrl, input.authorizedAt]);
+        if (inserted.rows[0]) { await client.query('COMMIT'); return x402CreditPurchaseRecord(inserted.rows[0]); }
+        const existing = await client.query<PgX402CreditPurchaseRow>('SELECT * FROM x402_credit_purchases WHERE purchase_id=$1 OR payment_ledger_id=$2 FOR UPDATE', [input.purchaseId, input.paymentLedgerId]);
+        if (!existing.rows[0]) throw new Error('x402 credit purchase disappeared during insert');
+        const result = x402CreditPurchaseRecord(existing.rows[0]);
+        assertSameX402CreditPurchase(result, input);
+        await client.query('COMMIT');
+        return result;
+      } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+    },
+    async settleX402CreditPurchase({ purchaseId, settledAt, settlementNetwork, settlementTransaction }: { purchaseId: string; settledAt: number; settlementNetwork: string; settlementTransaction: string }) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const found = await client.query<PgX402CreditPurchaseRow>('SELECT * FROM x402_credit_purchases WHERE purchase_id=$1 FOR UPDATE', [purchaseId]);
+        if (!found.rows[0]) { await client.query('COMMIT'); return null; }
+        const purchase = x402CreditPurchaseRecord(found.rows[0]);
+        const account = await client.query<PgAgentMeterAccountRow>("SELECT * FROM agent_meter_accounts WHERE account_id=$1 AND status='active' FOR UPDATE", [purchase.accountId]);
+        if (!account.rows[0]) { await client.query('COMMIT'); return null; }
+        if (purchase.state === 'CREDITED') { await client.query('COMMIT'); return { purchase, account: agentAccountState(account.rows[0]) }; }
+        const requestKey = `x402-pack-${purchase.purchaseId}`;
+        const reference = `x402-credit-pack:${purchase.packId}:${purchase.paymentLedgerId}`;
+        const operationId = `aco_${hashJson({ accountId: purchase.accountId, requestKey }).slice(0, 32)}`;
+        const inserted = await client.query<PgAgentCreditOperationRow>('INSERT INTO agent_meter_credit_operations (operation_id,account_id,request_key,credits,reference,credited_at) VALUES ($1,$2,$3,$4,$5,to_timestamp($6 / 1000.0)) ON CONFLICT(account_id,request_key) DO NOTHING RETURNING *', [operationId, purchase.accountId, requestKey, purchase.credits, reference, settledAt]);
+        if (!inserted.rows[0]) {
+          const existing = await client.query<PgAgentCreditOperationRow>('SELECT * FROM agent_meter_credit_operations WHERE account_id=$1 AND request_key=$2 FOR UPDATE', [purchase.accountId, requestKey]);
+          if (!existing.rows[0] || String(existing.rows[0].credits) !== purchase.credits || existing.rows[0].reference !== reference) throw commercialError('IDEMPOTENCY_CONFLICT', 'x402 credit purchase conflicts with an existing credit operation');
+        } else {
+          await client.query('UPDATE agent_meter_accounts SET provisioned_credits=provisioned_credits+$2,remaining_credits=remaining_credits+$2 WHERE account_id=$1', [purchase.accountId, purchase.credits]);
+        }
+        const saved = await client.query<PgX402CreditPurchaseRow>("UPDATE x402_credit_purchases SET state='CREDITED',settled_at=to_timestamp($2 / 1000.0),settlement_network=$3,settlement_transaction=$4 WHERE purchase_id=$1 RETURNING *", [purchaseId, settledAt, settlementNetwork, settlementTransaction]);
+        const updatedAccount = await client.query<PgAgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=$1', [purchase.accountId]);
+        await client.query('COMMIT');
+        return { purchase: x402CreditPurchaseRecord(saved.rows[0]), account: agentAccountState(updatedAccount.rows[0]) };
+      } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+    },
+    async getX402CreditPurchase(purchaseId: string) { const result = await pool.query<PgX402CreditPurchaseRow>('SELECT * FROM x402_credit_purchases WHERE purchase_id=$1', [purchaseId]); return result.rows[0] ? x402CreditPurchaseRecord(result.rows[0]) : null; },
     async revokeAgentMeterAccount(accountId: string) { const result = await pool.query<PgAgentMeterAccountRow>("UPDATE agent_meter_accounts SET status='revoked' WHERE account_id=$1 RETURNING *", [accountId]); const row = result.rows[0]; return row ? agentAccountState(row) : null; },
     async listAgentMeterUsage(accountId: string, limit: number) { const result = await pool.query<PgAgentUsageRow>('SELECT * FROM agent_meter_usage WHERE account_id=$1 ORDER BY reserved_at DESC,usage_id DESC LIMIT $2', [accountId, limit]); return result.rows.map(rowToAgentUsage); },
     async reserveAgentUsage(input: Omit<AgentUsageReservation, 'usageId' | 'state'>) {
@@ -305,4 +350,8 @@ export function createPostgresStore(pool: Pool) {
 
 function rowToJob(row: PgJobRow, { includeLease = false } = {}): ObservationJob { return { jobId: persistedStatus(row.job_id, 'job.jobId'), idempotencyKey: row.idempotency_key, ...(row.coalesce_key ? { coalesceKey: row.coalesce_key } : {}), input: persistedJobInput(row.input_json), state: persistedStatus(row.state, 'job.state'), attempts: persistedCount(row.attempts, 'job.attempts'), nextAttemptAt: persistedTimestamp(row.next_attempt_at, 'job.nextAttemptAt'), observation: row.observation_json == null ? null : persistedWorkerObservation(row.observation_json), result: persistedJobResult(row.result_json), error: persistedJobError(row.error_json), createdAt: persistedTimestamp(row.created_at, 'job.createdAt'), ...(includeLease ? { leaseToken: row.lease_token, leaseExpiresAt: persistedTimestamp(row.lease_expires_at, 'job.leaseExpiresAt') } : {}) }; }
 function rowToAgentUsage(row: PgAgentUsageRow): AgentUsageReservation { return { usageId: row.usage_id, accountId: row.account_id, routeId: row.route_id, requestKey: row.request_key, credits: String(row.credits), reservedAt: persistedTimestamp(row.reserved_at, 'agent usage reservedAt'), state: row.state }; }
+function assertSameX402CreditPurchase(existing: X402CreditPurchase, input: X402CreditPurchase) {
+  for (const key of ['purchaseId', 'paymentLedgerId', 'accountId', 'packId', 'credits', 'priceUsd', 'resourceUrl'] as const) if (existing[key] !== input[key]) throw commercialError('IDEMPOTENCY_CONFLICT', 'x402 credit purchase identifier was reused with different purchase details');
+}
+function commercialError(code: string, message: string) { return Object.assign(new Error(message), { code }); }
 function rowToAuthorization(row: PgAuthorizationRow): AuthorizationRecord { const policyEvidence = persistedPolicy(row.policy_json); return { authorization: persistedAuthorization(row.authorization_json), acceptance: persistedAcceptance(row.acceptance_json), policy: policyEvidence?.result ?? policyEvidence, policyEvidence: policyEvidence?.schema === 'priorseal.policy-evidence.v1' ? policyEvidence : undefined, ...(row.timestamp_evidence_json ? { timestampEvidence: persistedJson(row.timestamp_evidence_json, 'timestamp evidence') } : {}), ...(row.witness_evidence_json ? { witnessEvidence: persistedJson(row.witness_evidence_json, 'witness evidence') } : {}), status: persistedStatus(row.status, 'authorization.status'), boundTxHash: row.bound_tx_hash, uses: persistedCount(row.uses, 'authorization.uses') }; }

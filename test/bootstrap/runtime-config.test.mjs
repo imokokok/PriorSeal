@@ -71,6 +71,28 @@ test("runtime configuration accepts a Solana-only x402 payment rail", () => {
     PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a receipt bundle","price":"$0.01"}]'
   }), /selects Solana/);
 });
+test("x402 Credit packs are fixed SKUs that require both the matching checkout route and Agent Meter", () => {
+  const x402 = {
+    PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: "true",
+    PRIORSEAL_X402_FACILITATOR_URL: "https://facilitator.example",
+    PRIORSEAL_X402_RESOURCE_ORIGIN: "https://api.example",
+    PRIORSEAL_X402_PAY_TO: `0x${"b".repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: "eip155:8453",
+    PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/agent-credit-packs/standard-100/checkout","description":"Buy 100 Agent credits","price":"$1.00"}]'
+  };
+  const agentMeter = JSON.stringify({
+    schema: "priorseal.agent-meter.v1",
+    creditUnitUsd: "0.01",
+    operatorCredentialHash: "a".repeat(64),
+    accounts: [],
+    routes: []
+  });
+  const packs = JSON.stringify({ schema: "priorseal.x402-credit-packs.v1", packs: [{ packId: "standard-100", credits: "100", priceUsd: "1.00" }] });
+  const configured = loadRuntimeConfig({ ...x402, PRIORSEAL_AGENT_METER_JSON: agentMeter, PRIORSEAL_X402_CREDIT_PACKS_JSON: packs });
+  assert.deepEqual(configured.x402CreditPacks?.packs, [{ packId: "standard-100", credits: "100", priceUsd: "1.00", checkoutPath: "/v1/agent-credit-packs/standard-100/checkout" }]);
+  assert.throws(() => loadRuntimeConfig({ ...x402, PRIORSEAL_X402_CREDIT_PACKS_JSON: packs }), /requires PRIORSEAL_AGENT_METER_JSON/);
+  assert.throws(() => loadRuntimeConfig({ ...x402, PRIORSEAL_AGENT_METER_JSON: agentMeter, PRIORSEAL_X402_CREDIT_PACKS_JSON: packs.replace("1.00", "0.99") }), /requires an x402 GET route/);
+});
 test("Base Sepolia x402 is an explicit staging-only payment rail", () => {
   const x402 = {
     PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED: "true",

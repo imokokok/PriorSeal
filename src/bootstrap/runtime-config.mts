@@ -1,6 +1,7 @@
 import { createArchiveAccess } from '../application/archive/evidence-archive.mjs';
 import { parseX402Config } from '../infrastructure/payments/x402-exact-evm.mjs';
 import { parseAgentMeterConfig } from '../application/commerce/agent-meter.mjs';
+import { parseX402CreditPacks } from '../application/commerce/x402-credit-packs.mjs';
 import { SELFSEEK_BASE_MAINNET_CHAIN_ID, SELFSEEK_BASE_MAINNET_USDC, type SelfserveClaimConfig } from '../application/commerce/selfserve-claim.mjs';
 import { createHash } from 'node:crypto';
 
@@ -47,6 +48,7 @@ type RuntimeEnvironmentInput = Partial<Record<
   'PRIORSEAL_X402_CDP_API_KEY_SECRET' |
   'PRIORSEAL_X402_FACILITATOR_URL' |
   'PRIORSEAL_X402_FACILITATOR_URLS' |
+  'PRIORSEAL_X402_CREDIT_PACKS_JSON' |
   'PRIORSEAL_X402_ENABLE_TESTNETS' |
   'PRIORSEAL_X402_PAY_TO' |
   'PRIORSEAL_X402_SOLANA_PAY_TO' |
@@ -94,6 +96,8 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
   // self-serve funding path.
   const publicPaidCommerceEnabled = booleanValue(environment.PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED, 'PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED', runtimeEnvironment !== 'production');
   const x402 = publicPaidCommerceEnabled ? parseX402Config(environment) : undefined;
+  const x402CreditPacks = publicPaidCommerceEnabled ? parseX402CreditPacks(optionalJson(environment.PRIORSEAL_X402_CREDIT_PACKS_JSON, 'PRIORSEAL_X402_CREDIT_PACKS_JSON'), x402) : undefined;
+  if (x402CreditPacks && !agentMeter) throw new TypeError('PRIORSEAL_X402_CREDIT_PACKS_JSON requires PRIORSEAL_AGENT_METER_JSON');
   const selfserveClaim = publicPaidCommerceEnabled ? selfserveClaimConfig(environment, agentMeter, privateKeyPem) : undefined;
   for (const profile of safe4337Trust) {
     if (!erc4337EntryPoints.some(entry => entry.chainId === profile.chainId && entry.version === profile.version && entry.address === profile.entryPointAddress)) throw new TypeError(`Safe ERC-4337 trust entry ${profile.chainId}:${profile.version} requires a matching configured EntryPoint address`);
@@ -150,6 +154,7 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
     trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, 'PRIORSEAL_TRUST_PROXY', false),
     x402,
+    ...(x402CreditPacks ? { x402CreditPacks } : {}),
     ...(selfserveClaim ? { selfserveClaim } : {}),
   };
   if (runtimeEnvironment === 'production' || runtimeEnvironment === 'staging') {

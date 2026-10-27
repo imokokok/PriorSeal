@@ -45,6 +45,26 @@ export type AgentCreditOperation = {
   creditedAt: number;
 };
 
+/**
+ * A payment-backed top-up is deliberately separate from a metered API call.
+ * The only durable identifier is the x402 payment-ledger id; raw payment
+ * signatures and credentials never enter this record.
+ */
+export type X402CreditPurchase = {
+  purchaseId: string;
+  paymentLedgerId: string;
+  accountId: string;
+  packId: string;
+  credits: string;
+  priceUsd: string;
+  resourceUrl: string;
+  authorizedAt: number;
+  state: 'AUTHORIZED' | 'CREDITED';
+  settledAt: number | null;
+  settlementNetwork: string | null;
+  settlementTransaction: string | null;
+};
+
 export type AgentMeterAccountState = { accountId: string; provisionedCredits: string; remainingCredits: string; status: AgentMeterAccount['status'] };
 
 export type AgentMeterStore = {
@@ -53,6 +73,9 @@ export type AgentMeterStore = {
   findAgentMeterAccountByCredentialHash: (credentialHash: string) => Promise<AgentMeterAccount | null>;
   getAgentMeterAccount: (accountId: string) => Promise<AgentMeterAccountState | null | undefined>;
   creditAgentMeterAccount: (input: AgentCreditOperation) => Promise<{ replay: boolean; operation: AgentCreditOperation; account: AgentMeterAccountState } | null | undefined>;
+  authorizeX402CreditPurchase: (input: X402CreditPurchase) => Promise<X402CreditPurchase>;
+  settleX402CreditPurchase: (input: { purchaseId: string; settledAt: number; settlementNetwork: string; settlementTransaction: string }) => Promise<{ purchase: X402CreditPurchase; account: AgentMeterAccountState } | null | undefined>;
+  getX402CreditPurchase: (purchaseId: string) => Promise<X402CreditPurchase | null | undefined>;
   revokeAgentMeterAccount: (accountId: string) => Promise<AgentMeterAccountState | null | undefined>;
   listAgentMeterUsage: (accountId: string, limit: number) => Promise<AgentUsageReservation[]>;
   reserveAgentUsage: (input: Omit<AgentUsageReservation, 'usageId' | 'state'>) => Promise<{ kind: 'reserved'; reservation: AgentUsageReservation } | { kind: 'replayed'; reservation: AgentUsageReservation } | { kind: 'insufficient' }>;
@@ -72,6 +95,11 @@ export type AgentMeter = {
   };
   inspect: (credential: string | undefined) => Promise<AgentMeterAccountState>;
   usage: (credential: string | undefined, limit: number) => Promise<AgentUsageReservation[]>;
+  commerce: {
+    authorizeX402CreditPack: (input: { credential: string | undefined; purchaseId: string; paymentLedgerId: string; packId: string; credits: string; priceUsd: string; resourceUrl: string; authorizedAt: number }) => Promise<X402CreditPurchase>;
+    settleX402CreditPack: (input: { purchaseId: string; settledAt: number; settlementNetwork: string; settlementTransaction: string }) => Promise<{ purchase: X402CreditPurchase; account: AgentMeterAccountState }>;
+    getX402CreditPackPurchase: (input: { credential: string | undefined; purchaseId: string }) => Promise<X402CreditPurchase>;
+  };
 };
 
 /**
@@ -166,6 +194,30 @@ export function createAgentMeter(config: AgentMeterConfig | undefined, store: Ag
       const account = await requireAccount(credential);
       return store.listAgentMeterUsage(account.accountId, limit);
     },
+    commerce: {
+      async authorizeX402CreditPack({ credential, purchaseId, paymentLedgerId, packId, credits, priceUsd, resourceUrl, authorizedAt }) {
+        const account = await requireAccount(credential);
+        if (!/^xcp_[0-9a-f]{32}$/.test(purchaseId) || !/^xpl_[0-9a-f]{32}$/.test(paymentLedgerId) || !IDENTIFIER.test(packId) || !positiveUint(credits) || !positiveUsd(priceUsd) || !validHttpsResourceUrl(resourceUrl) || !Number.isSafeInteger(authorizedAt) || authorizedAt <= 0) {
+          throw commercialError('AGENT_ACCOUNT_INVALID', 'Invalid x402 credit-pack purchase');
+        }
+        return store.authorizeX402CreditPurchase({ purchaseId, paymentLedgerId, accountId: account.accountId, packId, credits, priceUsd, resourceUrl, authorizedAt, state: 'AUTHORIZED', settledAt: null, settlementNetwork: null, settlementTransaction: null });
+      },
+      async settleX402CreditPack({ purchaseId, settledAt, settlementNetwork, settlementTransaction }) {
+        if (!/^xcp_[0-9a-f]{32}$/.test(purchaseId) || !Number.isSafeInteger(settledAt) || settledAt <= 0 || !/^eip155:[1-9][0-9]*$|^solana:[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(settlementNetwork) || settlementTransaction.length < 1 || settlementTransaction.length > 128) {
+          throw commercialError('AGENT_ACCOUNT_INVALID', 'Invalid x402 credit-pack settlement');
+        }
+        const result = await store.settleX402CreditPurchase({ purchaseId, settledAt, settlementNetwork, settlementTransaction });
+        if (!result) throw commercialError('AGENT_ACCOUNT_NOT_FOUND', 'The Agent service account is unavailable for this payment');
+        return result;
+      },
+      async getX402CreditPackPurchase({ credential, purchaseId }) {
+        const account = await requireAccount(credential);
+        if (!/^xcp_[0-9a-f]{32}$/.test(purchaseId)) throw commercialError('AGENT_ACCOUNT_INVALID', 'Invalid x402 credit-pack purchase identifier');
+        const purchase = await store.getX402CreditPurchase(purchaseId);
+        if (!purchase || purchase.accountId !== account.accountId) throw commercialError('AGENT_ACCOUNT_NOT_FOUND', 'x402 credit-pack purchase was not found');
+        return purchase;
+      },
+    },
     operator: {
       authenticate(credential) { try { requireOperator(credential); return true; } catch { return false; } },
       async issue({ operatorCredential, accountId, provisionedCredits }) {
@@ -205,6 +257,12 @@ function routeMatches(pattern: string, pathname: string): boolean {
 function validRoutePath(path: string) { return path.startsWith('/') && !path.includes('//') && path.split('/').slice(1).every(segment => IDENTIFIER.test(segment) || /^:[A-Za-z][A-Za-z0-9]*$/.test(segment)); }
 function positiveUint(value: string) { return /^(0|[1-9][0-9]*)$/.test(value) && BigInt(value) > 0n && BigInt(value) <= 9_007_199_254_740_991n; }
 function positiveUsd(value: string) { return /^(?:0|[1-9][0-9]{0,4})\.[0-9]{1,6}$/.test(value) && BigInt(value.replace('.', '')) > 0n; }
+function validHttpsResourceUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && !url.hash;
+  } catch { return false; }
+}
 function creditPriceUsd(unit: string, credits: string) {
   const [whole, fraction] = unit.split('.');
   const scale = fraction.length;

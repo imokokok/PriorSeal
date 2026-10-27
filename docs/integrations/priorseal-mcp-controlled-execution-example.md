@@ -94,8 +94,10 @@ principal, executor, nonce, chain, or expiry requires a new authorization.
 After a transaction is already submitted, call
 `priorseal_observe_execution` with the authorization identifier and transaction
 identity. If it returns `observation_queued`, poll
-`priorseal_get_observation_job`; otherwise review its receipt. Retrieve the
-an x402 purchase handoff with `priorseal_get_evidence_bundle`, purchase the
-portable bundle through the returned URL, and verify it locally
-against independently established issuer-key trust. The convenience
+`priorseal_get_observation_job`; otherwise review its receipt. A successful
+metered observation returns its first portable evidence bundle directly; retain
+and verify that bundle locally against independently established issuer-key
+trust. Use `priorseal_get_evidence_bundle` only when an independent or later
+standalone copy is required: it returns an x402 purchase handoff, and the
+caller then purchases the portable bundle through the returned URL. The convenience
 `priorseal_verify_receipt` result is not an independent trust root.

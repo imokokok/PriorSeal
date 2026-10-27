@@ -5,7 +5,7 @@ import { createMerkleProof, merkleAppendNodes, merkleNodeKey, requiredMerkleNode
 import { assertReceiptIdentity } from './receipt-identity.mjs';
 import { assertX402PaymentLedgerEvent, type X402PaymentLedgerEvent } from '../../domain/x402-payment-ledger.mjs';
 import { hyperliquidCloidReservation } from '../../domain/hyperliquid.mjs';
-import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation } from '../../application/commerce/agent-meter.mjs';
+import type { AgentCreditOperation, AgentMeterAccount, AgentUsageReservation, X402CreditPurchase } from '../../application/commerce/agent-meter.mjs';
 import type { createMemoryStore } from './memory-store.mjs';
 import type { ObservationJob } from '../../application/observations/observation-worker.mjs';
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedWorkerObservation } from './persisted-records.mjs';
@@ -24,6 +24,7 @@ type JobRow = { job_id: string; idempotency_key: string; coalesce_key: string | 
 type AgentUsageRow = { usage_id: string; account_id: string; route_id: string; request_key: string; credits: number; reserved_at: number; state: AgentUsageReservation['state'] };
 type AgentMeterAccountRow = { account_id: string; credential_hash: string; provisioned_credits: number; remaining_credits: number; status: AgentMeterAccount['status'] };
 type AgentCreditOperationRow = { operation_id: string; account_id: string; request_key: string; credits: number; reference: string | null; credited_at: number };
+type X402CreditPurchaseRow = { purchase_id: string; payment_ledger_id: string; account_id: string; pack_id: string; credits: number; price_usd: string; resource_url: string; authorized_at: number; state: X402CreditPurchase['state']; settled_at: number | null; settlement_network: string | null; settlement_transaction: string | null };
 
 const json = (value: unknown): string | null => value == null ? null : JSON.stringify(value);
 const parsed = (value: string | null | undefined, label: string): unknown => value == null ? null : persistedJson(value, label);
@@ -56,6 +57,10 @@ function jobRecord(row: JobRow, includeLease = false): ObservationJob {
 }
 function agentUsageRecord(row: AgentUsageRow): AgentUsageReservation { return { usageId: row.usage_id, accountId: row.account_id, routeId: row.route_id, requestKey: row.request_key, credits: String(row.credits), reservedAt: Number(row.reserved_at), state: row.state }; }
 function creditOperationRecord(row: AgentCreditOperationRow): AgentCreditOperation { return { operationId: row.operation_id, accountId: row.account_id, requestKey: row.request_key, credits: String(row.credits), reference: row.reference, creditedAt: Number(row.credited_at) }; }
+function x402CreditPurchaseRecord(row: X402CreditPurchaseRow): X402CreditPurchase { return { purchaseId: row.purchase_id, paymentLedgerId: row.payment_ledger_id, accountId: row.account_id, packId: row.pack_id, credits: String(row.credits), priceUsd: row.price_usd, resourceUrl: row.resource_url, authorizedAt: Number(row.authorized_at), state: row.state, settledAt: row.settled_at == null ? null : Number(row.settled_at), settlementNetwork: row.settlement_network, settlementTransaction: row.settlement_transaction }; }
+function assertSameX402CreditPurchase(existing: X402CreditPurchase, input: X402CreditPurchase) {
+  for (const key of ['purchaseId', 'paymentLedgerId', 'accountId', 'packId', 'credits', 'priceUsd', 'resourceUrl'] as const) if (existing[key] !== input[key]) throw failed('IDEMPOTENCY_CONFLICT', 'x402 credit purchase identifier was reused with different purchase details');
+}
 function agentAccountState(row: AgentMeterAccountRow) { return { accountId: row.account_id, provisionedCredits: String(row.provisioned_credits), remainingCredits: String(row.remaining_credits), status: row.status }; }
 function hyperliquidReservationValues(intent: AuthorizationRecord['authorization']['intent']) { const reservation = hyperliquidCloidReservation(intent); return [reservation?.networkRef ?? null, reservation?.account ?? null, reservation?.clientOrderId ?? null] as const; }
 /** D1's batch is the transaction boundary; concurrent log appends retry after a unique-sequence collision. */
@@ -165,6 +170,58 @@ export function createD1Store(database: D1Database) {
       if (String(operation.credits) !== input.credits || operation.reference !== input.reference) throw failed('IDEMPOTENCY_CONFLICT', 'Agent credit idempotency key was reused for a different operation');
       return { replay: operation.operation_id !== input.operationId, operation: creditOperationRecord(operation), account: agentAccountState(account) };
     },
+    async authorizeX402CreditPurchase(input: X402CreditPurchase) {
+      const existing = await first<X402CreditPurchaseRow>('SELECT * FROM x402_credit_purchases WHERE purchase_id=?', input.purchaseId);
+      if (existing) {
+        const purchase = x402CreditPurchaseRecord(existing);
+        assertSameX402CreditPurchase(purchase, input);
+        return purchase;
+      }
+      const account = await first<AgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=?', input.accountId);
+      if (!account) throw failed('AGENT_ACCOUNT_NOT_FOUND', 'Agent service account was not found');
+      await run(`INSERT INTO x402_credit_purchases (purchase_id,payment_ledger_id,account_id,pack_id,credits,price_usd,resource_url,authorized_at,state) VALUES (?,?,?,?,?,?,?,?, 'AUTHORIZED') ON CONFLICT DO NOTHING`, input.purchaseId, input.paymentLedgerId, input.accountId, input.packId, Number(input.credits), input.priceUsd, input.resourceUrl, input.authorizedAt);
+      const saved = await first<X402CreditPurchaseRow>('SELECT * FROM x402_credit_purchases WHERE purchase_id=?', input.purchaseId);
+      if (!saved) {
+        const ledgerPurchase = await first<X402CreditPurchaseRow>('SELECT * FROM x402_credit_purchases WHERE payment_ledger_id=?', input.paymentLedgerId);
+        if (ledgerPurchase) throw failed('IDEMPOTENCY_CONFLICT', 'x402 payment ledger was already bound to a different credit purchase');
+        throw new Error('x402 credit purchase disappeared during insert');
+      }
+      const purchase = x402CreditPurchaseRecord(saved);
+      assertSameX402CreditPurchase(purchase, input);
+      return purchase;
+    },
+    async settleX402CreditPurchase({ purchaseId, settledAt, settlementNetwork, settlementTransaction }: { purchaseId: string; settledAt: number; settlementNetwork: string; settlementTransaction: string }) {
+      const purchaseRow = await first<X402CreditPurchaseRow>('SELECT * FROM x402_credit_purchases WHERE purchase_id=?', purchaseId);
+      if (!purchaseRow) return null;
+      const purchase = x402CreditPurchaseRecord(purchaseRow);
+      const account = await first<AgentMeterAccountRow>("SELECT * FROM agent_meter_accounts WHERE account_id=? AND status='active'", purchase.accountId);
+      if (!account) return null;
+      if (purchase.state === 'CREDITED') return { purchase, account: agentAccountState(account) };
+      const requestKey = `x402-pack-${purchase.purchaseId}`;
+      const reference = `x402-credit-pack:${purchase.packId}:${purchase.paymentLedgerId}`;
+      const operationId = `aco_${hashJson({ accountId: purchase.accountId, requestKey }).slice(0, 32)}`;
+      const existingOperation = await first<AgentCreditOperationRow>('SELECT * FROM agent_meter_credit_operations WHERE account_id=? AND request_key=?', purchase.accountId, requestKey);
+      if (existingOperation) {
+        // A previous attempt may have committed the credit operation but
+        // stopped before marking the purchase delivered. Do not credit the
+        // account a second time during that recovery path.
+        if (String(existingOperation.credits) !== purchase.credits || existingOperation.reference !== reference) throw failed('IDEMPOTENCY_CONFLICT', 'x402 credit purchase conflicts with an existing credit operation');
+        await run(`UPDATE x402_credit_purchases SET state='CREDITED',settled_at=?,settlement_network=?,settlement_transaction=? WHERE purchase_id=? AND state='AUTHORIZED'`, settledAt, settlementNetwork, settlementTransaction, purchaseId);
+      } else {
+        await batch([
+          statement(`INSERT INTO agent_meter_credit_operations (operation_id,account_id,request_key,credits,reference,credited_at) SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM x402_credit_purchases WHERE purchase_id=? AND state='AUTHORIZED') ON CONFLICT(account_id,request_key) DO NOTHING`, operationId, purchase.accountId, requestKey, Number(purchase.credits), reference, settledAt, purchaseId),
+          statement(`UPDATE agent_meter_accounts SET provisioned_credits=provisioned_credits+?,remaining_credits=remaining_credits+? WHERE account_id=? AND status='active' AND EXISTS (SELECT 1 FROM agent_meter_credit_operations WHERE account_id=? AND request_key=? AND operation_id=?)`, Number(purchase.credits), Number(purchase.credits), purchase.accountId, purchase.accountId, requestKey, operationId),
+          statement(`UPDATE x402_credit_purchases SET state='CREDITED',settled_at=?,settlement_network=?,settlement_transaction=? WHERE purchase_id=? AND state='AUTHORIZED' AND EXISTS (SELECT 1 FROM agent_meter_credit_operations WHERE account_id=? AND request_key=?)`, settledAt, settlementNetwork, settlementTransaction, purchaseId, purchase.accountId, requestKey),
+        ]);
+      }
+      const operation = await first<AgentCreditOperationRow>('SELECT * FROM agent_meter_credit_operations WHERE account_id=? AND request_key=?', purchase.accountId, requestKey);
+      const saved = await first<X402CreditPurchaseRow>('SELECT * FROM x402_credit_purchases WHERE purchase_id=?', purchaseId);
+      const creditedAccount = await first<AgentMeterAccountRow>('SELECT * FROM agent_meter_accounts WHERE account_id=?', purchase.accountId);
+      if (!operation || !saved || !creditedAccount || saved.state !== 'CREDITED') return null;
+      if (String(operation.credits) !== purchase.credits || operation.reference !== reference) throw failed('IDEMPOTENCY_CONFLICT', 'x402 credit purchase conflicts with an existing credit operation');
+      return { purchase: x402CreditPurchaseRecord(saved), account: agentAccountState(creditedAccount) };
+    },
+    async getX402CreditPurchase(purchaseId: string) { const row = await first<X402CreditPurchaseRow>('SELECT * FROM x402_credit_purchases WHERE purchase_id=?', purchaseId); return row ? x402CreditPurchaseRecord(row) : null; },
     async revokeAgentMeterAccount(accountId: string) { const row = await first<AgentMeterAccountRow>("UPDATE agent_meter_accounts SET status='revoked' WHERE account_id=? RETURNING *", accountId); return row ? agentAccountState(row) : null; },
     async listAgentMeterUsage(accountId: string, limit: number) { const rows = await all<AgentUsageRow>('SELECT * FROM agent_meter_usage WHERE account_id=? ORDER BY reserved_at DESC,usage_id DESC LIMIT ?', accountId, limit); return rows.map(agentUsageRecord); },
     async reserveAgentUsage(input: Omit<AgentUsageReservation, 'usageId' | 'state'>) {

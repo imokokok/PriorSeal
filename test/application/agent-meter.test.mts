@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { agentCredentialHash, createAgentMeter, parseAgentMeterConfig } from '../../src/application/commerce/agent-meter.mjs';
+import { parseX402CreditPacks, x402CreditPurchaseId } from '../../src/application/commerce/x402-credit-packs.mjs';
 import { createMemoryStore } from '../../src/infrastructure/persistence/memory-store.mjs';
+import { parseX402Config } from '../../src/infrastructure/payments/x402-exact-evm.mjs';
 
 const secret = 'agent-secret-that-is-long-enough-for-a-production-boundary';
 const config = parseAgentMeterConfig({
@@ -75,4 +77,32 @@ test('operator-issued accounts can be inspected, topped up, and revoked without 
   await meter.authorize({ method: 'POST', pathname: '/v1/authorizations/prepare', credential: secret, requestKey: 'bootstrap-call-1', now: 1000 });
   await meter.operator.revoke({ operatorCredential: operatorSecret, accountId: 'team:bootstrap' });
   await assert.rejects(meter.authorize({ method: 'POST', pathname: '/v1/authorizations/prepare', credential: secret, requestKey: 'bootstrap-call-2', now: 1001 }), { code: 'AGENT_CREDENTIAL_INVALID' });
+});
+
+test('x402 checkout tops up a fixed credit pack exactly once and never turns a payment into signing authority', async () => {
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://facilitator.example.test',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test',
+    PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path: '/v1/agent-credit-packs/standard-100/checkout', description: 'Buy 100 Agent credits', price: '$1.00' }]),
+  });
+  assert.ok(x402);
+  const packs = parseX402CreditPacks({ schema: 'priorseal.x402-credit-packs.v1', packs: [{ packId: 'standard-100', credits: '100', priceUsd: '1.00' }] }, x402);
+  assert.ok(packs);
+  assert.throws(() => parseX402CreditPacks({ schema: 'priorseal.x402-credit-packs.v1', packs: [{ packId: 'standard-100', credits: '100', priceUsd: '0.99' }] }, x402));
+
+  const meter = createAgentMeter(config, createMemoryStore());
+  assert.ok(meter);
+  const paymentLedgerId = 'xpl_0123456789abcdef0123456789abcdef';
+  const purchaseId = x402CreditPurchaseId(paymentLedgerId);
+  const purchase = await meter.commerce.authorizeX402CreditPack({
+    credential: secret, purchaseId, paymentLedgerId, packId: 'standard-100', credits: '100', priceUsd: '1.00', resourceUrl: 'https://api.example.test/v1/agent-credit-packs/standard-100/checkout', authorizedAt: 1_000,
+  });
+  assert.equal(purchase.state, 'AUTHORIZED');
+  const settled = await meter.commerce.settleX402CreditPack({ purchaseId, settledAt: 1_100, settlementNetwork: 'eip155:8453', settlementTransaction: `0x${'1'.repeat(64)}` });
+  assert.equal(settled.purchase.state, 'CREDITED');
+  assert.equal(settled.account.remainingCredits, '102');
+  const replay = await meter.commerce.settleX402CreditPack({ purchaseId, settledAt: 1_200, settlementNetwork: 'eip155:8453', settlementTransaction: `0x${'2'.repeat(64)}` });
+  assert.equal(replay.account.remainingCredits, '102');
+  assert.equal((await meter.commerce.getX402CreditPackPurchase({ credential: secret, purchaseId })).settlementTransaction, `0x${'1'.repeat(64)}`);
 });

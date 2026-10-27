@@ -94,3 +94,21 @@ test('x402 schema readiness requires the durable payment ledger', async () => {
     await assert.rejects(() => freshGuard(fixture.database, config, context, cache), /Required D1 production tables are missing/);
   } finally { fixture.sqlite.close(); }
 });
+
+test('x402 Credit-pack readiness requires the durable purchase table', async () => {
+  const fixture = testD1();
+  const guard = createSchemaGuard();
+  const cache = { async match() { return undefined; }, async put() {} } as unknown as Cache;
+  const context = { waitUntil(promise: Promise<unknown>) { void promise; } } as ExecutionContext;
+  const config = loadRuntimeConfig({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://x402.org/facilitator', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://priorseal.xyz', PRIORSEAL_X402_PAY_TO: `0x${'a'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'eip155:8453', PRIORSEAL_X402_ROUTES_JSON: '[{"method":"GET","path":"/v1/agent-credit-packs/standard-100/checkout","description":"Buy 100 Agent credits","price":"$1.00"}]',
+    PRIORSEAL_AGENT_METER_JSON: JSON.stringify({ schema: 'priorseal.agent-meter.v1', creditUnitUsd: '0.01', operatorCredentialHash: 'a'.repeat(64), accounts: [], routes: [] }),
+    PRIORSEAL_X402_CREDIT_PACKS_JSON: JSON.stringify({ schema: 'priorseal.x402-credit-packs.v1', packs: [{ packId: 'standard-100', credits: '100', priceUsd: '1.00' }] }),
+  });
+  try {
+    await guard(fixture.database, config, context, cache);
+    fixture.sqlite.exec('DROP TABLE x402_credit_purchases');
+    await assert.rejects(() => createSchemaGuard()(fixture.database, config, context, cache), /Required D1 production tables are missing/);
+  } finally { fixture.sqlite.close(); }
+});

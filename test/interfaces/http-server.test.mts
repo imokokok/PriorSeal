@@ -11,6 +11,7 @@ import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { createHttpServer, createMemoryStore, verifyFreshEvidenceCheck, verifyIntegrationReadiness, x402PaymentLedgerId } from '../../src/index.mjs';
 import { authorizationTypedData, buildAuthorization, hashJson } from '../../src/index.mjs';
 import { parseX402Config } from '../../src/infrastructure/payments/x402-exact-evm.mjs';
+import { parseX402CreditPacks } from '../../src/application/commerce/x402-credit-packs.mjs';
 import { verifyX402PaymentEvidence } from '../../src/domain/x402-payment-evidence.mjs';
 import { agentCredentialHash, createAgentMeter, parseAgentMeterConfig } from '../../src/application/commerce/agent-meter.mjs';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -144,7 +145,7 @@ test('PriorSeal MCP prepares a safe controlled-execution handoff without accepti
   assert.equal(result.result.structuredContent.data.controlledExecution.state, 'AWAITING_PRINCIPAL_SIGNATURE');
   assert.equal(result.result.structuredContent.data.controlledExecution.mayBroadcastTransaction, false);
   assert.deepEqual(result.result.structuredContent.data.controlledExecution.steps.map(step => [step.action ?? step.tool, step.status]), [
-    ['review_prepared_authorization', 'COMPLETE'], ['request_principal_signature', 'REQUIRED'], ['priorseal_accept_authorization', 'REQUIRED'], ['submit_exact_authorized_action', 'EXTERNAL'], ['priorseal_observe_execution', 'REQUIRED'], ['priorseal_get_evidence_bundle', 'REQUIRED'],
+    ['review_prepared_authorization', 'COMPLETE'], ['request_principal_signature', 'REQUIRED'], ['priorseal_accept_authorization', 'REQUIRED'], ['submit_exact_authorized_action', 'EXTERNAL'], ['priorseal_observe_execution', 'REQUIRED'], ['priorseal_get_evidence_bundle', 'CONDITIONAL'],
   ]);
 });
 test('PriorSeal MCP maps metered mutations to the existing Agent credit route and releases failed calls', async (t) => {
@@ -205,6 +206,72 @@ test('metered agent calls require a credential, consume only successful calls an
   assert.equal(exhausted.status, 402);
   assert.equal(exhausted.json().error.code, 'AGENT_CREDITS_EXHAUSTED');
 });
+
+test('an x402 fixed credit-pack checkout settles once, credits only its authenticated Agent account, and preserves delivery when payment evidence is configured', async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    if (url.pathname === '/supported') return new Response(JSON.stringify({ kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:8453' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.pathname === '/verify') return new Response(JSON.stringify({ isValid: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.pathname === '/settle') return new Response(JSON.stringify({ success: true, network: 'eip155:8453', transaction: `0x${'5'.repeat(64)}`, payer: `0x${'c'.repeat(40)}`, amount: '1000000' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    throw new Error(`Unexpected facilitator request: ${url.pathname} (${init?.method})`);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const secret = 'agent-secret-that-is-long-enough-for-a-production-boundary';
+  const store = createMemoryStore();
+  const meter = createAgentMeter(parseAgentMeterConfig({
+    schema: 'priorseal.agent-meter.v1', creditUnitUsd: '0.01', operatorCredentialHash: agentCredentialHash('operator-secret-that-is-long-enough-for-a-commercial-service-boundary'),
+    accounts: [{ accountId: 'team:checkout', credentialHash: agentCredentialHash(secret), provisionedCredits: '2', status: 'active' }], routes: [
+      { routeId: 'authorization-acceptance', method: 'POST', path: '/v1/authorizations', credits: '3' },
+      { routeId: 'execution-observation', method: 'POST', path: '/v1/executions/observe', credits: '9' },
+    ],
+  }), store);
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://credit-pack-facilitator.test', PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test', PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{ method: 'GET', path: '/v1/agent-credit-packs/standard-100/checkout', description: 'Buy 100 Agent credits', price: '$1.00' }]),
+  });
+  assert.ok(meter); assert.ok(x402);
+  const x402CreditPacks = parseX402CreditPacks({ schema: 'priorseal.x402-credit-packs.v1', packs: [{ packId: 'standard-100', credits: '100', priceUsd: '1.00' }] }, x402);
+  assert.ok(x402CreditPacks);
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  const server = createHttpServer({ store, agentMeter: meter, x402, x402CreditPacks, privateKeyPem, publicKeyPem });
+  t.after(() => server.close());
+
+  const capabilities = await request(server, '/v1/capabilities');
+  assert.equal(capabilities.status, 200);
+  const agentCreditCapabilities = (capabilities.json() as unknown as { payments: { agentCredits: { products: Array<{ productId: string; priceMechanism: string; credits: string; priceUsd: string; included: string[]; components: Array<{ routeId: string }> }>; creditPacks: { checkoutProtocol: string; requiresAgentCredential: boolean; packs: Array<{ packId: string; checkoutPath: string; priceUsd: string }> } } } }).payments.agentCredits;
+  assert.deepEqual(agentCreditCapabilities.creditPacks, {
+    checkoutProtocol: 'x402', requiresAgentCredential: true, packs: [{ packId: 'standard-100', credits: '100', priceUsd: '1.00', method: 'GET', checkoutPath: '/v1/agent-credit-packs/standard-100/checkout' }],
+  });
+  assert.deepEqual(agentCreditCapabilities.products, [{
+    productId: 'verified_action', name: 'Verified Action', priceMechanism: 'AGENT_CREDITS', credits: '12', priceUsd: '0.12',
+    components: [{ routeId: 'authorization-acceptance', method: 'POST', path: '/v1/authorizations', credits: '3', priceUsd: '0.03' }, { routeId: 'execution-observation', method: 'POST', path: '/v1/executions/observe', credits: '9', priceUsd: '0.09' }],
+    included: ['first_portable_evidence_bundle'],
+    boundary: 'Discovery only. Each component remains an independently idempotent state transition; x402 is not accepted on these POST routes.',
+  }]);
+  const unpaid = await request(server, '/v1/agent-credit-packs/standard-100/checkout', { headers: { 'x-priorseal-agent-key': secret } });
+  assert.equal(unpaid.status, 402);
+  const accepted = (unpaid.json() as unknown as { accepts: Array<Record<string, unknown>> }).accepts[0];
+  const paymentSignature = Buffer.from(JSON.stringify({ x402Version: 2, accepted, payload: {} })).toString('base64');
+  const paid = await request(server, '/v1/agent-credit-packs/standard-100/checkout', { headers: { 'x-priorseal-agent-key': secret, 'payment-signature': paymentSignature } });
+  assert.equal(paid.status, 200);
+  const body = paid.json() as unknown as { status: string; purchase: { purchaseId: string; state: string; credits: string; settlement: { transaction: string } }; account: { accountId: string; provisionedCredits: string; remainingCredits: string; status: string } };
+  assert.equal(body.status, 'CREDITS_GRANTED');
+  assert.deepEqual(body.account, { accountId: 'team:checkout', provisionedCredits: '102', remainingCredits: '102', status: 'active' });
+  assert.equal(body.purchase.state, 'CREDITED');
+  assert.equal(body.purchase.credits, '100');
+  assert.equal(body.purchase.settlement.transaction, `0x${'5'.repeat(64)}`);
+
+  const replay = await request(server, '/v1/agent-credit-packs/standard-100/checkout', { headers: { 'x-priorseal-agent-key': secret, 'payment-signature': paymentSignature } });
+  assert.equal(replay.status, 200);
+  assert.equal((replay.json() as unknown as { account: { remainingCredits: string } }).account.remainingCredits, '102');
+  const purchase = await request(server, `/v1/agent-credit-packs/purchases/${body.purchase.purchaseId}`, { headers: { 'x-priorseal-agent-key': secret } });
+  assert.equal(purchase.status, 200);
+  assert.equal((purchase.json() as unknown as { purchase: { state: string } }).purchase.state, 'CREDITED');
+});
+
 test('operator endpoints issue, inspect, credit, and revoke a narrowly scoped Agent service account', async (t) => {
   const operatorSecret = 'operator-secret-that-is-long-enough-for-a-commercial-service-boundary';
   const meter = createAgentMeter(parseAgentMeterConfig({
@@ -676,17 +743,29 @@ test('observation writes honor Idempotency-Key and return a signed linked receip
   const keys = generateKeyPairSync('ed25519');
   const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' });
   const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' });
+  const secret = 'agent-secret-that-is-long-enough-for-a-metered-observation';
+  const meter = createAgentMeter(parseAgentMeterConfig({
+    schema: 'priorseal.agent-meter.v1', creditUnitUsd: '0.01', operatorCredentialHash: agentCredentialHash('operator-secret-that-is-long-enough-for-a-commercial-service-boundary'),
+    accounts: [{ accountId: 'team:observation', credentialHash: agentCredentialHash(secret), provisionedCredits: '9', status: 'active' }],
+    routes: [{ routeId: 'execution-observation', method: 'POST', path: '/v1/executions/observe', credits: '9' }],
+  }), createMemoryStore());
+  assert.ok(meter);
   let calls = 0;
   const txHash = `0x${'1'.repeat(64)}`;
-  const server = createHttpServer({ privateKeyPem, publicKeyPem, observer: async () => { calls += 1; return { chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_000, observedAt: 1_001, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'evm-json-rpc:eip155:8453:configured-1' } as unknown as ObserverResult; } });
+  const server = createHttpServer({ privateKeyPem, publicKeyPem, agentMeter: meter, observer: async () => { calls += 1; return { chainId: 8453, txHash, status: 'CONFIRMED', action: 'TRANSFER', executedAt: 1_000, observedAt: 1_001, sender, recipient, asset: intent.asset, amount: intent.amount, nonce: intent.nonce, confirmations: 12, gasUsed: '21000', transfers: [], blockHash: `0x${'c'.repeat(64)}`, finalityState: 'CONFIRMED', observationSource: 'evm-json-rpc:eip155:8453:configured-1' } as unknown as ObserverResult; } });
   t.after(() => server.close());
   await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
-  const options = { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'observe-1' }, body: JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 }) };
+  const options = { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'observe-1', 'x-priorseal-agent-key': secret }, body: JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash, confirmations: 12 }) };
   const first = await request(server, '/v1/executions/observe', options);
   const replay = await request(server, '/v1/executions/observe', options);
   assert.equal(first.status, 200);
   const issued = first.json().receipt;
   assert.equal(issued.binding.bound, true);
+  const included = first.json() as unknown as { includedEvidenceBundle: { schema: string; receipt: { receiptId: string } }; evidenceDelivery: { model: string } };
+  assert.equal(included.includedEvidenceBundle.schema, 'priorseal.verification-bundle.v1');
+  assert.equal(included.includedEvidenceBundle.receipt.receiptId, issued.receiptId);
+  assert.equal(included.evidenceDelivery.model, 'INCLUDED_WITH_METERED_EXECUTION_OBSERVATION');
+  assert.equal((await meter.inspect(secret)).remainingCredits, '0');
   assert.equal(replay.headers['idempotency-replayed'], 'true');
   assert.equal(calls, 1);
   const fetched = await request(server, `/v1/receipts/${issued.receiptId}`);

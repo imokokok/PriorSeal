@@ -93,7 +93,9 @@ the following boundaries explicit:
 1. A human-controlled principal reviews and signs the prepared authorization.
 2. The agent accepts that exact signed authorization with an idempotency key.
 3. A separate executor may submit only the exact still-valid action.
-4. The agent observes the already-submitted transaction and retrieves evidence.
+4. The agent observes the already-submitted transaction. A successful metered
+   observation includes the original portable evidence bundle; a later or
+   independent export remains an x402 purchase.
 
 The helper neither accepts the authorization nor submits the transaction. See
 [the complete copy-and-adapt example](priorseal-mcp-controlled-execution-example.md).

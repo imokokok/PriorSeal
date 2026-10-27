@@ -19,8 +19,12 @@ GET /v1/evidence/receipts/{receiptId}
 
 When a deployment charges its receipt-bundle export through x402, this endpoint
 uses the same price and payment protection. It is not a free way to retrieve a
-portable bundle. Live discovery reports that status and price under
-`evidenceApi.commerce` in `/v1/capabilities`.
+portable bundle. The one deliberately different delivery is the first portable
+bundle included in a successfully metered `POST /v1/executions/observe` result:
+the customer already paid the execution-observation workflow, so a duplicate
+export charge is not applied to its original evidence. Live discovery reports
+standalone-export status and price under `evidenceApi.commerce` in
+`/v1/capabilities`.
 
 ## Fresh Evidence Check
 

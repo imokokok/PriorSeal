@@ -92,6 +92,30 @@ function createAgentMeter(config, store) {
       const account = await requireAccount(credential);
       return store.listAgentMeterUsage(account.accountId, limit);
     },
+    commerce: {
+      async authorizeX402CreditPack({ credential, purchaseId, paymentLedgerId, packId, credits, priceUsd, resourceUrl, authorizedAt }) {
+        const account = await requireAccount(credential);
+        if (!/^xcp_[0-9a-f]{32}$/.test(purchaseId) || !/^xpl_[0-9a-f]{32}$/.test(paymentLedgerId) || !IDENTIFIER.test(packId) || !positiveUint(credits) || !positiveUsd(priceUsd) || !validHttpsResourceUrl(resourceUrl) || !Number.isSafeInteger(authorizedAt) || authorizedAt <= 0) {
+          throw commercialError("AGENT_ACCOUNT_INVALID", "Invalid x402 credit-pack purchase");
+        }
+        return store.authorizeX402CreditPurchase({ purchaseId, paymentLedgerId, accountId: account.accountId, packId, credits, priceUsd, resourceUrl, authorizedAt, state: "AUTHORIZED", settledAt: null, settlementNetwork: null, settlementTransaction: null });
+      },
+      async settleX402CreditPack({ purchaseId, settledAt, settlementNetwork, settlementTransaction }) {
+        if (!/^xcp_[0-9a-f]{32}$/.test(purchaseId) || !Number.isSafeInteger(settledAt) || settledAt <= 0 || !/^eip155:[1-9][0-9]*$|^solana:[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(settlementNetwork) || settlementTransaction.length < 1 || settlementTransaction.length > 128) {
+          throw commercialError("AGENT_ACCOUNT_INVALID", "Invalid x402 credit-pack settlement");
+        }
+        const result = await store.settleX402CreditPurchase({ purchaseId, settledAt, settlementNetwork, settlementTransaction });
+        if (!result) throw commercialError("AGENT_ACCOUNT_NOT_FOUND", "The Agent service account is unavailable for this payment");
+        return result;
+      },
+      async getX402CreditPackPurchase({ credential, purchaseId }) {
+        const account = await requireAccount(credential);
+        if (!/^xcp_[0-9a-f]{32}$/.test(purchaseId)) throw commercialError("AGENT_ACCOUNT_INVALID", "Invalid x402 credit-pack purchase identifier");
+        const purchase = await store.getX402CreditPurchase(purchaseId);
+        if (!purchase || purchase.accountId !== account.accountId) throw commercialError("AGENT_ACCOUNT_NOT_FOUND", "x402 credit-pack purchase was not found");
+        return purchase;
+      }
+    },
     operator: {
       authenticate(credential) {
         try {
@@ -142,6 +166,14 @@ function positiveUint(value) {
 }
 function positiveUsd(value) {
   return /^(?:0|[1-9][0-9]{0,4})\.[0-9]{1,6}$/.test(value) && BigInt(value.replace(".", "")) > 0n;
+}
+function validHttpsResourceUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && !url.hash;
+  } catch {
+    return false;
+  }
 }
 function creditPriceUsd(unit, credits) {
   const [whole, fraction] = unit.split(".");

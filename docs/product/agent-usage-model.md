@@ -72,9 +72,9 @@ transaction key must not itself grant principal authority.
 | Stage | Customer experience | Commercial mechanism | Status |
 | --- | --- | --- | --- |
 | Design-partner pilot | One bounded execution path, configured jointly, with portable evidence delivered for review | Fixed-scope pilot, implementation fee, or enterprise service contract | Available now |
-| Paid evidence export | A caller purchases an eligible read-only receipt bundle and receives payment-to-resource evidence | x402 `exact` USDC payment on Base | Public production service: one Base-mainnet, read-only receipt-bundle route at $0.02 |
+| Paid public evidence | A caller purchases a readiness report, independent receipt bundle, Evidence API envelope, or fresh check | x402 `exact` USDC payment on a currently advertised rail | Public production service: read-only resources at $0.02 |
 | Agent runtime orchestration | Agent calls a principal-controlled signing boundary, submits exactly one authorized action through its integrator, then observes and verifies evidence | `priorseal-sdk` `authorizeWithEip712Signer()` / `runAgentAction()` | Implemented; authority and executor infrastructure remain integrator-owned |
-| Agent service credits | An eligible Base USDC payment can create a scoped Agent credential; the operator can also issue, credit or revoke one | Protected account endpoints; raw credentials are returned once and never stored by PriorSeal | Public self-service claims are enabled; operator controls remain available for support and account lifecycle |
+| Agent service credits | An existing Agent account buys fixed prepaid service capacity, or an eligible Base USDC payer creates a new self-serve account | x402 Credit-pack checkout for an authenticated existing account; Base transfer claim for first-time EVM self-service onboarding; protected operator controls | Credits remain the only normal payment mechanism for stateful authorization and observation work |
 | Session or budget authorization | Principal defines repeatable policy boundaries for an agent | A separately specified and reviewed authorization profile | Later milestone; not implied by current single-use authorization |
 
 ## Why x402 is not the authorization protocol
@@ -87,10 +87,14 @@ resources. Charging a write such as authorization creation or observation
 through that flow could leave an ambiguous result when the write or response
 fails.
 
-When public paid commerce is separately enabled, self-serve write usage uses a separate prepaid-credit meter rather than x402
-settlement. It atomically reserves a configured service credit using the
-request's idempotency key, consumes it only for a successful response, and
-releases it for a failed response. This must not be substituted with an API key
+When public paid commerce is separately enabled, stateful usage uses a
+separate prepaid-credit meter rather than x402 settlement on the write itself.
+It atomically reserves a configured service credit using the request's
+idempotency key, consumes it only for a successful response, and releases it
+for a failed response. A fixed x402 Credit-pack checkout may top up an already
+authenticated Agent account *after* settlement, but it is a checkout for
+Credits—not payment authorization for `POST /v1/authorizations` or
+`POST /v1/executions/observe`. This must not be substituted with an API key
 that silently gives the agent asset-execution authority.
 
 ## Prepaid service-credit meter
@@ -113,15 +117,45 @@ The first public schedule, once the launch gates below are complete, is:
 | --- | ---: | ---: |
 | Authorization acceptance | 3 | $0.03 |
 | Observation task that produces the durable receipt path | 9 | $0.09 |
-| Standard Evidence Flow | 12 | $0.12 |
+| Standard Verified Action: acceptance + observation + first portable evidence bundle | 12 | $0.12 |
 | Read-only receipt bundle via x402 | — | $0.02 |
 | Higher-assurance time, witness, or anchor evidence | — | separately quoted; not in the initial self-serve meter |
 
 The Agent credit configuration for that schedule uses `creditUnitUsd: "0.01"`.
 Status polling, local/offline verification, and a replay of the same
-idempotency key are not separately billed. The bundle export is either an x402
-purchase or an explicitly configured credit route, never both for the same
-request.
+idempotency key are not separately billed. A successful metered observation
+includes its first portable verification bundle in the response; replaying the
+same observation idempotency key recovers that included delivery without a
+second debit. A later independent export, a third-party export, an Evidence
+API envelope, or a fresh chain check remains a separately purchasable x402
+resource. This prevents double charging the original workflow while preserving
+a fair per-use price for independent verification work.
+
+## Product catalogue and payment choice
+
+PriorSeal sells outcomes, not two confusing payment systems:
+
+| Buyer need | Product | Price mechanism | Included / excluded |
+| --- | --- | --- | --- |
+| One-off configuration check or independent evidence retrieval | Public Evidence | x402 per resource | Read-only report or export only; no Agent Credits or subject-chain authority |
+| One complete authorized action with a signed result | Verified Action | 12 prepaid Credits | Authorization acceptance, execution observation, and the first portable bundle; excludes the subject-chain gas fee |
+| Sustained Agent usage | Credit Pack | Fixed x402 checkout for an authenticated existing Agent account, then Credits are consumed by work | x402 pays for capacity; it is not attached to the authorization/observation write routes |
+| First EVM self-service account | Base funding claim | Verified Base USDC transfer plus the payer-wallet signature | Creates or recovers the deterministic scoped Agent credential; it is an onboarding rail, not a replacement for x402 public evidence |
+| Private project archive or organization operations | Project / enterprise agreement | Separate contractual or operator-managed entitlement | Payment does not grant a right to access private archive data |
+
+The same user must not pay `$0.02` for a bundle that was already delivered as
+part of their `$0.12` Verified Action. Conversely, a `$0.02` public report
+does not entitle the buyer to `$0.12` of stateful authorization and observation
+work. An integrated Insight + PriorSeal offer can package an Insight decision
+with one PriorSeal Verified Action, but each service retains its own signed
+trust evidence and no payment becomes transaction authority.
+
+When both component routes are enabled, `GET /v1/capabilities` also publishes
+one discovery-only `payments.agentCredits.products` item named
+`verified_action`. It reports the derived total, its two independently
+idempotent component routes, and the included first verification bundle. This
+is a catalogue entry for buyers and SDKs; it does not turn the two `POST`
+writes into one x402 purchase or remove their separate failure handling.
 
 The corresponding metered-route portion of the operator secret is:
 
@@ -186,6 +220,29 @@ the authenticated credit operation under the operator's existing change
 controls. This is not a payment processor, receipt of funds, tax record, or
 automatic refund system.
 
+### x402 Credit-pack checkout
+
+`GET /v1/capabilities` lists only fixed credit packs configured by the
+operator. An existing account holder presents `x-priorseal-agent-key` to the
+pack's x402-protected `GET` checkout URL. After the facilitator verifies the
+proposed payment but before settlement, PriorSeal binds that authenticated
+account to a payment-ledger-bound pending purchase; it credits the account
+exactly once only after facilitator settlement succeeds. The
+purchase ID is deterministic from the privacy-minimised x402 payment ledger;
+the credit operation is idempotent, and raw payment signatures never enter the
+Credit ledger. `GET /v1/agent-credit-packs/purchases/{purchaseId}` lets that
+authenticated account inspect delivery status.
+
+The checkout endpoint intentionally remains a fixed, idempotent `GET`
+resource. It does not accept an arbitrary number of credits, change an
+authorization, observe an execution, sign a subject transaction, or disclose
+the Agent credential. If settlement succeeds while the durable credit write is
+temporarily unavailable, PriorSeal retains the authorized purchase for manual
+reconciliation rather than pretending payment failed or issuing a duplicate
+top-up. Production rollout requires PostgreSQL migration
+`019_x402_credit_purchases.sql`; Workers/D1 rollout requires
+`d1/migrations/0010_x402_credit_purchases.sql`.
+
 ## Implemented headless-agent path
 
 `priorseal-sdk` now provides `authorizeWithEip712Signer()` for a Node or agent
@@ -217,11 +274,12 @@ health checks, production issuer and secrets, a passing no-payment Go/No-Go
 check, and a separately authorized limited mainnet settlement rehearsal. See
 [x402 production Go/No-Go](../runbooks/x402-production-go-no-go.md).
 
-No public commercial launch claim for prepaid Agent credits is allowed until an
-operator has reviewed the route price schedule, operator-credential custody,
-account-provisioning and revocation runbook, credit-refund and support process,
-the applicable D1 or PostgreSQL migration, and a staging lifecycle rehearsal.
-The code is an operator-gated capability, not an activated billing service.
+No public commercial launch claim for prepaid Agent Credits or x402 Credit
+Packs is allowed until an operator has reviewed the route price schedule,
+operator-credential custody, account-provisioning and revocation runbook,
+credit-refund and support process, the applicable D1 or PostgreSQL migration,
+and a staging lifecycle rehearsal. The code is an operator-gated capability;
+deployment configuration and the support process are the launch decision.
 
 No public claim of autonomous, repeatable onchain authorization is allowed
 until a dedicated policy/session profile has explicit signed fields, replay and
