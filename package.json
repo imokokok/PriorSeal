@@ -98,7 +98,7 @@
     "x402:staging:check": "npm run core:build:operations && node scripts/x402-staging-readiness.mjs",
     "x402:staging:receipt": "npm run core:build:operations && node --env-file=.env.x402-testnet.local scripts/x402-staging-receipt-fixture.mjs --confirm-single-execution",
     "x402:staging:bundle": "npm run sdk:build && npm run core:build:operations && node --env-file=.env.x402-testnet.local --env-file=.env.x402-staging-pin.local scripts/x402-staging-bundle-rehearsal.mjs",
-    "x402:staging:credit-pack:meter-secret": "npm run core:build:operations 1>&2 && node --env-file=.env.x402-testnet.local scripts/x402-staging-credit-pack-meter-secret.mjs",
+    "x402:staging:credit-pack:meter-secret": "node --env-file=.env.x402-testnet.local scripts/x402-staging-credit-pack-meter-secret.mjs",
     "x402:staging:credit-pack": "npm run core:build:operations && node --env-file=.env.x402-testnet.local scripts/x402-staging-credit-pack-rehearsal.mjs --confirm-single-payment",
     "x402:staging:pay": "npm run core:build:operations && node --env-file=.env.x402-testnet.local scripts/x402-staging-paid-rehearsal.mjs --confirm-single-payment",
     "check": "npm run sdk:build && npm run check:static:prepared && npm run check:prepared",

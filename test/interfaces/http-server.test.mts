@@ -207,7 +207,7 @@ test('metered agent calls require a credential, consume only successful calls an
   assert.equal(exhausted.json().error.code, 'AGENT_CREDITS_EXHAUSTED');
 });
 
-test('an x402 fixed credit-pack checkout settles once, credits only its authenticated Agent account, and exposes a receipt state', async (t) => {
+test('an x402 fixed credit-pack checkout settles once, credits only its authenticated Agent account, and preserves delivery when payment evidence is configured', async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
@@ -233,7 +233,10 @@ test('an x402 fixed credit-pack checkout settles once, credits only its authenti
   assert.ok(meter); assert.ok(x402);
   const x402CreditPacks = parseX402CreditPacks({ schema: 'priorseal.x402-credit-packs.v1', packs: [{ packId: 'standard-100', credits: '100', priceUsd: '1.00' }] }, x402);
   assert.ok(x402CreditPacks);
-  const server = createHttpServer({ store, agentMeter: meter, x402, x402CreditPacks });
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  const server = createHttpServer({ store, agentMeter: meter, x402, x402CreditPacks, privateKeyPem, publicKeyPem });
   t.after(() => server.close());
 
   const capabilities = await request(server, '/v1/capabilities');

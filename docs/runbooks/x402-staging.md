@@ -150,7 +150,9 @@ wallet. The generator writes only SHA-256 credential digests to stdout; pipe
 it straight into Wrangler and never save or print its output:
 
 ```sh
-npm run x402:staging:credit-pack:meter-secret | npx wrangler secret bulk --env staging
+npm run core:build:operations
+node --env-file=.env.x402-testnet.local scripts/x402-staging-credit-pack-meter-secret.mjs \
+  | npx wrangler secret bulk --env staging
 ```
 
 After the Worker carrying the Credit-pack route is deployed and the no-charge

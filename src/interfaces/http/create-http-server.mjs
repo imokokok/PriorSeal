@@ -541,7 +541,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
           }
           if (privateKeyPem && paymentResourceUrl) {
             try {
-              paymentBoundBody = bindX402PaymentEvidenceToBundle({ body: completedResponse.body, resourceUrl: paymentResourceUrl, status: completedResponse.status, context: paymentContext, settlement: settlement.settlement, issuer, keyId, privateKeyPem, issuedAt: Math.floor(now() / 1e3) });
+              paymentBoundBody = bindX402PaymentEvidenceToBundle({ body: paymentBoundBody, resourceUrl: paymentResourceUrl, status: completedResponse.status, context: paymentContext, settlement: settlement.settlement, issuer, keyId, privateKeyPem, issuedAt: Math.floor(now() / 1e3) });
             } catch (error) {
               logger?.error?.({ event: "x402.payment_evidence_write_failed", requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || "INTERNAL_ERROR" });
             }

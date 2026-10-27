@@ -539,7 +539,11 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
           }
           if (privateKeyPem && paymentResourceUrl) {
             try {
-              paymentBoundBody = bindX402PaymentEvidenceToBundle({ body: completedResponse.body, resourceUrl: paymentResourceUrl, status: completedResponse.status, context: paymentContext, settlement: settlement.settlement, issuer, keyId, privateKeyPem, issuedAt: Math.floor(now() / 1000) });
+              // A credit-pack checkout replaces the captured checkout body
+              // with its durable delivery state above.  Evidence binding is a
+              // no-op for that JSON shape, so bind the current body rather
+              // than accidentally restoring the pre-settlement response.
+              paymentBoundBody = bindX402PaymentEvidenceToBundle({ body: paymentBoundBody, resourceUrl: paymentResourceUrl, status: completedResponse.status, context: paymentContext, settlement: settlement.settlement, issuer, keyId, privateKeyPem, issuedAt: Math.floor(now() / 1000) });
             } catch (error) {
               // Settlement has already succeeded; preserve delivery rather than turn it into a false 503.
               logger?.error?.({ event: 'x402.payment_evidence_write_failed', requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || 'INTERNAL_ERROR' });
