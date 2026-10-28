@@ -61,8 +61,12 @@ export function createObservationWorker({ observe, saveObservation, observerMana
   async function runJob(jobId: string) {
     if (store?.claimDueJobs && !store.claimJob) throw new TypeError('Targeted observation requires atomic claimJob support');
     const job = store?.claimJob ? await store.claimJob(jobId, clock(), jobLeaseMs) : jobs.get(jobId);
+    // A duplicate prompt may arrive before its retry window. Return its
+    // persisted state only in that no-claim path so Queue can retain the
+    // intended delay without adding a second read to actual executions.
+    if (!job && store?.claimJob) return store.getJob?.(jobId);
     const due = job && (store?.claimJob || ['QUEUED', 'RETRY_WAIT'].includes(job.state) && job.nextAttemptAt <= clock()) ? [job] : [];
-    return (await processJobs(due, Boolean(store?.claimJob)))[0];
+    return (await processJobs(due, Boolean(store?.claimJob)))[0] ?? job;
   }
   async function processJobs(due: ObservationJob[], persistentClaims: boolean) {
     for (const job of due) {

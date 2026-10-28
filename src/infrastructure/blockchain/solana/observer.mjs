@@ -84,7 +84,6 @@ async function rpc(url, method, params, fetcher, signal, metrics, context) {
   const started = Date.now();
   try {
     if (signal?.aborted) throw new PriorSealError("REQUEST_ABORTED", "Request was aborted");
-    metrics?.count?.("priorseal_rpc_requests_total", tags);
     const response = await fetcher(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "priorseal-solana-observer", method, params }), signal: combineSignal(signal) });
     if (!response.ok) throw new PriorSealError("RPC_HTTP_ERROR", `Solana RPC returned HTTP ${response.status} for ${method}`);
     const body = await response.json();
