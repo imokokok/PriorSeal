@@ -2,7 +2,7 @@ import { retryDelaySeconds, shouldRedeliverJob } from './cloudflare-retry.mjs';
 import { errorMessage } from '../shared/error-code.mjs';
 import type { createObservationWorker } from '../application/observations/observation-worker.mjs';
 
-type Worker = Pick<ReturnType<typeof createObservationWorker>, 'runJob' | 'get'>;
+type Worker = Pick<ReturnType<typeof createObservationWorker>, 'runJob'>;
 
 /** Each message is only a prompt; D1 leases remain the authority for execution. */
 export async function processObservationQueue(batch: MessageBatch<{ jobId: string }>, worker: Worker, queue: Queue<{ jobId: string }>) {
@@ -14,8 +14,7 @@ export async function processObservationQueue(batch: MessageBatch<{ jobId: strin
         message.ack();
         continue;
       }
-      await worker.runJob(jobId);
-      const job = await worker.get(jobId);
+      const job = await worker.runJob(jobId);
       if (shouldRedeliverJob(job)) await queue.send({ jobId }, { delaySeconds: retryDelaySeconds([job]) ?? undefined });
       message.ack();
     } catch (error) {

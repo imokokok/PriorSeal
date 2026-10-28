@@ -46,8 +46,9 @@ function createObservationWorker({ observe, saveObservation, observerManagesEvid
   async function runJob(jobId) {
     if (store?.claimDueJobs && !store.claimJob) throw new TypeError("Targeted observation requires atomic claimJob support");
     const job = store?.claimJob ? await store.claimJob(jobId, clock(), jobLeaseMs) : jobs.get(jobId);
+    if (!job && store?.claimJob) return store.getJob?.(jobId);
     const due = job && (store?.claimJob || ["QUEUED", "RETRY_WAIT"].includes(job.state) && job.nextAttemptAt <= clock()) ? [job] : [];
-    return (await processJobs(due, Boolean(store?.claimJob)))[0];
+    return (await processJobs(due, Boolean(store?.claimJob)))[0] ?? job;
   }
   async function processJobs(due, persistentClaims) {
     for (const job of due) {

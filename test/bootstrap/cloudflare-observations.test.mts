@@ -15,6 +15,24 @@ function messages(bodies: unknown[]) {
   return { batch, outcomes };
 }
 
+test('queue reschedules directly from the targeted run result', async () => {
+  const { batch, outcomes } = messages([{ jobId: 'job-1' }]);
+  const sent: { jobId: string; delaySeconds: number | undefined }[] = [];
+  const worker = {
+    async runJob() {
+      return { state: 'RETRY_WAIT', nextAttemptAt: Date.now() + 5_000 } as Awaited<ReturnType<ReturnType<typeof createObservationWorker>['runJob']>>;
+    },
+  };
+  const queue = { async send(body: { jobId: string }, options: { delaySeconds?: number }) {
+    sent.push({ jobId: body.jobId, delaySeconds: options.delaySeconds });
+  } } as unknown as Queue<{ jobId: string }>;
+
+  await processObservationQueue(batch, worker, queue);
+
+  assert.deepEqual(outcomes, [{ acknowledgments: 1, retries: 0 }]);
+  assert.deepEqual(sent, [{ jobId: 'job-1', delaySeconds: 5 }]);
+});
+
 test('queue prompts only run their task; retries, duplicate delivery and cron recovery preserve evidence', async (context) => {
   context.mock.timers.enable({ apis: ['Date'], now: 1000 });
   const fixture = testD1();

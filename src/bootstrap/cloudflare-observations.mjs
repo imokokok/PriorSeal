@@ -10,8 +10,7 @@ async function processObservationQueue(batch, worker, queue) {
         message.ack();
         continue;
       }
-      await worker.runJob(jobId);
-      const job = await worker.get(jobId);
+      const job = await worker.runJob(jobId);
       if (shouldRedeliverJob(job)) await queue.send({ jobId }, { delaySeconds: retryDelaySeconds([job]) ?? void 0 });
       message.ack();
     } catch (error) {

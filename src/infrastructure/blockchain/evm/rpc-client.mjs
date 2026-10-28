@@ -114,7 +114,6 @@ function createRpcClient({
         const started = Date.now();
         try {
           if (signal?.aborted) throw aborted();
-          metrics?.count?.("priorseal_rpc_requests_total", metricTags(method, context, { attempt: String(attempt + 1) }));
           const result = await request(url, method, params, signal);
           metrics?.timing?.("priorseal_rpc_latency_ms", Date.now() - started, metricTags(method, context, { outcome: "ok", attempt: String(attempt + 1) }));
           return result;
