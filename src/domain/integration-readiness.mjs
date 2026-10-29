@@ -4,6 +4,7 @@ import { signEd25519Statement, verifyEd25519Statement } from "./ed25519.mjs";
 import { hashJson } from "./hashing.mjs";
 const INTEGRATION_READINESS_SCHEMA = "priorseal.integration-readiness.v1";
 const INTEGRATION_READINESS_DOMAIN = "priorseal/integration-readiness/v1";
+const SMOKE_TEST_ADDRESS = "0x0000000000000000000000000000000000000000";
 function positiveInteger(value, field) {
   if (!Number.isSafeInteger(value) || Number(value) <= 0) throw new TypeError(`Integration readiness ${field} must be a positive integer`);
   return Number(value);
@@ -28,6 +29,35 @@ function inspection(value) {
   if (value.subject.kind === "NOT_OBSERVED" && (value.subject.codeHash !== null || value.subject.codeBytes !== null)) throw new TypeError("Unobserved integration readiness subjects cannot contain code facts");
   if (value.subject.kind !== "NOT_OBSERVED" && (value.subject.codeHash === null || value.subject.codeBytes === null)) throw new TypeError("Observed integration readiness subjects must contain code facts");
   return value;
+}
+function workflow({ chainId, subjectAddress, keyRegistryUrl }) {
+  const origin = new URL(keyRegistryUrl).origin;
+  const isSmokeTest = subjectAddress === SMOKE_TEST_ADDRESS;
+  const targetTemplate = `${origin}/v1/integration-readiness?chainId=${chainId}&subjectAddress={publicEvmAddress}`;
+  const nextActions = [
+    ...isSmokeTest ? [{
+      rel: "run_real_target",
+      method: "GET",
+      href: targetTemplate,
+      description: "Replace {publicEvmAddress} with the public EOA or contract that you actually intend to integrate. The zero-address smoke test only verifies discovery, payment, and signed delivery."
+    }] : [],
+    {
+      rel: "read_capabilities",
+      method: "GET",
+      href: `${origin}/v1/capabilities`,
+      description: "Read the live payment rails, evidence products, and Agent-credit capabilities before selecting a workflow."
+    },
+    {
+      rel: "prepare_controlled_execution",
+      method: "GET",
+      href: `${origin}/.well-known/priorseal-agent.json`,
+      description: "Read the Agent integration manifest before preparing a bounded authorization. A readiness report never grants transaction authority or permits broadcast."
+    }
+  ];
+  return {
+    stage: isSmokeTest ? "SMOKE_TEST" : "TARGET_INSPECTED",
+    nextActions
+  };
 }
 function buildIntegrationReadiness({
   chainId,
@@ -66,9 +96,11 @@ function buildIntegrationReadiness({
     algorithm: "Ed25519",
     keyRegistry,
     payment,
+    workflow: workflow({ chainId: normalizedChainId, subjectAddress: normalizedAddress, keyRegistryUrl: keyRegistry.url }),
     limitations: [
       "This is a read-only point-in-time check of public chain configuration and bytecode presence; it does not submit transactions or custody keys.",
       "EOA or CONTRACT describes only whether eth_getCode returned empty bytecode at the checked state. It does not prove address control, contract safety, ownership, authorization, or business suitability.",
+      "A zero-address result is an integration smoke test only. Run a separate report for the public target you actually intend to integrate.",
       "Verify this signature with the issuer key from the published key registry and apply independent RPC and security review before relying on the result."
     ]
   };

@@ -29,6 +29,9 @@ test('integration-readiness statement is deterministic, signed, and bounded to p
   assert.equal(signed.input.subjectAddress, subjectAddress);
   assert.equal(signed.inspection.subject.kind, 'CONTRACT');
   assert.equal(signed.expiresAt, 1_300);
+  assert.equal(signed.workflow.stage, 'TARGET_INSPECTED');
+  assert.equal(signed.workflow.nextActions.some((action) => action.rel === 'read_capabilities'), true);
+  assert.equal(signed.workflow.nextActions.some((action) => action.rel === 'run_real_target'), false);
   assert.equal(verifyIntegrationReadiness(signed, publicKeyPem), true);
   assert.equal(verifyIntegrationReadiness({ ...signed, inspection: { ...signed.inspection, subject: { ...signed.inspection.subject, kind: 'EOA' } } }, publicKeyPem), false);
   assert.ok(signed.limitations.some((item) => item.includes('does not submit transactions')));
@@ -39,4 +42,18 @@ test('integration-readiness rejects unbounded reports and inconsistent read-only
   assert.throws(() => buildIntegrationReadiness({ ...input, subjectAddress: 'not-an-address' }), /EVM address/);
   assert.throws(() => buildIntegrationReadiness({ ...input, inspection: { ...input.inspection, subject: { kind: 'NOT_OBSERVED', codeHash: `0x${'d'.repeat(64)}`, codeBytes: 1 } } }), /Unobserved/);
   assert.throws(() => buildIntegrationReadiness({ ...input, inspection: { ...input.inspection, subject: { kind: 'EOA', codeHash: null, codeBytes: null } } }), /Observed/);
+});
+
+test('integration-readiness labels the published zero-address request as a smoke test and gives a safe real-target follow-up', () => {
+  const report = buildIntegrationReadiness({
+    ...input,
+    subjectAddress: '0x0000000000000000000000000000000000000000',
+  });
+  assert.equal(report.workflow.stage, 'SMOKE_TEST');
+  assert.deepEqual(report.workflow.nextActions[0], {
+    rel: 'run_real_target',
+    method: 'GET',
+    href: 'https://priorseal.test/v1/integration-readiness?chainId=8453&subjectAddress={publicEvmAddress}',
+    description: 'Replace {publicEvmAddress} with the public EOA or contract that you actually intend to integrate. The zero-address smoke test only verifies discovery, payment, and signed delivery.',
+  });
 });
