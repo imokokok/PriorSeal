@@ -749,9 +749,78 @@ function agentIntegrationManifest({ version }) {
     }
   };
 }
+const INTEGRATION_READINESS_OPENAPI = {
+  summary: "Issue a signed, read-only EVM integration-readiness report (x402 when enabled)",
+  parameters: [
+    {
+      name: "chainId",
+      in: "query",
+      required: true,
+      description: "EVM chain ID to inspect. The deployment must have an independently configured RPC endpoint for this chain.",
+      example: 8453,
+      schema: { type: "integer", minimum: 1, maximum: 4294967295 }
+    },
+    {
+      name: "subjectAddress",
+      in: "query",
+      required: true,
+      description: "Public EVM address whose bytecode presence is checked. This does not prove control, safety, ownership, or authorization.",
+      example: `0x${"0".repeat(40)}`,
+      schema: { type: "string", pattern: "^0x[0-9a-fA-F]{40}$" }
+    }
+  ],
+  responses: {
+    "200": {
+      description: "A short-lived Ed25519-signed, read-only integration-readiness report.",
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            required: ["schema", "domain", "readinessId", "issuedAt", "expiresAt", "input", "inspection", "issuer", "keyId", "algorithm", "keyRegistry", "payment", "signature"],
+            properties: {
+              schema: { type: "string", const: "priorseal.integration-readiness.v1" },
+              domain: { type: "string", const: "priorseal/integration-readiness/v1" },
+              readinessId: { type: "string", pattern: "^pir_[0-9a-f]{32}$" },
+              issuedAt: { type: "integer", minimum: 1 },
+              expiresAt: { type: "integer", minimum: 1 },
+              input: {
+                type: "object",
+                required: ["chainId", "subjectAddress", "inputHash"],
+                properties: {
+                  chainId: { type: "integer", minimum: 1 },
+                  subjectAddress: { type: "string", pattern: "^0x[0-9a-fA-F]{40}$" },
+                  inputHash: { type: "string", pattern: "^[0-9a-f]{64}$" }
+                }
+              },
+              inspection: { type: "object", description: "Point-in-time RPC and bytecode observation." },
+              issuer: { type: "string" },
+              keyId: { type: "string" },
+              algorithm: { type: "string", const: "Ed25519" },
+              keyRegistry: { type: "object", description: "Published issuer key-registry digest and URL." },
+              payment: { type: "object", description: "The x402 route and configured price used for this report." },
+              signature: { type: "string" }
+            }
+          }
+        }
+      }
+    },
+    "400": { description: "Invalid or missing chainId or subjectAddress." },
+    "402": {
+      description: "Payment Required. The PAYMENT-REQUIRED header carries the live x402 v2 quote when this route is enabled.",
+      headers: { "PAYMENT-REQUIRED": { schema: { type: "string" }, description: "Base64-encoded x402 v2 payment requirements." } }
+    },
+    "503": { description: "Issuer key, x402 payment service, or integration-readiness inspection is not configured." }
+  }
+};
 const OPENAPI = { openapi: "3.1.0", info: { title: "PriorSeal API", version: "2.0.0", description: "Explicit, pre-execution authorization linked to observed EVM or Solana execution through independently verifiable receipts." }, paths: { "/v1/capabilities": { get: { summary: "Deployment configuration and workflow capabilities" } }, "/v1/integration-readiness": { get: { summary: "Issue a signed, read-only EVM integration-readiness report (x402 when enabled)" } }, "/v1/agent-credit-packs/{packId}/checkout": { get: { summary: "Purchase a fixed Agent Credits pack with x402 for an existing authenticated Agent account" } }, "/v1/agent-credit-packs/purchases/{purchaseId}": { get: { summary: "Read the authenticated account\u2019s x402 Credit-pack delivery status" } }, "/v1/archive": { get: { summary: "List private uploaded evidence with a project bearer credential" }, post: { summary: "Archive immutable evidence with a writer credential" } }, "/v1/archive/export": { get: { summary: "Export a private snapshot page including raw artifacts" } }, "/v1/archive/{entryId}": { get: { summary: "Read private project evidence" } }, "/v1/intents": { post: { summary: "Create a legacy unsigned intent draft", deprecated: true, responses: { "201": { description: "Created" } } } }, "/v1/authorizations/prepare": { post: { summary: "Canonicalize an authorization and return EIP-712 typed data or a Solana message" } }, "/v1/authorizations": { post: { summary: "Verify and accept a signed authorization" } }, "/v1/authorizations/{authorizationId}": { get: { summary: "Read authorization state" } }, "/v1/authorizations/{authorizationId}/transparency": { get: { summary: "Read signed transparency evidence and any verified external anchor" } }, "/v1/executions/observe": { post: { summary: "Observe EVM or Solana execution against an authorization; metered success includes its first portable evidence bundle" } }, "/v1/observation-jobs/{jobId}": { get: { summary: "Read automatic finality observation job" } }, "/v1/receipts/{receiptId}": { get: { summary: "Read receipt" } }, "/v1/receipts/{receiptId}/bundle": { get: { summary: "Export portable receipt evidence and key-discovery metadata (x402 when enabled)" } }, "/v1/evidence/receipts/{receiptId}": { get: { summary: "Read a chain-neutral evidence envelope with the portable verification bundle (x402 when enabled)" } }, "/v1/evidence/receipts/{receiptId}/check": { get: { summary: "Re-observe an authorization-bound transaction and return a newly signed fresh evidence check (x402 when enabled)" } }, "/v1/receipts/verify": { post: { summary: "Convenience verification, not authority" } }, "/.well-known/priorseal-keys.json": { get: { summary: "Read the issuer public-key registry" } }, "/.well-known/agent8004.json": { get: { summary: "Read the ERC-8004 agent registration record" } }, "/.well-known/priorseal-agent.json": { get: { summary: "Read safe Agent integration discovery" } }, "/v1/version": { get: { summary: "Read service and protocol versions" } }, "/health/live": { get: { summary: "Liveness" } }, "/health/ready": { get: { summary: "Readiness" } } } };
 function openApiSpec() {
-  return OPENAPI;
+  return {
+    ...OPENAPI,
+    paths: {
+      ...OPENAPI.paths,
+      "/v1/integration-readiness": { get: INTEGRATION_READINESS_OPENAPI }
+    }
+  };
 }
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);

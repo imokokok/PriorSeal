@@ -378,6 +378,36 @@ test('x402 Monad mainnet is advertised, verified, and settled through the HTTP l
   assert.ok(capabilities.payments.x402.networks.some(network => network.network === 'eip155:143'));
 });
 
+test('OpenAPI publishes the paid integration-readiness invocation and signed result contract', async (t) => {
+  const server = await serverFor(t);
+  const response = await request(server, '/openapi/v1.json');
+  assert.equal(response.status, 200);
+  const document = response.json() as unknown as {
+    openapi: string;
+    paths: {
+      '/v1/integration-readiness': {
+        get: {
+          parameters: Array<{ name: string; in: string; required: boolean; example: string | number }>;
+          responses: {
+            '200': { content: { 'application/json': { schema: { properties: { schema: { const: string }; input: { properties: { chainId: { minimum: number }; subjectAddress: { pattern: string } } } } } } } };
+            '402': { headers: { 'PAYMENT-REQUIRED': { schema: { type: string } } } };
+          };
+        };
+      };
+    };
+  };
+  const operation = document.paths['/v1/integration-readiness'].get;
+  assert.equal(document.openapi, '3.1.0');
+  assert.deepEqual(operation.parameters.map(({ name, in: location, required, example }) => ({ name, in: location, required, example })), [
+    { name: 'chainId', in: 'query', required: true, example: 8453 },
+    { name: 'subjectAddress', in: 'query', required: true, example: `0x${'0'.repeat(40)}` },
+  ]);
+  assert.equal(operation.responses['200'].content['application/json'].schema.properties.schema.const, 'priorseal.integration-readiness.v1');
+  assert.equal(operation.responses['200'].content['application/json'].schema.properties.input.properties.chainId.minimum, 1);
+  assert.equal(operation.responses['200'].content['application/json'].schema.properties.input.properties.subjectAddress.pattern, '^0x[0-9a-fA-F]{40}$');
+  assert.equal(operation.responses['402'].headers['PAYMENT-REQUIRED'].schema.type, 'string');
+});
+
 test('x402 integration readiness is receipt-independent, exposes Bazaar query metadata, and signs the delivered report', async (t) => {
   const originalFetch = globalThis.fetch;
   const calls: string[] = [];
