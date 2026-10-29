@@ -68,6 +68,15 @@ npm run mcp:compatibility:check
 mcp-publisher publish mcp/server.json
 ```
 
+If the release environment reaches the public Internet through an HTTP(S)
+proxy, enable Node's native environment-proxy support for the compatibility
+proof, while supplying the environment's existing proxy variables. For
+example:
+
+```sh
+NODE_USE_ENV_PROXY=1 npm run mcp:compatibility:check
+```
+
 The `io.github.imokokok/*` namespace requires the publisher to authenticate
 as the repository owner. Confirm that the Registry marks the new version
 `active`, that it is returned by the `latest` version query, and that the
