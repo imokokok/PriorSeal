@@ -272,6 +272,20 @@ input hash, issuer/key identifier, expiration, and a hash of the public key
 registry. It is useful as a portable integration preflight without needing an
 earlier PriorSeal receipt.
 
+The published zero address is a **smoke-test input**: it verifies discovery,
+payment, signing, and delivery, but says nothing useful about an intended
+integration target. Its signed `workflow.stage` is `SMOKE_TEST` and its first
+signed `workflow.nextActions` entry supplies the exact real-target request
+template. Replace `{publicEvmAddress}` with the public EOA or contract you
+actually intend to integrate, request that separate report, then read the
+signed capability and controlled-execution links. A non-zero target report is
+marked `TARGET_INSPECTED`; neither stage grants signing or broadcast authority.
+
+For privacy-preserving aggregate attribution, an integration may add the
+optional header `X-PriorSeal-Entry-Source` with one fixed value: `direct`,
+`docs`, `bazaar`, `mcp`, or `sdk`. It is only a bounded operational label and
+is not an account, wallet, campaign ID, price input, or authorization signal.
+
 It is not an ownership proof, contract audit, safety rating, authorization, or
 transaction right. It never requests a wallet key, signs a subject-chain
 transaction, broadcasts a transaction, or treats payment as execution

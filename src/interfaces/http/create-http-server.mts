@@ -50,6 +50,20 @@ const CLAIM_ERROR_STATUS = Object.freeze({ CLAIM_INVALID_REQUEST: 400, CLAIM_SIG
 
 function requester(req: IncomingMessage, trustProxy: boolean) { return trustProxy ? String(req.headers['cf-connecting-ip'] ?? '').trim() || String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown' : req.socket.remoteAddress || 'unknown'; }
 
+type X402EntrySource = 'direct' | 'docs' | 'bazaar' | 'mcp' | 'sdk' | 'unknown';
+const X402_ENTRY_SOURCES = new Set<X402EntrySource>(['direct', 'docs', 'bazaar', 'mcp', 'sdk', 'unknown']);
+
+/**
+ * Attribution is intentionally bounded and optional. It is never used for
+ * access control, pricing, or payment settlement, and avoids collecting an
+ * address, IP, user agent, or arbitrary campaign string in operational logs.
+ */
+function x402EntrySource(req: IncomingMessage): X402EntrySource {
+  const header = req.headers['x-priorseal-entry-source'];
+  const value = (Array.isArray(header) ? header[0] : header)?.trim().toLowerCase();
+  return value && X402_ENTRY_SOURCES.has(value as X402EntrySource) ? value as X402EntrySource : 'unknown';
+}
+
 type HttpStore = ReturnType<typeof createMemoryStore> | ReturnType<typeof createPostgresStore> | ReturnType<typeof createD1Store>;
 type HttpServerOptions = { archiveCredentials?: unknown; rpcChainIds?: number[]; erc4337EntryPoints?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; address: string; codeHash: string }[]; safe4337Trust?: { chainId: number; version: '0.6' | '0.7' | '0.8' | '0.9'; entryPointAddress: string; moduleAddress: string; moduleCodeHash: string; safeProxyCodeHash: string; safeSingletonCodeHash: string }[]; eip7702Delegates?: { chainId: number; address: string; codeHash: string }[]; hyperliquidSpotIocConfigured?: boolean; proofMode?: string; store?: HttpStore; agentMeter?: AgentMeter | null; selfserveClaim?: SelfserveClaim | null; x402CreditPacks?: X402CreditPacks; issuer?: string; privateKeyPem?: string; publicKeyPem?: string; keyId?: string; keyRegistry?: ReturnType<typeof createKeyRegistry>; policy?: ReturnType<typeof parsePolicyDocument>; authorizationAudience?: string; verifyContractSignature?: (input: { authorization: ReturnType<typeof buildAuthorization>; digest: `0x${string}`; signature: string }) => Promise<boolean> | boolean; timestampProvider?: ReturnType<typeof createDigiCertTimestampProvider> | null; requireTimestamp?: boolean; witnessProvider?: ReturnType<typeof createHttpWitnessProvider> | null; requireWitnessQuorum?: boolean; transparencyProvider?: ((acceptance: AuthorizationAcceptance, options?: { before?: number }) => Promise<{ checkpoint?: { anchor?: { anchoredAt: number } | null } | null }>) | null; observationWorker?: ReturnType<typeof createObservationWorker> | null; maxBodyBytes?: number; rateLimit?: number; rateLimiter?: { allow: (key: string, now: number) => boolean | Promise<boolean> }; requestTimeoutMs?: number; observer?: ExecutionObserver; integrationReadinessInspector?: (input: { chainId: number; subjectAddress: string; signal?: AbortSignal }) => Promise<IntegrationReadinessInspection>; corsOrigins?: string[]; trustProxy?: boolean; publicPaidCommerceEnabled?: boolean; x402?: X402Config; version?: string; staticDir?: string; logger?: { error?: (entry: Record<string, unknown>) => void; info?: (entry: Record<string, unknown>) => void } | null; now?: () => number };
 
@@ -73,7 +87,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
     const path = requestPath(req);
     const deadline = createRequestDeadline(req, requestTimeoutMs); const cleanup = () => deadline.cleanup();
     res.once('close', cleanup); res.once('finish', cleanup);
-    const paidRoute = matchPaidRoute(x402, req.method, path); const origin = req.headers.origin; const cors = origin && corsOrigins.includes(origin) ? { 'access-control-allow-origin': origin, vary: 'Origin', 'access-control-allow-headers': 'content-type,idempotency-key,x-request-id,authorization,payment-signature,x-priorseal-agent-key,x-priorseal-operator-key', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'access-control-expose-headers': 'payment-required,payment-response,x-priorseal-usage-id' } : {};
+    const paidRoute = matchPaidRoute(x402, req.method, path); const origin = req.headers.origin; const cors = origin && corsOrigins.includes(origin) ? { 'access-control-allow-origin': origin, vary: 'Origin', 'access-control-allow-headers': 'content-type,idempotency-key,x-request-id,authorization,payment-signature,x-priorseal-agent-key,x-priorseal-operator-key,x-priorseal-entry-source', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'access-control-expose-headers': 'payment-required,payment-response,x-priorseal-usage-id' } : {};
     let captureResponse = false;
     let capturedResponse: { status: number; body: unknown; headers: OutgoingHttpHeaders } | undefined;
     let meterReservation: AgentUsageReservation | undefined;
@@ -439,6 +453,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
         }
       }
       if (paidRoute && x402Payments && x402) {
+        const entrySource = x402EntrySource(req);
         let allowed: boolean;
         try { allowed = await rateLimiter.allow(requester(req, trustProxy), now()); }
         catch {
@@ -463,7 +478,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
         }
         if (prepared.kind !== 'authorized') {
           const accepts = Array.isArray(prepared.response.accepts) ? prepared.response.accepts : [];
-          logger?.info?.({ event: 'x402.challenge_issued', route: paidRoute.path, price: paidRoute.price, outcome: prepared.kind === 'invalid' ? 'invalid_payment' : 'payment_required', availableNetworks: accepts.length });
+          logger?.info?.({ event: 'x402.challenge_issued', route: paidRoute.path, price: paidRoute.price, outcome: prepared.kind === 'invalid' ? 'invalid_payment' : 'payment_required', availableNetworks: accepts.length, entrySource });
           if (prepared.kind === 'invalid' && prepared.status === 400) {
             respond(400, errorBody('INVALID_PAYMENT', 'The payment payload is malformed or does not match the advertised requirements', requestId));
             return;
@@ -472,7 +487,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
           return;
         }
         paymentContext = prepared.context;
-        logger?.info?.({ event: 'x402.payment_authorized', route: paidRoute.path, price: paidRoute.price, network: paymentContext.requirement.network });
+        logger?.info?.({ event: 'x402.payment_authorized', route: paidRoute.path, price: paidRoute.price, network: paymentContext.requirement.network, entrySource });
         try {
           await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: 'PAYMENT_AUTHORIZED', context: paymentContext, resourceUrl: paymentResourceUrl!, occurredAt: now() }));
         } catch (error) {
@@ -489,7 +504,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
           return;
         }
         if (completedResponse.status < 200 || completedResponse.status >= 300) {
-          logger?.info?.({ event: 'x402.resource_withheld', route: paidRoute.path, responseStatus: completedResponse.status, network: paymentContext.requirement.network });
+          logger?.info?.({ event: 'x402.resource_withheld', route: paidRoute.path, responseStatus: completedResponse.status, network: paymentContext.requirement.network, entrySource });
           try {
             await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: 'RESOURCE_WITHHELD', context: paymentContext, resourceUrl: paymentResourceUrl!, occurredAt: now(), responseStatus: completedResponse.status, responseBody: completedResponse.body }));
           } catch (error) {
@@ -501,7 +516,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
         try {
           const settlement = await x402Payments.settle(paymentContext, deadline.signal);
           if (!settlement.success) {
-            logger?.info?.({ event: 'x402.settlement_failed', route: paidRoute.path, network: paymentContext.requirement.network, reason: settlement.settlement.errorReason ?? 'unknown' });
+            logger?.info?.({ event: 'x402.settlement_failed', route: paidRoute.path, network: paymentContext.requirement.network, reason: settlement.settlement.errorReason ?? 'unknown', entrySource });
             try {
               await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: 'SETTLEMENT_FAILED', context: paymentContext, resourceUrl: paymentResourceUrl!, occurredAt: now(), responseStatus: completedResponse.status, responseBody: completedResponse.body, settlement: settlement.settlement, settlementAttempts: settlement.attempts }));
             } catch (error) {
@@ -511,7 +526,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
             return;
           }
           let paymentBoundBody = completedResponse.body;
-          logger?.info?.({ event: 'x402.settlement_succeeded', route: paidRoute.path, price: paidRoute.price, network: paymentContext.requirement.network, attempts: settlement.attempts });
+          logger?.info?.({ event: 'x402.settlement_succeeded', route: paidRoute.path, price: paidRoute.price, network: paymentContext.requirement.network, attempts: settlement.attempts, entrySource });
           const creditPack = x402CreditPacks?.findByPath(path);
           if (creditPack) {
             let pendingPurchaseId: string | undefined;
@@ -555,14 +570,14 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
             // Settlement has already succeeded: preserve delivery and its signed bundle evidence.
             logger?.error?.({ event: 'x402.payment_ledger_write_failed', requestId, method: req.method, path, network: paymentContext.requirement.network, code: errorCode(error) || 'INTERNAL_ERROR' });
           }
-          logger?.info?.({ event: 'x402.delivery_completed', route: paidRoute.path, responseStatus: completedResponse.status, network: paymentContext.requirement.network });
+          logger?.info?.({ event: 'x402.delivery_completed', route: paidRoute.path, responseStatus: completedResponse.status, network: paymentContext.requirement.network, entrySource });
           sendJson(res, completedResponse.status, paymentBoundBody, requestId, {
             ...completedResponse.headers,
             'payment-response': settlement.header,
             'cache-control': 'private, no-store',
           });
         } catch (error) {
-          logger?.info?.({ event: 'x402.settlement_unknown', route: paidRoute.path, network: paymentContext.requirement.network });
+          logger?.info?.({ event: 'x402.settlement_unknown', route: paidRoute.path, network: paymentContext.requirement.network, entrySource });
           try {
             await store.appendX402PaymentLedgerEvent(buildX402PaymentLedgerEvent({ type: 'SETTLEMENT_UNKNOWN', context: paymentContext, resourceUrl: paymentResourceUrl!, occurredAt: now(), responseStatus: completedResponse.status, responseBody: completedResponse.body }));
           } catch (ledgerError) {
@@ -775,6 +790,7 @@ function agentIntegrationManifest({ version }: { version: string }) {
     version,
     discovery: { capabilities: '/v1/capabilities', openapi: '/openapi/v1.json', mcp: '/mcp', issuerKeys: '/.well-known/priorseal-keys.json', evidence: '/v1/evidence/receipts/{receiptId}', freshEvidenceCheck: '/v1/evidence/receipts/{receiptId}/check', integrationReadiness: '/v1/integration-readiness?chainId={chainId}&subjectAddress={address}' },
     commerce: { x402: { discovery: '/v1/capabilities', paidResources: ['verification_bundle_export', 'evidence_envelope_export', 'fresh_evidence_check', 'integration_readiness_report', 'agent_credit_pack_checkout'], mcpBehavior: 'FREE_DISCOVERY_AND_PURCHASE_HANDOFF_ONLY', creditPacks: 'A fixed x402 credit pack tops up an existing authenticated Agent account only after settlement. It is never subject-transaction authority.' } },
+    workflowGuidance: { integrationReadiness: 'A zero-address report is a discovery and paid-delivery smoke test only. Follow its signed workflow.nextActions.run_real_target link with a public EOA or contract actually intended for integration before selecting a controlled workflow.' },
     safety: {
       executionMode: 'PROPOSAL_AND_PRINCIPAL_CONFIRMATION',
       principalSignature: 'REQUIRED_FOR_EVERY_EXACT_ACTION',
@@ -812,7 +828,7 @@ const INTEGRATION_READINESS_OPENAPI = {
         'application/json': {
           schema: {
             type: 'object',
-            required: ['schema', 'domain', 'readinessId', 'issuedAt', 'expiresAt', 'input', 'inspection', 'issuer', 'keyId', 'algorithm', 'keyRegistry', 'payment', 'signature'],
+            required: ['schema', 'domain', 'readinessId', 'issuedAt', 'expiresAt', 'input', 'inspection', 'issuer', 'keyId', 'algorithm', 'keyRegistry', 'payment', 'workflow', 'signature'],
             properties: {
               schema: { type: 'string', const: 'priorseal.integration-readiness.v1' },
               domain: { type: 'string', const: 'priorseal/integration-readiness/v1' },
@@ -834,6 +850,7 @@ const INTEGRATION_READINESS_OPENAPI = {
               algorithm: { type: 'string', const: 'Ed25519' },
               keyRegistry: { type: 'object', description: 'Published issuer key-registry digest and URL.' },
               payment: { type: 'object', description: 'The x402 route and configured price used for this report.' },
+              workflow: { type: 'object', description: 'Signed, read-only next-step links. A SMOKE_TEST result requires a public real-target follow-up before workflow selection.' },
               signature: { type: 'string' },
             },
           },

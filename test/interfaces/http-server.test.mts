@@ -389,7 +389,24 @@ test('OpenAPI publishes the paid integration-readiness invocation and signed res
         get: {
           parameters: Array<{ name: string; in: string; required: boolean; example: string | number }>;
           responses: {
-            '200': { content: { 'application/json': { schema: { properties: { schema: { const: string }; input: { properties: { chainId: { minimum: number }; subjectAddress: { pattern: string } } } } } } } };
+            '200': {
+              content: {
+                'application/json': {
+                  schema: {
+                    required: string[];
+                    properties: {
+                      schema: { const: string };
+                      input: {
+                        properties: {
+                          chainId: { minimum: number };
+                          subjectAddress: { pattern: string };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
             '402': { headers: { 'PAYMENT-REQUIRED': { schema: { type: string } } } };
           };
         };
@@ -405,6 +422,7 @@ test('OpenAPI publishes the paid integration-readiness invocation and signed res
   assert.equal(operation.responses['200'].content['application/json'].schema.properties.schema.const, 'priorseal.integration-readiness.v1');
   assert.equal(operation.responses['200'].content['application/json'].schema.properties.input.properties.chainId.minimum, 1);
   assert.equal(operation.responses['200'].content['application/json'].schema.properties.input.properties.subjectAddress.pattern, '^0x[0-9a-fA-F]{40}$');
+  assert.ok(operation.responses['200'].content['application/json'].schema.required.includes('workflow'));
   assert.equal(operation.responses['402'].headers['PAYMENT-REQUIRED'].schema.type, 'string');
 });
 
@@ -477,13 +495,15 @@ test('x402 integration readiness is receipt-independent, exposes Bazaar query me
   const paid = await request(server, path, { headers: { 'payment-signature': paymentHeader } });
   assert.equal(paid.status, 200);
   assert.equal(paid.headers['cache-control'], 'private, no-store');
-  const report = paid.json() as unknown as { schema: string; input: { chainId: number; subjectAddress: string; inputHash: string }; inspection: { subject: { kind: string } }; payment: { price: string }; expiresAt: number };
+  const report = paid.json() as unknown as { schema: string; input: { chainId: number; subjectAddress: string; inputHash: string }; inspection: { subject: { kind: string } }; payment: { price: string }; workflow: { stage: string; nextActions: Array<{ rel: string }> }; expiresAt: number };
   assert.equal(report.schema, 'priorseal.integration-readiness.v1');
   assert.equal(report.input.chainId, 8453);
   assert.equal(report.input.subjectAddress, `0x${'a'.repeat(40)}`);
   assert.match(report.input.inputHash, /^[0-9a-f]{64}$/);
   assert.equal(report.inspection.subject.kind, 'CONTRACT');
   assert.equal(report.payment.price, '$0.02');
+  assert.equal(report.workflow.stage, 'TARGET_INSPECTED');
+  assert.ok(report.workflow.nextActions.some((action) => action.rel === 'prepare_controlled_execution'));
   assert.equal(report.expiresAt, 1_300);
   assert.equal(verifyIntegrationReadiness(paid.json() as unknown as Record<string, unknown>, publicKeyPem), true);
   assert.deepEqual(calls, ['GET /supported', 'POST /verify', 'POST /settle']);
@@ -592,14 +612,14 @@ test('a paid receipt bundle includes issuer-signed x402 payment evidence', async
   await request(server, '/v1/intents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(intent) });
   const observed = await request(server, '/v1/executions/observe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intentId: intent.intentId, chainId: 8453, txHash }) });
   const receiptId = observed.json().receipt.receiptId;
-  const unpaid = await request(server, `/v1/receipts/${receiptId}/bundle`);
+  const unpaid = await request(server, `/v1/receipts/${receiptId}/bundle`, { headers: { 'x-priorseal-entry-source': 'docs' } });
   assert.equal(unpaid.status, 402);
   const bundleChallenge = unpaid.json() as unknown as { accepts: Array<Record<string, unknown>>; extensions: { bazaar: { info: { output: { format: string } }; routeTemplate: string } } };
   assert.equal(bundleChallenge.extensions.bazaar.info.output.format, 'priorseal.verification-bundle.v1');
   assert.equal(bundleChallenge.extensions.bazaar.routeTemplate, '/v1/receipts/:receiptId/bundle');
   const accepted = bundleChallenge.accepts[0];
   const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted, payload: {} })).toString('base64');
-  const paid = await request(server, `/v1/receipts/${receiptId}/bundle`, { headers: { 'payment-signature': paymentHeader } });
+  const paid = await request(server, `/v1/receipts/${receiptId}/bundle`, { headers: { 'payment-signature': paymentHeader, 'x-priorseal-entry-source': 'docs' } });
   assert.equal(paid.status, 200);
   const bundle = paid.json() as unknown as { bundleHash: string; paymentEvidence: Record<string, unknown> & { service: { responseHash: string } } };
   assert.notEqual(bundle.paymentEvidence.service.responseHash, bundle.bundleHash);
@@ -610,6 +630,7 @@ test('a paid receipt bundle includes issuer-signed x402 payment evidence', async
   assert.equal(ledger.at(-1)?.paymentEvidenceId, bundle.paymentEvidence.paymentEvidenceId);
   assert.deepEqual(metrics.map((entry) => entry.event), ['x402.challenge_issued', 'x402.payment_authorized', 'x402.settlement_succeeded', 'x402.delivery_completed']);
   assert.ok(metrics.every((entry) => !('receiptId' in entry) && !('payer' in entry) && !('paymentPayload' in entry)));
+  assert.deepEqual(metrics.map((entry) => entry.entrySource), ['docs', 'docs', 'docs', 'docs']);
 
   const unpaidEvidence = await request(server, `/v1/evidence/receipts/${receiptId}`);
   assert.equal(unpaidEvidence.status, 402);
