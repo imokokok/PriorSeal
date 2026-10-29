@@ -1,0 +1,79 @@
+{
+  "schema": "priorseal.grey-ridge-signals-testnet-provenance.v1",
+  "sourceQuote": {
+    "capturedAt": "2026-10-29T19:14:03Z",
+    "request": {
+      "method": "GET",
+      "url": "https://x402-data-api.sigrunner.workers.dev/gate/swap?token=0x940181a94A35A4569E4529A3CDfB74e38FD98631&side=buy&notional_usd=10"
+    },
+    "response": {
+      "httpStatus": 402,
+      "paymentRequiredHeaderSha256": "2abaa190711ad3993604f702a2a7efb6f863c16876a9ad70a8e0d92407ea2073",
+      "resource": {
+        "serviceName": "Base Token Safety Swap Gate",
+        "network": "eip155:8453"
+      },
+      "requirement": {
+        "scheme": "exact",
+        "network": "eip155:8453",
+        "amount": "8000",
+        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "payTo": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+        "maxTimeoutSeconds": 300
+      }
+    },
+    "paid": false
+  },
+  "testnetSettlement": {
+    "schema": "priorseal.x402-testnet-settlement-model.v1",
+    "mode": "SYNTHETIC_TEST_VECTOR",
+    "network": "eip155:84532",
+    "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "amount": "8000",
+    "payTo": "0x1111111111111111111111111111111111111111",
+    "settlementId": "grey-ridge-testnet-vector-20261030-01",
+    "settlementState": "SYNTHETIC_SETTLED",
+    "paymentPayloadSubmitted": false,
+    "transactionHash": null,
+    "sourceQuoteDigest": "5c1ea6861c5e4a739df67c65d7d83ffc1d087a116590822e2a42a235883bb325"
+  },
+  "action": {
+    "schema": "priorseal.downstream-action-model.v1",
+    "mode": "TESTNET_EXAMPLE_NOT_BROADCAST",
+    "chainId": 84532,
+    "action": "CONTRACT_CALL",
+    "target": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "calldataHash": "0x7e1bbf2a5f865c26015477f72051c4a59c82ea1d1d6133156c72e326c6bc8917",
+    "transactionValue": "0",
+    "maxAmount": "1",
+    "authorized": true,
+    "broadcast": false,
+    "settlementDigest": "c3be653ac4f3968d4a4fd5d0c3c412e3035aa6a4b84e82a1572b745a44d94dc1"
+  },
+  "boundaries": {
+    "testnetOnly": true,
+    "sourcePaid": false,
+    "greyRidgeSignalValidated": false,
+    "executionBroadcast": false,
+    "greyRidgeIntegrationClaimed": false,
+    "paymentOrDataAccessAuthorized": false
+  },
+  "authorization": {
+    "schema": "priorseal.testnet-trace-authorization.v1",
+    "signedAt": "2026-10-30T03:16:17+08:00",
+    "sourceQuoteDigest": "5c1ea6861c5e4a739df67c65d7d83ffc1d087a116590822e2a42a235883bb325",
+    "settlementDigest": "c3be653ac4f3968d4a4fd5d0c3c412e3035aa6a4b84e82a1572b745a44d94dc1",
+    "actionDigest": "84f98a1db3b11ee4a8aeee79b47b43723a0a954eaae63c7dbddb568bfcc5f8f2",
+    "boundaries": {
+      "testnetOnly": true,
+      "sourcePaid": false,
+      "greyRidgeSignalValidated": false,
+      "executionBroadcast": false,
+      "greyRidgeIntegrationClaimed": false,
+      "paymentOrDataAccessAuthorized": false
+    },
+    "digest": "25334dde602ad395c5c5192d0f52913aa122756a79b7b98b6e1c2cb36b3c7745",
+    "signerPublicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA5whQleJD2W6owd6havYB2xvXQi1Eu8UjNJQQorcJD48=\n-----END PUBLIC KEY-----\n",
+    "signature": "BRFJZQMgBh9fObGgyv1aw1XMUgJHCWJiSyQl0K26KudspL06Hk4le4onI26aQvrJVELHRHh8J0aa8xu+bUAoDg=="
+  }
+}
