@@ -1,39 +1,30 @@
-import type { loadRuntimeConfig } from './runtime-config.mjs';
+export const REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY = 11;
+const RUNTIME_CAPABILITY = 'cloudflare-runtime';
 
-const SCHEMA_CACHE_TTL_MS = 300_000;
-type Config = ReturnType<typeof loadRuntimeConfig>;
-
-/** Cache only successful schema readiness, with the same expiry as the edge cache. */
-export function createSchemaGuard(now: () => number = Date.now) {
-  const readyUntil = new Map<string, number>();
-  return async (database: D1Database, config: Config, context: ExecutionContext, cache: Cache) => {
-    const cacheUrl = `https://priorseal.internal/schema/d1-0010/${config.preExecutionProofMode}/${config.archiveCredentials ? 'archive' : 'public'}/${config.x402 ? 'x402' : 'unpaid'}/${config.agentMeter ? 'agent-meter' : 'unmetered'}/${config.x402CreditPacks ? 'credit-packs' : 'no-credit-packs'}`;
-    const currentTime = now();
-    if ((readyUntil.get(cacheUrl) ?? 0) > currentTime) return;
-    const cacheKey = new Request(cacheUrl);
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      const checkedAt = Number(cached.headers.get('x-schema-checked-at'));
-      if (Number.isSafeInteger(checkedAt) && checkedAt > 0 && checkedAt <= currentTime && checkedAt + SCHEMA_CACHE_TTL_MS > currentTime) {
-        readyUntil.set(cacheUrl, checkedAt + SCHEMA_CACHE_TTL_MS);
+/**
+ * Fails closed unless the ordered D1 migrations have recorded the exact
+ * capability required by this Worker. After a successful primary-key lookup,
+ * this isolate retains only the boolean result, never a D1 binding, query
+ * result, Request, Response, or other invocation-scoped I/O object.
+ */
+export function createSchemaCapabilityGuard() {
+  let ready = false;
+  let pending: Promise<void> | undefined;
+  return async (database: D1Database) => {
+    if (ready) return;
+    const check = pending ??= (async () => {
+      const capability = await database.prepare('SELECT version FROM priorseal_schema_capabilities WHERE capability=?')
+        .bind(RUNTIME_CAPABILITY)
+        .first<{ version: number }>();
+      if (capability?.version !== REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY) {
+        throw new TypeError(`D1 runtime schema capability ${REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY} is required`);
       }
-      return;
+      ready = true;
+    })();
+    try {
+      await check;
+    } finally {
+      if (pending === check) pending = undefined;
     }
-
-    const required = ['authorization_log', 'authorization_log_merkle_nodes', 'authorizations', 'observation_jobs', 'receipts'];
-    if (config.archiveCredentials) required.push('project_evidence_archive');
-    if (config.x402) required.push('x402_payment_ledger_events');
-    if (config.agentMeter) required.push('agent_meter_accounts', 'agent_meter_usage', 'agent_meter_credit_operations');
-    if (config.x402CreditPacks) required.push('x402_credit_purchases');
-    if (config.preExecutionProofMode === 'witness-quorum') required.push('witness_attestations');
-    const rows = await database.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${required.map(() => '?').join(',')})`).bind(...required).all<{ name: string }>();
-    if (rows.results.length !== required.length) throw new TypeError('Required D1 production tables are missing');
-    const columns = await database.prepare('PRAGMA table_info(observation_jobs)').all<{ name: string }>();
-    if (!columns.results.some((column) => column.name === 'coalesce_key')) throw new TypeError('Durable observation coalescing column is missing');
-    const authorizationColumns = await database.prepare('PRAGMA table_info(authorizations)').all<{ name: string }>();
-    if (!['hyperliquid_network_ref', 'hyperliquid_account', 'hyperliquid_cloid'].every(name => authorizationColumns.results.some((column) => column.name === name))) throw new TypeError('Hyperliquid cloid reservation columns are missing');
-    const checkedAt = now();
-    readyUntil.set(cacheUrl, checkedAt + SCHEMA_CACHE_TTL_MS);
-    context.waitUntil(cache.put(cacheKey, new Response('ready', { headers: { 'cache-control': 'public, max-age=300', 'x-schema-checked-at': String(checkedAt) } })));
   };
 }

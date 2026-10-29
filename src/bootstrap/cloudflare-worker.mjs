@@ -6,14 +6,14 @@ import { retryDelaySeconds } from "./cloudflare-retry.mjs";
 import { processObservationQueue } from "./cloudflare-observations.mjs";
 import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter } from "./cloudflare-bindings.mjs";
 import { errorMessage } from "../shared/error-code.mjs";
-import { createSchemaGuard } from "./cloudflare-schema.mjs";
-const assertSchemaCached = createSchemaGuard();
+import { createSchemaCapabilityGuard } from "./cloudflare-schema.mjs";
+const assertSchemaCapability = createSchemaCapabilityGuard();
 async function withRuntime(environment, context, createRuntime, operation) {
   const runtimeEnvironment = cloudflareRuntimeEnvironment(environment);
   const config = loadRuntimeConfig(runtimeEnvironment);
   let runtime;
   try {
-    await assertSchemaCached(environment.DB, config, context, caches.default);
+    await assertSchemaCapability(environment.DB);
     runtime = await createRuntime({
       config,
       environment: runtimeEnvironment,

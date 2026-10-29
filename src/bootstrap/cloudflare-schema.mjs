@@ -1,37 +1,26 @@
 // Generated from cloudflare-schema.mts by npm run core:build. Do not edit directly.
-const SCHEMA_CACHE_TTL_MS = 3e5;
-function createSchemaGuard(now = Date.now) {
-  const readyUntil = /* @__PURE__ */ new Map();
-  return async (database, config, context, cache) => {
-    const cacheUrl = `https://priorseal.internal/schema/d1-0010/${config.preExecutionProofMode}/${config.archiveCredentials ? "archive" : "public"}/${config.x402 ? "x402" : "unpaid"}/${config.agentMeter ? "agent-meter" : "unmetered"}/${config.x402CreditPacks ? "credit-packs" : "no-credit-packs"}`;
-    const currentTime = now();
-    if ((readyUntil.get(cacheUrl) ?? 0) > currentTime) return;
-    const cacheKey = new Request(cacheUrl);
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      const checkedAt2 = Number(cached.headers.get("x-schema-checked-at"));
-      if (Number.isSafeInteger(checkedAt2) && checkedAt2 > 0 && checkedAt2 <= currentTime && checkedAt2 + SCHEMA_CACHE_TTL_MS > currentTime) {
-        readyUntil.set(cacheUrl, checkedAt2 + SCHEMA_CACHE_TTL_MS);
+const REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY = 11;
+const RUNTIME_CAPABILITY = "cloudflare-runtime";
+function createSchemaCapabilityGuard() {
+  let ready = false;
+  let pending;
+  return async (database) => {
+    if (ready) return;
+    const check = pending ??= (async () => {
+      const capability = await database.prepare("SELECT version FROM priorseal_schema_capabilities WHERE capability=?").bind(RUNTIME_CAPABILITY).first();
+      if (capability?.version !== REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY) {
+        throw new TypeError(`D1 runtime schema capability ${REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY} is required`);
       }
-      return;
+      ready = true;
+    })();
+    try {
+      await check;
+    } finally {
+      if (pending === check) pending = void 0;
     }
-    const required = ["authorization_log", "authorization_log_merkle_nodes", "authorizations", "observation_jobs", "receipts"];
-    if (config.archiveCredentials) required.push("project_evidence_archive");
-    if (config.x402) required.push("x402_payment_ledger_events");
-    if (config.agentMeter) required.push("agent_meter_accounts", "agent_meter_usage", "agent_meter_credit_operations");
-    if (config.x402CreditPacks) required.push("x402_credit_purchases");
-    if (config.preExecutionProofMode === "witness-quorum") required.push("witness_attestations");
-    const rows = await database.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${required.map(() => "?").join(",")})`).bind(...required).all();
-    if (rows.results.length !== required.length) throw new TypeError("Required D1 production tables are missing");
-    const columns = await database.prepare("PRAGMA table_info(observation_jobs)").all();
-    if (!columns.results.some((column) => column.name === "coalesce_key")) throw new TypeError("Durable observation coalescing column is missing");
-    const authorizationColumns = await database.prepare("PRAGMA table_info(authorizations)").all();
-    if (!["hyperliquid_network_ref", "hyperliquid_account", "hyperliquid_cloid"].every((name) => authorizationColumns.results.some((column) => column.name === name))) throw new TypeError("Hyperliquid cloid reservation columns are missing");
-    const checkedAt = now();
-    readyUntil.set(cacheUrl, checkedAt + SCHEMA_CACHE_TTL_MS);
-    context.waitUntil(cache.put(cacheKey, new Response("ready", { headers: { "cache-control": "public, max-age=300", "x-schema-checked-at": String(checkedAt) } })));
   };
 }
 export {
-  createSchemaGuard
+  REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY,
+  createSchemaCapabilityGuard
 };
