@@ -5,18 +5,18 @@ import { retryDelaySeconds } from './cloudflare-retry.mjs';
 import { processObservationQueue } from './cloudflare-observations.mjs';
 import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter } from './cloudflare-bindings.mjs';
 import { errorMessage } from '../shared/error-code.mjs';
-import { createSchemaGuard } from './cloudflare-schema.mjs';
+import { createSchemaCapabilityGuard } from './cloudflare-schema.mjs';
 import type { ObservationJob } from '../application/observations/observation-worker.mjs';
 
 type Runtime = Awaited<ReturnType<typeof createPriorSealRuntime>>;
-const assertSchemaCached = createSchemaGuard();
+const assertSchemaCapability = createSchemaCapabilityGuard();
 
 async function withRuntime<T, R extends { server?: Runtime['server'] }>(environment: Env, context: ExecutionContext, createRuntime: (options: Parameters<typeof createPriorSealRuntime>[0]) => Promise<R>, operation: (runtime: R) => Promise<T>): Promise<T> {
   const runtimeEnvironment = cloudflareRuntimeEnvironment(environment);
   const config = loadRuntimeConfig(runtimeEnvironment);
   let runtime: R | undefined;
   try {
-    await assertSchemaCached(environment.DB, config, context, (caches as CacheStorage & { default: Cache }).default);
+    await assertSchemaCapability(environment.DB);
     runtime = await createRuntime({
       config,
       environment: runtimeEnvironment,
