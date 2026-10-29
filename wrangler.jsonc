@@ -19,8 +19,9 @@
   "placement": { "mode": "smart" },
   "observability": {
     "enabled": true,
-    "logs": { "enabled": true, "head_sampling_rate": 1 },
-    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+    "redact_query_string": true,
+    "logs": { "enabled": true, "head_sampling_rate": 0.1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
   },
   "vars": {
     "PRIORSEAL_ENVIRONMENT": "production",
@@ -167,8 +168,9 @@
       "triggers": { "crons": ["* * * * *"] },
       "observability": {
         "enabled": true,
-        "logs": { "enabled": true, "head_sampling_rate": 1 },
-        "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+        "redact_query_string": true,
+        "logs": { "enabled": true, "head_sampling_rate": 0.02 },
+        "traces": { "enabled": true, "head_sampling_rate": 0.01 }
       }
     }
   }
