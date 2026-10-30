@@ -53,10 +53,11 @@ jobs:
 
   agent-retail-readiness:
     runs-on: ubuntu-24.04
-    # Production is explicitly configured for public paid commerce in
-    # wrangler.jsonc. Keep the public check aligned with that declared mode.
+    # Production is intentionally pilot-only in wrangler.jsonc. Keep the
+    # public check aligned with that declared mode so it catches an accidental
+    # opening of self-service commerce rather than reporting a false failure.
     env:
-      PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE: 'true'
+      PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE: 'false'
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v5
