@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "wallet-mcp": {
+      "url": "https://wallet-mcp.coinbase.com"
+    },
+    "insight": {
+      "url": "https://www.oracleinsight.xyz/api/mcp"
+    },
+    "priorseal": {
+      "url": "https://priorseal.xyz/mcp"
+    }
+  }
+}

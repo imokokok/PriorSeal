@@ -2,7 +2,7 @@
 title: "Insight + PriorSeal Guard for Wallet MCP"
 description: "A safety workflow for Base Wallet MCP: inspect oracle decision inputs with Insight, bind an eligible exact Base call to an explicit PriorSeal authorization, then retain independently verifiable execution evidence."
 name: insight-priorseal-wallet-mcp
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Insight + PriorSeal Guard for Wallet MCP
@@ -28,6 +28,13 @@ API credential, wallet key, or private key in the skill, a prompt, or
 browser-side code. Read [the compatibility gate](references/compatibility-gate.md)
 before preparing an authorization and [the PriorSeal MCP guide](../../docs/integrations/priorseal-mcp.md)
 before connecting a metered Agent account.
+
+Use [`mcp.json`](mcp.json) as a connection template and run
+[`examples/connection-check.mts`](examples/connection-check.mts) before the
+first integration. It sends only MCP `initialize`, `notifications/initialized`,
+and `tools/list`; it never calls a paid tool, asks for a signature, or sends a
+transaction. Connection success is not evidence that an action profile is
+available: inspect the live tool descriptions and deployment capabilities.
 
 ## Wallet MCP onboarding gate
 
@@ -57,6 +64,9 @@ source of truth.
 - Keep an uncertain, reverted, pending, reorged, or mismatched execution
   explicit. Do not refresh a quote, change calldata, or retry under the same
   authorization.
+- Persist a [`Guarded Action` state record](references/guarded-action-states.md)
+  after every boundary. `UNKNOWN` may only return to observation of the original
+  transaction hash; it can never return to transaction submission.
 
 ## Scope and routing
 
