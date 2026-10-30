@@ -26,7 +26,7 @@ PriorSeal is for teams building EVM and Solana Agents, treasury automation, wall
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
 | Start a reproducible exact-call integration and hand a reviewer a portable v3 receipt bundle | [Exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) |
 | Bind a Solana mainnet transaction message to a wallet authorization and observed transaction | [Solana integration guide](docs/integrations/solana.md) |
-| Bind a Hyperliquid HyperCore spot IOC limit order to a cloid and observed fills | [Hyperliquid integration guide](docs/integrations/hyperliquid.md) |
+| Bind a Hyperliquid HyperCore spot IOC limit order to a cloid and observed fills, including an optional user-approved builder fee | [Hyperliquid integration guide](docs/integrations/hyperliquid.md) |
 | Configure x402 payment for eligible read-only evidence exports | [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md) |
 | Use an eligible Base Wallet MCP call with Insight assessment and PriorSeal evidence | [Wallet MCP × Insight × PriorSeal](docs/integrations/wallet-mcp-insight-priorseal.md) · [local skill package](skills/wallet-mcp-insight-priorseal/README.md) |
 | Embed one bounded action in a wallet or Agent runtime | [Guarded Action integration](docs/integrations/guarded-action.md) · [Base Sepolia rehearsal](docs/runbooks/base-sepolia-guarded-action-rehearsal.md) |

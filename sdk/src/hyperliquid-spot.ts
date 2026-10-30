@@ -1,4 +1,5 @@
 import { parseContextCommitments } from './exact-call.js'
+import { executionCommerceCommitment, type ExecutionCommerceTerms } from './execution-commerce.js'
 import type { ContextCommitment, HyperliquidSpotIocOrder, Intent } from './types.js'
 
 export const HYPERLIQUID_MAINNET_CHAIN_REF = 'hyperliquid:mainnet'
@@ -6,6 +7,25 @@ export const HYPERLIQUID_SPOT_IOC_PROFILE = 'priorseal.execution-profile.hyperli
 export const HYPERLIQUID_SPOT_IOC_ACTION = 'HYPERLIQUID_SPOT_IOC_ORDER'
 export const HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS = 5 * 60_000
 export const HYPERLIQUID_OUTCOME_ASSET_ID_MIN = 100_000_000
+/** Hyperliquid documents a 1% builder-fee ceiling for spot quote/collateral sides. */
+export const HYPERLIQUID_MAX_SPOT_BUILDER_FEE_TENTHS_BPS = 1_000
+
+export type HyperliquidSpotBuilderFeePolicy = {
+  builder: string
+  feeTenthsOfBasisPoint: number
+  maximumFeeTenthsOfBasisPoint?: number
+}
+
+export type HyperliquidBuilderFeeApproval = {
+  schema: 'priorseal.hyperliquid-builder-fee-approval.v1'
+  venue: 'hyperliquid'
+  network: 'hyperliquid:mainnet'
+  builder: string
+  maximumFeeTenthsOfBasisPoint: number
+  maximumFeeRate: string
+  unsignedExchangeAction: { type: 'approveBuilderFee'; builder: string; maxFeeRate: string }
+  caveats: string[]
+}
 
 export type HyperliquidSpotIocIntentInput = {
   intentId: string
@@ -79,7 +99,12 @@ export type HyperliquidSpotIocSubmission = {
     type: 'order'
     orders: Array<{ a: number; b: boolean; p: string; s: string; r: false; t: { limit: { tif: 'Ioc' } }; c: string }>
     grouping: 'na'
+    builder?: { b: string; f: number }
   }
+}
+
+export type HyperliquidSpotIocBuilderFeeSubmission = HyperliquidSpotIocSubmission & {
+  commerce: ExecutionCommerceTerms
 }
 
 /**
@@ -99,6 +124,72 @@ export function buildHyperliquidSpotIocSubmission(intent: Intent): HyperliquidSp
     schema: 'priorseal.hyperliquid-spot-ioc-submission.v1', account, clientOrderId: cloid(order.clientOrderId), nonce,
     expiresAfter: milliseconds(order.expiresAfter, 'intent.hyperliquidOrder.expiresAfter'),
     action: { type: 'order', orders: [{ a: assetId(order.assetId), b: boolean(order.isBuy, 'intent.hyperliquidOrder.isBuy'), p: decimal(order.limitPrice, 'intent.hyperliquidOrder.limitPrice', false), s: decimal(order.size, 'intent.hyperliquidOrder.size', true), r: false, t: { limit: { tif: 'Ioc' } }, c: cloid(order.clientOrderId) }], grouping: 'na' },
+  }
+}
+
+/**
+ * Bind an opt-in builder fee to a PriorSeal-authorized spot order.  The terms
+ * must already be present in the signed intent as a context commitment; this
+ * prevents a caller from adding a commercial fee after authorization.
+ */
+export function buildHyperliquidSpotIocBuilderFeeSubmission(intent: Intent, policy: HyperliquidSpotBuilderFeePolicy): HyperliquidSpotIocBuilderFeeSubmission {
+  const submission = buildHyperliquidSpotIocSubmission(intent)
+  const commerce = hyperliquidSpotBuilderFeeTerms(policy)
+  const commitment = executionCommerceCommitment(commerce)
+  if (!intent.contextCommitments?.some(entry => entry.namespace === commitment.namespace && entry.algorithm === commitment.algorithm && entry.digest.toLowerCase() === commitment.digest.toLowerCase())) throw new TypeError('intent does not commit to the supplied Hyperliquid builder fee terms')
+  const fee = commerce.venueFee
+  if (!fee) throw new TypeError('Hyperliquid builder fee terms are missing')
+  return {
+    ...submission,
+    commerce,
+    action: {
+      ...submission.action,
+      builder: { b: fee.beneficiary, f: fee.rate },
+    },
+  }
+}
+
+/** Build a separate user-signed main-account approval, never an order submission. */
+export function buildHyperliquidBuilderFeeApproval(policy: HyperliquidSpotBuilderFeePolicy): HyperliquidBuilderFeeApproval {
+  const fee = hyperliquidSpotBuilderFeeTerms(policy).venueFee
+  if (!fee) throw new TypeError('Hyperliquid builder fee terms are missing')
+  const maximumFeeRate = percentageFromTenthsOfBasisPoint(fee.maximumRate)
+  return {
+    schema: 'priorseal.hyperliquid-builder-fee-approval.v1',
+    venue: 'hyperliquid',
+    network: 'hyperliquid:mainnet',
+    builder: fee.beneficiary,
+    maximumFeeTenthsOfBasisPoint: fee.maximumRate,
+    maximumFeeRate,
+    unsignedExchangeAction: { type: 'approveBuilderFee', builder: fee.beneficiary, maxFeeRate: maximumFeeRate },
+    caveats: [
+      'Sign this action only with the Hyperliquid main account in the user-controlled wallet process.',
+      'This approval is a maximum and is distinct from the PriorSeal order authorization.',
+      'The SDK does not sign, submit, or verify approval state on the caller’s behalf.',
+    ],
+  }
+}
+
+/** Reusable commercial terms for a Hyperliquid spot builder-fee policy. */
+export function hyperliquidSpotBuilderFeeTerms(policy: HyperliquidSpotBuilderFeePolicy): ExecutionCommerceTerms {
+  const builder = address(policy?.builder, 'builder')
+  const rate = feeTenthsOfBasisPoint(policy?.feeTenthsOfBasisPoint, 'feeTenthsOfBasisPoint')
+  const maximumRate = feeTenthsOfBasisPoint(policy?.maximumFeeTenthsOfBasisPoint ?? rate, 'maximumFeeTenthsOfBasisPoint')
+  if (maximumRate < rate) throw new TypeError('maximumFeeTenthsOfBasisPoint must not be less than feeTenthsOfBasisPoint')
+  return {
+    schema: 'execution.commerce.v1',
+    productId: 'verified-execution',
+    metering: { preflight: 'C3', observation: 'C4', evidenceExport: 'C4' },
+    venueFee: {
+      kind: 'venue-native',
+      venue: 'hyperliquid',
+      beneficiary: builder,
+      unit: 'tenths-of-basis-point',
+      rate,
+      maximumRate,
+      approval: 'USER_SIGNATURE_REQUIRED_OR_UNVERIFIED',
+      settlement: 'VENUE_RECONCILIATION_REQUIRED',
+    },
   }
 }
 
@@ -144,6 +235,17 @@ function milliseconds(value: unknown, field: string): number {
 function address(value: unknown, field: string): string {
   if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(value)) throw new TypeError(`${field} must be a 20-byte EVM address`)
   return value.toLowerCase()
+}
+
+function feeTenthsOfBasisPoint(value: unknown, field: string): number {
+  if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > HYPERLIQUID_MAX_SPOT_BUILDER_FEE_TENTHS_BPS) throw new TypeError(`${field} must be an integer between 1 and ${HYPERLIQUID_MAX_SPOT_BUILDER_FEE_TENTHS_BPS}`)
+  return Number(value)
+}
+
+function percentageFromTenthsOfBasisPoint(value: number): string {
+  const whole = Math.floor(value / 1000)
+  const fraction = String(value % 1000).padStart(3, '0').replace(/0+$/, '')
+  return `${whole}${fraction ? `.${fraction}` : ''}%`
 }
 
 function identifier(value: unknown, field: string): void {

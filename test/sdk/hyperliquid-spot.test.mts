@@ -2,7 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
-import { buildHyperliquidSpotIocIntent, buildHyperliquidSpotIocSubmission } from '../../sdk/dist/index.js';
+import {
+  buildHyperliquidBuilderFeeApproval,
+  buildHyperliquidSpotIocBuilderFeeSubmission,
+  buildHyperliquidSpotIocIntent,
+  buildHyperliquidSpotIocSubmission,
+  executionCommerceCommitment,
+  hyperliquidSpotBuilderFeeTerms,
+} from '../../sdk/dist/index.js';
 import { verifyReceiptLocally } from '../../sdk/dist/verifier.js';
 import { authorizationTypedData, authorizeIntent, buildAuthorization, buildAuthorizedReceipt, createMemoryStore } from '../../src/index.mjs';
 import { signReceipt } from '../../src/domain/receipt.mjs';
@@ -40,6 +47,34 @@ test('SDK emits the exact unsigned Hyperliquid action without gaining signing or
     nonce: 1_700_000_000_000, expiresAfter: 1_700_000_060_000,
     action: { type: 'order', grouping: 'na', orders: [{ a: 10001, b: true, p: '100', s: '2', r: false, t: { limit: { tif: 'Ioc' } }, c: `0x${'c'.repeat(32)}` }] },
   });
+});
+
+test('SDK binds an opt-in Hyperliquid builder fee to the signed intent before adding it to a spot order', () => {
+  const policy = {
+    builder: `0x${'b'.repeat(40)}`,
+    feeTenthsOfBasisPoint: 10,
+    maximumFeeTenthsOfBasisPoint: 25,
+  };
+  const commerce = hyperliquidSpotBuilderFeeTerms(policy);
+  const intent = buildHyperliquidSpotIocIntent({
+    intentId: 'sdk-hyperliquid-builder-fee', account, amount: '1', assetId: 10001, isBuy: true,
+    limitPrice: '100', size: '2', clientOrderId: `0x${'1'.repeat(32)}`,
+    nonce: '1700000000000', expiresAfter: 1_700_000_060_000, validUntil: 1_700_000_060,
+    contextCommitments: [executionCommerceCommitment(commerce)],
+  });
+
+  const approval = buildHyperliquidBuilderFeeApproval(policy);
+  assert.deepEqual(approval.unsignedExchangeAction, {
+    type: 'approveBuilderFee', builder: policy.builder, maxFeeRate: '0.025%',
+  });
+  assert.deepEqual(buildHyperliquidSpotIocBuilderFeeSubmission(intent, policy).action.builder, {
+    b: policy.builder,
+    f: 10,
+  });
+  assert.throws(
+    () => buildHyperliquidSpotIocBuilderFeeSubmission(intent, { ...policy, feeTenthsOfBasisPoint: 11 }),
+    /does not commit/
+  );
 });
 
 test('SDK offline verifier reproduces a signed Hyperliquid spot IOC receipt', async () => {
