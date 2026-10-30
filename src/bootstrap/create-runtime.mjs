@@ -12,10 +12,11 @@ import { PriorSealError } from "../domain/errors.mjs";
 import { parsePolicyDocument, readPolicyFile } from "../infrastructure/policy/file-policy-provider.mjs";
 import { chainObservationRetryPolicy, createObservationWorker } from "../application/observations/observation-worker.mjs";
 import { observeExecution } from "../application/observations/observe-execution.mjs";
-import { observeEvm } from "../infrastructure/blockchain/evm/observer.mjs";
+import { createExecutionAdapterRegistry } from "../application/execution-adapters/registry.mjs";
+import { createEvmExecutionAdapter } from "../infrastructure/blockchain/evm/execution-adapter.mjs";
 import { createIntegrationReadinessInspector } from "../infrastructure/blockchain/evm/integration-readiness.mjs";
-import { observeSolana } from "../infrastructure/blockchain/solana/observer.mjs";
-import { observeHyperliquidSpotIoc } from "../infrastructure/blockchain/hyperliquid/observer.mjs";
+import { createSolanaExecutionAdapter } from "../infrastructure/blockchain/solana/execution-adapter.mjs";
+import { createHyperliquidExecutionAdapter } from "../infrastructure/blockchain/hyperliquid/execution-adapter.mjs";
 import { parseTransparencyAnchor, readTransparencyAnchor, verifyTransparencyAnchor } from "../infrastructure/transparency/file-anchor-provider.mjs";
 import { buildMerkleTransparencyEvidence, buildTransparencyEvidence } from "../domain/transparency.mjs";
 import { createHttpWitnessProvider, parseWitnessEndpoints, readWitnessEndpoints } from "../infrastructure/witness/http-witness-client.mjs";
@@ -81,7 +82,12 @@ async function composeRuntime({ config, environment = process.env, database, d1,
       if (config.requireExternalAnchor && !evidence.checkpoint.anchor) throw new PriorSealError("TRANSPARENCY_ANCHOR_REQUIRED", "A verified external anchor covering this authorization is required before execution");
       return evidence;
     } : null;
-    const observer = (input) => input.chainId === 0 && input.solanaTransaction ? observeSolana({ chainId: input.chainId, txHash: input.txHash, rpcUrls: rpcUrls(input.chainId), confirmations: input.confirmations, finalityRequirement: input.finalityRequirement ?? "CONFIRMATIONS", expectedTransaction: input.solanaTransaction, signal: input.signal, metrics: rpcMetrics }) : input.hyperliquidOrder && input.hyperliquidNonce && input.hyperliquidUser && config.hyperliquidInfoUrl ? observeHyperliquidSpotIoc({ txHash: input.txHash, order: input.hyperliquidOrder, nonce: input.hyperliquidNonce, user: input.hyperliquidUser, infoUrl: config.hyperliquidInfoUrl, signal: input.signal, metrics: rpcMetrics }) : input.hyperliquidOrder ? Promise.reject(new PriorSealError("RPC_NOT_CONFIGURED", "Set PRIORSEAL_HYPERLIQUID_INFO_URL before observing Hyperliquid orders")) : observeEvm({ ...input, rpcUrls: rpcUrls(input.chainId), rpcClient, erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates });
+    const executionAdapters = createExecutionAdapterRegistry([
+      createEvmExecutionAdapter({ rpcUrls: (chainId) => rpcUrls(chainId), rpcClient, erc4337EntryPoints: config.erc4337EntryPoints, safe4337Trust: config.safe4337Trust, eip7702Delegates: config.eip7702Delegates }),
+      createSolanaExecutionAdapter({ rpcUrls: (chainId) => rpcUrls(chainId), metrics: rpcMetrics }),
+      createHyperliquidExecutionAdapter({ infoUrl: config.hyperliquidInfoUrl, metrics: rpcMetrics })
+    ]);
+    const observer = (input) => executionAdapters.observe(input);
     const integrationReadinessInspector = createIntegrationReadinessInspector({ rpcClient, rpcUrls: (chainId) => rpcUrls(chainId) });
     const baseObservationWorker = store ? createObservationWorker({ store, observerManagesEvidence: true, retryPolicy: chainObservationRetryPolicy, observe: async (input) => (await observeExecution({ input, store, observer, privateKeyPem, publicKeyPem, issuer: config.issuer, keyId: config.keyId, transparencyProvider, authorizationAudience: config.authorizationAudience, verifyContractSignature })).response, saveObservation: (observation) => store.saveObservation(observation) }) : null;
     const observationWorker = baseObservationWorker && dispatchObservationJob ? {
