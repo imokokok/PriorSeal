@@ -29,7 +29,7 @@
     "PRIORSEAL_KEY_ID": "production-1",
     "PRIORSEAL_AUTHORIZATION_AUDIENCE": "priorseal.xyz",
     "PRIORSEAL_PREEXECUTION_PROOF_MODE": "rfc3161",
-    "PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED": "true",
+    "PRIORSEAL_PUBLIC_PAID_COMMERCE_ENABLED": "false",
     "PRIORSEAL_CORS_ORIGINS": "https://priorseal.xyz,https://www.priorseal.xyz",
     "PRIORSEAL_TRUST_PROXY": "true",
     "PRIORSEAL_X402_FACILITATOR_URL": "https://api.cdp.coinbase.com/platform/v2/x402",
@@ -90,7 +90,7 @@
       }
     ]
   },
-  "triggers": { "crons": ["* * * * *"] },
+  "triggers": { "crons": ["*/15 * * * *"] },
   "env": {
     "staging": {
       "assets": {
@@ -165,7 +165,7 @@
           }
         ]
       },
-      "triggers": { "crons": ["* * * * *"] },
+      "triggers": { "crons": ["*/15 * * * *"] },
       "observability": {
         "enabled": true,
         "redact_query_string": true,
