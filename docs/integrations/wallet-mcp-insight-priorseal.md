@@ -5,7 +5,7 @@ is the Wallet MCP companion for Insight decision-input integrity and PriorSeal
 authorization/execution evidence on Base.
 
 Download the complete installable package from
-[`priorseal.xyz`](https://priorseal.xyz/downloads/wallet-mcp-insight-priorseal-skill-v0.1.0.zip).
+[`priorseal.xyz`](https://priorseal.xyz/downloads/wallet-mcp-insight-priorseal-skill-v0.2.0.zip).
 The source directory in this repository is canonical; the download contains only
 that directory's Markdown files and no executable code or credentials.
 
@@ -24,3 +24,9 @@ Insight assessment, service payment, wallet signature and execution
 authorization remain separate facts. See the package's
 [compatibility gate](../../skills/wallet-mcp-insight-priorseal/references/compatibility-gate.md)
 and [PriorSeal MCP guide](priorseal-mcp.md) for the full protocol.
+
+Version 0.2.0 is a developer preview. It adds a credential-free MCP connection
+template, a no-money discovery check, and the SDK's serializable `Guarded
+Action` state record. Integrators own server-side credentials and state storage.
+The package does not request wallet allowlisting, publish a production payment
+rail, or change the Wallet MCP terms of service.

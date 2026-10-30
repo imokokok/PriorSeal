@@ -6,6 +6,7 @@ import { consoleNavigation, matchesConsoleNavigation } from './lib/console-navig
 import { hasPublishedAuthorization } from './features/capabilities/feature-registry'
 import { chains, dateTime, short } from './lib/format'
 import { openStoragePreferences } from './lib/storage'
+import { summarizeWalletGuardedAction, type WalletGuardedAction } from 'priorseal-sdk'
 import type { Receipt } from './types'
 
 export function Logo() { return <Link className="logo" to="/" aria-label="PriorSeal public home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Authority Evidence</small></span></Link> }
@@ -16,7 +17,7 @@ export function Status({ value, small = false }: { value?: string | null; small?
   const tokens = new Set(text.toUpperCase().split(/[\s_]+/))
   const contains = (values: string[]) => values.some((candidate) => tokens.has(candidate))
   const upper = text.toUpperCase()
-  const tone = upper === 'NON_COMPLIANT' || contains(['FAILED', 'INVALID', 'MISSING', 'REVERTED', 'EXPIRED', 'ERROR', 'MISMATCH', 'OFFLINE']) || upper === 'NOT_FOUND' ? 'danger' : upper === 'NOT_ASSESSABLE' || contains(['PENDING', 'CHECKING', 'INACTIVE', 'UNDETERMINED', 'REORGED', 'INSUFFICIENT']) ? 'warning' : contains(['COMPLIANT', 'COMPLETED', 'CONFIRMED', 'VALID', 'BOUND', 'ACTIVE', 'OK', 'SIGNED', 'ACCEPTED', 'AUTHORIZED', 'READY', 'ONLINE', 'HEALTHY', 'CLEAR']) ? 'success' : 'neutral'
+  const tone = upper === 'NON_COMPLIANT' || contains(['BLOCKED', 'FAILED', 'INVALID', 'MISSING', 'REVERTED', 'EXPIRED', 'ERROR', 'MISMATCH', 'OFFLINE']) || upper === 'NOT_FOUND' ? 'danger' : upper === 'NOT_ASSESSABLE' || contains(['PENDING', 'CHECKING', 'INACTIVE', 'UNDETERMINED', 'REORGED', 'UNKNOWN', 'INSUFFICIENT']) ? 'warning' : contains(['COMPLIANT', 'COMPLETED', 'CONFIRMED', 'VALID', 'BOUND', 'ACTIVE', 'OK', 'SIGNED', 'ACCEPTED', 'AUTHORIZED', 'READY', 'ONLINE', 'HEALTHY', 'CLEAR']) ? 'success' : 'neutral'
   return <span className={'status ' + tone + (small ? ' small' : '')}><span aria-hidden="true">{tone === 'success' ? '✓' : tone === 'danger' ? '!' : '•'}</span>{text.replaceAll('_', ' ')}</span>
 }
 export function Notice({ tone = 'info', title, children }: { tone?: 'info' | 'warning' | 'danger' | 'success'; title: string; children: ReactNode }) { return <section className={'notice ' + tone} role={tone === 'danger' ? 'alert' : 'status'}><span className="notice-icon" aria-hidden="true">{tone === 'warning' ? '!' : tone === 'danger' ? '×' : 'i'}</span><div><strong>{title}</strong><p>{children}</p></div></section> }
@@ -32,6 +33,24 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
   return <label className="field"><span className="field-label" id={`${descriptionId}-label`}>{label}</span>{child}{error ? <span id={descriptionId} className="field-error">{error}</span> : hint && <span id={descriptionId} className="field-hint">{hint}</span>}</label>
 }
 export function PageHeader({ eyebrow, title, children, actions }: { eyebrow?: string; title: string; children?: ReactNode; actions?: ReactNode }) { return <div className="page-header"><div className="page-heading">{eyebrow && <p className="eyebrow">{eyebrow}</p>}<h1 data-route-heading tabIndex={-1}>{title}</h1>{children && <p className="lede">{children}</p>}</div>{actions && <div className="header-actions">{actions}</div>}</div> }
+
+/** A reusable, presentation-only card. Integrators persist and transition the SDK record themselves. */
+export function GuardedActionCard({ action }: { action: WalletGuardedAction }) {
+  const summary = summarizeWalletGuardedAction(action)
+  return <article className="panel" aria-label={`Guarded action ${action.actionId}`}>
+    <span className="exact-index">GUARDED ACTION / {action.chainId}</span>
+    <div className="receipt-badges"><Status value={summary.state} /><Status value={summary.terminal ? 'TERMINAL' : 'IN PROGRESS'} small /></div>
+    <h2>{summary.title}</h2>
+    <p>{summary.detail}</p>
+    <dl className="data-grid">
+      <div><dt>Action</dt><dd><CodeValue value={action.actionId} /></dd></div>
+      <div><dt>Intent</dt><dd><CodeValue value={action.intentId} /></dd></div>
+      <div><dt>Transaction</dt><dd><CodeValue value={action.submission?.txHash} /></dd></div>
+      <div><dt>Receipt</dt><dd><CodeValue value={action.observation?.receiptId} /></dd></div>
+    </dl>
+    <Notice tone={summary.state === 'RISK_BLOCKED' || summary.state === 'FAILED' ? 'danger' : summary.state === 'UNKNOWN' ? 'warning' : 'info'} title="Next safe step">{summary.nextStep}</Notice>
+  </article>
+}
 
 type ConsoleContextValue = {
   inShell: boolean
