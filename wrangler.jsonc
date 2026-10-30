@@ -89,9 +89,6 @@
       }
     ]
   },
-  // The queue delivers ordinary retries directly. This scan repairs only missed
-  // deliveries after a Worker outage, so a 15-minute recovery window avoids
-  // creating an otherwise idle Worker invocation every minute.
   "triggers": { "crons": ["*/15 * * * *"] },
   "env": {
     "staging": {
