@@ -22,11 +22,31 @@ or a smart-account request is covered by PriorSeal. See
    chat surfaces that cannot call the authenticated PriorSeal API can use the
    Insight assessment portion, but must stop before authorization and never
    claim a guarded execution.
+5. Run `examples/connection-check.mts` with Node 22+ before the first use. It
+   proves only that free MCP discovery is reachable. It does not request a
+   wallet signature, call a paid tool, or send a transaction.
+
+`mcp.json` is a credential-free connection template. The server-side integrator
+owns its PriorSeal credential and state persistence; the end user never pastes
+one into a chat prompt or browser field.
+
+## Guarded Action record
+
+Version 0.2.0 adds the public `priorseal-sdk` `WalletGuardedAction` state model
+and a reusable UI card. Persist it at every boundary:
+
+`risk → prepare → authorization signature → accepted → submitted → observe → verify`
+
+`UNKNOWN` is deliberately not a retry state. Re-observe the stored original
+transaction hash; do not make a replacement transaction under the same action.
+See [`references/guarded-action-states.md`](references/guarded-action-states.md)
+and [`docs/integrations/guarded-action.md`](../../docs/integrations/guarded-action.md).
 
 ## Release status
 
 The complete, versioned package is also available from
-[`priorseal.xyz`](https://priorseal.xyz/downloads/wallet-mcp-insight-priorseal-skill-v0.1.0.zip).
+[`priorseal.xyz`](https://priorseal.xyz/downloads/wallet-mcp-insight-priorseal-skill-v0.2.0.zip).
 It does not deploy a new PriorSeal endpoint, request Wallet MCP host allowlisting,
-or establish a production payment rail. Those are separate operational and
-partner-authorized changes.
+or establish a production payment rail. This is a developer-preview integration
+package, not a Wallet MCP endorsement or a public commercial-payment launch.
+Those are separate operational and partner-authorized changes.
