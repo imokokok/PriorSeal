@@ -40,17 +40,8 @@ async function observeExecution({ input: inputValue, store, observer, signal, pr
   const confirmations = solana || hyperliquid ? Math.max(requestedConfirmations, Number(constraints?.minConfirmations ?? 0)) : Math.max(requestedConfirmations, Number(constraints?.minConfirmations ?? 0), maxToleratedReorgDepth == null ? 0 : maxToleratedReorgDepth + 1);
   const erc4337 = intent.executionProfile === "priorseal.execution-profile.erc4337-user-operation.v1" ? { entryPoint: String(intent.entryPoint), entryPointCodeHash: String(intent.entryPointCodeHash), entryPointVersion: intent.entryPointVersion, userOperationHash: String(intent.userOperationHash), ...intent.accountCallProfile ? { accountCallProfile: intent.accountCallProfile, accountCallTarget: String(intent.accountCallTarget), accountCallValue: String(intent.accountCallValue), accountCallDataHash: String(intent.accountCallDataHash) } : {}, ...intent.eip7702 ? { eip7702: intent.eip7702 } : {} } : void 0;
   const previous = store.getObservation ? await store.getObservation(intent.chainId, requestedTxHash) : null;
-  const observed = await observer({
-    chainId: intent.chainId,
-    txHash: requestedTxHash,
-    confirmations,
-    finalityRequirement,
-    maxToleratedReorgDepth,
-    ...solana ? { solanaTransaction: intent.solanaTransaction } : {},
-    ...hyperliquid ? { hyperliquidOrder: intent.hyperliquidOrder, hyperliquidNonce: intent.nonce, hyperliquidUser: intent.sender } : {},
-    ...erc4337 ? { erc4337 } : {},
-    signal
-  });
+  const observationRequest = solana ? { kind: "solana-signature", reference: { kind: "solana-signature", chainRef: SOLANA_MAINNET_CAIP2, signature: requestedTxHash }, chainId: intent.chainId, txHash: requestedTxHash, confirmations, finalityRequirement, maxToleratedReorgDepth, solanaTransaction: intent.solanaTransaction, signal } : hyperliquid ? { kind: "venue-order", reference: { kind: "venue-order", venue: "hyperliquid", account: intent.sender, clientOrderId: requestedTxHash }, chainId: intent.chainId, txHash: requestedTxHash, confirmations, finalityRequirement, maxToleratedReorgDepth, hyperliquidOrder: intent.hyperliquidOrder, hyperliquidNonce: intent.nonce, hyperliquidUser: intent.sender, signal } : { kind: "evm-transaction", reference: { kind: "evm-transaction", chainId: intent.chainId, txHash: requestedTxHash }, chainId: intent.chainId, txHash: requestedTxHash, confirmations, finalityRequirement, maxToleratedReorgDepth, ...erc4337 ? { erc4337 } : {}, signal };
+  const observed = await observer(observationRequest);
   const observedTxHash = solana ? normalizeSolanaSignature(observed?.txHash) : hyperliquid ? normalizeHyperliquidCloid(observed?.txHash) : normalizeTxHash(observed?.txHash);
   if (observedTxHash !== requestedTxHash) throw new PriorSealError("OBSERVATION_TX_HASH_MISMATCH", "Observer transaction hash does not match the requested transaction");
   if (String(observed?.chainId) !== String(intent.chainId) || solana && observed?.chainRef !== SOLANA_MAINNET_CAIP2 || hyperliquid && observed?.chainRef !== HYPERLIQUID_MAINNET_CHAIN_REF) throw new PriorSealError("OBSERVATION_CHAIN_MISMATCH", "Observer chain does not match the authorized intent");
