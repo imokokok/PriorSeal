@@ -34,6 +34,54 @@ TWAPs, outcomes, subaccount or vault delegation, API-wallet approval, HyperEVM,
 deposits, withdrawals, or route selection. Those are new execution profiles,
 not flags to add to this one.
 
+## Optional builder-fee commerce
+
+An integration can opt into a Hyperliquid builder fee without giving PriorSeal
+or Insight signing authority. The commercial term uses the portable
+`execution.commerce.v1` context-commitment namespace, so the same receipt
+binding works for other venue adapters. It records the beneficiary, exact
+per-order rate, user-approved maximum and the requirement for venue-side
+reconciliation.
+
+For a spot order, create a fee policy, add its commitment to the intent, then
+ask the **main account** to sign the separate `approveBuilderFee` action. Only
+after that can the same policy be added to the unsigned order action. The SDK
+refuses to add the fee to an order whose signed intent does not already commit
+to exactly those terms.
+
+```ts
+import {
+  buildHyperliquidBuilderFeeApproval,
+  buildHyperliquidSpotIocBuilderFeeSubmission,
+  buildHyperliquidSpotIocIntent,
+  executionCommerceCommitment,
+  hyperliquidSpotBuilderFeeTerms,
+} from 'priorseal-sdk'
+
+const builderFee = {
+  builder: '0xYourBuilderAddress',
+  feeTenthsOfBasisPoint: 10, // 1 bp
+  maximumFeeTenthsOfBasisPoint: 10,
+}
+
+const intent = buildHyperliquidSpotIocIntent({
+  // ordinary IOC fields omitted
+  contextCommitments: [
+    executionCommerceCommitment(hyperliquidSpotBuilderFeeTerms(builderFee)),
+  ],
+})
+
+// Sign with the user-controlled Hyperliquid main account. The SDK never signs
+// or submits either action.
+const approval = buildHyperliquidBuilderFeeApproval(builderFee)
+const order = buildHyperliquidSpotIocBuilderFeeSubmission(intent, builderFee)
+```
+
+The SDK reports terms and an estimate-ready order record; it does **not** claim
+that a venue has accrued or paid a builder fee. Reconcile revenue against the
+venue's builder-fill export before recognizing it. API/x402 charges remain
+separate payments for Insight/PriorSeal services, never authority to trade.
+
 ## Configure a deployment
 
 Set a public HTTPS Info endpoint explicitly. The runtime refuses Hyperliquid
