@@ -12,7 +12,7 @@ import { txHash as normalizeTxHash } from '../../domain/values.mjs';
 import { decodeBase58, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from '../../domain/solana.mjs';
 import type { SolanaTransactionMessage } from '../../domain/solana.mjs';
 import { HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_SPOT_IOC_PROFILE, isHyperliquidCloid } from '../../domain/hyperliquid.mjs';
-import type { HyperliquidSpotIocOrder } from '../../domain/hyperliquid.mjs';
+import type { ExecutionObservationRequest } from '../../domain/execution-adapter.mjs';
 import { assertOnlyFields } from '../../shared/safe-json.mjs';
 import { findIdempotentReplay, reserveIdempotentResponse } from '../idempotency.mjs';
 import type { Authorization } from '../../domain/authorization.mjs';
@@ -46,7 +46,7 @@ type ObservationStore = IdempotencyStore<ObservationResponse> & {
   saveObservation: (observation: Observation) => Promise<unknown>;
   saveReceipt: (receipt: SignedReceipt) => Promise<unknown>;
 };
-export type ExecutionObserver = (input: { chainId: number; txHash: string; confirmations: number; finalityRequirement: 'CONFIRMATIONS' | 'RPC_FINALIZED'; maxToleratedReorgDepth: number | null; solanaTransaction?: SolanaTransactionMessage; hyperliquidOrder?: HyperliquidSpotIocOrder; hyperliquidNonce?: string; hyperliquidUser?: string; erc4337?: { entryPoint: string; entryPointCodeHash: string; entryPointVersion: '0.6' | '0.7' | '0.8' | '0.9'; userOperationHash: string; accountCallProfile?: 'safe-4337.v1'; accountCallTarget?: string; accountCallValue?: string; accountCallDataHash?: string; eip7702?: { delegateAddress: string; delegateCodeHash: string; authorizationTupleHash?: string } }; signal?: AbortSignal }) => Promise<ExecutionInput>;
+export type ExecutionObserver = (input: ExecutionObservationRequest) => Promise<ExecutionInput>;
 type ContractSignatureVerifier = NonNullable<NonNullable<Parameters<typeof verifyAuthorizedReceipt>[2]>['verifyContractSignature']>;
 
 /** Observes an execution, records evidence, and optionally issues a signed receipt. */
@@ -79,17 +79,12 @@ export async function observeExecution({ input: inputValue, store, observer, sig
     ? { entryPoint: String(intent.entryPoint), entryPointCodeHash: String(intent.entryPointCodeHash), entryPointVersion: intent.entryPointVersion as '0.6' | '0.7' | '0.8' | '0.9', userOperationHash: String(intent.userOperationHash), ...(intent.accountCallProfile ? { accountCallProfile: intent.accountCallProfile as 'safe-4337.v1', accountCallTarget: String(intent.accountCallTarget), accountCallValue: String(intent.accountCallValue), accountCallDataHash: String(intent.accountCallDataHash) } : {}), ...(intent.eip7702 ? { eip7702: intent.eip7702 } : {}) }
     : undefined;
   const previous = store.getObservation ? await store.getObservation(intent.chainId, requestedTxHash) : null;
-  const observed = await observer({
-    chainId: intent.chainId,
-    txHash: requestedTxHash,
-    confirmations,
-    finalityRequirement,
-    maxToleratedReorgDepth,
-    ...(solana ? { solanaTransaction: intent.solanaTransaction } : {}),
-    ...(hyperliquid ? { hyperliquidOrder: intent.hyperliquidOrder, hyperliquidNonce: intent.nonce, hyperliquidUser: intent.sender } : {}),
-    ...(erc4337 ? { erc4337 } : {}),
-    signal,
-  });
+  const observationRequest: ExecutionObservationRequest = solana
+    ? { kind: 'solana-signature', reference: { kind: 'solana-signature', chainRef: SOLANA_MAINNET_CAIP2, signature: requestedTxHash }, chainId: intent.chainId, txHash: requestedTxHash, confirmations, finalityRequirement, maxToleratedReorgDepth, solanaTransaction: intent.solanaTransaction!, signal }
+    : hyperliquid
+      ? { kind: 'venue-order', reference: { kind: 'venue-order', venue: 'hyperliquid', account: intent.sender, clientOrderId: requestedTxHash }, chainId: intent.chainId, txHash: requestedTxHash, confirmations, finalityRequirement, maxToleratedReorgDepth, hyperliquidOrder: intent.hyperliquidOrder!, hyperliquidNonce: intent.nonce, hyperliquidUser: intent.sender, signal }
+      : { kind: 'evm-transaction', reference: { kind: 'evm-transaction', chainId: intent.chainId, txHash: requestedTxHash }, chainId: intent.chainId, txHash: requestedTxHash, confirmations, finalityRequirement, maxToleratedReorgDepth, ...(erc4337 ? { erc4337 } : {}), signal };
+  const observed = await observer(observationRequest);
   const observedTxHash = solana ? normalizeSolanaSignature(observed?.txHash) : hyperliquid ? normalizeHyperliquidCloid(observed?.txHash) : normalizeTxHash(observed?.txHash);
   if (observedTxHash !== requestedTxHash) throw new PriorSealError('OBSERVATION_TX_HASH_MISMATCH', 'Observer transaction hash does not match the requested transaction');
   if (String(observed?.chainId) !== String(intent.chainId) || (solana && observed?.chainRef !== SOLANA_MAINNET_CAIP2) || (hyperliquid && observed?.chainRef !== HYPERLIQUID_MAINNET_CHAIN_REF)) throw new PriorSealError('OBSERVATION_CHAIN_MISMATCH', 'Observer chain does not match the authorized intent');
