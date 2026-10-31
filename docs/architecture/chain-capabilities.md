@@ -12,6 +12,7 @@ implicit claim that every other column is enabled.
 | OP Mainnet | `eip155:10` | Yes | EVM JSON-RPC, deployment RPC required. |
 | Polygon PoS | `eip155:137` | Yes | EVM JSON-RPC, deployment RPC required. |
 | Monad | `eip155:143` | Yes | Offered only when the selected facilitator supports `exact`. |
+| HyperEVM | `eip155:999` | Yes | Native Circle USDC; configure `PRIORSEAL_RPC_HYPEREVM` for observation. x402 is offered only when the selected facilitator supports `exact`. |
 | Sei | `eip155:1329` | Yes | EVM JSON-RPC, deployment RPC required. |
 | X Layer | `eip155:196` | Yes | EVM JSON-RPC, deployment RPC required. |
 | BNB Smart Chain | `eip155:56` | Yes | EVM JSON-RPC, deployment RPC required. x402 settles 18-decimal bridged USDC through a facilitator with a non-EIP-3009 mandate flow (AEON; set `PRIORSEAL_X402_FACILITATOR_URLS`). |
@@ -60,7 +61,8 @@ observes the confirmed transaction.
 
 Every execution receipt can be delivered through the chain-neutral
 [`Evidence API`](evidence-api.md). Its EVM profile applies to each supported
-EIP-155 chain in this matrix, including Monad (`eip155:143`); its Solana
+EIP-155 chain in this matrix, including Monad (`eip155:143`) and HyperEVM
+(`eip155:999`); its Solana
 profile applies only to the compiled Solana transaction path. A profile is a
 description of signed receipt fields and their verification route, not a claim
 that a chain-specific advanced feature is available. In particular, Monad's

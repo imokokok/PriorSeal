@@ -6,6 +6,7 @@ export const SUPPORTED_CHAINS = Object.freeze({
   137: { name: 'Polygon PoS', rpcEnv: 'PRIORSEAL_RPC_POLYGON' },
   143: { name: 'Monad', rpcEnv: 'PRIORSEAL_RPC_MONAD' },
   196: { name: 'X Layer', rpcEnv: 'PRIORSEAL_RPC_X_LAYER' },
+  999: { name: 'HyperEVM', rpcEnv: 'PRIORSEAL_RPC_HYPEREVM' },
   1329: { name: 'Sei', rpcEnv: 'PRIORSEAL_RPC_SEI' },
   8453: { name: 'Base', rpcEnv: 'PRIORSEAL_RPC_BASE' },
   84532: { name: 'Base Sepolia', rpcEnv: 'PRIORSEAL_RPC_BASE_SEPOLIA' },
