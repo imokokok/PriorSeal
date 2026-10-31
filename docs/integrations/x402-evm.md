@@ -1,8 +1,8 @@
 # x402 payments on aligned EVM networks and Solana
 
 PriorSeal's shared Node and Cloudflare Worker API can accept x402 v2 `exact`
-USDC payments on Ethereum, OP Mainnet, Polygon PoS, Monad, X Layer, Sei,
-Base, Arbitrum One, Avalanche C-Chain, and BNB Smart Chain. It can also accept
+USDC payments on Ethereum, OP Mainnet, Polygon PoS, Monad, HyperEVM, X Layer,
+Sei, Base, Arbitrum One, Avalanche C-Chain, and BNB Smart Chain. It can also accept
 Solana mainnet USDC (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`). The API
 delegates signature verification and settlement to a facilitator configured by
 the deployment operator. The actual `PAYMENT-REQUIRED` response contains only
@@ -144,6 +144,26 @@ Record the facilitator's live `/supported` response for `eip155:56` in the
 change record before enabling the rail, exactly as the
 [production Go/No-Go](../runbooks/x402-production-go-no-go.md) requires for a
 new mainnet rail.
+
+HyperEVM (`eip155:999`) uses [Circle-native USDC](https://www.circle.com/multi-chain-usdc/hyperevm)
+at `0xb88339CB7199b77E23DB6E890353E22632Ba630f` on the ordinary six-decimal
+USDC grid. Its chain ID is 999, as documented by
+[Hyperliquid](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm).
+PriorSeal includes the rail but does not select or endorse a facilitator for
+it: enable it only after the candidate's live `/supported` response contains
+the exact-v2 `exact` + `eip155:999` tuple and its verification and settlement
+responses pass the no-payment rollout check. A dedicated facilitator can be
+routed without changing the default:
+
+```dotenv
+PRIORSEAL_X402_NETWORKS=eip155:999
+PRIORSEAL_X402_FACILITATOR_URL=https://REPLACE_WITH_APPROVED_X402_V2_FACILITATOR
+PRIORSEAL_X402_FACILITATOR_URLS=eip155:999=https://facilitator.ultravioletadao.xyz
+```
+
+If the deployment will also observe HyperEVM subject transactions, configure
+`PRIORSEAL_RPC_HYPEREVM` with a reviewed HyperEVM JSON-RPC endpoint. Payment
+acceptance and subject-chain observation are separate opt-ins.
 
 For Solana, the resource server obtains the sponsor's public `feePayer` from
 the facilitator's exact-v2 network metadata (`kinds[].extra.feePayer`). This
