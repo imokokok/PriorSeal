@@ -50,8 +50,8 @@ pricing, enabled rails and exact resources are available from
 `GET /v1/capabilities`. See the [agent usage and payment model](docs/product/agent-usage-model.md).
 
 For x402 API payments, the aligned production rails are Ethereum, OP Mainnet,
-Polygon PoS, Monad, X Layer, Sei, Base, Arbitrum One, Avalanche C-Chain, and
-Solana mainnet-beta. A rail is advertised only when its payee is configured and
+Polygon PoS, Monad, HyperEVM, X Layer, Sei, Base, Arbitrum One, Avalanche
+C-Chain, and Solana mainnet-beta. A rail is advertised only when its payee is configured and
 the selected facilitator currently supports it; execution observation still
 requires that chain's independently configured RPC endpoint.
 

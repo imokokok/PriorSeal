@@ -24,6 +24,7 @@ export const X402_EVM_NETWORKS = Object.freeze([
   { family: 'evm', network: 'eip155:1329', chainId: 1329, name: 'Sei', asset: '0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392', assetName: 'USD Coin', assetVersion: '2' },
   { family: 'evm', network: 'eip155:196', chainId: 196, name: 'X Layer', asset: '0xB6CEceAB302E2E4948951eE7843FC24E92933061', assetName: 'USD Coin', assetVersion: '2' },
   { family: 'evm', network: 'eip155:143', chainId: 143, name: 'Monad', asset: '0x754704Bc059F8C67012fEd69BC8A327a5aafb603', assetName: 'USDC', assetVersion: '2' },
+  { family: 'evm', network: 'eip155:999', chainId: 999, name: 'HyperEVM', asset: '0xb88339CB7199b77E23DB6E890353E22632Ba630f', assetName: 'USDC', assetVersion: '2' },
   {
     family: 'evm',
     network: 'eip155:56',
