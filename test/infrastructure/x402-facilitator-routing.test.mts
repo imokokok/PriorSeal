@@ -55,6 +55,64 @@ test('BNB Smart Chain is advertised by default and on explicit selection', () =>
   assert.deepEqual(explicit?.networks, ['eip155:8453', 'eip155:56', 'eip155:999']);
 });
 
+test('HyperCore native USDC remains disabled until its dedicated merchant rail is fully configured', () => {
+  assert.equal(parseX402Config(base)?.hypercore, undefined);
+  const config = parseX402Config({
+    ...base,
+    PRIORSEAL_HYPERCORE_X402_ENABLED: 'true',
+    PRIORSEAL_HYPERCORE_X402_FACILITATOR_URL: 'https://hypercore-facilitator.example',
+    PRIORSEAL_HYPERCORE_X402_MERCHANT_ID: 'priorseal',
+    PRIORSEAL_HYPERCORE_X402_MERCHANT_SECRET: 'a-merchant-secret-that-is-long-enough',
+    PRIORSEAL_HYPERCORE_X402_PAY_TO: '0xdef0000000000000000000000000000000000002',
+  });
+  assert.deepEqual(config?.hypercore && {
+    network: config.hypercore.network,
+    merchantId: config.hypercore.merchantId,
+    payTo: config.hypercore.payTo,
+  }, {
+    network: 'hyperliquid:mainnet',
+    merchantId: 'priorseal',
+    payTo: '0xDEF0000000000000000000000000000000000002',
+  });
+  assert.throws(() => parseX402Config({ ...base, PRIORSEAL_HYPERCORE_X402_ENABLED: 'yes' }), /must be true/);
+  assert.throws(() => parseX402Config({ ...base, PRIORSEAL_HYPERCORE_X402_ENABLED: 'true' }), /FACILITATOR_URL/);
+});
+
+test('a HyperCore-only rollout suppresses all ordinary facilitator rails', async (t) => {
+  const config = parseX402Config({
+    ...base,
+    PRIORSEAL_X402_STANDARD_RAILS_ENABLED: 'false',
+    PRIORSEAL_HYPERCORE_X402_ENABLED: 'true',
+    PRIORSEAL_HYPERCORE_X402_FACILITATOR_URL: 'https://hypercore-facilitator.example',
+    PRIORSEAL_HYPERCORE_X402_MERCHANT_ID: 'priorseal',
+    PRIORSEAL_HYPERCORE_X402_MERCHANT_SECRET: 'a-merchant-secret-that-is-long-enough',
+    PRIORSEAL_HYPERCORE_X402_PAY_TO: '0xdef0000000000000000000000000000000000002',
+  });
+  assert.deepEqual(config?.networks, []);
+  assert.throws(() => parseX402Config({ ...base, PRIORSEAL_X402_STANDARD_RAILS_ENABLED: 'no' }), /STANDARD_RAILS_ENABLED/);
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    if (url.toString() === 'https://hypercore-facilitator.example/v1/quotes') {
+      return Response.json({
+        requirement: {
+          scheme: 'exact', network: 'hyperliquid:mainnet', amount: '0.01', asset: 'USDC',
+          payTo: '0xDEF0000000000000000000000000000000000002', maxTimeoutSeconds: 60,
+          extra: { assetTransferMethod: 'hypercore-usd-send', protocolVersion: '1', quoteId: 'a'.repeat(43) },
+        },
+      });
+    }
+    throw new TypeError(`ordinary facilitator should not be called: ${url.toString()}`);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const prepared = await createX402PaymentService(config!).prepare(config!.routes[0]!, 'https://api.example.test/v1/receipts/example/bundle', undefined);
+  assert.equal(prepared.kind, 'required');
+  if (prepared.kind !== 'required') throw new Error('expected HyperCore payment requirement');
+  assert.deepEqual((prepared.response.accepts as Array<{ network: string }>).map(({ network }) => network), ['hyperliquid:mainnet']);
+});
+
 test('per-network facilitator overrides parse and validate strictly', () => {
   const parsed = parseX402Config({
     ...base,
