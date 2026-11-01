@@ -1,0 +1,41 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hypercore-x402-facilitator-testnet",
+  "main": "./src/hypercore-x402/worker.mjs",
+  "compatibility_date": "2026-09-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  },
+  "vars": {
+    "HYPERCORE_X402_ENABLED": "false",
+    "HYPERCORE_X402_NETWORK": "hyperliquid:testnet",
+    "HYPERCORE_X402_EXCHANGE_URL": "https://api.hyperliquid-testnet.xyz/exchange",
+    "HYPERCORE_X402_MAX_TIMEOUT_SECONDS": "60"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "HYPERCORE_X402_PAYMENTS", "class_name": "HypercorePaymentGate" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["HypercorePaymentGate"] }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hypercore-x402-facilitator-testnet",
+      "database_id": "7ab503bb-9f8d-45c5-ace8-c52f9646e96e",
+      "migrations_dir": "./hypercore-x402/migrations"
+    }
+  ],
+  "secrets": {
+    "required": [
+      "HYPERCORE_X402_PAY_TO",
+      "HYPERCORE_X402_MERCHANTS_JSON"
+    ]
+  }
+}
