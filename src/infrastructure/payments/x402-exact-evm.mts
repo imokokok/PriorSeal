@@ -2,6 +2,8 @@ import { getAddress } from 'viem';
 import { assertSafeJson } from '../../shared/safe-json.mjs';
 import { decodeBase58, isSolanaPublicKey, SOLANA_MAINNET_CAIP2 } from '../../domain/solana.mjs';
 import { CDP_X402_FACILITATOR_URL, cdpFacilitatorAuthHeaders, parseCdpFacilitatorAuth, type CdpFacilitatorAuth } from './cdp-facilitator-auth.mjs';
+import { createHypercoreFacilitatorClient, parseHypercoreFacilitatorConfig, type HypercoreFacilitatorFetcher, type HypercoreFacilitatorMerchantConfig } from './hypercore-x402-facilitator-client.mjs';
+import { HYPERCORE_X402_MAINNET, HYPERCORE_X402_TESTNET, isHypercoreNetwork, type HypercoreX402Network } from './hypercore-x402-protocol.mjs';
 
 /**
  * Payment networks deliberately mirror Insight's production x402 rails.
@@ -101,6 +103,8 @@ export type X402Config = {
   testnetNetworksEnabled: boolean;
   timeoutMs: number;
   routes: X402Route[];
+  /** Native HyperCore Core-USDC beta. It is opt-in and disabled by default. */
+  hypercore?: HypercoreFacilitatorMerchantConfig;
 };
 
 type X402Environment = Partial<Record<
@@ -109,14 +113,21 @@ type X402Environment = Partial<Record<
   'PRIORSEAL_X402_RESOURCE_ORIGIN' | 'PRIORSEAL_X402_PAY_TO' |
   'PRIORSEAL_X402_SOLANA_PAY_TO' |
   'PRIORSEAL_X402_NETWORKS' |
+  'PRIORSEAL_X402_STANDARD_RAILS_ENABLED' |
   'PRIORSEAL_X402_ENABLE_TESTNETS' |
   'PRIORSEAL_ENVIRONMENT' |
+  'PRIORSEAL_HYPERCORE_X402_ENABLED' | 'PRIORSEAL_HYPERCORE_X402_FACILITATOR_URL' |
+  'PRIORSEAL_HYPERCORE_X402_MERCHANT_ID' | 'PRIORSEAL_HYPERCORE_X402_MERCHANT_SECRET' |
+  'PRIORSEAL_HYPERCORE_X402_NETWORK' | 'PRIORSEAL_HYPERCORE_X402_PAY_TO' |
   'PRIORSEAL_X402_TIMEOUT_MS' | 'PRIORSEAL_X402_ROUTES_JSON', string
->>;
+>> & {
+  /** A private Cloudflare service binding is used only when the runtime supplies it. */
+  HYPERCORE_X402_FACILITATOR?: HypercoreFacilitatorFetcher;
+};
 
-export type X402PaymentContext = { payload: X402PaymentPayload; requirement: X402Requirement };
+export type X402PaymentContext = { payload: X402PaymentPayload; requirement: X402Requirement; rail?: 'hypercore' };
 export type X402Settlement = { success: boolean; transaction: string; network: string; errorReason?: string; payer?: string; amount?: string };
-export type X402NetworkDescriptor = { family: 'evm' | 'svm'; network: string; chainId: number; name: string; asset: string; assetName: string };
+export type X402NetworkDescriptor = { family: 'evm' | 'svm' | 'hypercore'; network: string; chainId: number; name: string; asset: string; assetName: string };
 
 const BAZAAR_SERVICE = Object.freeze({
   serviceName: 'PriorSeal Evidence API',
@@ -144,7 +155,14 @@ export function parseX402Config(environment: X402Environment): X402Config | unde
     payTo: optional(environment.PRIORSEAL_X402_PAY_TO),
     solanaPayTo: optional(environment.PRIORSEAL_X402_SOLANA_PAY_TO),
     networks: optional(environment.PRIORSEAL_X402_NETWORKS),
+    standardRailsEnabled: optional(environment.PRIORSEAL_X402_STANDARD_RAILS_ENABLED),
     enableTestnets: optional(environment.PRIORSEAL_X402_ENABLE_TESTNETS),
+    hypercoreEnabled: optional(environment.PRIORSEAL_HYPERCORE_X402_ENABLED),
+    hypercoreFacilitatorUrl: optional(environment.PRIORSEAL_HYPERCORE_X402_FACILITATOR_URL),
+    hypercoreMerchantId: optional(environment.PRIORSEAL_HYPERCORE_X402_MERCHANT_ID),
+    hypercoreMerchantSecret: optional(environment.PRIORSEAL_HYPERCORE_X402_MERCHANT_SECRET),
+    hypercoreNetwork: optional(environment.PRIORSEAL_HYPERCORE_X402_NETWORK),
+    hypercorePayTo: optional(environment.PRIORSEAL_HYPERCORE_X402_PAY_TO),
     timeoutMs: optional(environment.PRIORSEAL_X402_TIMEOUT_MS),
     routesJson: optional(environment.PRIORSEAL_X402_ROUTES_JSON),
   };
@@ -160,14 +178,45 @@ export function parseX402Config(environment: X402Environment): X402Config | unde
   const payTo = raw.payTo ? parseEvmAddress(raw.payTo, 'PRIORSEAL_X402_PAY_TO') : undefined;
   const solanaPayTo = raw.solanaPayTo ? parseSolanaPublicKey(raw.solanaPayTo, 'PRIORSEAL_X402_SOLANA_PAY_TO') : undefined;
   const testnetNetworksEnabled = parseTestnetNetworkFlag(raw.enableTestnets, environment.PRIORSEAL_ENVIRONMENT);
-  const networkSelection = parseNetworkSelection(raw.networks, testnetNetworksEnabled);
+  const configuredNetworkSelection = parseNetworkSelection(raw.networks, testnetNetworksEnabled);
+  const standardRailsEnabled = parseStandardRailsEnabled(raw.standardRailsEnabled);
+  const networkSelection = standardRailsEnabled
+    ? configuredNetworkSelection
+    : { networks: [], networksExplicitlyConfigured: true };
   if (networkSelection.networksExplicitlyConfigured && networkSelection.networks.some(network => network.startsWith('eip155:')) && !payTo) throw new TypeError('PRIORSEAL_X402_NETWORKS selects an EVM payment rail but PRIORSEAL_X402_PAY_TO is not configured');
   if (networkSelection.networksExplicitlyConfigured && networkSelection.networks.includes(SOLANA_MAINNET_CAIP2) && !solanaPayTo) throw new TypeError('PRIORSEAL_X402_NETWORKS selects Solana but PRIORSEAL_X402_SOLANA_PAY_TO is not configured');
   const timeoutMs = parseTimeout(raw.timeoutMs);
   const facilitatorHeaders = parseFacilitatorHeaders(raw.facilitatorHeadersJson);
   const facilitatorAuth = parseFacilitatorAuth(raw.facilitatorAuthMode, raw.cdpApiKeyId, raw.cdpApiKeySecret, facilitatorUrl, Boolean(raw.facilitatorHeadersJson));
   const routes = parseRoutes(raw.routesJson!);
-  return { facilitatorUrl, ...(facilitatorUrls ? { facilitatorUrls } : {}), facilitatorHeaders, ...(facilitatorAuth ? { facilitatorAuth } : {}), resourceOrigin, ...(payTo ? { payTo } : {}), ...(solanaPayTo ? { solanaPayTo } : {}), ...networkSelection, testnetNetworksEnabled, timeoutMs, routes };
+  const hypercore = parseHypercoreMerchantConfig(raw, timeoutMs, environment.HYPERCORE_X402_FACILITATOR);
+  return { facilitatorUrl, ...(facilitatorUrls ? { facilitatorUrls } : {}), facilitatorHeaders, ...(facilitatorAuth ? { facilitatorAuth } : {}), resourceOrigin, ...(payTo ? { payTo } : {}), ...(solanaPayTo ? { solanaPayTo } : {}), ...networkSelection, testnetNetworksEnabled, timeoutMs, routes, ...(hypercore ? { hypercore } : {}) };
+}
+
+function parseHypercoreMerchantConfig(raw: {
+  hypercoreEnabled?: string;
+  hypercoreFacilitatorUrl?: string;
+  hypercoreMerchantId?: string;
+  hypercoreMerchantSecret?: string;
+  hypercoreNetwork?: string;
+  hypercorePayTo?: string;
+}, timeoutMs: number, fetcher?: HypercoreFacilitatorFetcher): HypercoreFacilitatorMerchantConfig | undefined {
+  if (!raw.hypercoreEnabled) return undefined;
+  if (raw.hypercoreEnabled !== 'true') throw new TypeError('PRIORSEAL_HYPERCORE_X402_ENABLED must be true when configured');
+  const required = [
+    ['PRIORSEAL_HYPERCORE_X402_FACILITATOR_URL', raw.hypercoreFacilitatorUrl],
+    ['PRIORSEAL_HYPERCORE_X402_MERCHANT_ID', raw.hypercoreMerchantId],
+    ['PRIORSEAL_HYPERCORE_X402_MERCHANT_SECRET', raw.hypercoreMerchantSecret],
+    ['PRIORSEAL_HYPERCORE_X402_PAY_TO', raw.hypercorePayTo],
+  ] as const;
+  for (const [name, value] of required) if (!value) throw new TypeError(`${name} is required when PRIORSEAL_HYPERCORE_X402_ENABLED=true`);
+  const network = raw.hypercoreNetwork ?? HYPERCORE_X402_MAINNET;
+  if (!isHypercoreNetwork(network)) throw new TypeError(`PRIORSEAL_HYPERCORE_X402_NETWORK must be ${HYPERCORE_X402_MAINNET} or ${HYPERCORE_X402_TESTNET}`);
+  return parseHypercoreFacilitatorConfig({
+    url: raw.hypercoreFacilitatorUrl!, merchantId: raw.hypercoreMerchantId!, merchantSecret: raw.hypercoreMerchantSecret!,
+    network: network as HypercoreX402Network, payTo: parseEvmAddress(raw.hypercorePayTo!, 'PRIORSEAL_HYPERCORE_X402_PAY_TO'),
+    timeoutMs: Math.min(timeoutMs, 30_000), ...(fetcher ? { fetcher } : {}),
+  });
 }
 
 export function matchX402Route(config: X402Config | undefined, method: string | undefined, path: string) {
@@ -182,20 +231,18 @@ export function matchX402Route(config: X402Config | undefined, method: string | 
  */
 export async function discoverX402AvailableNetworks(config: X402Config, signal?: AbortSignal): Promise<X402NetworkDescriptor[]> {
   const supported = await getSupportedNetworks(config, signal);
-  return X402_STAGING_NETWORKS
+  const ordinary: X402NetworkDescriptor[] = X402_STAGING_NETWORKS
     .filter(network => config.networks.includes(network.network) && supported.networks.has(network.network))
     .filter(network => network.family === 'evm' ? Boolean(config.payTo) : Boolean(config.solanaPayTo && supported.solanaFeePayer))
     .map(({ family, network, chainId, name, asset, assetName }) => ({ family, network, chainId, name, asset, assetName }));
+  return [...ordinary, ...(config.hypercore ? [{ family: 'hypercore' as const, network: config.hypercore.network, chainId: 0, name: 'HyperCore native USDC', asset: 'USDC', assetName: 'USDC' }] : [])];
 }
 
 /** Implements the x402 v2 HTTP lifecycle through the configured facilitator. */
 export function createX402PaymentService(config: X402Config) {
+  const hypercoreClient = config.hypercore ? createHypercoreFacilitatorClient(config.hypercore) : undefined;
   return {
     async prepare(route: X402Route, resourceUrl: string, paymentHeader: string | undefined, signal?: AbortSignal): Promise<{ kind: 'required'; response: Record<string, unknown>; header: string } | { kind: 'invalid'; status: 400 | 402; response: Record<string, unknown>; header: string } | { kind: 'authorized'; context: X402PaymentContext }> {
-      const supported = await getSupportedNetworks(config, signal);
-      const requirements = X402_STAGING_NETWORKS.filter(network => config.networks.includes(network.network)).map(network => makeRequirement(config, route, network, supported.solanaFeePayer))
-        .filter((requirement): requirement is X402Requirement => Boolean(requirement && supported.networks.has(requirement.network)));
-      if (requirements.length === 0) throw new Error('Configured facilitator does not support exact payments on any locally configured network');
       const resource = {
         url: resourceUrl,
         description: route.description,
@@ -209,6 +256,29 @@ export function createX402PaymentService(config: X402Config) {
       if (paymentHeader) {
         try { payload = decodePaymentHeader(paymentHeader); } catch { malformed = true; }
       }
+      // Core requirements contain a short-lived quoteId. A returned Core
+      // payment must be verified against that quote, not a newly minted one.
+      if (!malformed && payload && hypercoreClient && payload.accepted.network === config.hypercore?.network) {
+        const verification = await hypercoreClient.verify(payload);
+        const coreResponse = { x402Version: 2, error: verification.isValid ? undefined : 'Payment verification failed', resource, accepts: [payload.accepted] };
+        if (!verification.isValid) return { kind: 'invalid', status: 402, response: coreResponse, header: encodeBase64Json(coreResponse) };
+        return { kind: 'authorized', context: { payload, requirement: payload.accepted, rail: 'hypercore' } };
+      }
+      let requirements: X402Requirement[] = [];
+      try {
+        const supported = await getSupportedNetworks(config, signal);
+        requirements = X402_STAGING_NETWORKS.filter(network => config.networks.includes(network.network)).map(network => makeRequirement(config, route, network, supported.solanaFeePayer))
+          .filter((requirement): requirement is X402Requirement => Boolean(requirement && supported.networks.has(requirement.network)));
+      } catch (error) {
+        // Native Core is deliberately isolated: a third-party EVM facilitator
+        // outage must not make the self-hosted beta unavailable. When Core is
+        // absent, preserve the existing fail-closed behaviour.
+        if (!hypercoreClient) throw error;
+      }
+      if (hypercoreClient && config.hypercore) {
+        requirements.push(await hypercoreClient.quote(resourceUrl, priceToHypercoreUsd(route.price)));
+      }
+      if (requirements.length === 0) throw new Error('Configured facilitator does not support exact payments on any locally configured network');
       // Bazaar receives a self-validating description of the exact paid HTTP
       // resource. Receipt IDs are path parameters, not service metadata.
       const extensions = { bazaar: bazaarDiscovery(route, resourceUrl) };
@@ -236,6 +306,22 @@ export function createX402PaymentService(config: X402Config) {
     },
 
     async settle(context: X402PaymentContext, signal?: AbortSignal) {
+      if (context.rail === 'hypercore') {
+        if (!hypercoreClient) throw new Error('HyperCore facilitator is not configured');
+        const settlement = await hypercoreClient.settle(context.payload);
+        if (settlement.network !== context.requirement.network || (settlement.amount !== undefined && settlement.amount !== context.requirement.amount) || !/^hcx_[0-9a-f]{32}$/.test(settlement.transaction)) {
+          throw new Error('HyperCore facilitator returned a mismatched settlement response');
+        }
+        const buyerFacing = {
+          success: settlement.success,
+          transaction: settlement.transaction,
+          network: settlement.network,
+          ...(!settlement.success && settlement.errorReason ? { errorReason: settlement.errorReason } : {}),
+          ...(settlement.payer ? { payer: settlement.payer } : {}),
+          ...(settlement.amount ? { amount: settlement.amount } : {}),
+        };
+        return { success: settlement.success, settlement, attempts: 1, response: buyerFacing, header: encodeBase64Json(buyerFacing) };
+      }
       const request = {
         x402Version: context.payload.x402Version,
         paymentPayload: context.payload,
@@ -413,6 +499,14 @@ function priceToAtomicUnits(price: string) {
   const atomic = BigInt(match[1]) * 1_000_000n + BigInt((match[2] ?? '').padEnd(6, '0'));
   if (atomic <= 0n || atomic > 9_000_000_000_000_000_000n) throw new TypeError('x402 route price is outside the supported range');
   return atomic.toString();
+}
+
+/** Convert the six-decimal route price into the canonical human USD string Core signs. */
+function priceToHypercoreUsd(price: string) {
+  const atomic = BigInt(priceToAtomicUnits(price));
+  const whole = atomic / 1_000_000n;
+  const fraction = (atomic % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 
 /**
@@ -648,6 +742,19 @@ function parseTestnetNetworkFlag(value: string | undefined, runtimeEnvironment: 
   const environment = runtimeEnvironment?.trim() || 'development';
   if (!['staging', 'test', 'development'].includes(environment)) throw new TypeError('PRIORSEAL_X402_ENABLE_TESTNETS is allowed only in staging, test, or development');
   return true;
+}
+
+/**
+ * A controlled rollout may expose the native HyperCore rail before any
+ * third-party EVM/Solana facilitator.  Keep ordinary rails enabled by default
+ * to preserve established deployments, but require an explicit false value to
+ * suppress every ordinary requirement and discovery call.
+ */
+function parseStandardRailsEnabled(value: string | undefined) {
+  if (!value) return true;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new TypeError('PRIORSEAL_X402_STANDARD_RAILS_ENABLED must be true or false');
 }
 
 async function getSupportedNetworks(config: X402Config, parentSignal?: AbortSignal) {
