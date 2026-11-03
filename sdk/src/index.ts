@@ -38,6 +38,23 @@ export {
 } from './insight-base-lending-guard.js'
 export type { InsightBaseLendingGuardDecision, InsightBaseLendingGuardVerification } from './insight-base-lending-guard.js'
 export {
+  BASE_AGENT_SWAP_GUARD_INTENT_ASSET_PREFIX,
+  INSIGHT_BASE_AGENT_SWAP_GUARD_NAMESPACE,
+  INSIGHT_BASE_AGENT_SWAP_GUARD_SCHEMA,
+  baseAgentSwapGuardCommitment,
+  baseAgentSwapGuardIntentAsset,
+  buildBaseAgentSwapGuardBoundIntents,
+  verifyBaseAgentSwapGuardAuthorizationBundle,
+  verifyBaseAgentSwapGuardReceiptBundle,
+  verifyInsightBaseAgentSwapGuardDecision,
+} from './insight-base-agent-swap-guard.js'
+export type {
+  BaseAgentSwapGuardBoundIntents,
+  BaseAgentSwapGuardVerificationOptions,
+  InsightBaseAgentSwapGuardDecision,
+  InsightBaseAgentSwapGuardVerification,
+} from './insight-base-agent-swap-guard.js'
+export {
   INSIGHT_MONAD_LENDING_GUARD_NAMESPACE,
   INSIGHT_MONAD_LENDING_GUARD_SCHEMA,
   MONAD_LENDING_GUARD_INTENT_ASSET_PREFIX,

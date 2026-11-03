@@ -1,0 +1,13 @@
+{
+  "schema": "insight.keys.v1",
+  "keys": [
+    {
+      "key_id": "base-swap-guard-reference-attester",
+      "public_key": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+      "validFrom": "1970-01-01T00:00:00.000Z",
+      "validUntil": null,
+      "revoked": false,
+      "role": "attester"
+    }
+  ]
+}

@@ -18,6 +18,7 @@
     "test:aps-priorseal": "npm --prefix examples/aps-priorseal-decision-binding-v1 run verify:producer && npm --prefix examples/aps-priorseal-decision-binding-v1 test",
     "example:receipt": "node examples/create-signed-receipt.mjs",
     "example:exact-call-partner-reference": "npm run sdk:build && npm run core:build && node examples/exact-call-partner-reference-v1/generate-fixtures.mjs && node examples/exact-call-partner-reference-v1/verify.mjs",
+    "example:insight-base-agent-swap-guard-reference": "npm run sdk:build && npm run core:build && node examples/insight-base-agent-swap-guard-reference-v1/generate-fixtures.mjs && node examples/insight-base-agent-swap-guard-reference-v1/verify.mjs --update && node examples/insight-base-agent-swap-guard-reference-v1/verify.mjs",
     "example:erc8004-inspect": "npm run sdk:build && npm run core:build && node examples/erc8004-agent-accountability-v1/inspect.mjs",
     "example:boundaryattest-paired": "npm run sdk:build && node examples/boundaryattest-paired-v0.2/verify.reference.mjs",
     "example:insight-boundaryattest-three-object": "npm run sdk:build && node examples/insight-boundaryattest-three-object-v0.2/verify.reference.mjs",
