@@ -26,7 +26,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "typescript": "^5.8.3",
     "undici": "7.30.0",
-    "vite": "^6.3.5"
+    "vite": "^6.4.5"
   },
   "overrides": {
     "@gelatonetwork/relay-sdk": {
