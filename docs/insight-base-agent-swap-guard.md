@@ -16,6 +16,12 @@ observe → review loop, with deterministic demo keys and a machine-readable
 report, ships as
 [examples/insight-base-agent-swap-guard-reference-v1](../examples/insight-base-agent-swap-guard-reference-v1/README.md).
 
+After execution, the loop closes with Insight's signed settlement artifact;
+see
+[insight-base-agent-swap-guard-settlement.md](insight-base-agent-swap-guard-settlement.md)
+for the Close step, the decision↔settlement cross-binding, and double-settlement
+contradiction detection.
+
 The prior approval call is not an arbitrary allowance: it targets the source
 token contract, carries Insight's exact `approve(router, amount)` calldata,
 uses the same source-token amount as the swap, and expires with the swap. A

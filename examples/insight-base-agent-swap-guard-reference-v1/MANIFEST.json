@@ -28,6 +28,12 @@
     },
     "fixture/receipts/swap.json": {
       "sha256": "4fd58c5ddc32862244f8ae5e72d49ef2076b25a87ef792100feda460139c1790"
+    },
+    "fixture/settlement.json": {
+      "sha256": "ea5d29fa73bd4c30b753f76c73168956b2cdb1d43e0781ee904a37aa0dce002d"
+    },
+    "fixture/settlement-contradictory.json": {
+      "sha256": "1e319b5a8c74fdaa5346f1224785f06740f7af67fc3e816bf5f207ad60ebb3f3"
     }
   },
   "timeline": {

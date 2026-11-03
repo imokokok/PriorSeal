@@ -3,7 +3,7 @@
   "fixtureId": "insight-base-agent-swap-guard-reference-v1",
   "summary": {
     "result": "PASS",
-    "total": 23,
+    "total": 31,
     "failed": 0
   },
   "checks": [
@@ -68,6 +68,20 @@
       "stage": "review",
       "expected": "4fd58c5ddc32862244f8ae5e72d49ef2076b25a87ef792100feda460139c1790",
       "actual": "4fd58c5ddc32862244f8ae5e72d49ef2076b25a87ef792100feda460139c1790",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/settlement.json",
+      "stage": "review",
+      "expected": "ea5d29fa73bd4c30b753f76c73168956b2cdb1d43e0781ee904a37aa0dce002d",
+      "actual": "ea5d29fa73bd4c30b753f76c73168956b2cdb1d43e0781ee904a37aa0dce002d",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/settlement-contradictory.json",
+      "stage": "review",
+      "expected": "1e319b5a8c74fdaa5346f1224785f06740f7af67fc3e816bf5f207ad60ebb3f3",
+      "actual": "1e319b5a8c74fdaa5346f1224785f06740f7af67fc3e816bf5f207ad60ebb3f3",
       "pass": true
     },
     {
@@ -166,6 +180,48 @@
       "stage": "review",
       "expected": "AUTHORIZATION_OUTLIVES_INSIGHT_DECISION",
       "actual": "AUTHORIZATION_OUTLIVES_INSIGHT_DECISION",
+      "pass": true
+    },
+    {
+      "id": "close:settlement-for-decision",
+      "stage": "close",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "id": "close:settlement-reason",
+      "stage": "close",
+      "expected": "OK",
+      "actual": "OK",
+      "pass": true
+    },
+    {
+      "id": "close:tampered-settlement-rejected",
+      "stage": "close",
+      "expected": "false",
+      "actual": "false",
+      "pass": true
+    },
+    {
+      "id": "close:contradiction-detected",
+      "stage": "close",
+      "expected": "false",
+      "actual": "false",
+      "pass": true
+    },
+    {
+      "id": "close:contradiction-count",
+      "stage": "close",
+      "expected": "1",
+      "actual": "1",
+      "pass": true
+    },
+    {
+      "id": "close:single-settlement-consistent",
+      "stage": "close",
+      "expected": "true",
+      "actual": "true",
       "pass": true
     }
   ]

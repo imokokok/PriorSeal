@@ -5,6 +5,11 @@ one **mainnet spot** IOC limit order, authorized before submission and later
 observed through Hyperliquid's public Info API. It is an order-book profile,
 not a Uniswap-style AMM adapter and not a HyperEVM transaction integration.
 
+For **perpetual** orders, Insight's Hyperliquid Perp Guard decision can now be
+bound to the exact unsigned IOC envelope before authorization; see
+[insight-hyperliquid-perp-guard.md](../insight-hyperliquid-perp-guard.md).
+Perp observation reuses the cloid-based Info API flow documented below.
+
 The profile is observation-only. It never receives an API wallet secret,
 creates an API wallet, signs a Hyperliquid exchange action, submits an order,
 or authorizes withdrawals. The trading system retains every exchange key and

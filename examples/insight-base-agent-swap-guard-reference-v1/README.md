@@ -17,6 +17,11 @@ base-agent-swap-guard SDK adapter:
 5. **review** — a reviewer verifies both receipts plus the original signed
    Insight decision offline through `verifyBaseAgentSwapGuardReceiptBundle`,
    including fail-closed counterexamples.
+6. **close** — Insight's signed settlement of the observed swap
+   (`insight.base-agent-swap-guard-settlement.v1`) is verified offline and
+   cross-bound to the same decision; double-settlement contradiction detection
+   rejects two closures of one decision claiming different executed
+   transactions.
 
 This is a **reference fixture**, not a live run: no RPC endpoint, hosted
 service, funded wallet, private credential, or real transaction is used. The
@@ -52,7 +57,10 @@ check and every fixture hash and rejects any drift.
   is rejected);
 - both receipts are signed by the pinned PriorSeal issuer and bind observed
   executions to their authorizations, with the approval observed before the
-  swap; a tampered receipt is rejected.
+  swap; a tampered receipt is rejected;
+- the settlement verifies against Insight's key registry, binds to the same
+  decision hash, chain, recipient and guarded calldata hash, and a tampered
+  settlement or a contradictory double settlement is rejected.
 
 ## Scope boundary
 

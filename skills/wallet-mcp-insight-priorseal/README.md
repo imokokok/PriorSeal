@@ -42,6 +42,25 @@ transaction hash; do not make a replacement transaction under the same action.
 See [`references/guarded-action-states.md`](references/guarded-action-states.md)
 and [`docs/integrations/guarded-action.md`](../../docs/integrations/guarded-action.md).
 
+## Related Insight per-guard skills
+
+Insight packages each reviewed guard as its own versioned skill for
+agent-side distribution (index: `https://www.oracleinsight.xyz/skill.md`):
+
+| Insight skill | PriorSeal SDK adapter / doc |
+| --- | --- |
+| `insight-pre-trade-safety` | `insight-decision-input` |
+| `insight-lending-guard` | `insight-base-lending-guard`, `insight-monad-lending-guard`, `insight-multichain-evm-lending-guard`, `insight-solana-lending-guard` |
+| `insight-base-agent-swap-guard` | `insight-base-agent-swap-guard` (+ [settlement closure](../../docs/insight-base-agent-swap-guard-settlement.md)) |
+| `insight-solana-swap-guard` | [insight-solana-swap-guard](../../docs/insight-solana-swap-guard.md) |
+| `insight-hyperliquid-perp-guard` | [insight-hyperliquid-perp-guard](../../docs/insight-hyperliquid-perp-guard.md) |
+| `insight-base-perp-guard` | not yet bound — no Base perp rail in PriorSeal |
+
+The decision source is pluggable: this skill composes Insight with PriorSeal,
+but the SDK adapters above bind any conforming signed decision. When an agent
+uses one of Insight's per-guard skills directly, PriorSeal's role is the
+authorization, observation and settlement-closure layer behind it.
+
 ## Release status
 
 The complete, versioned package is also available from
