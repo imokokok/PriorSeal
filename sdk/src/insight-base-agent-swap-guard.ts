@@ -146,7 +146,10 @@ function sameHash(left: unknown, right: unknown): boolean {
   return typeof left === 'string' && typeof right === 'string' && HEX32.test(left) && HEX32.test(right) && left.toLowerCase() === right.toLowerCase()
 }
 
-function registryTrust(registry: KeyRegistry | undefined, address: string, issuedAt: number): boolean {
+/** Shared Insight published-key trust check: one matching, non-revoked,
+ *  role-carrying attester key valid at the signing instant. Reused by the
+ *  settlement and perp-guard consumers of the same oracle-keys registry. */
+export function insightKeyRegistryTrust(registry: KeyRegistry | undefined, address: string, issuedAt: number): boolean {
   if (!registry || !isRecord(registry) || (registry.public_keys && registry.keys) || (registry.revoked_keys && registry.revoked)) return false
   const rawKeys = registry.public_keys ?? registry.keys
   if (!Array.isArray(rawKeys) || rawKeys.length < 1 || rawKeys.length > 100) return false
@@ -234,7 +237,7 @@ export async function verifyInsightBaseAgentSwapGuardDecision(value: unknown, op
     if (!sameHash(hashTypedData(args), attestation.uid)) return { ...empty, reason: 'UID_MISMATCH', decisionHash: expectedHash, attester: attestation.attester, issuedAt: data.issuedAt, validUntil: data.validUntil }
     const signatureValid = await verifyTypedData({ ...args, address: attestation.attester as `0x${string}`, signature: attestation.signature })
     if (!signatureValid) return { ...empty, reason: 'SIGNATURE_INVALID', decisionHash: expectedHash, attester: attestation.attester, issuedAt: data.issuedAt, validUntil: data.validUntil }
-    const trusted = registryTrust(options.keyRegistry, attestation.attester, data.issuedAt)
+    const trusted = insightKeyRegistryTrust(options.keyRegistry, attestation.attester, data.issuedAt)
     if (!trusted) return { ...empty, signatureValid: true, reason: 'SIGNER_UNTRUSTED', decisionHash: expectedHash, attester: attestation.attester, issuedAt: data.issuedAt, validUntil: data.validUntil }
     const expired = data.validUntil <= (options.now ?? Math.floor(Date.now() / 1000))
     const valid = options.allowHistorical ? data.validUntil > data.issuedAt : !expired

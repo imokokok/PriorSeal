@@ -183,6 +183,72 @@ function insightKeyRegistry() {
   }
 }
 
+const settlementDomain = { name: 'Insight Base Agent Swap Guard Settlement', version: '1', chainId: 1 } as const
+const settlementTypes = {
+  BaseAgentSwapGuardSettlement: [
+    { name: 'decisionHash', type: 'bytes32' },
+    { name: 'swapTxHash', type: 'bytes32' },
+    { name: 'approvalTxHash', type: 'bytes32' },
+    { name: 'onChainSwapCalldataHash', type: 'bytes32' },
+    { name: 'recipient', type: 'address' },
+    { name: 'chainId', type: 'uint256' },
+    { name: 'fillStatus', type: 'string' },
+    { name: 'sourceAmountRaw', type: 'string' },
+    { name: 'destinationAmountRaw', type: 'string' },
+    { name: 'executedPrice', type: 'string' },
+    { name: 'realizedSlippageBps', type: 'string' },
+    { name: 'blockNumber', type: 'string' },
+    { name: 'executedAt', type: 'uint256' },
+    { name: 'checkedAt', type: 'uint256' },
+    { name: 'reasonCodesHash', type: 'bytes32' },
+    { name: 'schemaVersion', type: 'uint256' },
+  ],
+} as const
+
+/** Stage 6 — close: Insight's signed settlement of the observed swap. */
+async function settlementClosure(decisionHash: string, swapTxHash: string) {
+  const reasonCodes: string[] = []
+  const data = {
+    decisionHash: decisionHash as `0x${string}`,
+    swapTxHash: swapTxHash as `0x${string}`,
+    approvalTxHash: `0x${sha256('synthetic:approval')}` as `0x${string}`,
+    onChainSwapCalldataHash: keccak256(swapData),
+    recipient: wallet,
+    chainId: 8453 as const,
+    fillStatus: 'FULL' as const,
+    sourceAmountRaw: amountInRaw,
+    destinationAmountRaw: '3200000000',
+    executedPrice: '3200',
+    realizedSlippageBps: '12.5',
+    blockNumber: '27134567',
+    executedAt: swapExecutedAt,
+    checkedAt: swapObservedAt + 40,
+    reasonCodesHash: keccak256(toBytes(canonical(reasonCodes))),
+    schemaVersion: 1 as const,
+  }
+  const typedData = {
+    domain: settlementDomain,
+    types: settlementTypes,
+    primaryType: 'BaseAgentSwapGuardSettlement' as const,
+    message: { ...data, chainId: 8453n, executedAt: BigInt(data.executedAt), checkedAt: BigInt(data.checkedAt), schemaVersion: 1n },
+  }
+  return {
+    type: 'BaseAgentSwapGuardSettlement' as const,
+    schemaVersion: 1 as const,
+    schema: 'insight.base-agent-swap-guard-settlement.v1' as const,
+    uid: hashTypedData(typedData),
+    attester: insightAttester.address,
+    attesterLabel: 'Insight Base Agent Swap Guard settlement attester' as const,
+    signedAt: new Date(data.checkedAt * 1000).toISOString(),
+    signature: await insightAttester.signTypedData(typedData),
+    verifyUrl: 'https://www.oracleinsight.xyz/api/v1/safety/base-agent-swap-guard/settlement',
+    decisionHash: decisionHash as `0x${string}`,
+    reasonCodes,
+    data,
+    eip712: { domain: settlementDomain, types: settlementTypes, primaryType: 'BaseAgentSwapGuardSettlement' },
+  }
+}
+
 function issuerKeyRegistry() {
   return {
     schema: 'priorseal.keys.v1',
@@ -312,6 +378,13 @@ async function generateFixtures() {
   const outlivesAuthorization = structuredClone(approval.authorization) as { expiresAt: number }
   outlivesAuthorization.expiresAt = validUntil + 1
 
+  // Stage 6 — close: Insight's settlement of the observed swap, bound to the
+  // same synthetic execution the swap receipt observed, plus a contradictory
+  // closure claiming a different executed transaction for fail-closed review.
+  const swapTxHash = `0x${sha256('synthetic:swap')}`
+  const settlement = await settlementClosure(decision.decisionHash, swapTxHash)
+  const contradictorySettlement = await settlementClosure(decision.decisionHash, `0x${sha256('synthetic:swap:alternative')}`)
+
   writeJson('fixture/insight-decision.json', decision)
   writeJson('fixture/insight-key-registry.json', insightKeyRegistry())
   writeJson('fixture/issuer-key.json', issuerKeyRegistry())
@@ -321,6 +394,8 @@ async function generateFixtures() {
   writeJson('fixture/authorizations/outlives.json', outlivesAuthorization)
   writeJson('fixture/receipts/approval.json', approvalReceipt)
   writeJson('fixture/receipts/swap.json', swapReceipt)
+  writeJson('fixture/settlement.json', settlement)
+  writeJson('fixture/settlement-contradictory.json', contradictorySettlement)
 
   const artifacts = [
     'fixture/insight-decision.json',
@@ -332,6 +407,8 @@ async function generateFixtures() {
     'fixture/authorizations/outlives.json',
     'fixture/receipts/approval.json',
     'fixture/receipts/swap.json',
+    'fixture/settlement.json',
+    'fixture/settlement-contradictory.json',
   ].map((relativePath) => [relativePath, { sha256: sha256(readFileSync(join(directory, relativePath))) }])
 
   writeJson('MANIFEST.json', {

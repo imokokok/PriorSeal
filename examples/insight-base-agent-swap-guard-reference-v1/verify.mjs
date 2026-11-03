@@ -4,8 +4,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  detectInsightBaseAgentSwapGuardSettlementContradictions,
   verifyBaseAgentSwapGuardAuthorizationBundle,
   verifyBaseAgentSwapGuardReceiptBundle,
+  verifyBaseAgentSwapGuardSettlementForDecision,
   verifyInsightBaseAgentSwapGuardDecision
 } from "../../sdk/dist/index.js";
 import { verifyReceiptLocally } from "../../sdk/dist/verifier.js";
@@ -73,6 +75,20 @@ const outlivesResult = await verifyBaseAgentSwapGuardAuthorizationBundle({
   decision
 }, { keyRegistry: insightTrust.keyRegistry });
 record("review:authorization-outlives-decision-rejected", "review", "AUTHORIZATION_OUTLIVES_INSIGHT_DECISION", outlivesResult.reason);
+const settlement = readJson("fixture/settlement.json");
+const contradictorySettlement = readJson("fixture/settlement-contradictory.json");
+const closeResult = await verifyBaseAgentSwapGuardSettlementForDecision({ settlement, decision }, insightTrust);
+record("close:settlement-for-decision", "close", "true", String(closeResult.valid));
+record("close:settlement-reason", "close", "OK", closeResult.reason);
+const tamperedSettlement = structuredClone(settlement);
+tamperedSettlement.data.swapTxHash = `0x${"f0".repeat(32)}`;
+const tamperedClose = await verifyBaseAgentSwapGuardSettlementForDecision({ settlement: tamperedSettlement, decision }, insightTrust);
+record("close:tampered-settlement-rejected", "close", "false", String(tamperedClose.valid));
+const contradictoryReport = await detectInsightBaseAgentSwapGuardSettlementContradictions([settlement, contradictorySettlement], insightTrust);
+record("close:contradiction-detected", "close", "false", String(contradictoryReport.consistent));
+record("close:contradiction-count", "close", "1", String(contradictoryReport.contradictions.length));
+const consistentReport = await detectInsightBaseAgentSwapGuardSettlementContradictions([settlement], insightTrust);
+record("close:single-settlement-consistent", "close", "true", String(consistentReport.consistent));
 const reportPath = join(directory, "report.json");
 const update = process.argv.includes("--update");
 const failed = checks.filter((entry) => !entry.pass);
