@@ -7,6 +7,14 @@
  * The script deliberately has no signing, transaction, approval, quote, or
  * `/verify` path. Every state-bearing read uses EIP-1898's block-hash selector
  * with requireCanonical: true, so a report is tied to one canonical state.
+ *
+ * Guard-coverage boundary: this preflight reads the Uniswap V3 WETH/USDC 0.3%
+ * pool (fee 3000) on Base Sepolia via SwapRouter02/QuoterV2. That market is
+ * NOT covered by any Insight swap-guard reviewed lane — the reviewed lanes are
+ * Aerodrome and PancakeSwap on Base mainnet, and no Insight guard exists for
+ * Base Sepolia Uniswap V3. If a later D8 stage ever executes against this
+ * pool, it would do so without an Insight pre-trade guard; any such step
+ * needs its own explicit safety decision before it is authorized.
  */
 
 import { createHash } from 'node:crypto';
