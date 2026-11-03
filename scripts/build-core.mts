@@ -52,6 +52,7 @@ const onDemandToolSources = [
   'scripts/verify-wak-base-sepolia-router.mts',
   'scripts/verify-wak-frozen-multicall-sheet.mts',
   'scripts/verify-wak-frozen-multicall-sheet-v4.mts',
+  'scripts/verify-interai-d8-03-identity-preflight.mts',
 ].map((path) => join(projectRoot, path));
 const onDemandOperationSources = [
   'scripts/erc4337-pilot-doctor.mts',
