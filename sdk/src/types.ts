@@ -134,7 +134,7 @@ export type HyperliquidInfoObservationEvidence = {
 
 export type Intent = {
   schema?: 'priorseal.intent.v1' | 'priorseal.intent.v2'
-  executionProfile?: 'priorseal.execution-profile.exact-call.v1' | 'priorseal.execution-profile.erc4337-user-operation.v1' | 'priorseal.execution-profile.solana-transaction.v2' | 'priorseal.execution-profile.hyperliquid-spot-ioc.v1'
+  executionProfile?: 'priorseal.execution-profile.exact-call.v1' | 'priorseal.execution-profile.erc4337-user-operation.v1' | 'priorseal.execution-profile.solana-transaction.v2' | 'priorseal.execution-profile.hyperliquid-spot-ioc.v1' | 'priorseal.execution-profile.hyperliquid-perp-ioc.v1'
   intentId: string
   intentHash?: string
   chainId: number | string

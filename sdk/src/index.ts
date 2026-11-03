@@ -10,7 +10,7 @@ export type { WalletGuardedAction, WalletGuardedActionEvent, WalletGuardedAction
 export { buildExactCallIntent, parseExactCallTransaction, parseContextCommitments } from './exact-call.js'
 export { AGENT_PROPOSAL_NAMESPACE, agentProposalCommitment, assertAgentId, canonicalAgentProposalBytes, createAgentProposal, parseAgentProposal, verifyAgentProposalCommitment } from './agent-proposal.js'
 export type { AgentProposal } from './agent-proposal.js'
-export { buildSolanaTransactionIntent, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
+export { buildSolanaTransactionIntent, encodeSolanaTransactionMessageBytes, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
 export type { SolanaTransactionIntentInput } from './solana-transaction.js'
 export { buildHyperliquidBuilderFeeApproval, buildHyperliquidSpotIocBuilderFeeSubmission, buildHyperliquidSpotIocIntent, buildHyperliquidSpotIocSubmission, HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_MAX_SPOT_BUILDER_FEE_TENTHS_BPS, HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS, HYPERLIQUID_OUTCOME_ASSET_ID_MIN, HYPERLIQUID_SPOT_IOC_ACTION, HYPERLIQUID_SPOT_IOC_PROFILE, hyperliquidSpotBuilderFeeTerms } from './hyperliquid-spot.js'
 export type { HyperliquidBuilderFeeApproval, HyperliquidSpotBuilderFeePolicy, HyperliquidSpotIocBuilderFeeSubmission, HyperliquidSpotIocIntentInput, HyperliquidSpotIocSubmission } from './hyperliquid-spot.js'
@@ -55,6 +55,23 @@ export type {
   InsightBaseAgentSwapGuardVerification,
 } from './insight-base-agent-swap-guard.js'
 export {
+  INSIGHT_BASE_AGENT_SWAP_GUARD_SETTLEMENT_ATTESTER_LABEL,
+  INSIGHT_BASE_AGENT_SWAP_GUARD_SETTLEMENT_PRIMARY_TYPE,
+  INSIGHT_BASE_AGENT_SWAP_GUARD_SETTLEMENT_SCHEMA,
+  SETTLEMENT_CHAIN_IDS,
+  detectInsightBaseAgentSwapGuardSettlementContradictions,
+  verifyBaseAgentSwapGuardSettlementForDecision,
+  verifyInsightBaseAgentSwapGuardSettlement,
+} from './insight-base-agent-swap-guard-settlement.js'
+export type {
+  InsightBaseAgentSwapGuardSettlement,
+  InsightBaseAgentSwapGuardSettlementContradiction,
+  InsightBaseAgentSwapGuardSettlementData,
+  InsightBaseAgentSwapGuardSettlementOptions,
+  InsightBaseAgentSwapGuardSettlementSetReport,
+  InsightBaseAgentSwapGuardSettlementVerification,
+} from './insight-base-agent-swap-guard-settlement.js'
+export {
   INSIGHT_MONAD_LENDING_GUARD_NAMESPACE,
   INSIGHT_MONAD_LENDING_GUARD_SCHEMA,
   MONAD_LENDING_GUARD_INTENT_ASSET_PREFIX,
@@ -95,6 +112,56 @@ export type {
   InsightSolanaLendingGuardVerification,
   SolanaLendingGuardVerificationOptions,
 } from './insight-solana-lending-guard.js'
+export {
+  INSIGHT_SOLANA_SWAP_GUARD_NAMESPACE,
+  INSIGHT_SOLANA_SWAP_GUARD_SCHEMA,
+  INSIGHT_SOLANA_SWAP_GUARD_SETTLEMENT_SCHEMA,
+  SOLANA_SWAP_GUARD_PROFILE_ID,
+  SOLANA_SWAP_GUARD_VALID_FOR_SECONDS,
+  buildSolanaSwapGuardBoundIntent,
+  detectSolanaSwapGuardSettlementContradictions,
+  solanaSwapGuardCommitment,
+  solanaSwapGuardIntentAsset,
+  verifyInsightSolanaSwapGuardDecision,
+  verifyInsightSolanaSwapGuardSettlement,
+  verifySolanaSwapGuardAuthorizationBinding,
+  verifySolanaSwapGuardSettlementForDecision,
+} from './insight-solana-swap-guard.js'
+export type {
+  InsightSolanaSwapGuardDecision,
+  InsightSolanaSwapGuardSettlement,
+  InsightSolanaSwapGuardSettlementContradiction,
+  InsightSolanaSwapGuardSettlementData,
+  InsightSolanaSwapGuardSettlementSetReport,
+  InsightSolanaSwapGuardSettlementVerification,
+  InsightSolanaSwapGuardVerification,
+  InsightSolanaSwapGuardVerificationOptions,
+} from './insight-solana-swap-guard.js'
+export {
+  HYPERLIQUID_MAX_PERP_BUILDER_FEE_TENTHS_BPS,
+  HYPERLIQUID_PERP_ASSET_INDEX_MAX,
+  HYPERLIQUID_PERP_GUARD_PROTOCOL_ID,
+  HYPERLIQUID_PERP_GUARD_VALID_FOR_SECONDS,
+  HYPERLIQUID_PERP_IOC_ACTION,
+  HYPERLIQUID_PERP_IOC_PROFILE,
+  HYPERLIQUID_PERP_MAX_ENVELOPE_LIFETIME_MS,
+  INSIGHT_HYPERLIQUID_PERP_GUARD_NAMESPACE,
+  INSIGHT_HYPERLIQUID_PERP_GUARD_SCHEMA,
+  buildHyperliquidPerpGuardBoundIntent,
+  buildHyperliquidPerpGuardSubmission,
+  hyperliquidPerpGuardCommitment,
+  verifyHyperliquidPerpGuardAuthorizationBinding,
+  verifyInsightHyperliquidPerpGuardDecision,
+} from './insight-hyperliquid-perp-guard.js'
+export type {
+  HyperliquidPerpGuardIntentInput,
+  HyperliquidPerpIocSubmission,
+  HyperliquidPerpOrderBinding,
+  HyperliquidPerpOrderEnvelope,
+  InsightHyperliquidPerpGuardDecision,
+  InsightHyperliquidPerpGuardVerification,
+  InsightHyperliquidPerpGuardVerificationOptions,
+} from './insight-hyperliquid-perp-guard.js'
 export {
   ERC8004_IDENTITY_COMMITMENT_NAMESPACE,
   ERC8004_IDENTITY_REGISTRY_ABI,

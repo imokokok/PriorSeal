@@ -61,6 +61,13 @@ export async function hashSolanaTransactionMessage(value: SolanaTransactionMessa
   return '0x' + [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+/** Exact serialized Solana message bytes, excluding signatures. Exposed so
+ *  guard consumers can Ed25519-verify an on-chain fee-payer signature over the
+ *  attested unsigned message — the cryptographic "executed == reviewed" check. */
+export function encodeSolanaTransactionMessageBytes(value: SolanaTransactionMessage): Uint8Array {
+  return Uint8Array.from(encodeMessageBytes(normalizeMessage(value)))
+}
+
 function encodeMessageBytes(message: SolanaTransactionMessage): number[] {
   const header = [message.header.numRequiredSignatures, message.header.numReadonlySignedAccounts, message.header.numReadonlyUnsignedAccounts]
   const blockhash = [...decodeBase58Bytes(message.recentBlockhash)]

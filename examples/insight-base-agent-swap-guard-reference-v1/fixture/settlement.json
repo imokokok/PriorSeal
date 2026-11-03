@@ -1,0 +1,107 @@
+{
+  "type": "BaseAgentSwapGuardSettlement",
+  "schemaVersion": 1,
+  "schema": "insight.base-agent-swap-guard-settlement.v1",
+  "uid": "0x004b9a2f141f1c339592a18a310e406022be2e5321c134c67c5383403d3eb4e2",
+  "attester": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+  "attesterLabel": "Insight Base Agent Swap Guard settlement attester",
+  "signedAt": "2026-10-17T16:01:01.000Z",
+  "signature": "0x9c666bdfe4c283664ed3c814cc5f14c3d04c6acfcb3db272b622ee528a4c3924169e4be2738ea11bb8458bf200da20f137a6eb47c728220fb20bf9284c07fcc11b",
+  "verifyUrl": "https://www.oracleinsight.xyz/api/v1/safety/base-agent-swap-guard/settlement",
+  "decisionHash": "0x89d45f173286ff26530a417e5b4ed00a2a1e4139ff09fea1770738d2af910992",
+  "reasonCodes": [],
+  "data": {
+    "decisionHash": "0x89d45f173286ff26530a417e5b4ed00a2a1e4139ff09fea1770738d2af910992",
+    "swapTxHash": "0x7ad0548f50e0a9dc031dcf43a78a713e981e16c8a44a5c8f06678ab02740618d",
+    "approvalTxHash": "0xadee9fdd04989a30fa01d85b37324173c4a147d371d404ec230be918e0104678",
+    "onChainSwapCalldataHash": "0x1d3cb30516bbe672123b7eacf1f0fda81321ad431932901b62fb1a0390695665",
+    "recipient": "0x1563915e194D8CfBA1943570603F7606A3115508",
+    "chainId": 8453,
+    "fillStatus": "FULL",
+    "sourceAmountRaw": "1000000000000000000",
+    "destinationAmountRaw": "3200000000",
+    "executedPrice": "3200",
+    "realizedSlippageBps": "12.5",
+    "blockNumber": "27134567",
+    "executedAt": 1792252820,
+    "checkedAt": 1792252861,
+    "reasonCodesHash": "0x518674ab2b227e5f11e9084f615d57663cde47bce1ba168b4c19c7ee22a73d70",
+    "schemaVersion": 1
+  },
+  "eip712": {
+    "domain": {
+      "name": "Insight Base Agent Swap Guard Settlement",
+      "version": "1",
+      "chainId": 1
+    },
+    "types": {
+      "BaseAgentSwapGuardSettlement": [
+        {
+          "name": "decisionHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "swapTxHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "approvalTxHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "onChainSwapCalldataHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "fillStatus",
+          "type": "string"
+        },
+        {
+          "name": "sourceAmountRaw",
+          "type": "string"
+        },
+        {
+          "name": "destinationAmountRaw",
+          "type": "string"
+        },
+        {
+          "name": "executedPrice",
+          "type": "string"
+        },
+        {
+          "name": "realizedSlippageBps",
+          "type": "string"
+        },
+        {
+          "name": "blockNumber",
+          "type": "string"
+        },
+        {
+          "name": "executedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "checkedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "reasonCodesHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "schemaVersion",
+          "type": "uint256"
+        }
+      ]
+    },
+    "primaryType": "BaseAgentSwapGuardSettlement"
+  }
+}

@@ -6,14 +6,17 @@
 //   authorize — two principal-signed exact-call authorizations, adjacent nonces
 //   observe — one signed PriorSeal receipt per call, approval before swap
 //   review  — the full receipt bundle plus fail-closed counterexamples
+//   close   — Insight's signed settlement cross-bound to the same decision
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
+  detectInsightBaseAgentSwapGuardSettlementContradictions,
   verifyBaseAgentSwapGuardAuthorizationBundle,
   verifyBaseAgentSwapGuardReceiptBundle,
+  verifyBaseAgentSwapGuardSettlementForDecision,
   verifyInsightBaseAgentSwapGuardDecision,
 } from '../../sdk/dist/index.js'
 import { verifyReceiptLocally } from '../../sdk/dist/verifier.js'
@@ -22,7 +25,7 @@ const directory = dirname(fileURLToPath(import.meta.url))
 const sha256 = (path: string) => createHash('sha256').update(readFileSync(join(directory, path))).digest('hex')
 const readJson = (relativePath: string): unknown => JSON.parse(readFileSync(join(directory, relativePath), 'utf8'))
 
-type Check = { id: string; stage: 'assess' | 'bind' | 'authorize' | 'observe' | 'review'; expected: string; actual: string; pass: boolean }
+type Check = { id: string; stage: 'assess' | 'bind' | 'authorize' | 'observe' | 'review' | 'close'; expected: string; actual: string; pass: boolean }
 
 const checks: Check[] = []
 const record = (id: string, stage: Check['stage'], expected: string, actual: string) =>
@@ -102,6 +105,30 @@ const outlivesResult = await verifyBaseAgentSwapGuardAuthorizationBundle({
   decision,
 }, { keyRegistry: insightTrust.keyRegistry })
 record('review:authorization-outlives-decision-rejected', 'review', 'AUTHORIZATION_OUTLIVES_INSIGHT_DECISION', outlivesResult.reason)
+
+// Stage 6 — close: Insight's signed settlement, cross-bound to the same
+// decision, with double-settlement contradiction detection over the pair.
+const settlement = readJson('fixture/settlement.json')
+const contradictorySettlement = readJson('fixture/settlement-contradictory.json')
+const closeResult = await verifyBaseAgentSwapGuardSettlementForDecision({ settlement, decision }, insightTrust)
+record('close:settlement-for-decision', 'close', 'true', String(closeResult.valid))
+record('close:settlement-reason', 'close', 'OK', closeResult.reason)
+
+// Fail-closed: a settlement whose swap transaction was altered after signing.
+const tamperedSettlement = structuredClone(settlement) as { data: { swapTxHash: string } }
+tamperedSettlement.data.swapTxHash = `0x${'f0'.repeat(32)}`
+const tamperedClose = await verifyBaseAgentSwapGuardSettlementForDecision({ settlement: tamperedSettlement, decision }, insightTrust)
+record('close:tampered-settlement-rejected', 'close', 'false', String(tamperedClose.valid))
+
+// Fail-closed: two closures of one decision claiming different executed
+// transactions — something no honest settlement can produce.
+const contradictoryReport = await detectInsightBaseAgentSwapGuardSettlementContradictions([settlement, contradictorySettlement], insightTrust)
+record('close:contradiction-detected', 'close', 'false', String(contradictoryReport.consistent))
+record('close:contradiction-count', 'close', '1', String(contradictoryReport.contradictions.length))
+
+// A single consistent closure (the honest pair would be a byte-identical replay).
+const consistentReport = await detectInsightBaseAgentSwapGuardSettlementContradictions([settlement], insightTrust)
+record('close:single-settlement-consistent', 'close', 'true', String(consistentReport.consistent))
 
 // The committed report must describe exactly this review. `--update` writes it
 // after regenerating fixtures; a plain run only reads and compares.
