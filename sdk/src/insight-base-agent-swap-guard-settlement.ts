@@ -25,7 +25,7 @@
 import { hashTypedData, keccak256, toBytes, verifyTypedData } from 'viem'
 
 import type { InsightBaseAgentSwapGuardDecision } from './insight-base-agent-swap-guard.js'
-import { insightKeyRegistryTrust } from './insight-base-agent-swap-guard.js'
+import { insightKeyRegistryTrust, verifyInsightBaseAgentSwapGuardDecision } from './insight-base-agent-swap-guard.js'
 
 export const INSIGHT_BASE_AGENT_SWAP_GUARD_SETTLEMENT_SCHEMA = 'insight.base-agent-swap-guard-settlement.v1' as const
 export const INSIGHT_BASE_AGENT_SWAP_GUARD_SETTLEMENT_PRIMARY_TYPE = 'BaseAgentSwapGuardSettlement' as const
@@ -239,19 +239,20 @@ export type InsightBaseAgentSwapGuardSettlementCrossCheck = {
 
 /**
  * Verify a settlement against the guard decision it claims to close: the
- * decisionHash, reviewed chain, recipient and guarded swap calldata hash must
- * all agree. The decision may have expired — closure is a historical fact, not
- * a forward authorization.
+ * decision itself is verified first (signature, trust, binding arithmetic —
+ * historically, since closure is a fact about the past, not a forward
+ * authorization), then the decisionHash, reviewed chain, recipient and guarded
+ * swap calldata hash must all agree.
  */
 export async function verifyBaseAgentSwapGuardSettlementForDecision(input: { settlement: unknown; decision: unknown }, options: InsightBaseAgentSwapGuardSettlementOptions = {}): Promise<InsightBaseAgentSwapGuardSettlementCrossCheck> {
+  const decisionVerification = await verifyInsightBaseAgentSwapGuardDecision(input.decision, { keyRegistry: options.keyRegistry, allowHistorical: true })
+  if (!decisionVerification.valid || !decisionVerification.trusted) {
+    return { valid: false, reason: `DECISION_${decisionVerification.reason}`, decisionHash: decisionVerification.decisionHash, swapTxHash: null, attester: decisionVerification.attester }
+  }
   const settlementVerification = await verifyInsightBaseAgentSwapGuardSettlement(input.settlement, options)
   if (!settlementVerification.valid) return { ...settlementVerification, reason: `SETTLEMENT_${settlementVerification.reason}` }
   const settlement = input.settlement as InsightBaseAgentSwapGuardSettlement
   const decision = input.decision as InsightBaseAgentSwapGuardDecision
-  if (!isRecord(decision) || decision.schema !== 'insight.base-agent-swap-guard-decision.v1' || !isRecord(decision.guard) ||
-    !isRecord((decision.guard as { binding?: unknown }).binding) || !isRecord((decision.guard as { scope?: unknown }).scope)) {
-    return { valid: false, reason: 'DECISION_MALFORMED', decisionHash: settlementVerification.decisionHash, swapTxHash: settlementVerification.swapTxHash, attester: settlementVerification.attester }
-  }
   const guard = decision.guard
   const binding = guard.binding as { swap: { calldataHash: string }; recipient: string }
   const scope = guard.scope as { chainId: number }

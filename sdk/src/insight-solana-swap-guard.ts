@@ -377,15 +377,20 @@ export type InsightSolanaSwapGuardSettlementCrossCheck = {
 }
 
 /**
- * Close the loop: verify the settlement, cross-bind it to the decision it
- * claims to settle, and cryptographically confirm the executed transaction is
- * the reviewed one (Ed25519 fee-payer signature over the attested message).
- * The decision may have expired — closure is a historical fact.
+ * Close the loop: verify the decision itself first (Ed25519 signature, pinned
+ * signer, attested message hash — historically, since closure is a fact about
+ * the past), then the settlement, then cross-bind them, and finally
+ * cryptographically confirm the executed transaction is the reviewed one
+ * (Ed25519 fee-payer signature over the attested message).
  */
 export async function verifySolanaSwapGuardSettlementForDecision(
   input: { settlement: unknown; decision: unknown },
   options: { trustedPublicKey: string },
 ): Promise<InsightSolanaSwapGuardSettlementCrossCheck> {
+  const decisionVerification = await verifyInsightSolanaSwapGuardDecision(input.decision, { trustedPublicKey: options.trustedPublicKey, allowHistorical: true })
+  if (!decisionVerification.valid || !decisionVerification.trusted) {
+    return { valid: false, reason: `DECISION_${decisionVerification.reason}`, settlement: null, attester: decisionVerification.attester }
+  }
   const decision = decisionShape(input.decision)
   if (!decision || !decision.action || !decision.attestation) return { valid: false, reason: 'DECISION_MALFORMED', settlement: null, attester: null }
   const settlementVerification = await verifyInsightSolanaSwapGuardSettlement(input.settlement, options)

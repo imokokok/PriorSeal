@@ -174,3 +174,43 @@ test('fails closed on builder-fee envelopes instead of authorizing beyond the as
     /HYPERLIQUID_PERP_GUARD_BUILDER_FEE_NOT_SUPPORTED/,
   )
 })
+
+test('authorization binding fails closed on builder-fee decisions too', async () => {
+  const proof = await decision()
+  const attestation = proof.attestation!
+  proof.order.action.builder = { b: '0x9999999999999999999999999999999999999999', f: 50 }
+  proof.binding.builder = { b: '0x9999999999999999999999999999999999999999', f: 50 }
+  proof.binding.intentHash = keccak256(new TextEncoder().encode(canonical(proof.order)))
+  proof.decisionHash = keccak256(new TextEncoder().encode(canonical({ schema: 'insight.hyperliquid-perp-guard-decision.v1', guard: proof.guard, order: proof.order, binding: proof.binding })))
+  attestation.data.decisionHash = proof.decisionHash
+  attestation.data.builderFeeTenths = 50
+  attestation.data.intentHash = proof.binding.intentHash
+  const typedData = {
+    domain,
+    types,
+    primaryType: 'HyperliquidPerpGuardDecision' as const,
+    message: { ...attestation.data, assetIndex: 0n, builderFeeTenths: 50n, issuedAt: BigInt(now), validUntil: BigInt(now + 300), schemaVersion: 1n },
+  }
+  attestation.uid = hashTypedData(typedData)
+  attestation.signature = await signer.signTypedData(typedData)
+  const intent = {
+    schema: 'priorseal.intent.v2',
+    executionProfile: 'priorseal.execution-profile.hyperliquid-perp-ioc.v1',
+    intentId: 'hyperliquid-perp-test',
+    chainId: 0,
+    chainRef: 'hyperliquid:mainnet',
+    action: 'HYPERLIQUID_PERP_IOC_ORDER',
+    asset: 'hyperliquid:mainnet/perp:0',
+    amount: '1',
+    sender: account,
+    recipient: account,
+    validUntil: now + 60,
+    nonce,
+    hyperliquidOrder: { assetId: 0, isBuy: true, limitPrice: '1100.5', size: '0.5', timeInForce: 'Ioc', clientOrderId: `0x${'33'.repeat(16)}`, expiresAfter },
+    contextCommitments: [{ namespace: 'insight.hyperliquid-perp-guard.v1', algorithm: 'keccak256', digest: proof.decisionHash }],
+  }
+  assert.deepEqual(
+    await verifyHyperliquidPerpGuardAuthorizationBinding({ intent, issuedAt: now + 1, expiresAt: now + 60 }, proof, options),
+    { valid: false, reason: 'HYPERLIQUID_PERP_GUARD_BUILDER_FEE_NOT_SUPPORTED' },
+  )
+})

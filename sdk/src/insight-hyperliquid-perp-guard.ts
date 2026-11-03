@@ -395,6 +395,7 @@ export async function verifyHyperliquidPerpGuardAuthorizationBinding(authorizati
   const issuedAt = Number(authorization.issuedAt)
   const verification = await verifyInsightHyperliquidPerpGuardDecision(decision, { ...options, now: issuedAt, allowHistorical: true })
   if (!verification.valid || !decision.attestation || decision.guard.verdict !== 'ALLOW') return { valid: false, reason: `INSIGHT_${verification.reason}` }
+  if (decision.order.action.builder) return { valid: false, reason: 'HYPERLIQUID_PERP_GUARD_BUILDER_FEE_NOT_SUPPORTED' }
   try {
     const intent = authorization.intent as Intent
     const order = decision.order

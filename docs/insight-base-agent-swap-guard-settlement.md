@@ -11,7 +11,9 @@ PriorSeal's SDK consumes that closure offline:
 1. Independently verify the signed settlement — structural shape, the
    reason-code hash, the typed-data uid, the attester signature, and trust in
    Insight's published key registry.
-2. Cross-bind the settlement to the guard decision it claims to close: same
+2. Cross-bind the settlement to the guard decision it claims to close
+   (the decision itself is verified first — signature, trust and binding
+   arithmetic, historically, since closure is a fact about the past): same
    `decisionHash`, same reviewed chain, same recipient, and the on-chain swap
    calldata hash must equal the calldata hash the decision guarded.
 3. Detect contradictions across a set of closures: two verified settlements

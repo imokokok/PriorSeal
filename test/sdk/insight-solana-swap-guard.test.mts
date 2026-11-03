@@ -163,6 +163,19 @@ test('rejects a settlement whose transaction is not the reviewed message', async
   assert.equal(cross.reason, 'EXECUTED_MESSAGE_MISMATCH')
 })
 
+test('rejects a settlement cross-binding whose decision attester is not the pinned key', async () => {
+  const proof = await decision()
+  const stranger = generateKeyPairSync('ed25519')
+  const strangerJwk = stranger.publicKey.export({ format: 'jwk' })
+  if (!strangerJwk.x) throw new Error('Ed25519 public key export failed')
+  proof.attestation.signer.publicKey = base58(Buffer.from(strangerJwk.x, 'base64url'))
+  const closure = await settlement(proof.decisionHash, txSignature())
+  const cross = await verifySolanaSwapGuardSettlementForDecision({ settlement: closure, decision: proof }, { trustedPublicKey: attester })
+  assert.equal(cross.valid, false)
+  assert.equal(cross.reason, 'DECISION_UNTRUSTED_ATTESTER')
+  assert.equal(cross.settlement, null)
+})
+
 test('flags two closures of one decision claiming different executed transactions', async () => {
   const proof = await decision()
   const first = await settlement(proof.decisionHash, txSignature())

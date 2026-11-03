@@ -193,6 +193,17 @@ test('rejects a settlement bound to different executed calldata than the decisio
   assert.equal(cross.reason.startsWith('SETTLEMENT_') || cross.reason === 'CALLDATA_HASH_MISMATCH', true)
 })
 
+test('rejects a settlement cross-binding whose decision fails its own verification', async () => {
+  const proof = await decision()
+  const closure = await settlement(proof.decisionHash, `0x${'ab'.repeat(32)}` as `0x${string}`)
+  // No key registry: the decision's attester is untrusted, so the closure is
+  // refused before the settlement is even examined.
+  const cross = await verifyBaseAgentSwapGuardSettlementForDecision({ settlement: closure, decision: proof }, {})
+  assert.equal(cross.valid, false)
+  assert.equal(cross.reason, 'DECISION_SIGNER_UNTRUSTED')
+  assert.equal(cross.swapTxHash, null)
+})
+
 test('flags two closures of one decision claiming different swap transactions', async () => {
   const proof = await decision()
   const first = await settlement(proof.decisionHash, `0x${'ab'.repeat(32)}` as `0x${string}`)

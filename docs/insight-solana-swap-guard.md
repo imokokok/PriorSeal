@@ -38,7 +38,8 @@ const intent = await buildSolanaSwapGuardBoundIntent({
 // 3. Verify an issued authorization stays within the decision scope.
 const binding = await verifySolanaSwapGuardAuthorizationBinding(authorization, decision, trust);
 
-// 4. Close: verify Insight's settlement, cross-bind it to the decision, and —
+// 4. Close: verify the decision itself, then Insight's settlement, cross-bind
+//    the two, and —
 //    the strongest local check — Ed25519-verify the on-chain fee-payer
 //    signature over the attested unsigned message, proving the executed
 //    transaction is the reviewed one with no Insight dependency.
