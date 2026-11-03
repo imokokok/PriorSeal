@@ -1,0 +1,172 @@
+{
+  "schema": "insight.base-agent-swap-guard.reference-report.v1",
+  "fixtureId": "insight-base-agent-swap-guard-reference-v1",
+  "summary": {
+    "result": "PASS",
+    "total": 23,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "id": "integrity:fixture/insight-decision.json",
+      "stage": "review",
+      "expected": "2fddc5ef9b875b0feb40f4bf5b064ca1c7b9a6de075ff3f1f0faed12d1d761bb",
+      "actual": "2fddc5ef9b875b0feb40f4bf5b064ca1c7b9a6de075ff3f1f0faed12d1d761bb",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/insight-key-registry.json",
+      "stage": "review",
+      "expected": "3903cf178c7f701281501041d20a2426f48fb25e90583ac1d58da160056ea14d",
+      "actual": "3903cf178c7f701281501041d20a2426f48fb25e90583ac1d58da160056ea14d",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/issuer-key.json",
+      "stage": "review",
+      "expected": "e6b91d1c681bfd1acd12ada7d4c86f60816a5d7ba577e2855f3dd4b441061996",
+      "actual": "e6b91d1c681bfd1acd12ada7d4c86f60816a5d7ba577e2855f3dd4b441061996",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/intents.json",
+      "stage": "review",
+      "expected": "6b5f25e6580082ebafa9fafb08dc2e83931e70eb5cfe642db7e8e39a23420184",
+      "actual": "6b5f25e6580082ebafa9fafb08dc2e83931e70eb5cfe642db7e8e39a23420184",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/authorizations/approval.json",
+      "stage": "review",
+      "expected": "ed4f40ebcd301617086658dc816d24e6daf5fbeac7ce51aed6a768a4abf994cb",
+      "actual": "ed4f40ebcd301617086658dc816d24e6daf5fbeac7ce51aed6a768a4abf994cb",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/authorizations/swap.json",
+      "stage": "review",
+      "expected": "b1740c84a73a1479e10626bdc03c4599773a47ea361b5b4cacf8f81acdcb9f1f",
+      "actual": "b1740c84a73a1479e10626bdc03c4599773a47ea361b5b4cacf8f81acdcb9f1f",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/authorizations/outlives.json",
+      "stage": "review",
+      "expected": "7fa992e14ac331d36aa015699a3de1727f7087781fb371aa0ac4433e8b637ce2",
+      "actual": "7fa992e14ac331d36aa015699a3de1727f7087781fb371aa0ac4433e8b637ce2",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/receipts/approval.json",
+      "stage": "review",
+      "expected": "52bd4b2e0912974736a1e5d8830e15993121aaf1d5ca1bdf43239fa00728fe56",
+      "actual": "52bd4b2e0912974736a1e5d8830e15993121aaf1d5ca1bdf43239fa00728fe56",
+      "pass": true
+    },
+    {
+      "id": "integrity:fixture/receipts/swap.json",
+      "stage": "review",
+      "expected": "4fd58c5ddc32862244f8ae5e72d49ef2076b25a87ef792100feda460139c1790",
+      "actual": "4fd58c5ddc32862244f8ae5e72d49ef2076b25a87ef792100feda460139c1790",
+      "pass": true
+    },
+    {
+      "id": "assess:decision-valid",
+      "stage": "assess",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "id": "assess:reason",
+      "stage": "assess",
+      "expected": "OK",
+      "actual": "OK",
+      "pass": true
+    },
+    {
+      "id": "bind:approval-commitment",
+      "stage": "bind",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "id": "bind:swap-commitment",
+      "stage": "bind",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "id": "bind:ordered-nonces",
+      "stage": "bind",
+      "expected": "1",
+      "actual": "1",
+      "pass": true
+    },
+    {
+      "id": "authorize:bundle-valid",
+      "stage": "authorize",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "id": "authorize:reason",
+      "stage": "authorize",
+      "expected": "OK",
+      "actual": "OK",
+      "pass": true
+    },
+    {
+      "id": "observe:approval-receipt",
+      "stage": "observe",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "id": "observe:swap-receipt",
+      "stage": "observe",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "id": "observe:approval-before-swap",
+      "stage": "observe",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "id": "review:receipt-bundle",
+      "stage": "review",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "id": "review:receipt-bundle-reason",
+      "stage": "review",
+      "expected": "OK",
+      "actual": "OK",
+      "pass": true
+    },
+    {
+      "id": "review:tampered-swap-receipt-rejected",
+      "stage": "review",
+      "expected": "false",
+      "actual": "false",
+      "pass": true
+    },
+    {
+      "id": "review:authorization-outlives-decision-rejected",
+      "stage": "review",
+      "expected": "AUTHORIZATION_OUTLIVES_INSIGHT_DECISION",
+      "actual": "AUTHORIZATION_OUTLIVES_INSIGHT_DECISION",
+      "pass": true
+    }
+  ]
+}

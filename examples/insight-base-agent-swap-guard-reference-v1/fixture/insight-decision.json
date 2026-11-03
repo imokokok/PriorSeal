@@ -1,0 +1,117 @@
+{
+  "schema": "insight.base-agent-swap-guard-decision.v1",
+  "guard": {
+    "schema": "insight.base-agent-swap-guard.v1",
+    "verdict": "ALLOW",
+    "validUntil": 1792252860,
+    "scope": {
+      "chainId": 8453,
+      "profileId": "base-aerodrome-slipstream-weth-usdc-cl100",
+      "transactionAuthority": "none"
+    },
+    "market": {
+      "exactInput": {
+        "amountInRaw": "1000000000000000000"
+      }
+    },
+    "binding": {
+      "chainId": 8453,
+      "recipient": "0x1563915e194D8CfBA1943570603F7606A3115508",
+      "approval": {
+        "token": "0x4200000000000000000000000000000000000006",
+        "spender": "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
+        "amountRaw": "1000000000000000000",
+        "calldataHash": "0x1044b5ea34cd8c447777dcf5b0b3016969ccd00db9d23ed8d60a273853b3bab8"
+      },
+      "swap": {
+        "to": "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
+        "value": "0x0",
+        "calldataHash": "0x1d3cb30516bbe672123b7eacf1f0fda81321ad431932901b62fb1a0390695665"
+      }
+    },
+    "transactionsToSign": {
+      "approval": {
+        "to": "0x4200000000000000000000000000000000000006",
+        "value": "0x0",
+        "data": "0x095ea7b3000000000000000000000000be6d8f0d05cc4be24d5167a3ef062215be6d18a50000000000000000000000000000000000000000000000000de0b6b3a7640000"
+      },
+      "swap": {
+        "to": "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
+        "value": "0x0",
+        "data": "0xc9fa893c00000000000000000000000032484957c8fa159e601984f4643fe5b6b0c6da9e0000000000000000000000001563915e194d8cfba1943570603f7606a31155080000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "decisionHash": "0x89d45f173286ff26530a417e5b4ed00a2a1e4139ff09fea1770738d2af910992"
+  },
+  "decisionHash": "0x89d45f173286ff26530a417e5b4ed00a2a1e4139ff09fea1770738d2af910992",
+  "attestation": {
+    "type": "BaseAgentSwapGuardDecision",
+    "schemaVersion": 1,
+    "uid": "0x3349cc37ca47e111d3ce193fac9aa414f90f9d1f6377114eed007644244edeef",
+    "attester": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+    "attesterLabel": "Insight Base Agent Swap Guard attester",
+    "signedAt": "2026-10-17T16:00:00.000Z",
+    "validForSeconds": 60,
+    "signature": "0x13add560a76dd2ae26a51ebafda53ade6cb61c4577ace6061de2f13be0ed45ff1031a6914f4044dd9ce356e8a5c8feacd0107b3112f8409c36a24cae6268ec1b1c",
+    "verifyUrl": "https://www.oracleinsight.xyz/api/v1/safety/base-agent-swap-guard/verify",
+    "data": {
+      "decisionHash": "0x89d45f173286ff26530a417e5b4ed00a2a1e4139ff09fea1770738d2af910992",
+      "approvalCalldataHash": "0x1044b5ea34cd8c447777dcf5b0b3016969ccd00db9d23ed8d60a273853b3bab8",
+      "swapCalldataHash": "0x1d3cb30516bbe672123b7eacf1f0fda81321ad431932901b62fb1a0390695665",
+      "recipient": "0x1563915e194D8CfBA1943570603F7606A3115508",
+      "chainId": 8453,
+      "verdict": 0,
+      "issuedAt": 1792252800,
+      "validUntil": 1792252860,
+      "schemaVersion": 1
+    },
+    "eip712": {
+      "domain": {
+        "name": "Insight Base Agent Swap Guard",
+        "version": "1",
+        "chainId": 1
+      },
+      "types": {
+        "BaseAgentSwapGuardDecision": [
+          {
+            "name": "decisionHash",
+            "type": "bytes32"
+          },
+          {
+            "name": "approvalCalldataHash",
+            "type": "bytes32"
+          },
+          {
+            "name": "swapCalldataHash",
+            "type": "bytes32"
+          },
+          {
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "name": "chainId",
+            "type": "uint256"
+          },
+          {
+            "name": "verdict",
+            "type": "uint8"
+          },
+          {
+            "name": "issuedAt",
+            "type": "uint256"
+          },
+          {
+            "name": "validUntil",
+            "type": "uint256"
+          },
+          {
+            "name": "schemaVersion",
+            "type": "uint256"
+          }
+        ]
+      },
+      "primaryType": "BaseAgentSwapGuardDecision"
+    }
+  }
+}

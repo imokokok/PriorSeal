@@ -1,0 +1,51 @@
+{
+  "schema": "priorseal.authorization.v2",
+  "domain": "priorseal/authorization/v2",
+  "intent": {
+    "schema": "priorseal.intent.v2",
+    "executionProfile": "priorseal.execution-profile.exact-call.v1",
+    "intentId": "base-agent-swap-guard-swap-001",
+    "chainId": 8453,
+    "action": "CONTRACT_CALL",
+    "asset": "eip155:8453/erc20:0x4200000000000000000000000000000000000006",
+    "amount": "1000000000000000000",
+    "sender": "0x1563915e194d8cfba1943570603f7606a3115508",
+    "recipient": "0xbe6d8f0d05cc4be24d5167a3ef062215be6d18a5",
+    "validUntil": 1792252860,
+    "nonce": "8",
+    "callTarget": "0xbe6d8f0d05cc4be24d5167a3ef062215be6d18a5",
+    "calldataHash": "0x1d3cb30516bbe672123b7eacf1f0fda81321ad431932901b62fb1a0390695665",
+    "transactionValue": "0",
+    "contextCommitments": [
+      {
+        "namespace": "insight.base-agent-swap-guard.v1",
+        "algorithm": "keccak256",
+        "digest": "0x89d45f173286ff26530a417e5b4ed00a2a1e4139ff09fea1770738d2af910992"
+      }
+    ],
+    "intentHash": "6f9d88ec76be4f2bfc07c909269956db7584c88aa5b90992062b1b53f46848a9"
+  },
+  "intentHash": "6f9d88ec76be4f2bfc07c909269956db7584c88aa5b90992062b1b53f46848a9",
+  "principal": {
+    "type": "user",
+    "id": "base-swap-guard-reference-principal",
+    "account": "0x1563915e194d8cfba1943570603f7606a3115508"
+  },
+  "authorizer": {
+    "type": "eip712",
+    "address": "0x1563915e194d8cfba1943570603f7606a3115508"
+  },
+  "delegate": {
+    "agentId": "base-swap-guard-reference-agent",
+    "executor": "0x1563915e194d8cfba1943570603f7606a3115508"
+  },
+  "issuedAt": 1792252800,
+  "notBefore": 1792252800,
+  "expiresAt": 1792252860,
+  "authorizationNonce": "0x9393939393939393939393939393939393939393939393939393939393939393",
+  "maxUses": "1",
+  "audience": "priorseal",
+  "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "signature": "0xab3918c80d4e313f8749fc1a6ee04c7162fdb06e8bee98eb5886d48365914b3c4e6d436777d31e557a4cef3d26f23dfc64f22679eb4a3cede5bffef0e1ec01671c",
+  "authorizationId": "auth_4f8ab2a104e65c12736653f3a5b6f8af"
+}

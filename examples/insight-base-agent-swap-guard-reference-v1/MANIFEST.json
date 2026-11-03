@@ -1,0 +1,41 @@
+{
+  "schema": "priorseal.fixture-manifest.v1",
+  "fixtureId": "insight-base-agent-swap-guard-reference-v1",
+  "files": {
+    "fixture/insight-decision.json": {
+      "sha256": "2fddc5ef9b875b0feb40f4bf5b064ca1c7b9a6de075ff3f1f0faed12d1d761bb"
+    },
+    "fixture/insight-key-registry.json": {
+      "sha256": "3903cf178c7f701281501041d20a2426f48fb25e90583ac1d58da160056ea14d"
+    },
+    "fixture/issuer-key.json": {
+      "sha256": "e6b91d1c681bfd1acd12ada7d4c86f60816a5d7ba577e2855f3dd4b441061996"
+    },
+    "fixture/intents.json": {
+      "sha256": "6b5f25e6580082ebafa9fafb08dc2e83931e70eb5cfe642db7e8e39a23420184"
+    },
+    "fixture/authorizations/approval.json": {
+      "sha256": "ed4f40ebcd301617086658dc816d24e6daf5fbeac7ce51aed6a768a4abf994cb"
+    },
+    "fixture/authorizations/swap.json": {
+      "sha256": "b1740c84a73a1479e10626bdc03c4599773a47ea361b5b4cacf8f81acdcb9f1f"
+    },
+    "fixture/authorizations/outlives.json": {
+      "sha256": "7fa992e14ac331d36aa015699a3de1727f7087781fb371aa0ac4433e8b637ce2"
+    },
+    "fixture/receipts/approval.json": {
+      "sha256": "52bd4b2e0912974736a1e5d8830e15993121aaf1d5ca1bdf43239fa00728fe56"
+    },
+    "fixture/receipts/swap.json": {
+      "sha256": "4fd58c5ddc32862244f8ae5e72d49ef2076b25a87ef792100feda460139c1790"
+    }
+  },
+  "timeline": {
+    "insightIssuedAt": 1792252800,
+    "insightValidUntil": 1792252860,
+    "approvalAcceptedAt": 1792252801,
+    "swapAcceptedAt": 1792252802,
+    "approvalExecutedAt": 1792252810,
+    "swapExecutedAt": 1792252820
+  }
+}
