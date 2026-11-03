@@ -2,11 +2,36 @@
 
 ## Unreleased
 
+## 0.15.0 — 2026-11-03
+
+- Bind Insight settlement closure: verify Insight's signed Base Agent Swap
+  Guard settlement offline, cross-bind it to its verified guard decision
+  (decisionHash / chain / recipient / guarded swap calldata hash), and detect
+  double settlements — one decisionHash closed by two different swap
+  transactions. Both settlement cross-checks verify the guard decision itself
+  first and fail closed with `DECISION_*` reasons.
+- Add the Insight Solana Swap Guard adapter (Orca Whirlpool USDC/USDT):
+  Ed25519 decision verification against a pinned key, one reviewed message
+  bound into a PriorSeal intent, and closure by Ed25519-verifying the on-chain
+  fee-payer signature over the exact attested message bytes
+  (`encodeSolanaTransactionMessageBytes` is now exported).
+- Add the Insight Hyperliquid Perp Guard adapter: exact unsigned IOC envelope
+  validation with binding re-derivation (intentHash, implied notional) and
+  EIP-712 decision verification. Builder-fee envelopes fail closed until the
+  intent schema carries them.
 - Add `priorseal.agent-proposal.v1`: a compact, caller-retained Agent rationale
   record with a canonical SHA-256 context commitment. It binds the retained
   record to the exact authorization intent and the Agent ID in the
   principal-signed authorization. This is a disclosure and evidence binding,
   not a reputation, identity, trading-safety, or investment claim.
+
+## 0.14.0 — 2026-11-03
+
+- Add the Insight Base Agent Swap Guard adapter: offline verification of the
+  signed pre-trade decision (EIP-712, key-registry trust), two ordered
+  exact-call intents bound to the decision commitment, and a self-contained
+  offline reference agent example covering the assess → bind → authorize →
+  observe → review loop with fail-closed counterexamples.
 
 ## 0.13.0 — 2026-10-19
 
