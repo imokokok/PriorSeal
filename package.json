@@ -14,6 +14,7 @@
   },
   "type": "module",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
     "example:aps-priorseal": "npm --prefix examples/aps-priorseal-decision-binding-v1 run verify",
     "test:aps-priorseal": "npm --prefix examples/aps-priorseal-decision-binding-v1 run verify:producer && npm --prefix examples/aps-priorseal-decision-binding-v1 test",
     "example:receipt": "node examples/create-signed-receipt.mjs",
