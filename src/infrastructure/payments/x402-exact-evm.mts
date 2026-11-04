@@ -770,7 +770,10 @@ async function getSupportedNetworks(config: X402Config, parentSignal?: AbortSign
     const solanaFeePayer = solanaResponse?.solanaFeePayers.get(SOLANA_MAINNET_CAIP2) ?? null;
     return { networks, solanaFeePayer };
   });
-  capabilityCache.set(cacheKey, { expiresAt: Date.now() + 60_000, promise });
+  // 10-minute TTL: facilitator capability sets are near-static; a 60s TTL made
+  // every Worker isolate re-fetch /supported each minute (thousands of CDP
+  // REST calls per month). Error path still evicts the entry immediately.
+  capabilityCache.set(cacheKey, { expiresAt: Date.now() + 600_000, promise });
   try { return await promise; } catch (error) { capabilityCache.delete(cacheKey); throw error; }
 }
 
