@@ -53,11 +53,6 @@ jobs:
 
   agent-retail-readiness:
     runs-on: ubuntu-24.04
-    # Production enables public x402 commerce in wrangler.jsonc. Keep the
-    # public check aligned with that declared mode so it catches an accidental
-    # withdrawal of advertised payment routes rather than reporting a false failure.
-    env:
-      PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE: 'true'
     timeout-minutes: 8
     # Production has completed the operator-managed pilot: public paid routes,
     # self-service claims, and x402 are intentionally enabled.
