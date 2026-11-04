@@ -10,6 +10,13 @@ export type { WalletGuardedAction, WalletGuardedActionEvent, WalletGuardedAction
 export { buildExactCallIntent, parseExactCallTransaction, parseContextCommitments } from './exact-call.js'
 export { AGENT_PROPOSAL_NAMESPACE, agentProposalCommitment, assertAgentId, canonicalAgentProposalBytes, createAgentProposal, parseAgentProposal, verifyAgentProposalCommitment } from './agent-proposal.js'
 export type { AgentProposal } from './agent-proposal.js'
+export {
+  HEADLESS_H4_ENTRY_HASH_NAMESPACE,
+  buildHeadlessH4ExactCallIntent,
+  headlessH4EntryHashCommitment,
+  parseHeadlessH4EntryHash,
+} from './headless-h4.js'
+export type { HeadlessH4EntryHash, HeadlessH4ExactCallInput } from './headless-h4.js'
 export { buildSolanaTransactionIntent, encodeSolanaTransactionMessageBytes, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
 export type { SolanaTransactionIntentInput } from './solana-transaction.js'
 export { buildHyperliquidBuilderFeeApproval, buildHyperliquidSpotIocBuilderFeeSubmission, buildHyperliquidSpotIocIntent, buildHyperliquidSpotIocSubmission, HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_MAX_SPOT_BUILDER_FEE_TENTHS_BPS, HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS, HYPERLIQUID_OUTCOME_ASSET_ID_MIN, HYPERLIQUID_SPOT_IOC_ACTION, HYPERLIQUID_SPOT_IOC_PROFILE, hyperliquidSpotBuilderFeeTerms } from './hyperliquid-spot.js'
