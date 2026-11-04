@@ -615,7 +615,7 @@ async function getSupportedNetworks(config, parentSignal) {
     const solanaFeePayer = solanaResponse?.solanaFeePayers.get(SOLANA_MAINNET_CAIP2) ?? null;
     return { networks, solanaFeePayer };
   });
-  capabilityCache.set(cacheKey, { expiresAt: Date.now() + 6e4, promise });
+  capabilityCache.set(cacheKey, { expiresAt: Date.now() + 6e5, promise });
   try {
     return await promise;
   } catch (error) {
