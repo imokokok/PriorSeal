@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+# Automation already runs the repository's CI suite before publishing changes.
+if [ "${GITHUB_ACTIONS:-}" = 'true' ]; then
+  exit 0
+fi
+
+# Lightweight preflight only. The heavy suite (build, coverage, release:check,
+# Playwright e2e) runs as required GitHub Actions checks on protected branches;
+# run `npm run release:check` for the complete suite locally.
+npm run typecheck
+npm run format:check

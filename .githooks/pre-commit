@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+# Automation already runs the repository's CI suite before publishing changes.
+if [ "${GITHUB_ACTIONS:-}" = 'true' ]; then
+  exit 0
+fi
+
+# Fast local gate: quick static checks run in parallel
+# (see scripts/run-checks-parallel.mjs). The heavy suite (build, coverage,
+# release:check, e2e) is enforced by required GitHub Actions checks on
+# protected branches; run `npm run release:check` manually for the full suite.
+node scripts/run-checks-parallel.mjs lint source:policy
