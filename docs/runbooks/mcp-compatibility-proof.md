@@ -16,7 +16,7 @@ specific product UI will configure every remote MCP server identically.
    `mayBroadcastTransaction: false` invariant.
 4. `initialize` using the compatible `2025-11-25` handshake.
 
-The check verifies the negotiated protocol response headers, the ten published
+The check verifies the negotiated protocol response headers, the twelve published
 tool names, the read-only and service-state annotations, and both transport
 forms. Although MCP uses HTTP POST for these protocol messages, every call in
 this check is read-only at the PriorSeal business boundary.
@@ -47,3 +47,38 @@ production smoke check. The proof is suitable for a release gate because it
 does not require a credential, modify persistent application state, or incur
 an Agent-credit operation. It does not replace independent verification of a
 receipt evidence bundle or the synthetic end-to-end authorization smoke test.
+
+## Official MCP Registry publication
+
+The Official MCP Registry stores versioned manifests. When the public MCP
+surface changes, publish a new `mcp/server.json` version only after the
+matching Worker release is live and this compatibility proof passes against
+that deployment. Do not publish an undeployed or unverified endpoint.
+
+For an additive tool, prompt, resource, or compatible option, increment the
+minor version; use a major version for a removed/renamed tool or a
+client-breaking schema change. Documentation-only changes do not need a
+Registry version.
+
+From a networked, authenticated release environment:
+
+```sh
+mcp-publisher validate mcp/server.json
+npm run mcp:compatibility:check
+mcp-publisher publish mcp/server.json
+```
+
+If the release environment reaches the public Internet through an HTTP(S)
+proxy, enable Node's native environment-proxy support for the compatibility
+proof, while supplying the environment's existing proxy variables. For
+example:
+
+```sh
+NODE_USE_ENV_PROXY=1 npm run mcp:compatibility:check
+```
+
+The `io.github.imokokok/*` namespace requires the publisher to authenticate
+as the repository owner. Confirm that the Registry marks the new version
+`active`, that it is returned by the `latest` version query, and that the
+public endpoint still passes the read-only proof. Never mark an earlier
+version deleted merely because a newer compatible version is available.
