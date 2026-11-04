@@ -42,6 +42,12 @@ the UTF-8 canonical bytes with SHA-256. For a quote, the `sha256` member itself
 is excluded from its preimage and all other members, including the legacy
 `source` and `expiresAt` aliases, remain included.
 
+The key set remains exact even where the profile permits a member to be `null`:
+`core.receiverAddress` (Lightning-address drafts) and `core.tokenAddress`
+(native assets), plus `quote.tokenAddress`, `quote.rateSource` / `source`, and
+`quote.fiatCurrency`. A present `null` is still part of the JCS preimage; an
+omitted or additional member is rejected.
+
 The two context commitments are independent. An exact-crypto draft has no
 quote, so it carries the core commitment only. A separately defined payer-view
 commitment may be added later under a distinct namespace, but it cannot replace
