@@ -6,6 +6,7 @@
     "strict": true,
     "allowJs": false,
     "noEmit": true,
+    "incremental": true,
     "skipLibCheck": true,
     "types": ["node"]
   },
