@@ -1,7 +1,11 @@
 /**
- * Bind Insight's narrow Base DEX guard to two ordered PriorSeal exact-call
- * intents. An ERC-20 approval is intentionally not batched with the swap:
- * each call gets its own authorization and evidence, with adjacent nonces.
+ * Bind Insight's agent swap guard (reviewed EVM profiles on Base 8453,
+ * BNB 56 and Monad 143) to two ordered PriorSeal exact-call intents. An
+ * ERC-20 approval is intentionally not batched with the swap: each call gets
+ * its own authorization and evidence, with adjacent nonces. The EIP-712
+ * signing domain stays fixed (chainId: 1, matching Insight); the reviewed
+ * chain travels inside guard.scope.chainId / binding.chainId /
+ * attestation.data.chainId and must agree everywhere.
  */
 
 import { hashTypedData, keccak256, toBytes, verifyTypedData } from 'viem'
@@ -14,7 +18,12 @@ import { verifyReceiptLocally, type LocalVerifierOptions } from './verifier.js'
 
 export const INSIGHT_BASE_AGENT_SWAP_GUARD_NAMESPACE = 'insight.base-agent-swap-guard.v1' as const
 export const INSIGHT_BASE_AGENT_SWAP_GUARD_SCHEMA = 'insight.base-agent-swap-guard-decision.v1' as const
+/** Legacy Base-only asset prefix, kept for backward compatibility. */
 export const BASE_AGENT_SWAP_GUARD_INTENT_ASSET_PREFIX = 'eip155:8453/erc20:' as const
+/** Reviewed chains whose swap decisions this guard can bind (mirrors Insight's SUPPORTED_CHAIN_IDS). */
+export const BASE_AGENT_SWAP_GUARD_CHAIN_IDS = [8453, 56, 143] as const
+export type InsightBaseAgentSwapGuardChainId = (typeof BASE_AGENT_SWAP_GUARD_CHAIN_IDS)[number]
+const SUPPORTED_CHAIN_IDS: ReadonlySet<number> = new Set(BASE_AGENT_SWAP_GUARD_CHAIN_IDS)
 
 const DOMAIN = { name: 'Insight Base Agent Swap Guard', version: '1', chainId: 1 } as const
 const TYPES = {
@@ -36,10 +45,16 @@ const SIGNATURE = /^0x[0-9a-fA-F]{130}$/
 const UINT = /^(?:0|[1-9][0-9]*)$/
 const MAX_VALID_FOR_SECONDS = 120
 const LABEL = 'Insight Base Agent Swap Guard attester'
-const SUPPORTED_PROFILE_IDS = new Set([
-  'base-aerodrome-slipstream-weth-usdc-cl100',
-  'base-pancakeswap-v3-usdc-usdt-100',
-])
+/** Reviewed profile → its pinned chain, mirroring Insight's GUARD_PROFILE_SPECS. */
+const SUPPORTED_PROFILE_CHAINS: Readonly<Record<string, number>> = {
+  'base-aerodrome-slipstream-weth-usdc-cl100': 8453,
+  'base-aerodrome-slipstream-usdc-usdt-cl1': 8453,
+  'base-pancakeswap-v3-usdc-usdt-100': 8453,
+  'bnb-pancakeswap-v3-usdt-usdc-100': 56,
+  'bnb-pancakeswap-v3-usdt-wbnb-100': 56,
+  'monad-pancakeswap-v3-wmon-usdc-500': 143,
+}
+const SUPPORTED_PROFILE_IDS = new Set(Object.keys(SUPPORTED_PROFILE_CHAINS))
 
 export type InsightBaseAgentSwapGuardDecision = {
   schema: typeof INSIGHT_BASE_AGENT_SWAP_GUARD_SCHEMA
@@ -47,10 +62,10 @@ export type InsightBaseAgentSwapGuardDecision = {
     schema: 'insight.base-agent-swap-guard.v1'
     verdict: 'ALLOW' | 'CAUTION' | 'BLOCK'
     validUntil: number | null
-    scope: { chainId: 8453; [key: string]: unknown }
+    scope: { chainId: InsightBaseAgentSwapGuardChainId; [key: string]: unknown }
     market: { exactInput: { amountInRaw: string; [key: string]: unknown }; [key: string]: unknown } | null
     binding: {
-      chainId: 8453
+      chainId: InsightBaseAgentSwapGuardChainId
       recipient: string
       approval: { token: string; spender: string; amountRaw: string; calldataHash: `0x${string}` }
       swap: { to: string; value: '0x0'; calldataHash: `0x${string}` }
@@ -78,7 +93,7 @@ export type InsightBaseAgentSwapGuardDecision = {
       approvalCalldataHash: `0x${string}`
       swapCalldataHash: `0x${string}`
       recipient: string
-      chainId: 8453
+      chainId: InsightBaseAgentSwapGuardChainId
       verdict: 0
       issuedAt: number
       validUntil: number
@@ -186,7 +201,7 @@ function typedData(data: NonNullable<InsightBaseAgentSwapGuardDecision['attestat
       approvalCalldataHash: data.approvalCalldataHash,
       swapCalldataHash: data.swapCalldataHash,
       recipient: data.recipient as `0x${string}`,
-      chainId: 8453n,
+      chainId: BigInt(data.chainId),
       verdict: 0,
       issuedAt: BigInt(data.issuedAt),
       validUntil: BigInt(data.validUntil),
@@ -200,9 +215,9 @@ function callsAreBound(decision: InsightBaseAgentSwapGuardDecision): boolean {
   const binding = guard.binding
   const calls = guard.transactionsToSign
   return Boolean(
-    guard.schema === 'insight.base-agent-swap-guard.v1' && guard.verdict === 'ALLOW' && guard.scope?.chainId === 8453 && SUPPORTED_PROFILE_IDS.has(guard.scope?.profileId as string) &&
+    guard.schema === 'insight.base-agent-swap-guard.v1' && guard.verdict === 'ALLOW' && typeof guard.scope?.chainId === 'number' && SUPPORTED_CHAIN_IDS.has(guard.scope.chainId) && SUPPORTED_PROFILE_IDS.has(guard.scope?.profileId as string) &&
     Number.isSafeInteger(guard.validUntil) && guard.validUntil !== null && guard.market && binding && calls &&
-    binding.chainId === 8453 && sameAddress(calls.approval.to, binding.approval.token) && calls.approval.value === '0x0' &&
+    binding.chainId === guard.scope.chainId && SUPPORTED_PROFILE_CHAINS[guard.scope?.profileId as string] === guard.scope.chainId && sameAddress(calls.approval.to, binding.approval.token) && calls.approval.value === '0x0' &&
     sameHash(keccak256(calls.approval.data), binding.approval.calldataHash) &&
     sameAddress(calls.swap.to, binding.swap.to) && sameAddress(binding.approval.spender, calls.swap.to) && calls.swap.value === '0x0' &&
     sameHash(keccak256(calls.swap.data), binding.swap.calldataHash) &&
@@ -217,9 +232,9 @@ export function baseAgentSwapGuardCommitment(decision: Pick<InsightBaseAgentSwap
 }
 
 /** CAIP-19-style source-token asset label used for approval and exact-input swap. */
-export function baseAgentSwapGuardIntentAsset(token: string): string {
+export function baseAgentSwapGuardIntentAsset(token: string, chainId: InsightBaseAgentSwapGuardChainId = 8453): string {
   if (!ADDRESS.test(token)) throw new TypeError('Base agent swap token must be a 20-byte EVM address')
-  return `${BASE_AGENT_SWAP_GUARD_INTENT_ASSET_PREFIX}${token.toLowerCase()}`
+  return `eip155:${chainId}/erc20:${token.toLowerCase()}`
 }
 
 /** Independently verify Insight's signed ALLOW plus its two exact calldata bindings. */
@@ -232,7 +247,7 @@ export async function verifyInsightBaseAgentSwapGuardDecision(value: unknown, op
     const data = attestation.data
     const expectedHash = guardDecisionHash(guard)
     if (!expectedHash || !callsAreBound(decision) || !sameHash(expectedHash, guard.decisionHash) || !sameHash(expectedHash, decision.decisionHash) || !sameHash(expectedHash, data.decisionHash) || !sameHash(data.approvalCalldataHash, guard.binding!.approval.calldataHash) || !sameHash(data.swapCalldataHash, guard.binding!.swap.calldataHash) || !sameAddress(data.recipient, guard.binding!.recipient)) return { ...empty, reason: 'CALL_BINDING_MISMATCH', decisionHash: expectedHash, attester: attestation.attester, issuedAt: data?.issuedAt ?? null, validUntil: data?.validUntil ?? null }
-    if (!HEX32.test(attestation.uid) || !ADDRESS.test(attestation.attester) || attestation.type !== 'BaseAgentSwapGuardDecision' || attestation.schemaVersion !== 1 || attestation.attesterLabel !== LABEL || !SIGNATURE.test(attestation.signature) || !HEX32.test(data.decisionHash) || !HEX32.test(data.approvalCalldataHash) || !HEX32.test(data.swapCalldataHash) || !ADDRESS.test(data.recipient) || data.chainId !== 8453 || data.verdict !== 0 || data.schemaVersion !== 1 || !Number.isSafeInteger(data.issuedAt) || !Number.isSafeInteger(data.validUntil) || data.issuedAt < 0 || data.validUntil <= data.issuedAt || data.validUntil !== guard.validUntil || attestation.validForSeconds !== data.validUntil - data.issuedAt || attestation.validForSeconds < 1 || attestation.validForSeconds > MAX_VALID_FOR_SECONDS || attestation.signedAt !== new Date(data.issuedAt * 1000).toISOString() || canonicalJson(attestation.eip712) !== canonicalJson({ domain: DOMAIN, types: TYPES, primaryType: 'BaseAgentSwapGuardDecision' })) return { ...empty, reason: 'MALFORMED', decisionHash: expectedHash, attester: attestation.attester, issuedAt: data.issuedAt, validUntil: data.validUntil }
+    if (!HEX32.test(attestation.uid) || !ADDRESS.test(attestation.attester) || attestation.type !== 'BaseAgentSwapGuardDecision' || attestation.schemaVersion !== 1 || attestation.attesterLabel !== LABEL || !SIGNATURE.test(attestation.signature) || !HEX32.test(data.decisionHash) || !HEX32.test(data.approvalCalldataHash) || !HEX32.test(data.swapCalldataHash) || !ADDRESS.test(data.recipient) || !SUPPORTED_CHAIN_IDS.has(data.chainId) || data.verdict !== 0 || data.schemaVersion !== 1 || !Number.isSafeInteger(data.issuedAt) || !Number.isSafeInteger(data.validUntil) || data.issuedAt < 0 || data.validUntil <= data.issuedAt || data.validUntil !== guard.validUntil || attestation.validForSeconds !== data.validUntil - data.issuedAt || attestation.validForSeconds < 1 || attestation.validForSeconds > MAX_VALID_FOR_SECONDS || attestation.signedAt !== new Date(data.issuedAt * 1000).toISOString() || canonicalJson(attestation.eip712) !== canonicalJson({ domain: DOMAIN, types: TYPES, primaryType: 'BaseAgentSwapGuardDecision' })) return { ...empty, reason: 'MALFORMED', decisionHash: expectedHash, attester: attestation.attester, issuedAt: data.issuedAt, validUntil: data.validUntil }
     const args = typedData(data)
     if (!sameHash(hashTypedData(args), attestation.uid)) return { ...empty, reason: 'UID_MISMATCH', decisionHash: expectedHash, attester: attestation.attester, issuedAt: data.issuedAt, validUntil: data.validUntil }
     const signatureValid = await verifyTypedData({ ...args, address: attestation.attester as `0x${string}`, signature: attestation.signature })
@@ -245,8 +260,8 @@ export async function verifyInsightBaseAgentSwapGuardDecision(value: unknown, op
   } catch { return { ...empty, reason: 'VERIFICATION_ERROR' } }
 }
 
-function isExactTransaction(value: ExactCallIntentInput['transaction'], expected: { to: string; data: string }, sender: string): boolean {
-  return value.chainId === 8453 && sameAddress(value.from, sender) && sameAddress(value.to, expected.to) &&
+function isExactTransaction(value: ExactCallIntentInput['transaction'], expected: { to: string; data: string }, sender: string, chainId: number): boolean {
+  return value.chainId === chainId && sameAddress(value.from, sender) && sameAddress(value.to, expected.to) &&
     typeof value.data === 'string' && value.data.toLowerCase() === expected.data.toLowerCase() && uint(value.value ?? 0) === '0'
 }
 
@@ -256,7 +271,7 @@ function scopeIntent(intent: Intent, decision: InsightBaseAgentSwapGuardDecision
   const binding = guard.binding!
   const calls = guard.transactionsToSign!
   const expected = stage === 'approval' ? calls.approval : calls.swap
-  if (intent.schema !== 'priorseal.intent.v2' || intent.executionProfile !== 'priorseal.execution-profile.exact-call.v1' || intent.action !== 'CONTRACT_CALL' || intent.asset !== baseAgentSwapGuardIntentAsset(binding.approval.token) || intent.amount !== binding.approval.amountRaw || Number(intent.chainId) !== 8453 || !sameAddress(intent.sender, binding.recipient) || !sameAddress(intent.callTarget, expected.to) || !sameAddress(intent.recipient, expected.to) || !sameHash(intent.calldataHash, stage === 'approval' ? binding.approval.calldataHash : binding.swap.calldataHash) || intent.transactionValue !== '0' || !Number.isSafeInteger(intent.validUntil) || intent.validUntil > attestation.data.validUntil || now >= intent.validUntil || !matchUniqueContextCommitment(intent, baseAgentSwapGuardCommitment(decision)).matched) throw new Error(`BASE_AGENT_SWAP_GUARD_${stage.toUpperCase()}_SCOPE_MISMATCH`)
+  if (intent.schema !== 'priorseal.intent.v2' || intent.executionProfile !== 'priorseal.execution-profile.exact-call.v1' || intent.action !== 'CONTRACT_CALL' || intent.asset !== baseAgentSwapGuardIntentAsset(binding.approval.token, binding.chainId) || intent.amount !== binding.approval.amountRaw || Number(intent.chainId) !== binding.chainId || !sameAddress(intent.sender, binding.recipient) || !sameAddress(intent.callTarget, expected.to) || !sameAddress(intent.recipient, expected.to) || !sameHash(intent.calldataHash, stage === 'approval' ? binding.approval.calldataHash : binding.swap.calldataHash) || intent.transactionValue !== '0' || !Number.isSafeInteger(intent.validUntil) || intent.validUntil > attestation.data.validUntil || now >= intent.validUntil || !matchUniqueContextCommitment(intent, baseAgentSwapGuardCommitment(decision)).matched) throw new Error(`BASE_AGENT_SWAP_GUARD_${stage.toUpperCase()}_SCOPE_MISMATCH`)
 }
 
 /**
@@ -275,7 +290,7 @@ export async function buildBaseAgentSwapGuardBoundIntents(input: { approval: Exa
   if (input.approval.contextCommitments?.some((entry) => entry.namespace.toLowerCase() === INSIGHT_BASE_AGENT_SWAP_GUARD_NAMESPACE) || input.swap.contextCommitments?.some((entry) => entry.namespace.toLowerCase() === INSIGHT_BASE_AGENT_SWAP_GUARD_NAMESPACE)) throw new TypeError('BASE_AGENT_SWAP_GUARD_RESERVED_NAMESPACE')
   const binding = decision.guard.binding!
   const calls = decision.guard.transactionsToSign!
-  if (!isExactTransaction(input.approval.transaction, calls.approval, binding.recipient) || !isExactTransaction(input.swap.transaction, calls.swap, binding.recipient) || input.approval.asset !== baseAgentSwapGuardIntentAsset(binding.approval.token) || input.swap.asset !== baseAgentSwapGuardIntentAsset(binding.approval.token) || String(input.approval.amount) !== binding.approval.amountRaw || String(input.swap.amount) !== binding.approval.amountRaw) throw new TypeError('BASE_AGENT_SWAP_GUARD_INPUT_SCOPE_MISMATCH')
+  if (!isExactTransaction(input.approval.transaction, calls.approval, binding.recipient, binding.chainId) || !isExactTransaction(input.swap.transaction, calls.swap, binding.recipient, binding.chainId) || input.approval.asset !== baseAgentSwapGuardIntentAsset(binding.approval.token, binding.chainId) || input.swap.asset !== baseAgentSwapGuardIntentAsset(binding.approval.token, binding.chainId) || String(input.approval.amount) !== binding.approval.amountRaw || String(input.swap.amount) !== binding.approval.amountRaw) throw new TypeError('BASE_AGENT_SWAP_GUARD_INPUT_SCOPE_MISMATCH')
   const approvalNonce = uint(input.approval.transaction.nonce)
   const swapNonce = uint(input.swap.transaction.nonce)
   if (approvalNonce === null || swapNonce === null || BigInt(swapNonce) !== BigInt(approvalNonce) + 1n) throw new TypeError('BASE_AGENT_SWAP_GUARD_NONCES_NOT_CONSECUTIVE')

@@ -1,5 +1,85 @@
 # Changelog
 
+## 2026-11-05 — capability-gap documentation close-out (P1-3 / P1-5 / P2)
+
+Documentation close-out across the insight and PriorSeal repositories. Every
+item below already exists in code; this entry records the capabilities the
+README/SDK docs now describe. `insight` has no CHANGELOG.md, so the insight-side
+items are recorded here as well.
+
+- **reviewed-profile registry** (insight, `src/lib/reviewed/`): 38 descriptors
+  across 8 groups (lending / swap / perp / prediction), a read-only heartbeat
+  (`heartbeat.ts`: anchor consistency + activity) and a pure freshness gate
+  (`guard.ts`: any non-ACTIVE status → BLOCK). **Status: wired into production
+  guard decision paths with EVIDENCE-GRADED enforcement** — only first-hand
+  disproved profiles (today just `drift-v2-mainnet`) are hard-BLOCKed by default;
+  every other profile is advisory-only, and a `strict` switch (default false,
+  reserved until heartbeat infra is ready) BLOCKs all non-ACTIVE profiles.
+  `drift-v2-mainnet` is registered `STALE` (P0-1 first-hand check:
+  on-chain AMM frozen since 2026-04-01, ~218 days; official repo archived and
+  migrated to Velocity; all instructions commented out; constants still
+  correct). **Needs manual review registration**: all 38 descriptors carry
+  `reviewedAt: 2026-11-05` and most have no captured activity signal
+  (activityStatus UNKNOWN → fail-closed STALE).
+- **ERC-4626 vault reduction** (insight, `lending/erc4626VaultDecoder.ts` and
+  `vaultMarketMapping.ts`): a generic `deposit`/`mint`/`redeem`/`withdraw`
+  decoder wired into `baseLendingGuard.ts` **by default**, but the reviewed
+  Morpho Blue Base market registry starts **empty and fail-closed** — every
+  vault is refused until markets are registered through review or injected as
+  `reviewedMarkets`. **Needs manual review registration**: concrete Morpho
+  Blue Base `marketId` / `loanAsset` pairs. This is **not** curator-vault
+  support.
+- **Monad exact-order binding + EIP-712 attestation** (insight,
+  `perps/monadPerpGuardAttestation.ts`): binds the canonical `payloadHash` of
+  a **centralized Perpl order payload**, not chain calldata, so the
+  attestation cannot prove on-chain execution. **Status: lib-layer module +
+  tests only, no HTTP verify route and no REST/MCP wiring**; an eligible
+  attester key is required to sign. **Needs manual review registration**: the
+  Perpl order-payload schema / binding surface and attester-key trust.
+- **AUSD independent coverage** (insight, `perps/monadPerpGuard.ts`):
+  `requireIndependentAusdCoverage` strict mode is **opt-in, default off**;
+  default behaviour is unchanged (insufficient coverage is disclosed, not
+  BLOCKed). AUSD has no independent cross-oracle coverage today. **Needs
+  manual review registration**: populate the UNVERIFIED AUSD coverage registry
+  before strict mode can pass.
+- **Prediction entry-chain × settlement-chain mapping** (insight,
+  `settlementEvidence/venueChainMapping.ts`): pure offline classification over
+  declared metadata, called by `polymarketGuard.ts` **by default**; five venue
+  classes, `solana-native` projects are `UNVERIFIED` name-only placeholders,
+  `unknown` fails closed. It is one chain-agnostic metadata screen, not four
+  per-chain guards and not execution risk control. **Needs manual review
+  registration**: first-party program ids / settlement addresses for
+  Solana-native venues.
+- **Settlement independent re-read** (PriorSeal SDK,
+  `settlement-independent-reread.ts`): `independentlyVerifySettlement(
+  settlement, { rpcUrl | provider | reader })` uses the caller's own RPC to
+  recompute the calldata hash, ERC-20 `Transfer` amounts and chain/block
+  against the settlement's claims; `verifySettlementWithIndependentReread`
+  composes it with the offline verifier. **opt-in, default off** — with no RPC
+  source it returns `UNKNOWN` and never changes existing verifier behaviour.
+  Default offline verification stays signature-only and inherits Insight's RPC
+  reconciliation claims (`swapTxHash`, `calldataHash`, `fillStatus`, amounts,
+  `blockNumber`, `executedPrice`); off-chain quote fields (`executedPrice`,
+  `realizedSlippageBps`, `executedAt`) are never independently verifiable.
+
+- **Multichain swap authorization closure** (PriorSeal SDK,
+  `insight-base-agent-swap-guard.ts` / `insight-base-agent-swap-guard-settlement.ts`):
+  the Base Agent Swap Guard adapter now binds decisions and settlements for
+  all three reviewed EVM chains — Base 8453, BNB 56 and Monad 143 — mirroring
+  Insight's `SUPPORTED_CHAIN_IDS` and its six reviewed EVM profiles
+  (Base 3 / BNB 2 / Monad 1) with a profile→pinned-chain consistency check.
+  The intent asset label is chain-aware (`eip155:<chainId>/erc20:<token>`;
+  the single-argument form still returns the Base prefix); the EIP-712
+  signing domain is unchanged (chainId: 1). Unsupported chains (e.g. 1) and
+  profile/chain mismatches fail closed. Tests cover the full 56/143 loop
+  (decision → intents → authorization bundle), settlement cross-binding,
+  chain-mismatch rejection and cross-chain contradiction detection.
+
+Docs touched by this close-out: `insight/README.md` (capability matrix +
+"Scope & non-goals"), `PriorSeal/sdk/README.md` (guard inventory + settlement
+re-read boundary). New reports / quickstarts and the rebuilt upper-level report
+live outside the repositories under `~/.workbuddy/insight-capability-gap/`.
+
 ## Unreleased
 
 - Completed the production persistence cutover to Cloudflare D1, verified the former database contents as a preserved subset of D1, and removed obsolete Neon configuration, dependencies, migration tooling, and local credentials.

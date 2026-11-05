@@ -218,6 +218,31 @@ For a deterministic, zero-network review packet covering exact-call target, call
 
 Portable bundles are available with `getVerificationBundle(receiptId)`. Verify them with `verifyVerificationBundleLocally(bundle, { trustedKeys: confirmedTrust.keys, expectedAudience: confirmedTrust.audience })`; both values must come from your independently confirmed trust configuration, never from `bundle.keyRegistry` or the receipt alone. The hosted deployment currently uses `priorseal.xyz`; do not assume the SDK's compatibility default `priorseal` matches a deployment.
 
+## Insight guard adapters
+
+The SDK ships offline adapters for Insight's signed guard decisions. These are verification and binding helpers only: none of them signs, submits, or authorizes an on-chain action. The full inventory exported from the package root:
+
+| Family | Adapter module | What it verifies / binds |
+| --- | --- | --- |
+| Lending | `insight-base-lending-guard` | Base lending EIP-712 decision, bound intent, receipt bundle |
+| Lending | `insight-monad-lending-guard` | Monad lending decision, bound intent, receipt bundle |
+| Lending | `insight-multichain-evm-lending-guard` | Multichain EVM lending decision, bound intent, receipt bundle |
+| Lending | `insight-solana-lending-guard` | Solana lending decision, bound intent |
+| Swap | `insight-base-agent-swap-guard` (0.14.0; multichain since the 2026-11-05 close-out) | Insight Agent Swap Guard EIP-712 decision plus two ordered exact-call intents, across the three reviewed EVM chains — Base 8453, BNB 56, Monad 143 — over Insight's six reviewed profiles (Base 3 / BNB 2 / Monad 1); unsupported chains and profile/chain mismatches fail closed |
+| Swap | `insight-base-agent-swap-guard-settlement` (0.15.0) | Offline settlement verification, decision↔settlement cross-binding, double-settlement contradiction detection over the same three EVM chains |
+| Swap | `insight-solana-swap-guard` (0.15.0) | Orca Whirlpool Ed25519 decision and settlement over the exact attested message bytes |
+| Perp | `insight-hyperliquid-perp-guard` (0.15.0) | Exact unsigned IOC envelope binding and EIP-712 decision; builder-fee envelopes fail closed |
+
+0.15.0 added the Solana Swap Guard adapter, the Hyperliquid Perp Guard adapter, the Base Agent Swap Guard settlement closure, and `priorseal.agent-proposal.v1` (`agent-proposal`). The last one is a caller-retained Agent rationale record with a canonical SHA-256 context commitment — a disclosure/evidence binding, **not a guard** and not a reputation, identity, trading-safety, or investment claim. The 0.14.0 Base Agent Swap Guard adapter and the four lending adapters predate 0.15.0; the settlement closure extends the Base swap adapter rather than being a separate guard family. Since the 2026-11-05 close-out the swap adapter and its settlement closure cover all three reviewed EVM chains (Base 8453 / BNB 56 / Monad 143). See the [SDK changelog](CHANGELOG.md) for the release-by-release list.
+
+## Independent settlement re-read (opt-in)
+
+`verifyInsightBaseAgentSwapGuardSettlement` verifies a Base Agent Swap Guard settlement offline: it re-checks signatures, the uid, the reason-code hash, and the decision↔settlement binding. It **inherits Insight's RPC reconciliation claims** for the factual layer — `swapTxHash`, `onChainSwapCalldataHash` / `calldataHash`, `fillStatus`, `sourceAmountRaw` / `destinationAmountRaw`, `blockNumber`, and `executedPrice`. Default offline verification is therefore independent only with respect to signatures and bindings; it is **not** an independent on-chain proof of those facts.
+
+`independentlyVerifySettlement(settlement, { rpcUrl | provider | reader })` optionally closes that gap using **the caller's own RPC**: it re-reads the swap transaction and receipt, recomputes `keccak256` of the calldata against the declared hash, decodes ERC-20 `Transfer` amounts and recipient against the declared amounts, `recipient`, and `fillStatus`, and pins the chain id and block number. Any mismatch, undecodable log, missing receipt, RPC error, or timeout fails closed (`verdict !== 'VERIFIED'`). `verifySettlementWithIndependentReread` runs the existing offline verifier first and attaches this re-read; a caller should require both `verification.valid` and `independentReread.verified` before trusting the factual layer.
+
+This is **opt-in and off by default**: with no options, or no RPC source, it returns an `UNKNOWN` result and never changes the behaviour of the existing settlement verifiers. No RPC endpoint is baked in, and only the URL origin (never a credential-bearing URL) is recorded in results. Off-chain quote fields — `executedPrice`, `realizedSlippageBps`, `executedAt` — cannot be independently recomputed from chain data and remain unverified by this path.
+
 ## Deployment capabilities and resumable authorization
 
 Read `await priorseal.capabilities()` before preparing a workflow. Check its audience, execution profile, chosen chain's `chainReadiness`, and `workflowReady`. Capabilities report configuration and storage; they do not probe live RPC/TSA availability or replace request-specific policy checks.

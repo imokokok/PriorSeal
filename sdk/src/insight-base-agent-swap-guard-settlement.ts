@@ -61,7 +61,7 @@ const RAW_AMOUNT = /^(?:0|[1-9][0-9]*)?$/
 /** Human prices and slippage are decimal strings; '' means unavailable; slippage may be negative. */
 const DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/
 const SIGNED_DECIMAL = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/
-export const SETTLEMENT_CHAIN_IDS = new Set<number>([8453, 56])
+export const SETTLEMENT_CHAIN_IDS = new Set<number>([8453, 56, 143])
 
 export type InsightBaseAgentSwapGuardSettlementData = {
   decisionHash: `0x${string}`
@@ -71,7 +71,7 @@ export type InsightBaseAgentSwapGuardSettlementData = {
   /** keccak256 of the settlement transaction's actual input bytes. */
   onChainSwapCalldataHash: `0x${string}`
   recipient: string
-  chainId: 8453 | 56
+  chainId: 8453 | 56 | 143
   fillStatus: 'FULL' | 'REVERTED'
   sourceAmountRaw: string
   destinationAmountRaw: string

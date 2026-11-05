@@ -45,6 +45,7 @@ export {
 } from './insight-base-lending-guard.js'
 export type { InsightBaseLendingGuardDecision, InsightBaseLendingGuardVerification } from './insight-base-lending-guard.js'
 export {
+  BASE_AGENT_SWAP_GUARD_CHAIN_IDS,
   BASE_AGENT_SWAP_GUARD_INTENT_ASSET_PREFIX,
   INSIGHT_BASE_AGENT_SWAP_GUARD_NAMESPACE,
   INSIGHT_BASE_AGENT_SWAP_GUARD_SCHEMA,
@@ -58,6 +59,7 @@ export {
 export type {
   BaseAgentSwapGuardBoundIntents,
   BaseAgentSwapGuardVerificationOptions,
+  InsightBaseAgentSwapGuardChainId,
   InsightBaseAgentSwapGuardDecision,
   InsightBaseAgentSwapGuardVerification,
 } from './insight-base-agent-swap-guard.js'
@@ -78,6 +80,23 @@ export type {
   InsightBaseAgentSwapGuardSettlementSetReport,
   InsightBaseAgentSwapGuardSettlementVerification,
 } from './insight-base-agent-swap-guard-settlement.js'
+export {
+  createSettlementRereadReader,
+  independentlyVerifySettlement,
+  verifySettlementWithIndependentReread,
+} from './settlement-independent-reread.js'
+export type {
+  IndependentRereadCheck,
+  IndependentRereadMismatch,
+  IndependentRereadOptions,
+  IndependentRereadResult,
+  IndependentRereadVerdict,
+  ObservedErc20Transfer,
+  SettlementRereadReader,
+  SettlementRereadReceipt,
+  SettlementRereadTransaction,
+  SettlementVerificationWithIndependentReread,
+} from './settlement-independent-reread.js'
 export {
   INSIGHT_MONAD_LENDING_GUARD_NAMESPACE,
   INSIGHT_MONAD_LENDING_GUARD_SCHEMA,
