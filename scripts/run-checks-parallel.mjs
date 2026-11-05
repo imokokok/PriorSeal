@@ -1,20 +1,33 @@
 // Generated from run-checks-parallel.mts by npm run core:build. Do not edit directly.
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { EOL } from "node:os";
 import os from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 const names = process.argv.slice(2);
 if (names.length === 0) {
   console.error("Usage: node scripts/run-checks-parallel.mjs <npm-script-name> [...more]");
   process.exit(1);
 }
+const scripts = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8")
+).scripts;
 const cpus = os.availableParallelism?.() ?? os.cpus().length;
 const limit = Number(process.env.CHECKS_PARALLEL_LIMIT ?? Math.max(2, Math.min(6, cpus - 2)));
 const results = /* @__PURE__ */ new Map();
+function commandFor(name) {
+  const script = scripts[name];
+  if (typeof script !== "string") return ["npm", ["run", "--silent", name]];
+  if (/^(node|npx|tsgo|tsc|eslint)\s/.test(script) && !/&&|\|\||;|>|\||\$\(/.test(script)) return ["sh", ["-c", script]];
+  return ["npm", ["run", "--silent", name]];
+}
 function run(name) {
   return new Promise((resolve) => {
-    const child = spawn("npm", ["run", "--silent", name], {
+    const [command, args] = commandFor(name);
+    const child = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: process.env
+      env: { ...process.env, PATH: `${join(process.cwd(), "node_modules", ".bin")}:${process.env.PATH ?? ""}` }
     });
     const tag = `[${name}] `;
     const pipe = (stream, out) => {

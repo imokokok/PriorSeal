@@ -6,8 +6,12 @@ if [ "${GITHUB_ACTIONS:-}" = 'true' ]; then
   exit 0
 fi
 
-# Lightweight preflight only. The heavy suite (build, coverage, release:check,
-# Playwright e2e) runs as required GitHub Actions checks on protected branches;
-# run `npm run release:check` for the complete suite locally.
-npm run typecheck
-npm run format:check
+# Lightweight preflight only. The SDK bundle must exist first because several
+# examples and scripts import `sdk/dist/*.js` directly, so `typecheck:prepared`
+# cannot start before `sdk:build` finishes. After that, the four TypeScript
+# projects and the whitespace check are independent and run in parallel
+# (see scripts/run-checks-parallel.mjs). The heavy suite (build, coverage,
+# release:check, Playwright e2e) runs as required GitHub Actions checks on
+# protected branches; run `npm run release:check` for the complete suite.
+node scripts/run-checks-parallel.mjs sdk:build
+node scripts/run-checks-parallel.mjs typecheck:prepared format:check

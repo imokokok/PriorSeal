@@ -31,6 +31,20 @@ async function checkRuntime(file) {
 ${output}`));
   });
 }
+function checkTsc(label, args) {
+  return new Promise((resolve) => {
+    const child = spawn("./node_modules/.bin/tsc", args, { stdio: ["ignore", "pipe", "pipe"] });
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.on("close", (code) => resolve(code === 0 ? null : `${label}
+${output}`));
+  });
+}
 async function checkRuntimeFiles(files) {
   const limit = Math.max(2, Math.min(8, (os.availableParallelism?.() ?? os.cpus().length) - 1));
   const failures = [];
@@ -68,9 +82,16 @@ if (mode === "format") {
   process.exit(0);
 }
 if (mode === "typecheck") {
-  run("./node_modules/.bin/tsc", ["-p", "tsconfig.core.json", "--pretty", "false"]);
-  run("./node_modules/.bin/tsc", ["-p", "tsconfig.maintenance.json", "--pretty", "false"]);
-  run("./node_modules/.bin/tsc", ["-b", "web/tsconfig.json", "--pretty", "false"]);
+  const failures = (await Promise.all([
+    checkTsc("tsconfig.core.json", ["-p", "tsconfig.core.json", "--pretty", "false"]),
+    checkTsc("tsconfig.maintenance.json", ["-p", "tsconfig.maintenance.json", "--pretty", "false"]),
+    checkTsc("web/tsconfig.app.json", ["-p", "web/tsconfig.app.json", "--pretty", "false"]),
+    checkTsc("web/tsconfig.node.json", ["-p", "web/tsconfig.node.json", "--pretty", "false"])
+  ])).filter((failure) => failure !== null);
+  if (failures.length > 0) {
+    for (const failure of failures) process.stderr.write(failure);
+    process.exit(1);
+  }
   process.exit(0);
 }
 throw new Error("Usage: node scripts/quality.mjs <lint|format|typecheck>");
