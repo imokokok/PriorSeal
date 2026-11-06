@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
       - name: Check portfolio public surfaces; confirm failures after one minute
@@ -60,7 +60,7 @@ jobs:
       PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE: 'true'
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
       - name: Check Agent-retail public surfaces; confirm failures after one minute
