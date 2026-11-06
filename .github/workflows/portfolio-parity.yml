@@ -14,12 +14,12 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out PriorSeal
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: main
           path: priorseal
       - name: Check out Insight
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: imokokok/Insight
           ref: main
