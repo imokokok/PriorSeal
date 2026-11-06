@@ -5,9 +5,14 @@ import { readFile } from 'node:fs/promises';
 const read = (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('container development uses the supported runtime without sending local secrets', async () => {
-  const [dockerfile, dockerignore, compose] = await Promise.all([read('Dockerfile'), read('.dockerignore'), read('docker-compose.yml')]);
+  const [dockerfile, dockerignore, compose, nodeVersion] = await Promise.all([
+    read('Dockerfile'),
+    read('.dockerignore'),
+    read('docker-compose.yml'),
+    read('.node-version'),
+  ]);
   assert.doesNotMatch(dockerfile, /node:20/);
-  assert.match(dockerfile, /FROM node:22-alpine/);
+  assert.match(dockerfile, new RegExp(`FROM node:${nodeVersion.trim().replaceAll('.', '\\.')}-alpine`));
   assert.match(dockerfile, /COPY migrations \.\/migrations/);
   assert.match(dockerignore, /^\.env\.\*$/m);
   assert.match(dockerignore, /^\.priorseal$/m);

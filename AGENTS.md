@@ -26,6 +26,12 @@
 - Using a proxy must never change the required author or committer identity. Re-verify both identities before committing and verify the requested remote ref by SHA after pushing.
 - Preserve remote history by default. Use a force push only when the user explicitly requests a history rewrite, and prefer `--force-with-lease`.
 
+## Local Node.js version
+
+- The repository pins Node.js `22.23.2` in `.node-version` and `.nvmrc`. CI reads `node-version-file: .node-version`, the production image uses `node:22.23.2-alpine`, and `engines.node` stays `22.x`.
+- Run `nvm use` (or `fnm use`) after entering the repository. `npm run prepare` does not install a Node version for you, so a shell that defaults to another major will fail the CI parity step.
+- A shell hook that switches automatically is optional; if you add one, keep it scoped to this directory. Do not change the machine-wide default Node.js version for other projects.
+
 ## TypeScript source policy
 
 - Write all new production, integration, deployment, migration, and operational source code in TypeScript. Use `.mts` for Node ESM code and `.ts`/`.tsx` in the SDK and web workspaces.

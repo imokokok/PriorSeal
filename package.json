@@ -127,7 +127,7 @@
     "erc4337:pilot:ui": "PRIORSEAL_LOCAL_API_URL=http://127.0.0.1:3001 PRIORSEAL_ERC4337_HTTP_PROXY=http://127.0.0.1:7890 node --env-file=.env.local node_modules/vite/bin/vite.js web --config web/vite.config.ts --host 127.0.0.1 --port 8765 --strictPort"
   },
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "workspaces": [
     "web",
