@@ -121,11 +121,35 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: |
             package-lock.json
             examples/aps-priorseal-decision-binding-v1/package-lock.json
+      - name: Verify Node.js version pins agree
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat .node-version)"
+          actual="$(node -p 'process.versions.node')"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::CI runs Node $actual but .node-version pins $expected" >&2
+            exit 1
+          fi
+          if [ "$(cat .nvmrc)" != "$expected" ]; then
+            echo "::error::.nvmrc must equal .node-version ($expected)" >&2
+            exit 1
+          fi
+          engines="$(node -p "JSON.parse(require('node:fs').readFileSync('package.json','utf8')).engines.node")"
+          if [ "$engines" != "${expected%%.*}.x" ]; then
+            echo "::error::engines.node is '$engines'; expected '${expected%%.*}.x'" >&2
+            exit 1
+          fi
+          if grep -rInE 'node-version:[[:space:]]*[0-9]' .github/workflows; then
+            echo "::error::workflows must use node-version-file: .node-version" >&2
+            exit 1
+          fi
+          echo "Node.js pins agree on $expected."
       - name: Install root and maintenance example dependencies
         run: |
           npm ci
@@ -166,7 +190,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: |
             package-lock.json

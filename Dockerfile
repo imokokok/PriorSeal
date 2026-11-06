@@ -1,4 +1,4 @@
-FROM node:22-alpine AS web-build
+FROM node:22.23.2-alpine AS web-build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY sdk/package.json ./sdk/package.json
@@ -9,7 +9,7 @@ COPY web/ ./web/
 COPY src/domain/rfc3161.mjs src/domain/rfc3161.d.mts /app/src/domain/
 RUN npm --prefix web run build
 
-FROM node:22-alpine
+FROM node:22.23.2-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
