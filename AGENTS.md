@@ -45,3 +45,12 @@
 - For partner integration preparation, rehearsal, fresh bundles, live execution, post-run verification, or replies, first read `/Users/imokokok/Documents/partnerships/AGENTS.md`, then `/Users/imokokok/Documents/partnerships/COLLABORATION-DOCS-STANDARD.md`, then `/Users/imokokok/Documents/partnerships/JOINT-RUN-PLAYBOOK.md`. Continue with the partnerships root README, the partner README, and the current stage fact sources. These rules supplement this repository's rules.
 - Apply this read order at a new joint-run task/window or context resumption. Within an unchanged continuous task, reuse already-read rules and recheck changed rules and the latest partner status. Dated retrospectives explain historical lessons; current partner facts determine scope, permissions and protocol conditions.
 - Follow the user's order for rehearsals and live runs: perform the authorized work and preserve raw evidence immediately; deliver complete English and Chinese replies in the conversation, explicitly stating required attachments and final files or no attachment; update formal collaboration documents last. Preserve existing authorization and required per-bundle GO or single-send gates; do not mark a draft as sent.
+
+## Parallel agent worktrees
+
+- One task = one branch = one worktree in `~/Documents/insight-worktrees/PriorSeal-<slug>`. Never do feature work, `git checkout`, `git reset --hard`, `git clean`, or `git stash` in the primary checkout.
+- Run the shared tool from this repository's root with `node ~/Documents/insight/scripts/worktree.mjs <command>`. The script prints the exact commands for this repository; there is no `npm run wt` here.
+- Declare the files a task will touch with `create <slug> --paths "..."`. A refused claim means another active task owns that path; coordinate instead of overriding.
+- Dependency manifests (`package.json`, any nested lockfile), cron bundles, and migration files are serial by category. A dependency change requires `deps <slug> --isolate` before `npm install`; never install through the shared `node_modules` symlink.
+- `status` reports the stage each task is stuck in and the next action. `ship` is the only commit/push/PR/auto-merge path; it verifies the required `release-check` gate before merging and refuses on overlap with another open PR.
+- Write `.handoff.local` with `handoff <slug> --next "..."` before a long pause; resume with `resume <slug>` instead of re-deriving context.
