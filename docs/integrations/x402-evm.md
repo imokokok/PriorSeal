@@ -61,27 +61,31 @@ Example route configuration (choose the price and routes for the deployment):
 
 `bazaar` is optional route metadata. Use it for a paid route with query input
 so an agent can construct a purchase request without guessing the parameters.
-For example, the receipt-independent integration-readiness product declares
-both its exact input and its signed output format:
+Do not publish the all-zero EVM address as the default for a real-target
+product: it is a compatibility check, not customer value. PriorSeal exposes it
+on the separately named `/v1/integration-readiness/smoke` route. The real
+`/v1/integration-readiness` product requires the caller's non-zero public
+target address and returns an explicit Agent Trust Activation next step.
+
+For example, a deployment can publish the compatibility-only smoke route with
+only the selected chain as input:
 
 ```json
 {
   "method": "GET",
-  "path": "/v1/integration-readiness",
-  "description": "Issue a signed read-only EVM integration-readiness report",
+  "path": "/v1/integration-readiness/smoke",
+  "description": "Verify x402 payment and signed-delivery compatibility",
   "price": "$0.02",
   "bazaar": {
     "input": {
       "queryParams": {
-        "chainId": "8453",
-        "subjectAddress": "0x0000000000000000000000000000000000000000"
+        "chainId": "8453"
       },
       "querySchema": {
         "properties": {
-          "chainId": { "type": "string", "pattern": "^[1-9][0-9]{0,9}$" },
-          "subjectAddress": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" }
+          "chainId": { "type": "string", "pattern": "^[1-9][0-9]{0,9}$" }
         },
-        "required": ["chainId", "subjectAddress"]
+        "required": ["chainId"]
       }
     },
     "output": {

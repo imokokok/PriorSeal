@@ -450,15 +450,18 @@ test('x402 integration readiness is receipt-independent, exposes Bazaar query me
       method: 'GET', path: '/v1/integration-readiness', description: 'Issue a signed read-only EVM integration-readiness report', price: '$0.02',
       bazaar: {
         input: {
-          queryParams: { chainId: '8453', subjectAddress: `0x${'a'.repeat(40)}` },
+          queryParams: { chainId: '8453', subjectAddress: '{publicEvmAddress}' },
           querySchema: { properties: { chainId: { type: 'string', pattern: '^[1-9][0-9]{0,9}$' }, subjectAddress: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' } }, required: ['chainId', 'subjectAddress'] },
         },
         output: { format: 'priorseal.integration-readiness.v1', example: { schema: 'priorseal.integration-readiness.v1' } },
       },
+    }, {
+      method: 'GET', path: '/v1/integration-readiness/smoke', description: 'Verify payment and signed delivery compatibility', price: '$0.02',
     }]),
   });
   assert.ok(x402);
   const store = createMemoryStore();
+  const metrics: Array<Record<string, unknown>> = [];
   const server = createHttpServer({
     x402,
     store,
@@ -467,6 +470,7 @@ test('x402 integration readiness is receipt-independent, exposes Bazaar query me
     issuer: 'priorseal.test',
     keyId: 'test-1',
     now: () => 1_000_000,
+    logger: { info(entry) { metrics.push(entry); } },
     integrationReadinessInspector: async () => ({
       chain: { support: 'SUPPORTED', rpc: 'AVAILABLE', observedChainId: 8453, source: 'evm-json-rpc' },
       subject: { kind: 'CONTRACT', codeHash: `0x${'c'.repeat(64)}`, codeBytes: 1 },
@@ -486,7 +490,7 @@ test('x402 integration readiness is receipt-independent, exposes Bazaar query me
       };
     };
   };
-  assert.deepEqual(challenge.extensions.bazaar.info.input.queryParams, { chainId: '8453', subjectAddress: `0x${'a'.repeat(40)}` });
+  assert.deepEqual(challenge.extensions.bazaar.info.input.queryParams, { chainId: '8453', subjectAddress: '{publicEvmAddress}' });
   assert.deepEqual(challenge.extensions.bazaar.schema.properties.input.required, ['type', 'method', 'queryParams']);
   assert.deepEqual(challenge.extensions.bazaar.schema.properties.input.properties.queryParams.required, ['chainId', 'subjectAddress']);
   assert.equal(challenge.extensions.bazaar.info.output.format, 'priorseal.integration-readiness.v1');
@@ -495,7 +499,7 @@ test('x402 integration readiness is receipt-independent, exposes Bazaar query me
   const paid = await request(server, path, { headers: { 'payment-signature': paymentHeader } });
   assert.equal(paid.status, 200);
   assert.equal(paid.headers['cache-control'], 'private, no-store');
-  const report = paid.json() as unknown as { schema: string; input: { chainId: number; subjectAddress: string; inputHash: string }; inspection: { subject: { kind: string } }; payment: { price: string }; workflow: { stage: string; nextActions: Array<{ rel: string }> }; expiresAt: number };
+  const report = paid.json() as unknown as { schema: string; input: { chainId: number; subjectAddress: string; inputHash: string }; inspection: { subject: { kind: string } }; payment: { price: string }; workflow: { stage: string; nextActions: Array<{ rel: string }> }; activation: { state: string; nextActions: Array<{ rel: string }> }; expiresAt: number };
   assert.equal(report.schema, 'priorseal.integration-readiness.v1');
   assert.equal(report.input.chainId, 8453);
   assert.equal(report.input.subjectAddress, `0x${'a'.repeat(40)}`);
@@ -504,14 +508,28 @@ test('x402 integration readiness is receipt-independent, exposes Bazaar query me
   assert.equal(report.payment.price, '$0.02');
   assert.equal(report.workflow.stage, 'TARGET_INSPECTED');
   assert.ok(report.workflow.nextActions.some((action) => action.rel === 'prepare_controlled_execution'));
+  assert.equal(report.activation.state, 'READY_FOR_CONTROLLED_ACTION');
+  assert.ok(report.activation.nextActions.some((action) => action.rel === 'open_first_verified_action'));
   assert.equal(report.expiresAt, 1_300);
   assert.equal(verifyIntegrationReadiness(paid.json() as unknown as Record<string, unknown>, publicKeyPem), true);
   assert.deepEqual(calls, ['GET /supported', 'POST /verify', 'POST /settle']);
+  assert.deepEqual(metrics.slice(0, 4).map((entry) => entry.journeyStage), ['TARGET_INSPECTED', 'TARGET_INSPECTED', 'TARGET_INSPECTED', 'TARGET_INSPECTED']);
   const ledger = await store.listX402PaymentLedgerEvents(x402PaymentLedgerId({ payload: { x402Version: 2, accepted: challenge.accepts[0] as never, payload: {}, resource: { url: `https://api.example.test${path}` }, extensions: challenge.extensions }, requirement: challenge.accepts[0] as never }, `https://api.example.test${path}`));
   assert.deepEqual(ledger.map(event => event.type), ['PAYMENT_AUTHORIZED', 'DELIVERED']);
   const invalid = await request(server, `/v1/integration-readiness?chainId=bad&subjectAddress=0x${'a'.repeat(40)}`, { headers: { 'payment-signature': paymentHeader } });
   assert.equal(invalid.status, 400);
   assert.equal(calls.filter((call) => call === 'POST /settle').length, 1, 'an invalid report input must withhold the resource without settlement');
+  const misroutedSmoke = await request(server, '/v1/integration-readiness?chainId=8453&subjectAddress=0x0000000000000000000000000000000000000000');
+  assert.equal(misroutedSmoke.status, 400);
+  const smokeUnpaid = await request(server, '/v1/integration-readiness/smoke?chainId=8453');
+  assert.equal(smokeUnpaid.status, 402);
+  const smokeChallenge = smokeUnpaid.json() as unknown as { accepts: Array<Record<string, unknown>> };
+  const smokeHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: smokeChallenge.accepts[0], payload: {} })).toString('base64');
+  const smokePaid = await request(server, '/v1/integration-readiness/smoke?chainId=8453', { headers: { 'payment-signature': smokeHeader } });
+  assert.equal(smokePaid.status, 200);
+  const smokeReport = smokePaid.json() as unknown as { workflow: { stage: string }; activation: { state: string } };
+  assert.equal(smokeReport.workflow.stage, 'SMOKE_TEST');
+  assert.equal(smokeReport.activation.state, 'REQUIRES_REAL_TARGET');
 });
 
 test('capability discovery advertises only rails supported by the current facilitator', async (t) => {
@@ -631,6 +649,7 @@ test('a paid receipt bundle includes issuer-signed x402 payment evidence', async
   assert.deepEqual(metrics.map((entry) => entry.event), ['x402.challenge_issued', 'x402.payment_authorized', 'x402.settlement_succeeded', 'x402.delivery_completed']);
   assert.ok(metrics.every((entry) => !('receiptId' in entry) && !('payer' in entry) && !('paymentPayload' in entry)));
   assert.deepEqual(metrics.map((entry) => entry.entrySource), ['docs', 'docs', 'docs', 'docs']);
+  assert.deepEqual(metrics.map((entry) => entry.journeyStage), ['PAID_RESOURCE', 'PAID_RESOURCE', 'PAID_RESOURCE', 'PAID_RESOURCE']);
 
   const unpaidEvidence = await request(server, `/v1/evidence/receipts/${receiptId}`);
   assert.equal(unpaidEvidence.status, 402);

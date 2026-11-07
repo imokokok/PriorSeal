@@ -206,11 +206,33 @@ npm run x402:staging:pay
 ```
 
 The command refuses to run without its embedded
-`--confirm-single-payment` flag, verifies the only permitted quote is Base
-Sepolia test USDC `10000` ($0.01) to the configured staging payee, and rejects
-redirects, a changed resource, or more than one signed request. Its output
+`--confirm-single-payment` flag, verifies the one Base Sepolia exact
+requirement is test USDC `10000` ($0.01) to the configured staging payee, and
+rejects redirects, a changed resource, or more than one signed request. Other
+advertised rails do not become eligible: its client is configured to sign only
+that Base Sepolia requirement. Its output
 contains only public reconciliation fields; retain that output with the D1
 ledger evidence.
+
+### Real-target readiness rehearsal
+
+Before promoting the Bazaar-facing readiness route, separately prove that a
+normal x402 Agent replaces the illustrative `{publicEvmAddress}` value with a
+non-zero target. The confirmation-gated rehearsal uses the dedicated staging
+payer's own public EOA as that target; it never accepts a caller-selected
+address, a zero address, a different path, or a second signed request:
+
+```sh
+npm run x402:staging:target-readiness
+```
+
+It requests exactly
+`/v1/integration-readiness?chainId=84532&subjectAddress=<staging-payer>` and
+permits only the same `$0.01` Base Sepolia test-USDC requirement. In addition
+to reconciling the payment, it rejects any response that does not bind the
+signed report to the payer address, label the workflow `TARGET_INSPECTED`, and
+state `READY_FOR_CONTROLLED_ACTION`. This is the deployment gate for the
+actual route; the zero-address smoke route cannot satisfy it.
 
 Only after that succeeds, run the separate receipt-bundle rehearsal with a
 known staging receipt. The route is intentionally parameterized, but the
