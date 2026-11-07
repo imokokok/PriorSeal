@@ -32,6 +32,7 @@ test('integration-readiness statement is deterministic, signed, and bounded to p
   assert.equal(signed.workflow.stage, 'TARGET_INSPECTED');
   assert.equal(signed.workflow.nextActions.some((action) => action.rel === 'read_capabilities'), true);
   assert.equal(signed.workflow.nextActions.some((action) => action.rel === 'run_real_target'), false);
+  assert.equal(signed.activation.nextActions.some((action) => action.rel === 'open_agent_credit_onboarding'), true);
   assert.equal(verifyIntegrationReadiness(signed, publicKeyPem), true);
   assert.equal(verifyIntegrationReadiness({ ...signed, inspection: { ...signed.inspection, subject: { ...signed.inspection.subject, kind: 'EOA' } } }, publicKeyPem), false);
   assert.ok(signed.limitations.some((item) => item.includes('does not submit transactions')));

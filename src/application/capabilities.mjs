@@ -5,6 +5,7 @@ import { HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_SPOT_IOC_ACTION, HYPERLIQUID
 import { evidenceProfilesForChains, EVIDENCE_API_SCHEMA } from "../domain/evidence-api.mjs";
 import { SUPPORTED_CHAINS } from "../infrastructure/blockchain/evm/chains.mjs";
 import { matchX402Route, X402_STAGING_NETWORKS } from "../infrastructure/payments/x402-exact-evm.mjs";
+import { INTEGRATION_READINESS_SMOKE_PATH } from "../domain/integration-readiness.mjs";
 async function deploymentCapabilities({ issuer, audience, keyConfigured, policy, proofMode, timestampConfigured, witnessConfigured, anchorConfigured, rpcChainIds, erc4337EntryPoints = [], safe4337Trust = [], eip7702Delegates = [], hyperliquidSpotIocConfigured = false, store, archiveEnabled, contractSignatureConfigured = false, publicPaidCommerceEnabled = true, x402, x402AvailableNetworks, agentMeter = null, selfserveClaim = null, x402CreditPacks, now }) {
   let storage = "available";
   try {
@@ -25,6 +26,7 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
   const chains = [...evmChains, ...solanaTransaction ? [0] : []];
   const evidenceBundleRoute = x402 ? matchX402Route(x402, "GET", "/v1/receipts/evidence/bundle") : void 0;
   const integrationReadinessRoute = x402 ? matchX402Route(x402, "GET", "/v1/integration-readiness") : void 0;
+  const integrationReadinessSmokeRoute = x402 ? matchX402Route(x402, "GET", INTEGRATION_READINESS_SMOKE_PATH) : void 0;
   const verifiedAction = agentMeter ? verifiedActionProduct(agentMeter.routes) : void 0;
   const proofConfigured = proofMode === "issuer" || (proofMode === "rfc3161" ? timestampConfigured : proofMode === "witness-quorum" ? witnessConfigured : anchorConfigured);
   const rpc = rpcChainIds === void 0 ? "unknown" : chains.some((id) => rpcChainIds.includes(id)) ? "configured" : "unavailable";
@@ -66,6 +68,8 @@ async function deploymentCapabilities({ issuer, audience, keyConfigured, policy,
       price: integrationReadinessRoute.price,
       input: { query: ["chainId", "subjectAddress"] },
       output: "priorseal.integration-readiness.v1",
+      smokeTest: integrationReadinessSmokeRoute ? { path: integrationReadinessSmokeRoute.path, price: integrationReadinessSmokeRoute.price, purpose: "Payment and signed-delivery compatibility only; it is not a real-target assessment." } : { configured: false },
+      activation: { product: "agent_trust_activation", next: "Run a real-target readiness report, then use the published Agent integration and live Credit options to complete one bounded, independently verifiable action." },
       boundary: "Read-only point-in-time EVM RPC configuration and bytecode presence check. It never proves ownership, contract safety, execution authority, or a right to transact."
     } : { enabled: false },
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? "operator_defined", scope: "project_uploaded_evidence" }

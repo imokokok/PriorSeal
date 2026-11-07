@@ -4,6 +4,8 @@ import { signEd25519Statement, verifyEd25519Statement } from "./ed25519.mjs";
 import { hashJson } from "./hashing.mjs";
 const INTEGRATION_READINESS_SCHEMA = "priorseal.integration-readiness.v1";
 const INTEGRATION_READINESS_DOMAIN = "priorseal/integration-readiness/v1";
+const INTEGRATION_READINESS_PATH = "/v1/integration-readiness";
+const INTEGRATION_READINESS_SMOKE_PATH = "/v1/integration-readiness/smoke";
 const SMOKE_TEST_ADDRESS = "0x0000000000000000000000000000000000000000";
 function positiveInteger(value, field) {
   if (!Number.isSafeInteger(value) || Number(value) <= 0) throw new TypeError(`Integration readiness ${field} must be a positive integer`);
@@ -59,6 +61,25 @@ function workflow({ chainId, subjectAddress, keyRegistryUrl }) {
     nextActions
   };
 }
+function activation({ subjectAddress, keyRegistryUrl }) {
+  const origin = new URL(keyRegistryUrl).origin;
+  const smoke = subjectAddress === SMOKE_TEST_ADDRESS;
+  return {
+    schema: "priorseal.agent-trust-activation.v1",
+    state: smoke ? "REQUIRES_REAL_TARGET" : "READY_FOR_CONTROLLED_ACTION",
+    goal: smoke ? "Replace the smoke-test address with the public EOA or contract that your Agent will actually integrate before selecting an execution workflow." : "Use this real-target report as the discovery step before a bounded principal authorization, separate execution, and independent evidence verification.",
+    nextActions: smoke ? [{ rel: "inspect_real_target", method: "GET", href: `${origin}${INTEGRATION_READINESS_PATH}?chainId={chainId}&subjectAddress={publicEvmAddress}` }] : [
+      { rel: "read_agent_integration", method: "GET", href: `${origin}/.well-known/priorseal-agent.json` },
+      { rel: "open_first_verified_action", method: "GET", href: `${origin}/app/onboarding?start=verified-action` },
+      { rel: "open_agent_credit_onboarding", method: "GET", href: `${origin}/app/onboarding?start=agent-credits` },
+      { rel: "read_live_credit_options", method: "GET", href: `${origin}/v1/capabilities` }
+    ],
+    boundaries: [
+      "PriorSeal never signs or broadcasts the subject-chain action.",
+      "A payment for readiness does not create authorization, Agent credits, or an execution right."
+    ]
+  };
+}
 function buildIntegrationReadiness({
   chainId,
   subjectAddress,
@@ -78,7 +99,7 @@ function buildIntegrationReadiness({
   const normalizedExpiresAt = positiveInteger(expiresAt, "expiresAt");
   if (normalizedExpiresAt <= normalizedIssuedAt || normalizedExpiresAt - normalizedIssuedAt > 3600) throw new TypeError("Integration readiness expiresAt must be after issuedAt and within one hour");
   if (!keyRegistry || keyRegistry.schema !== "priorseal.keys.v1" || !/^[0-9a-f]{64}$/.test(keyRegistry.hash) || typeof keyRegistry.url !== "string" || !/^https:\/\//.test(keyRegistry.url)) throw new TypeError("Integration readiness key registry digest is invalid");
-  if (!payment || payment.protocol !== "x402" || payment.method !== "GET" || payment.path !== "/v1/integration-readiness" || typeof payment.price !== "string" || !/^\$(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(payment.price)) throw new TypeError("Integration readiness payment descriptor is invalid");
+  if (!payment || payment.protocol !== "x402" || payment.method !== "GET" || ![INTEGRATION_READINESS_PATH, INTEGRATION_READINESS_SMOKE_PATH].includes(payment.path) || typeof payment.price !== "string" || !/^\$(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(payment.price)) throw new TypeError("Integration readiness payment descriptor is invalid");
   const checked = inspection(result);
   const input = { chainId: normalizedChainId, subjectAddress: normalizedAddress };
   const inputHash = hashJson(input);
@@ -97,6 +118,7 @@ function buildIntegrationReadiness({
     keyRegistry,
     payment,
     workflow: workflow({ chainId: normalizedChainId, subjectAddress: normalizedAddress, keyRegistryUrl: keyRegistry.url }),
+    activation: activation({ subjectAddress: normalizedAddress, keyRegistryUrl: keyRegistry.url }),
     limitations: [
       "This is a read-only point-in-time check of public chain configuration and bytecode presence; it does not submit transactions or custody keys.",
       "EOA or CONTRACT describes only whether eth_getCode returned empty bytecode at the checked state. It does not prove address control, contract safety, ownership, authorization, or business suitability.",
@@ -114,7 +136,9 @@ function verifyIntegrationReadiness(value, publicKeyPem) {
 }
 export {
   INTEGRATION_READINESS_DOMAIN,
+  INTEGRATION_READINESS_PATH,
   INTEGRATION_READINESS_SCHEMA,
+  INTEGRATION_READINESS_SMOKE_PATH,
   buildIntegrationReadiness,
   signIntegrationReadiness,
   verifyIntegrationReadiness

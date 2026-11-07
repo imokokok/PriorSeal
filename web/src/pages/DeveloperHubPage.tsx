@@ -6,6 +6,7 @@ const resources = [
   { index: '01', title: 'TypeScript SDK', copy: 'Prepare authorization, collect a wallet signature, observe execution and verify receipts in one typed client.', to: '/app/sdk', action: 'Open SDK guide' },
   { index: '02', title: 'HTTP API', copy: 'Use the stable `/v1` surface, published capabilities and OpenAPI index for service-to-service integrations.', to: '/app/api', action: 'Open API reference' },
   { index: '03', title: 'MCP integration', copy: 'Give a compatible agent client explicit access to PriorSeal authorization, observation and evidence tools.', to: '/integrations/mcp', action: 'Open MCP guide' },
+  { index: '04', title: 'Agent Trust Activation', copy: 'Start with a real target, then complete one bounded action with an Insight decision, PriorSeal authorization and independently verifiable evidence.', to: '/app/onboarding?start=verified-action', action: 'Start first verified action' },
 ]
 
 export function DeveloperHubPage() {

@@ -73,6 +73,7 @@ const onDemandOperationSources = [
   "scripts/x402-staging-credit-pack-rehearsal.mts",
   "scripts/x402-staging-receipt-fixture.mts",
   "scripts/x402-staging-paid-rehearsal.mts",
+  "scripts/x402-staging-target-readiness-rehearsal.mts",
   "scripts/x402-staging-readiness.mts"
 ].map((path) => join(projectRoot, path));
 const onDemandPaths = /* @__PURE__ */ new Set([...onDemandGeneratorSources, ...onDemandToolSources, ...onDemandOperationSources]);

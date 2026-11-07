@@ -102,10 +102,12 @@ console.log(JSON.stringify({
 
 function assertExpectedChallenge(header: string | null) {
   const challenge = decodeBase64Json(header, 'PAYMENT-REQUIRED');
-  if (challenge.x402Version !== 2 || !record(challenge.resource) || challenge.resource.url !== TARGET_URL || !Array.isArray(challenge.accepts) || challenge.accepts.length !== 1) {
-    throw new TypeError('Staging payment challenge does not describe exactly one expected resource and requirement');
+  if (challenge.x402Version !== 2 || !record(challenge.resource) || challenge.resource.url !== TARGET_URL || !Array.isArray(challenge.accepts)) {
+    throw new TypeError('Staging payment challenge does not describe the expected resource');
   }
-  const requirement = challenge.accepts[0];
+  const requirements = challenge.accepts.filter((candidate): candidate is Record<string, unknown> => record(candidate) && candidate.scheme === 'exact' && candidate.network === NETWORK);
+  if (requirements.length !== 1) throw new TypeError('Staging payment challenge must contain exactly one Base Sepolia exact requirement');
+  const requirement = requirements[0];
   if (!record(requirement) || requirement.scheme !== 'exact' || requirement.network !== NETWORK || requirement.amount !== AMOUNT || !sameAddress(requirement.asset, ASSET) || !sameAddress(requirement.payTo, PAY_TO)) {
     throw new TypeError('Staging payment challenge differs from the approved Base Sepolia $0.01 USDC rehearsal terms');
   }
