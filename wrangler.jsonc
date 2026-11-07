@@ -132,6 +132,7 @@
         "PRIORSEAL_X402_FACILITATOR_URLS": "eip155:56=https://facilitator.aeon.xyz,solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp=https://facilitator.payai.network",
         "PRIORSEAL_X402_ENABLE_TESTNETS": "true",
         "PRIORSEAL_X402_NETWORKS": "eip155:84532",
+        "PRIORSEAL_X402_STANDARD_RAILS_ENABLED": "true",
         "PRIORSEAL_X402_STAGING_OBSERVATION_NETWORKS": "eip155:84532",
         "PRIORSEAL_HYPERCORE_X402_ENABLED": "true",
         "PRIORSEAL_HYPERCORE_X402_FACILITATOR_URL": "https://hypercore-x402-facilitator-testnet.priorseal.workers.dev",
