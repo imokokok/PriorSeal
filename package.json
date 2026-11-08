@@ -143,18 +143,18 @@
     "viem": "2.56.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.12",
-    "@electric-sql/pglite": "^0.5.8",
+    "@biomejs/biome": "^2.6.5",
+    "@electric-sql/pglite": "^0.5.15",
     "@playwright/test": "^1.63.0",
-    "@types/node": "^26.5.0",
+    "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
-    "@x402/evm": "^2.27.0",
-    "@x402/fetch": "^2.27.0",
+    "@x402/evm": "^2.30.0",
+    "@x402/fetch": "^2.30.0",
     "c8": "12.0.0",
-    "esbuild": "0.25.12",
-    "solc": "0.8.36",
+    "esbuild": "0.28.2",
+    "solc": "0.8.38",
     "typescript": "^5.8.3",
-    "wrangler": "^4.149.0"
+    "wrangler": "^4.158.0"
   },
   "overrides": {
     "tmp": "0.2.7",
