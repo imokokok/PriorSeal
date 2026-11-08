@@ -13,16 +13,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@safe-global/relay-kit": "6.1.1",
-    "@solana/web3.js": "^3.1.0",
+    "@safe-global/relay-kit": "6.1.5",
+    "@solana/web3.js": "^3.1.1",
     "priorseal-sdk": "file:../sdk",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^7.6.2"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5"
   },
   "devDependencies": {
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^4.7.0",
     "typescript": "^5.8.3",
     "undici": "7.30.1",
