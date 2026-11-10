@@ -43,7 +43,10 @@ export async function integrationDoctor(options: DoctorOptions = {}) {
       read(base, '/api/v1/health/ready'),
     ]);
     live.check.ok &&= record(live.body?.data)?.status === 'ok';
-    ready.check.ok &&= record(ready.body?.data)?.status === 'ready';
+    // Insight intentionally exposes a cheap public liveness response here.
+    // Deep dependency readiness is a cron-only, authenticated probe, so the
+    // public contract is `live`, not `ready`.
+    ready.check.ok &&= record(ready.body?.data)?.status === 'live';
     const checks = [live.check, ready.check];
     if (probe) for (let i = 0; i < samples; i++) {
       if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000));
