@@ -45,7 +45,7 @@ jobs:
           exit "$confirmation_status"
       - name: Retain diagnostic evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: public-portfolio-health
           path: health-portfolio-*.json
@@ -73,7 +73,7 @@ jobs:
           node scripts/agent-retail-readiness.mjs > health-agent-retail-confirmation.json
       - name: Retain diagnostic evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: public-agent-retail-health
           path: health-agent-retail-*.json
