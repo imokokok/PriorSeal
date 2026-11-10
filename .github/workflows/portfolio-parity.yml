@@ -26,6 +26,8 @@ jobs:
           path: insight
       - uses: actions/setup-node@v5
         with:
-          node-version-file: .node-version
+          # The two repositories are checked out into subdirectories; the
+          # project runtime pin belongs to Insight, not this empty workspace root.
+          node-version-file: insight/.node-version
       - name: Check shared RWA source and frozen vectors across both releases
         run: node priorseal/scripts/check-rwa-parity.mjs --peer insight
