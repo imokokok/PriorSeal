@@ -1,6 +1,6 @@
 # PriorSeal first-release product scope
 
-PriorSeal’s core is the independently verifiable relationship between explicit authorization before action and observed EVM or Solana execution afterward. It can be used independently. Insight supplies separate oracle transparency, simulation and risk inputs when the two products are combined. See [product positioning](positioning.md).
+PriorSeal's core product is **Verified Action**: the independently verifiable relationship between explicit authorization before action and observed EVM or Solana execution afterward. It can be used independently. Insight supplies separate oracle transparency, simulation and risk inputs when the two products are combined. See [Verified Action](verified-action.md) and [product positioning](positioning.md).
 
 PriorSeal 当前可作为受限自动化的付费设计伙伴试点独立交付；公开自助付费
 仍受生产 x402 Go/No-Go 约束。详见
@@ -17,7 +17,7 @@ PriorSeal 的长期商业方向是 Agent 按调用使用的授权与证据层；
 
 ## Primary user
 
-The first release serves Agent builders, wallet and trading-application teams, and treasury engineering teams that need a portable, independently verifiable statement connecting an Agent proposal and a pre-authorized intent to an observed EVM or Solana execution. The end user is the principal who reviews and signs one exact action; the Agent is not given an open-ended asset mandate.
+The first release serves Agent builders, wallet and trading-application teams, and treasury engineering teams that need a portable, independently verifiable statement connecting an Agent proposal and a pre-authorized intent to an observed EVM or Solana execution. The first engagement is one bounded, high-value execution path—not a generic automation product. The end user is the principal who reviews and signs one exact action; the Agent is not given an open-ended asset mandate.
 
 Auditors are the primary evidence consumer. They do not need wallet access and should be able to inspect a downloaded receipt or evidence bundle without trusting the PriorSeal HTTP verification endpoint.
 
@@ -28,6 +28,8 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 3. Register the authorization and receive a signed acceptance plus independent RFC 3161 timestamp.
 4. Observe an explicitly identified EVM transaction or Solana signature against the single-use authorization.
 5. Download the v3 receipt and independently recompute authorization, execution status, compliance and signatures.
+
+This is one product journey. Internally it is organized as **Seal** (bounded authorization), **Witness** (pre-execution proof), **Match** (execution against authorization), and **Review** (portable verification). Those layers are not four independent first-release SKUs.
 
 ## Product vocabulary
 
@@ -58,6 +60,7 @@ Auditors are the primary evidence consumer. They do not need wallet access and s
 - Every signed receipt can be downloaded and checked outside the PriorSeal service.
 - A valid v3 receipt separately proves the signed evidence and reports whether a final correlated execution complied with the exact canonical intent; in RFC 3161 mode it also proves that an independent TSA timestamped the authorization before the observed block time.
 - Product copy consistently states what PriorSeal proves and does not prove.
+- A design partner can identify the single execution path, evidence consumer, and operational or audit question that its Verified Action resolves.
 
 ## Explicit non-goals
 

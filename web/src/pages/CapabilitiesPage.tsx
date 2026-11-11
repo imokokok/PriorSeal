@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PriorSealMark } from '../brand'
-import { publishedCapabilityFeatures } from '../features/capabilities/feature-registry'
+import { publishedCapabilityFeatures, verifiedActionLayers } from '../features/capabilities/feature-registry'
 import { getCapabilities, type Capabilities } from '../lib/api'
 import { chains, dateTime } from '../lib/format'
 import '../landing/landing.css'
 import './capabilities-page.css'
 
 function PublicMark() {
-  return <Link className="museum-mark" to="/" aria-label="PriorSeal home"><span className="museum-mark__symbol"><PriorSealMark /></span><span className="museum-mark__name">PriorSeal<small>Authority evidence</small></span></Link>
+  return <Link className="museum-mark" to="/" aria-label="PriorSeal home"><span className="museum-mark__symbol"><PriorSealMark /></span><span className="museum-mark__name">PriorSeal<small>Verified Action</small></span></Link>
 }
 
 export function CapabilitiesPage() {
@@ -37,7 +37,7 @@ export function CapabilitiesPage() {
       <section className="capabilities-hero">
         <div>
           <p className="museum-kicker">DEPLOYMENT CAPABILITIES / CURRENT</p>
-          <h1 data-route-heading tabIndex={-1}>Only what this deployment<br /><em>publishes now.</em></h1>
+          <h1 data-route-heading tabIndex={-1}>Verified Action,<br /><em>only where configured.</em></h1>
         </div>
         <p>PriorSeal separates supported authorization, observation and verification capabilities from future plans. Every item below is derived from the deployment capability document; no unavailable workflow is presented as ready.</p>
       </section>
@@ -53,9 +53,14 @@ export function CapabilitiesPage() {
         <div className="capability-register__list">{features.map((feature, index) => <article key={feature.id}><div className="capability-register__index">{String(index + 1).padStart(2, '0')}<span>PUBLISHED</span></div><div><h3>{feature.title}</h3><p>{feature.description}</p><dl><div><dt>Use when</dt><dd>{feature.useCase}</dd></div><div><dt>Evidence scope</dt><dd>{feature.establishes}</dd></div><div><dt>Does not establish</dt><dd>{feature.doesNotEstablish}</dd></div></dl></div><Link className="museum-text-link" to={feature.to}>{feature.action} <span>→</span></Link></article>)}</div>
       </section>}
 
+      <section className="capability-register" aria-labelledby="verified-action-layers-title">
+        <header><div className="museum-section-id"><span>02</span><p>Product architecture</p></div><div><p className="museum-kicker">ONE OUTCOME / FOUR RESPONSIBILITIES</p><h2 id="verified-action-layers-title">Seal, Witness,<br />Match, Review.</h2></div></header>
+        <div className="capability-register__list">{verifiedActionLayers.map((layer, index) => <article key={layer.id}><div className="capability-register__index">{String(index + 1).padStart(2, '0')}<span>{layer.label.toUpperCase()}</span></div><div><h3>{layer.title}</h3><p>{layer.copy}</p><dl><div><dt>Boundary</dt><dd>{layer.boundary}</dd></div></dl></div></article>)}</div>
+      </section>
+
       <section className="capabilities-boundary">
         <div><p className="museum-kicker">OPERATING BOUNDARY</p><h2>Published does not mean<br /><em>unbounded.</em></h2></div>
-        <p>Each capability remains subject to the deployment policy, its trusted configuration and the exact request being evaluated. PriorSeal records and verifies explicit evidence; it does not custody assets, hold transaction-signing keys or certify economic safety.</p>
+        <p>The four responsibilities form one Verified Action; they are not four independent promises that this deployment makes. Each remains subject to deployment policy, trusted configuration and the exact request being evaluated. PriorSeal records and verifies explicit evidence; it does not custody assets, hold transaction-signing keys or certify economic safety.</p>
       </section>
     </main>
   </div>

@@ -35,7 +35,7 @@ function CopyValue({ label, value }: { label: string; value: string }) {
 }
 
 function Brand() {
-  return <Link className="monad-proof__brand" to="/" aria-label="PriorSeal home"><PriorSealMark /><span>PriorSeal<small>Authority evidence</small></span></Link>
+  return <Link className="monad-proof__brand" to="/" aria-label="PriorSeal home"><PriorSealMark /><span>PriorSeal<small>Verified Action</small></span></Link>
 }
 
 export function MonadProofPage() {
@@ -55,9 +55,9 @@ export function MonadProofPage() {
       <main id="main-content">
         <section className="monad-proof__hero">
           <div>
-            <p className="monad-proof__kicker">MONAD / TECHNICAL CASE RECORD / 001</p>
+            <p className="monad-proof__kicker">VERIFIED ACTION / MONAD TECHNICAL CASE RECORD / 001</p>
             <p className="monad-proof__status"><span /> VERIFIED EXACT CALL</p>
-            <h1 data-route-heading tabIndex={-1}>Authorization{' '}<br />became <em>evidence.</em></h1>
+            <h1 data-route-heading tabIndex={-1}>One authorized action<br />became <em>evidence.</em></h1>
             <p className="monad-proof__lede">A public, zero-native-value Monad run: a principal signed one time-bounded PriorSeal authorization, then made one exact call. The call emitted the expected event and was checked against its authorized scope.</p>
             <div className="monad-proof__actions"><a href="#evidence">Read the evidence <span>↓</span></a><a href="#boundary">Read the boundary <span>↓</span></a></div>
           </div>

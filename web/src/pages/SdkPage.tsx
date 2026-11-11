@@ -87,9 +87,9 @@ export function SdkPage() {
   }, [])
 
   return <AppShell>
-    <PageHeader eyebrow="TYPESCRIPT SDK" title="Connect authorization to execution." actions={<><Link className="button secondary" to="/app/develop">Developer hub</Link><CopyButton value={install} label="Copy install command" /></>}>One typed client prepares explicit authorization, collects the wallet signature, observes EVM execution and retrieves independently verifiable receipts. It never submits a transaction or receives a transaction-signing key.</PageHeader>
+    <PageHeader eyebrow="VERIFIED ACTION / TYPESCRIPT SDK" title="Connect one provable action." actions={<><Link className="button secondary" to="/app/develop">Developer hub</Link><CopyButton value={install} label="Copy install command" /></>}>One typed client prepares the Seal layer, collects the wallet signature, records configured Witness evidence, matches EVM execution and retrieves portable Review evidence. It never submits a transaction or receives a transaction-signing key.</PageHeader>
 
-    <div className="sdk-path" aria-label="Integration path"><div><span>01 / INSTALL</span><strong>Add the typed client</strong></div><div><span>02 / INTEGRATE</span><strong>Bind authority to execution</strong></div><div><span>03 / VERIFY</span><strong>Check evidence locally</strong></div></div>
+    <div className="sdk-path" aria-label="Verified Action integration path"><div><span>01 / SEAL</span><strong>Prepare bounded authority</strong></div><div><span>02 / WITNESS</span><strong>Accept with configured proof</strong></div><div><span>03 / MATCH</span><strong>Observe exact execution</strong></div><div><span>04 / REVIEW</span><strong>Check evidence locally</strong></div></div>
 
     <section className="sdk-hero panel">
       <div className="sdk-package">
@@ -115,10 +115,10 @@ export function SdkPage() {
 
       <aside className="sdk-sequence">
         {[
-          ['01', 'Prepare', 'Canonicalize the intent and receive EIP-712 typed data.'],
-          ['02', 'Authorize', 'Collect the user or organization signature on a trusted surface.'],
-          ['03', 'Observe', 'Attach the independently submitted EVM transaction hash.'],
-          ['04', 'Verify', 'Retrieve the signed receipt and verify it independently.'],
+          ['01', 'Seal', 'Canonicalize the intent and collect one principal-controlled signature.'],
+          ['02', 'Witness', 'Accept the authorization with the deployment’s configured pre-execution proof mode.'],
+          ['03', 'Match', 'Attach the independently submitted EVM transaction hash.'],
+          ['04', 'Review', 'Retrieve the signed receipt and verify it independently.'],
         ].map(([number, title, copy]) => <article className="panel" key={number}><span>{number}</span><div><h3>{title}</h3><p>{copy}</p></div></article>)}
       </aside>
     </section>

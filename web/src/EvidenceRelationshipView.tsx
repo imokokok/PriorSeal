@@ -44,17 +44,18 @@ export function EvidenceRelationshipView({ receipt, verification, signerTrustCon
       hash: policyHash,
     }] : []),
     { label: 'Intent', title: 'Intent hash', status: 'RECORDED', hash: receipt.intentHash },
-    ...(authorizationHash ? [{ label: 'Authority', title: 'Authorization hash', status: authorization?.signature ? 'SIGNED' : 'RECORDED', hash: authorizationHash }] : []),
-    ...(transactionHash ? [{ label: 'Transaction', title: 'Transaction hash', status: receipt.executionStatus ?? receipt.execution.status, hash: transactionHash }] : []),
-    { label: 'Execution', title: 'Execution hash', status: receipt.compliance?.status ?? receipt.outcome, hash: receipt.executionHash },
-    { label: 'Receipt', title: 'Receipt identifier', status: verification?.valid ? 'LOCALLY VERIFIED' : 'SIGNED CLAIM', value: receipt.receiptId },
+    ...(authorizationHash ? [{ label: 'Seal', title: 'Authorization hash', status: authorization?.signature ? 'SIGNED' : 'RECORDED', hash: authorizationHash }] : []),
+    { label: 'Witness', title: 'Acceptance evidence', status: receipt.authorizationEvidence?.timestamp ? 'RECORDED' : 'SEE RECEIPT', value: receipt.authorizationEvidence?.timestamp?.serialNumber ?? 'See the receipt’s configured proof mode' },
+    ...(transactionHash ? [{ label: 'Match', title: 'Transaction hash', status: receipt.executionStatus ?? receipt.execution.status, hash: transactionHash }] : []),
+    { label: 'Match', title: 'Execution hash', status: receipt.compliance?.status ?? receipt.outcome, hash: receipt.executionHash },
+    { label: 'Review', title: 'Receipt identifier', status: verification?.valid ? 'LOCALLY VERIFIED' : 'SIGNED CLAIM', value: receipt.receiptId },
   ]
   const cryptographicStatus = verification ? verification.valid ? 'VERIFIED' : verification.code : 'NOT VERIFIED HERE'
   const crossEvidenceStatus = relationshipStatus(relations, relationshipReviewComplete)
 
   return <section className={`panel evidence-relationship ${verification?.valid ? 'evidence-relationship--verified' : 'evidence-relationship--claims'}`} aria-labelledby="evidence-relationship-title">
-    <div className="panel-head relationship-intro"><div><span className="relationship-kicker">EVIDENCE MAP / 01</span><h2 id="evidence-relationship-title">Evidence relationship</h2><p>Each transition keeps its own scope. A matching digest, valid signature, observed execution and compliance result are related claims, not substitutes for one another.</p></div><div className="relationship-intro__scope"><span>DISPLAY MODE</span><strong>{verification ? verification.valid ? 'Local review attached' : 'Local review did not pass' : 'Receipt claims only'}</strong><small>{verification ? 'Read each assessment within the verifier’s stated scope.' : 'Run local verification to check signatures and hashes.'}</small></div></div>
-    <div className="relationship-divider"><span>01 / RECORD PATH</span><h3>From authority to receipt</h3></div>
+    <div className="panel-head relationship-intro"><div><span className="relationship-kicker">VERIFIED ACTION / EVIDENCE MAP</span><h2 id="evidence-relationship-title">Seal, Witness, Match, Review</h2><p>Each transition keeps its own scope. A matching digest, valid signature, observed execution and compliance result are related claims, not substitutes for one another.</p></div><div className="relationship-intro__scope"><span>DISPLAY MODE</span><strong>{verification ? verification.valid ? 'Local review attached' : 'Local review did not pass' : 'Receipt claims only'}</strong><small>{verification ? 'Read each assessment within the verifier’s stated scope.' : 'Run local verification to check signatures and hashes.'}</small></div></div>
+    <div className="relationship-divider"><span>01 / VERIFIED ACTION PATH</span><h3>From authorization to review</h3></div>
     <ol className="relationship-chain">
       {stages.map((stage, index) => <li key={`${stage.label}-${stage.title}`}>
         <div className="relationship-stage-heading"><small>{String(index + 1).padStart(2, '0')} · {stage.label}</small><Status value={stage.status} small /></div>

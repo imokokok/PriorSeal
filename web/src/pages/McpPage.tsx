@@ -24,7 +24,7 @@ const flow = [
 export function McpPage() {
   return <div className="mcp-guide">
     <header className="mcp-guide__nav">
-      <Link to="/" className="mcp-guide__brand" aria-label="PriorSeal home"><PriorSealMark /><span>PriorSeal<small>Authority evidence</small></span></Link>
+      <Link to="/" className="mcp-guide__brand" aria-label="PriorSeal home"><PriorSealMark /><span>PriorSeal<small>Verified Action</small></span></Link>
       <nav aria-label="MCP guide navigation"><a href="#connect">Connect</a><a href="#workflow">Workflow</a><a href="#compatibility">Compatibility</a></nav>
       <Link className="mcp-guide__console" to="/app">Open console <span>↗</span></Link>
     </header>
@@ -32,9 +32,9 @@ export function McpPage() {
     <main id="main-content">
       <section className="mcp-guide__hero">
         <div>
-          <p className="mcp-guide__kicker">PRIORSEAL / REMOTE MCP</p>
-          <h1 data-route-heading tabIndex={-1}>Bounded authority,<br /><em>ready for agents.</em></h1>
-          <p>Connect an MCP client to prepare principal-reviewed authorizations, record observations of already-submitted actions, and discover x402-paid evidence resources. The server never holds wallet keys, signs for a principal, or broadcasts a transaction.</p>
+          <p className="mcp-guide__kicker">PRIORSEAL / VERIFIED ACTION / REMOTE MCP</p>
+          <h1 data-route-heading tabIndex={-1}>One provable action,<br /><em>ready for agents.</em></h1>
+          <p>Connect an MCP client to prepare principal-reviewed authorizations, record configured pre-execution proof, match already-submitted actions, and discover portable evidence resources. The server never holds wallet keys, signs for a principal, or broadcasts a transaction.</p>
           <div className="mcp-guide__actions"><a href="#connect">Connect the endpoint <span>↓</span></a><a href="https://registry.modelcontextprotocol.io/v0/servers/io.github.imokokok%2Fpriorseal/versions/0.1.1" target="_blank" rel="noreferrer">View in MCP Registry <span>↗</span></a></div>
         </div>
         <aside className="mcp-guide__endpoint" aria-label="PriorSeal MCP endpoint">
@@ -55,7 +55,7 @@ export function McpPage() {
       </section>
 
       <section className="mcp-guide__workflow" id="workflow">
-        <header><p className="mcp-guide__kicker">03 / CONTROLLED EXECUTION</p><h2>One explicit handoff chain.</h2><p><code>priorseal_prepare_controlled_execution</code> returns the reviewed preparation material and this sequence. It does not accept the authorization or execute an action.</p></header>
+        <header><p className="mcp-guide__kicker">03 / VERIFIED ACTION</p><h2>Seal, Witness,<br />Match, Review.</h2><p><code>priorseal_prepare_controlled_execution</code> returns the reviewed preparation material and this sequence. It does not accept the authorization or execute an action.</p></header>
         <ol>{flow.map(([number, title, description]) => <li key={number}><span>{number}</span><div><h3>{title}</h3><p>{description}</p></div></li>)}</ol>
       </section>
 
