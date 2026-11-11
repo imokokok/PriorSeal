@@ -1,10 +1,11 @@
 # PriorSeal MCP
 
-PriorSeal exposes a public, remote MCP endpoint at
-`https://priorseal.xyz/mcp`. It is a Streamable HTTP server for agents that
-need to prepare bounded authorizations, accept a principal-provided signature,
-observe a submitted EVM or Solana transaction, and retrieve or verify portable
-evidence.
+PriorSeal exposes a public, remote MCP endpoint at `https://priorseal.xyz/mcp`.
+It is a Streamable HTTP server for Agents that need to complete one **Verified
+Action**: prepare a bounded authorization (**Seal**), accept it with the
+deployment's configured proof mode (**Witness**), observe a submitted EVM or
+Solana transaction against that authorization (**Match**), and retrieve or
+verify portable evidence (**Review**).
 
 The endpoint supports the current stateless MCP protocol revision
 `2026-07-28` and the compatible `2025-11-25` handshake flow. It is listed in
@@ -26,7 +27,8 @@ Configure a remote MCP server with this URL:
 ```
 
 MCP does not make an Agent a transaction signer or grant an automatic-trading
-permission.
+permission. The four labels organize one product journey; they do not create
+four independent permissions or change any protocol schema.
 
 The server exposes these tools:
 
@@ -82,13 +84,13 @@ permission to submit a changed, expired, or unmatched transaction. Error
 results set `isError: true` and carry a machine-readable error code in
 `data.error.code` plus a recovery-oriented `nextAction`.
 
-## Controlled-execution quick start
+## Verified Action quick start
 
-Use `priorseal_prepare_controlled_execution` when the agent needs the standard
+Use `priorseal_prepare_controlled_execution` when the Agent needs the standard
 safe sequence rather than an individual primitive. It is read-only: it returns
 the prepared authorization, signing payload, live capabilities, and a
 `priorseal.controlled-execution-workflow.v1` checklist. The checklist makes
-the following boundaries explicit:
+the following Seal → Witness → Match → Review boundaries explicit:
 
 1. A human-controlled principal reviews and signs the prepared authorization.
 2. The agent accepts that exact signed authorization with an idempotency key.

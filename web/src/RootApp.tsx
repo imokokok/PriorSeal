@@ -64,7 +64,7 @@ function RouteAccessibility() {
       const heading = document.querySelector<HTMLElement>('[data-route-heading]')
       if (!heading) return false
       const title = heading.textContent?.replace(/\s+/g, ' ').trim() || 'PriorSeal'
-      document.title = location.pathname === '/' ? 'PriorSeal — Agent-ready, user-controlled' : `${title} — PriorSeal`
+      document.title = location.pathname === '/' ? 'PriorSeal — Verified Action for onchain Agents' : `${title} — PriorSeal`
       if (shouldFocus) {
         heading.focus({ preventScroll: true })
         setAnnouncement(`${title} page loaded`)

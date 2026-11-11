@@ -3,7 +3,7 @@
 .page-sdk .page-header h1 { max-width: 890px; font-size: clamp(53px,5.4vw,83px); line-height: .96; letter-spacing: -.063em; }
 .page-sdk .lede { max-width: 810px; margin-top: 21px; font-size: 16px; line-height: 1.58; }
 .page-sdk .page-header .copy-button { min-height: 44px; padding-inline: 15px; border-color: var(--wine); }
-.sdk-path { margin: 29px 0 23px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid var(--rule); }
+.sdk-path { margin: 29px 0 23px; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); border: 1px solid var(--rule); }
 .sdk-path > div { min-width: 0; min-height: 126px; padding: 20px 23px; display: flex; flex-direction: column; justify-content: space-between; gap: 18px; background: var(--porcelain); border-right: 1px solid var(--rule); }
 .sdk-path > div:last-child { color: #fff0e8; background: #3b252d; border-right: 0; }
 .sdk-path span, .sdk-section-index { color: var(--wine); font: 600 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .12em; }
@@ -37,6 +37,9 @@
 .sdk-verify h2 { line-height: 1.03; letter-spacing: -.045em; }
 
 @media (max-width: 980px) {
+  .sdk-path { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .sdk-path > div:nth-child(2) { border-right: 0; }
+  .sdk-path > div:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
   .page-sdk .sdk-code .panel-head { align-items: start; flex-direction: column; }
   .page-sdk .sdk-workbench { grid-template-columns: minmax(0,1fr); }
   .page-sdk .sdk-sequence { grid-template-columns: repeat(2,minmax(0,1fr)); }

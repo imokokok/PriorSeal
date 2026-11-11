@@ -14,7 +14,7 @@ export function PrivacyPage() {
   }, [])
 
   return <main id="main-content" className="public-document privacy-document">
-    <header className="public-document__nav"><Link className="logo" to="/" aria-label="PriorSeal home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Authority Evidence</small></span></Link><Link to="/app">Open console →</Link></header>
+    <header className="public-document__nav"><Link className="logo" to="/" aria-label="PriorSeal home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Verified Action</small></span></Link><Link to="/app">Open console →</Link></header>
     <article>
       <div className="privacy-document__hero">
         <p className="eyebrow">PRIVACY &amp; STORAGE / 001</p>

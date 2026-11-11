@@ -1,6 +1,6 @@
 # priorseal-sdk
 
-Typed browser and Node.js client connecting explicit authorization to observed EVM or Solana execution and independently verifiable receipts. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
+Typed browser and Node.js client for a **Verified Action**: connect explicit authorization to configured pre-execution proof, observed EVM or Solana execution, and independently verifiable receipts. The client makes the product path explicit: **Seal** the bounded authorization, record deployment-configured **Witness** evidence, **Match** the observed execution, and **Review** the portable receipt. Use PriorSeal independently or bind external assessment evidence, such as Insight’s oracle risk assessments, through context commitments. It never receives a transaction-signing key and does not submit asset transfers.
 
 ```bash
 npm install priorseal-sdk
@@ -26,7 +26,7 @@ The snippets below show integration points and require your own `intent`, transa
 
 ## Client
 
-This flow uses the hosted API and your application's wallet provider. The application constructs `intent` and submits the transaction before it supplies `txHash` for observation.
+This flow uses the hosted API and your application's wallet provider. The application constructs `intent` and submits the transaction before it supplies `txHash` for Match. Acceptance records the deployment's configured Witness evidence; use the returned receipt for Review.
 
 ```ts
 import { createPriorSealClient } from 'priorseal-sdk'
