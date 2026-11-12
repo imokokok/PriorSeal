@@ -485,19 +485,15 @@ export function VerifyPage() {
                 className="button secondary"
                 disabled={!raw.trim()}
                 onClick={() => {
-                  const blob =
-                    originalFile ??
-                    new Blob([raw], { type: "application/json" });
-                  const url = URL.createObjectURL(blob);
-                  const link = document.createElement("a");
-                  link.href = url;
-                  link.download = "original-evidence.json";
-                  link.click();
-                  URL.revokeObjectURL(url);
+                  try {
+                    downloadJson(JSON.parse(raw), "evidence.json");
+                  } catch {
+                    setMessage("Only valid JSON can be exported.");
+                  }
                 }}
               >
                 {originalFile
-                  ? "Export original bytes"
+                  ? "Export JSON"
                   : "Export evidence JSON"}
               </button>
             </div>
