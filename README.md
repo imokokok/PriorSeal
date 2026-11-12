@@ -65,7 +65,7 @@ PriorSeal organizes its implementation around four layers. They can be called in
 3. **Match — execution verification.** PriorSeal observes the submitted action and checks supported fields against the authorization.
 4. **Review — portable evidence.** A customer or reviewer verifies the signed receipt and bundle independently.
 
-See [Verified Action](docs/product/verified-action.md) for the buyer, delivery, and boundaries. An execution observation without an authorization remains an execution fact; it is not a claim that an action complied with prior approval.
+See [Verified Action](docs/product/verified-action.md) for the buyer, delivery, and boundaries. The [standard release profile](docs/product/verified-action.md#standard-release-profile-and-advanced-profiles) is the default product promise; witness quorum, EVM anchoring, ERC-4337/7702/Safe, Hyperliquid, and enterprise retention are advanced profiles that require explicit deployment scope. An execution observation without an authorization remains an execution fact; it is not a claim that an action complied with prior approval.
 
 ## What the evidence covers
 

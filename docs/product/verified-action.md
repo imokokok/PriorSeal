@@ -37,6 +37,38 @@ Seal → Witness → Match → Review = Verified Action
 
 `Witness` is an assurance choice, not a promise that every deployment has the same proof mode. `Review` is a delivery and enterprise-retention capability; it does not make a receipt self-trusting.
 
+## Standard release profile and advanced profiles
+
+The first customer-facing release is intentionally narrower than every profile
+implemented in the repository. A **standard Verified Action** is the path that
+sales, onboarding, and implementation materials may offer by default. A
+deployment must still publish the applicable capabilities and pass its own
+production checks before it is described as available.
+
+| Layer | Standard Verified Action | Required boundary |
+| --- | --- | --- |
+| Seal | A single-use, time-bounded EIP-712 authorization for a supported EVM intent, or a Solana Ed25519 authorization for a complete compiled mainnet-beta message | No session, budget, recurring, or unattended mandate. |
+| Witness | A verified RFC 3161 timestamp for the accepted authorization | `issuer` proof is development-only; it is not the standard production assurance claim. |
+| Match | A configured EVM transfer or exact-call observation, or a complete compiled Solana mainnet-beta message observation | The configured RPC remains the observation source. Solana binds message bytes; it does not infer arbitrary program semantics. |
+| Review | A signed v3 receipt and its first portable verification bundle, checked with an independently pinned issuer key | A downloaded discovery key cannot establish its own trust. |
+
+The following are **advanced profiles**. They are technically supported only
+when their documented pins, dependencies, and acceptance checks are present;
+they must be explicitly named in a design-partner scope or enterprise
+agreement rather than included in the default product promise.
+
+| Profile | Why it is not standard by default |
+| --- | --- |
+| Witness quorum | It requires independently operated, configured witnesses and an agreed quorum policy. |
+| EVM transparency anchor | It requires a reviewed multisig and confirmed external anchor; the reference anchor contract is not audited. |
+| ERC-4337, Safe 4337, and EIP-7702 | Each deployment must pin its EntryPoint, account/module or delegate code and provide the required transaction-trace capability. |
+| Hyperliquid spot or perp IOC | The profile relies on the venue's public Info API and has deliberately narrow order and fill semantics. |
+| Private archive / Evidence Workspace | It is an enterprise evidence-retention capability, not required to prove one action with a portable bundle. |
+
+Do not silently downgrade a standard path to an advanced profile or upgrade an
+advanced profile into a standard claim. The deployment's `GET /v1/capabilities`
+response is authoritative for whether a particular profile is configured.
+
 ## Buyer and first engagement
 
 The initial buyer is a team operating one high-value, Agent-involved execution path: a wallet, trading application, treasury system, or Agent runtime that needs to resolve user-consent, operational-accountability, partner-review, or audit questions. The first engagement is a fixed-scope design-partner pilot, not a generic autonomous-trading offer.
@@ -54,7 +86,7 @@ A pilot selects one execution path, names the principal, executor, evidence cons
 ## Commercial sequence
 
 1. **Design-partner Verified Action pilot:** one agreed execution path and a portable evidence delivery.
-2. **Standardized Verified Action:** repeated, validated pilot path exposed through the SDK and API, subject to the applicable payment and production gates.
+2. **Standardized Verified Action:** the standard profile above, repeated and validated through the SDK and API, subject to the applicable payment and production gates.
 3. **Evidence Workspace:** project retention, review, export, and organization controls only after repeated customer demand for those workflows.
 
 Public Evidence, Fresh Evidence Check, and an Evidence Workspace remain complementary offers. They do not replace the primary question answered by a Verified Action.

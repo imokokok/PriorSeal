@@ -53,7 +53,7 @@ authorized.
 | Match | Observed execution against approved boundaries | Primary value customers evaluate |
 | Review | Portable verification and evidence handling | Included delivery; enterprise expansion after demonstrated demand |
 
-The commercial offer remains one **Verified Action**. A separate execution observation can be useful, but without a linked authorization it must not be marketed as authorization compliance. See [Verified Action](verified-action.md).
+The commercial offer remains one **Verified Action**. A separate execution observation can be useful, but without a linked authorization it must not be marketed as authorization compliance. The default commercial promise is the [standard Verified Action profile](verified-action.md#standard-release-profile-and-advanced-profiles); advanced profiles require explicit deployment and customer scope.
 
 ## Three independently selectable offers
 

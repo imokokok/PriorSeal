@@ -118,7 +118,7 @@ The first public schedule, once the launch gates below are complete, is:
 | Observation task that produces the durable receipt path | 9 | $0.09 |
 | Standard Verified Action: acceptance + observation + first portable evidence bundle | 12 | $0.12 |
 | Read-only receipt bundle via x402 | — | $0.02 |
-| Higher-assurance time, witness, or anchor evidence | — | separately quoted; not in the initial self-serve meter |
+| Witness-quorum, EVM-anchor, or another nonstandard assurance profile | — | separately quoted; not in the initial self-serve meter |
 
 The Agent credit configuration for that schedule uses `creditUnitUsd: "0.01"`.
 Status polling, local/offline verification, and a replay of the same
