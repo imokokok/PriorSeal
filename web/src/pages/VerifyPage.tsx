@@ -36,6 +36,10 @@ export function VerifyPage() {
     ?.receipt;
   const [lookup, setLookup] = useState("");
   const [originalFile, setOriginalFile] = useState<File | null>(null);
+  const [pendingEvidenceExport, setPendingEvidenceExport] = useState<{
+    filename: string;
+    url: string;
+  } | null>(null);
   const [raw, setRaw] = useState(
     received ? JSON.stringify(received, null, 2) : "",
   );
@@ -68,6 +72,14 @@ export function VerifyPage() {
   const verificationRun = useRef(0);
   const resultRef = useRef<HTMLElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
+  const evidenceExportLink = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    if (!pendingEvidenceExport) return;
+    evidenceExportLink.current?.click();
+    URL.revokeObjectURL(pendingEvidenceExport.url);
+    setPendingEvidenceExport(null);
+  }, [pendingEvidenceExport]);
 
   useEffect(() => {
     api
@@ -422,6 +434,13 @@ export function VerifyPage() {
 
   return (
     <AppShell>
+      <a
+        aria-hidden="true"
+        download={pendingEvidenceExport?.filename}
+        hidden
+        href={pendingEvidenceExport?.url}
+        ref={evidenceExportLink}
+      />
       <PageHeader eyebrow="VERIFIED ACTION / REVIEW" title="Verify receipt">
         Finish the Review layer by importing a receipt, native verification
         bundle or combined review manifest. Verification runs locally; pasted
@@ -489,12 +508,10 @@ export function VerifyPage() {
                     downloadJson(JSON.parse(raw), "evidence.json");
                     return;
                   }
-                  const url = URL.createObjectURL(originalFile);
-                  const link = document.createElement("a");
-                  link.href = url;
-                  link.download = "original-evidence.json";
-                  link.click();
-                  URL.revokeObjectURL(url);
+                  setPendingEvidenceExport({
+                    filename: "original-evidence.json",
+                    url: URL.createObjectURL(originalFile),
+                  });
                 }}
               >
                 {originalFile
