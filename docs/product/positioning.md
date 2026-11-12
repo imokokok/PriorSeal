@@ -58,6 +58,10 @@ The commercial offer remains one **Verified Action**. A separate execution obser
 
 PriorSeal is currently optimizing for **one person, one wallet, one Agent-proposed action, and one portable proof trail**. The product work priority is understandable proposal review, explicit wallet confirmation, one-time execution recovery, and evidence the person can keep or independently verify. It is not organization workflow software: do not add SSO, RBAC, hosted team archives, approval chains, or enterprise retention as roadmap work without a new product decision.
 
+## Current product direction: personal Agent control
+
+PriorSeal is currently optimizing for **one person, one wallet, one Agent-proposed action, and one portable proof trail**. The product work priority is understandable proposal review, explicit wallet confirmation, one-time execution recovery, and evidence the person can keep or independently verify. It is not organization workflow software: do not add SSO, RBAC, hosted team archives, approval chains, or enterprise retention as roadmap work without a new product decision.
+
 ## Three independently selectable offers
 
 | Offer | Buyer need | Evidence scope |
