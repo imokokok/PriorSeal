@@ -54,7 +54,6 @@ authorized.
 | Review | Portable verification and user-controlled evidence handling | Included delivery; local evidence is the default |
 
 The commercial offer remains one **Verified Action**. A separate execution observation can be useful, but without a linked authorization it must not be marketed as authorization compliance. The default commercial promise is the [standard Verified Action profile](verified-action.md#standard-release-profile-and-advanced-profiles); advanced profiles require explicit deployment and customer scope.
-
 ## Current product direction: personal Agent control
 
 PriorSeal is currently optimizing for **one person, one wallet, one Agent-proposed action, and one portable proof trail**. The product work priority is understandable proposal review, explicit wallet confirmation, one-time execution recovery, and evidence the person can keep or independently verify. It is not organization workflow software: do not add SSO, RBAC, hosted team archives, approval chains, or enterprise retention as roadmap work without a new product decision.
