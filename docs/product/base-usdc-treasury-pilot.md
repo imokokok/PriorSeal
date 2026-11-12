@@ -1,8 +1,13 @@
-# Base USDC Treasury Pilot
+# Base USDC Treasury Pilot (historical reference)
+
+> **Status:** This document records an earlier organization/treasury pilot
+> concept. It is not PriorSeal's current product-development or commercial
+> direction. Do not begin new work from this plan; use the
+> [personal Agent roadmap](agent-first-roadmap.md) instead.
 
 ## Product decision
 
-The first paid PriorSeal pilot is a **bounded Base USDC organization or treasury payment**. It is not a general payment product and it does not turn PriorSeal into a custodian, payment processor, policy engine, or organization-approval system.
+This earlier proposed paid pilot was a **bounded Base USDC organization or treasury payment**. It was not a general payment product and did not turn PriorSeal into a custodian, payment processor, policy engine, or organization-approval system.
 
 The buyer is the team responsible for an onchain treasury, procurement flow, or controlled disbursement. The operational user may be an executor or agent operator; the person who values the product is the finance, operations, security, or audit owner who needs evidence of the payment path.
 

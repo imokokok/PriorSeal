@@ -17,9 +17,9 @@ PriorSeal 的长期商业方向是 Agent 按调用使用的授权与证据层；
 
 ## Primary user
 
-The first release serves Agent builders, wallet and trading-application teams, and treasury engineering teams that need a portable, independently verifiable statement connecting an Agent proposal and a pre-authorized intent to an observed EVM or Solana execution. The first engagement is one bounded, high-value execution path—not a generic automation product. The end user is the principal who reviews and signs one exact action; the Agent is not given an open-ended asset mandate.
+The first release serves an individual wallet owner using an Agent. Agent builders and wallet applications are integration users, not the primary product beneficiary. The product provides a portable, independently verifiable statement connecting the Agent proposal, that person's pre-authorized intent, and an observed EVM or Solana execution. The first engagement is one bounded, high-value execution path—not a generic automation product. The end user reviews and signs one exact action; the Agent is not given an open-ended asset mandate.
 
-Auditors are the primary evidence consumer. They do not need wallet access and should be able to inspect a downloaded receipt or evidence bundle without trusting the PriorSeal HTTP verification endpoint.
+The wallet owner is the primary evidence consumer. They can keep a downloaded receipt or evidence bundle and verify it without trusting the PriorSeal HTTP verification endpoint. An independent reviewer can reproduce the same result without wallet access.
 
 ## Core journey
 
@@ -41,7 +41,6 @@ This is one product journey. Internally it is organized as **Seal** (bounded aut
 - **Local activity:** browser-local convenience data, not a complete server archive.
 - **Audit bundle:** a portable export of filtered local evidence and available context; each receipt remains independently verifiable.
 - **Review manifest:** original Insight attachments and their byte hashes alongside a native PriorSeal bundle, with explicit verification roles and cross-evidence relationships. It does not issue another authorization or verdict.
-- **Project archive:** a credential-scoped store of explicitly uploaded evidence. It is separate from local activity and the public issuance APIs.
 
 ## Implemented workflow polish
 
@@ -50,7 +49,7 @@ This is one product journey. Internally it is organized as **Seal** (bounded aut
 - Deployment capability discovery reports profiles, chain configuration, audience, proof mode, and dependencies before wallet signing. Its readiness result describes configuration and storage, not a live RPC/TSA availability guarantee.
 - Reviewers can import native bundles or composite manifests and independently confirm reusable trust profiles. Embedded discovery keys cannot approve themselves. Custom audiences and historical key windows are checked.
 - SDK authorization checkpoints preserve prepared/signed bytes and an acceptance idempotency key. Observation timeouts return job and transaction recovery handles. Recovery does not broadcast another transaction.
-- Optional private uploaded-evidence archives provide project/environment isolation, writer/reviewer roles, immutable supersession history and snapshot pagination. See the [archive runbook](../runbooks/project-evidence-archive.md).
+- Local evidence stays user-controlled by default. The existing optional private archive is not a current product-development direction.
 - Rotation diagnostics identify unresolved authorizations without changing the current same-key receipt/acceptance rule.
 
 ## First-release success criteria
@@ -70,10 +69,12 @@ This is one product journey. Internally it is organized as **Seal** (bounded aut
 - Treating one RPC provider as an absolute source of truth.
 - Presenting browser-local activity as an organizational system of record.
 
-## Later product milestones
+## Next personal-Agent milestones
 
-- User-account onboarding, SSO and richer project RBAC beyond the implemented credential-scoped uploaded-evidence archive.
-- Read-only receipt sharing with revocation/supersession status.
-- Policy templates, approval workflows, notifications and webhooks.
+- Clearer proposal review, including the Agent rationale, limits, expiry, fees, and explicit one-time boundary before wallet confirmation.
+- Recovery that makes pending, failed, and unknown submission states understandable without retrying or broadening authority.
+- User-controlled local receipt, trust-profile, and export handling across the supported SDK and console flows.
 - Published CLI distribution and future chain-state adapters for the SDK local verifier.
 - Historical ERC-1271 account-state proofs and independently operated transparency witnesses.
+
+SSO, RBAC, hosted team archives, approval workflows, and organization retention are intentionally outside the current roadmap.

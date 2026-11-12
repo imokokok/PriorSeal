@@ -6,7 +6,7 @@
 
 PriorSeal's primary product is **Verified Action**. It preserves the relationship between what a principal authorized before action and what was observed afterward. A portable receipt lets another party check signed permission, supported ordering evidence, execution state, and compliance with the authorization's bound fields.
 
-Its product path is **Agent proposal → bounded intent → principal authorization → acceptance and time evidence → observed execution → signed receipt → independent review**. Agent builders, wallets, trading applications, treasury teams and their users can use PriorSeal independently of Insight.
+Its product path is **Agent proposal → bounded intent → principal authorization → acceptance and time evidence → observed execution → signed receipt → independent review**. The primary user is an individual wallet owner using an Agent; wallets and Agent applications integrate PriorSeal on that person's behalf.
 
 中文：**证明 Agent 参与的链上行动在执行前获得了明确授权，并且实际执行没有超出批准边界。**
 
@@ -51,9 +51,13 @@ authorized.
 | Seal | Bounded principal authorization | Required input to a Verified Action |
 | Witness | Proof that approval preceded execution | Assurance selection for the agreed path |
 | Match | Observed execution against approved boundaries | Primary value customers evaluate |
-| Review | Portable verification and evidence handling | Included delivery; enterprise expansion after demonstrated demand |
+| Review | Portable verification and user-controlled evidence handling | Included delivery; local evidence is the default |
 
 The commercial offer remains one **Verified Action**. A separate execution observation can be useful, but without a linked authorization it must not be marketed as authorization compliance. The default commercial promise is the [standard Verified Action profile](verified-action.md#standard-release-profile-and-advanced-profiles); advanced profiles require explicit deployment and customer scope.
+
+## Current product direction: personal Agent control
+
+PriorSeal is currently optimizing for **one person, one wallet, one Agent-proposed action, and one portable proof trail**. The product work priority is understandable proposal review, explicit wallet confirmation, one-time execution recovery, and evidence the person can keep or independently verify. It is not organization workflow software: do not add SSO, RBAC, hosted team archives, approval chains, or enterprise retention as roadmap work without a new product decision.
 
 ## Three independently selectable offers
 

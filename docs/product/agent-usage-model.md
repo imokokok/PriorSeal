@@ -28,7 +28,7 @@ signature. A changed call, expired authorization, consumed nonce, failed
 policy, uncertain execution, or non-compliant observation remains an explicit
 state—not permission to retry or broaden the action.
 
-## User-controlled Agent mode
+## Personal Agent mode
 
 For retail-facing wallets and trading applications, the product is not an
 autonomous trading bot. It is a **proposal-and-confirmation boundary**:
@@ -70,7 +70,7 @@ transaction key must not itself grant principal authority.
 
 | Stage | Customer experience | Commercial mechanism | Status |
 | --- | --- | --- | --- |
-| Design-partner pilot | One bounded execution path, configured jointly, with portable evidence delivered for review | Fixed-scope pilot, implementation fee, or enterprise service contract | Available now |
+| Personal-Agent pilot | One bounded action in a wallet or Agent application, with portable evidence delivered to its user | Fixed-scope pilot or implementation fee | Available now |
 | Paid public evidence | A caller purchases a readiness report, independent receipt bundle, Evidence API envelope, or fresh check | x402 `exact` USDC payment on an approved, advertised rail | Not announced as generally available; subject to the production Go/No-Go |
 | Agent runtime orchestration | Agent calls a principal-controlled signing boundary, submits exactly one authorized action through its integrator, then observes and verifies evidence | `priorseal-sdk` `authorizeWithEip712Signer()` / `runAgentAction()` | Implemented; authority and executor infrastructure remain integrator-owned |
 | Agent service credits | An existing Agent account buys fixed prepaid service capacity, or an eligible Base USDC payer creates a new self-serve account | x402 Credit-pack checkout for an authenticated existing account; Base transfer claim for first-time EVM self-service onboarding; protected operator controls | Credits remain the only normal payment mechanism for stateful authorization and observation work |
@@ -132,7 +132,7 @@ a fair per-use price for independent verification work.
 
 ## Product catalogue and payment choice
 
-PriorSeal sells outcomes, not four capability layers or two confusing payment systems. **Verified Action** is the primary stateful outcome; the other rows are complementary read-only, capacity, onboarding, or enterprise operations offers.
+PriorSeal sells outcomes, not four capability layers or two confusing payment systems. **Verified Action** is the primary stateful outcome; the other rows are complementary read-only, capacity, or personal-Agent onboarding offers.
 
 | Buyer need | Product | Price mechanism | Included / excluded |
 | --- | --- | --- | --- |
@@ -140,7 +140,6 @@ PriorSeal sells outcomes, not four capability layers or two confusing payment sy
 | One complete authorized action with a signed result | Verified Action | 12 prepaid Credits | Authorization acceptance, execution observation, and the first portable bundle; excludes the subject-chain gas fee |
 | Sustained Agent usage | Credit Pack | Fixed x402 checkout for an authenticated existing Agent account, then Credits are consumed by work | x402 pays for capacity; it is not attached to the authorization/observation write routes |
 | First EVM self-service account | Base funding claim | Verified Base USDC transfer plus the payer-wallet signature | Creates or recovers the deterministic scoped Agent credential; it is an onboarding rail, not a replacement for x402 public evidence |
-| Private project archive or organization operations | Project / enterprise agreement | Separate contractual or operator-managed entitlement | Payment does not grant a right to access private archive data |
 
 The same user must not pay `$0.02` for a bundle that was already delivered as
 part of their `$0.12` Verified Action. Conversely, a `$0.02` public report
