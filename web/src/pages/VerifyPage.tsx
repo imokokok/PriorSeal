@@ -487,10 +487,11 @@ export function VerifyPage() {
                 onClick={() => {
                   const blob =
                     originalFile ??
-                    new Blob([raw], { type: "application/json" });
+                    new Blob([new TextEncoder().encode(raw)], {
+                      type: "application/json",
+                    });
                   const url = URL.createObjectURL(blob);
                   const link = document.createElement("a");
-                  // codeql[js/xss-through-dom]: url is a browser-created blob URL, not HTML.
                   link.href = url;
                   link.download = "original-evidence.json";
                   link.click();
