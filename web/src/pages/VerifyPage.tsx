@@ -77,7 +77,6 @@ export function VerifyPage() {
   useEffect(() => {
     if (!pendingEvidenceExport) return;
     evidenceExportLink.current?.click();
-    URL.revokeObjectURL(pendingEvidenceExport.url);
     setPendingEvidenceExport(null);
   }, [pendingEvidenceExport]);
 
@@ -510,7 +509,7 @@ export function VerifyPage() {
                   }
                   setPendingEvidenceExport({
                     filename: "original-evidence.json",
-                    url: URL.createObjectURL(originalFile),
+                    url: `data:application/json;charset=utf-8,${encodeURIComponent(raw)}`,
                   });
                 }}
               >
