@@ -263,3 +263,5 @@ export { verifyCoverageReport, coveragePolicyId, coverageReportDigest } from './
 export type { CoverageTrust, CoveragePolicy, SignedCoverageReport } from './insight-coverage.js'
 export { buildReviewManifest, verifyReviewManifestLocally, verifyReviewManifestWithChain, createInsightSwapRiskChainReader, parseTrustProfile } from './verifier.js'
 export type { ReviewManifest, ReviewAttachment, ReviewAttachmentInput, ReviewArtifactResult, ReviewResult, ReviewManifestChainResult, InsightSwapRiskChainReader, InsightSwapRiskChainReplay, TrustProfile } from './verifier.js'
+export { createActionEvidencePassport, parseActionEvidencePassport, summarizeActionEvidencePassport, verifyActionEvidencePassport } from './verifier.js'
+export type { ActionEvidencePassport, ActionEvidencePassportSummary, ActionEvidencePassportVerification, ServicePaymentAttachment } from './verifier.js'
