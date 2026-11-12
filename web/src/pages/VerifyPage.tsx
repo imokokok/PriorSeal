@@ -485,12 +485,11 @@ export function VerifyPage() {
                 className="button secondary"
                 disabled={!raw.trim()}
                 onClick={() => {
-                  const blob =
-                    originalFile ??
-                    new Blob([new TextEncoder().encode(raw)], {
-                      type: "application/json",
-                    });
-                  const url = URL.createObjectURL(blob);
+                  if (!originalFile) {
+                    downloadJson(JSON.parse(raw), "evidence.json");
+                    return;
+                  }
+                  const url = URL.createObjectURL(originalFile);
                   const link = document.createElement("a");
                   link.href = url;
                   link.download = "original-evidence.json";
