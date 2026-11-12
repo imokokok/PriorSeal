@@ -15,7 +15,7 @@ Agent proposal → Bounded intent → Principal signature → Acceptance + time 
                                 → EVM / Solana observation → Signed receipt → Independent review
 ```
 
-PriorSeal is for teams building EVM and Solana Agents, treasury automation, wallets, trading applications, and transaction infrastructure. A Verified Action is one bounded path through authorization, pre-execution proof, execution matching, and portable review. PriorSeal sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys, move funds, or turn a single authorization into open-ended automation.
+PriorSeal is for an individual using an EVM or Solana wallet with an Agent, and for the wallet or Agent builder serving that person. A Verified Action is one bounded path through authorization, pre-execution proof, execution matching, and portable review. PriorSeal sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys, move funds, or turn a single authorization into open-ended automation.
 
 ## Choose your integration path
 
@@ -65,7 +65,7 @@ PriorSeal organizes its implementation around four layers. They can be called in
 3. **Match — execution verification.** PriorSeal observes the submitted action and checks supported fields against the authorization.
 4. **Review — portable evidence.** A customer or reviewer verifies the signed receipt and bundle independently.
 
-See [Verified Action](docs/product/verified-action.md) for the buyer, delivery, and boundaries. The [standard release profile](docs/product/verified-action.md#standard-release-profile-and-advanced-profiles) is the default product promise; witness quorum, EVM anchoring, ERC-4337/7702/Safe, Hyperliquid, and enterprise retention are advanced profiles that require explicit deployment scope. An execution observation without an authorization remains an execution fact; it is not a claim that an action complied with prior approval.
+See [Verified Action](docs/product/verified-action.md) for the buyer, delivery, and boundaries. The [standard release profile](docs/product/verified-action.md#standard-release-profile-and-advanced-profiles) is the default product promise; witness quorum, EVM anchoring, ERC-4337/7702/Safe, and Hyperliquid are advanced profiles that require explicit deployment scope. Organization workspaces and enterprise retention are not on the current product roadmap. An execution observation without an authorization remains an execution fact; it is not a claim that an action complied with prior approval.
 
 ## What the evidence covers
 
@@ -173,7 +173,7 @@ Other partner fixtures are under [`examples/`](examples/). Insight can be used i
 
 | Topic | Start here |
 | --- | --- |
-| Product scope, commercial direction and evidence limits | [Verified Action](docs/product/verified-action.md) · [Positioning](docs/product/positioning.md) · [First-release scope](docs/product/first-release-scope.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
+| Product scope, commercial direction and evidence limits | [Verified Action](docs/product/verified-action.md) · [Agent-first roadmap](docs/product/agent-first-roadmap.md) · [Positioning](docs/product/positioning.md) · [First-release scope](docs/product/first-release-scope.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
 | Authorization and receipt semantics | [Signed authorization](docs/architecture/signed-authorization.md) · [Temporal evidence and finality](docs/architecture/temporal-finality.md) · [Lifecycle](docs/architecture/lifecycle.md) · [API compatibility](docs/api/compatibility.md) |
 | Security and operations | [Threat model](docs/security/threat-model.md) · [Supply-chain controls](docs/security/supply-chain.md) · [Operations](docs/runbooks/operations.md) · [Agent/retail public operations](docs/runbooks/agent-retail-public-operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
 | SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |
