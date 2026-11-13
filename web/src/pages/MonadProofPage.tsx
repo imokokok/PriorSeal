@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom'
 import { PriorSealMark } from '../brand'
 import './monad-proof.css'
 
-const proof = {
-  network: 'Monad · eip155:143',
+const monadReference = {
   principal: '0x1BF19c0e42f5cCcf8261dabFd755b827a2091DeC',
   contract: '0xDAb872732036Da9bE8b289A2fa4EeDED28421bF1',
   deploymentTx: '0x584eeaf5e06abf6e7bc984ad05d95f2b22b1226352f716d3169dc7131ac07147',
@@ -12,124 +11,38 @@ const proof = {
   runId: '0xaebe478f81fefa75a08777ed8c08ecbc6a81bd11e6b7141f9dd131902f5a9b96',
 } as const
 
+const proofCases = [
+  { index: '01', title: 'Configured EVM', scope: 'Configured EIP-155 networks', copy: 'One exact EVM call can bind chain, executor, nonce, target, calldata hash and native value. A deployment publishes only the EVM networks whose RPC and proof inputs are configured.' },
+  { index: '02', title: 'Solana message', scope: 'Compiled message / confirmed observation', copy: 'A Solana mainnet-beta authorization can bind the complete compiled legacy, v0 or v1 transaction message before its confirmed observation.' },
+  { index: '03', title: 'Selected venues', scope: 'Explicit profile / venue scope', copy: 'Venue-specific profiles can bind their own bounded objects, such as a Hyperliquid spot IOC order and its matching fills. They remain separate from generic EVM claims.' },
+  { index: '04', title: 'Advanced accounts', scope: 'Explicit deployment activation', copy: 'ERC-4337, Safe 4337 and EIP-7702 need separately pinned contracts, code hashes and deployment configuration. They are never implied by basic chain support.' },
+] as const
+
 function CopyValue({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false)
-
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1600)
-    } catch {
-      setCopied(false)
-    }
+    try { await navigator.clipboard.writeText(value); setCopied(true); window.setTimeout(() => setCopied(false), 1600) } catch { setCopied(false) }
   }
-
-  return (
-    <div className="monad-proof__value">
-      <span>{label}</span>
-      <code>{value}</code>
-      <button type="button" onClick={() => void copy()} aria-label={`Copy ${label}`}>{copied ? 'Copied' : 'Copy'}</button>
-    </div>
-  )
+  return <div className="monad-proof__value"><span>{label}</span><code>{value}</code><button type="button" onClick={() => void copy()} aria-label={`Copy ${label}`}>{copied ? 'Copied' : 'Copy'}</button></div>
 }
 
 function Brand() {
-  return <Link className="monad-proof__brand" to="/" aria-label="PriorSeal home"><PriorSealMark /><span>PriorSeal<small>Verified Action</small></span></Link>
+  return <Link className="monad-proof__brand" to="/" aria-label="PriorSeal home"><PriorSealMark /><span>PriorSeal<small>Authority evidence</small></span></Link>
 }
 
+/** Kept at its historical module name so existing lazy imports remain stable. */
 export function MonadProofPage() {
-  return (
-    <div className="monad-proof">
-      <header className="monad-proof__nav">
-        <Brand />
-        <nav aria-label="Primary navigation">
-          <Link to="/solutions">Solutions</Link>
-          <Link to="/capabilities">Capabilities</Link>
-          <Link to="/app/develop">Developer hub</Link>
-          <a href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">GitHub ↗</a>
-        </nav>
-        <Link className="monad-proof__console" to="/app">Open console <span>↗</span></Link>
-      </header>
-
-      <main id="main-content">
-        <section className="monad-proof__hero">
-          <div>
-            <p className="monad-proof__kicker">TECHNICAL PROOF CASE / MONAD / 001</p>
-            <p className="monad-proof__status"><span /> VERIFIED EXACT CALL</p>
-            <h1 data-route-heading tabIndex={-1}>One authorized action<br />became <em>evidence.</em></h1>
-            <p className="monad-proof__lede">A public technical proof case, not a product plan: a principal signed one time-bounded PriorSeal authorization, then made one zero-native-value exact call on Monad. The call emitted the expected event and was checked against its authorized scope.</p>
-            <div className="monad-proof__actions"><a href="#evidence">Read the evidence <span>↓</span></a><a href="#boundary">Read the boundary <span>↓</span></a></div>
-          </div>
-
-          <aside className="monad-proof__receipt" aria-label="Monad technical proof summary">
-            <header><span>PRIORSEAL / MONAD PING</span><b>RECORDED</b></header>
-            <div className="monad-proof__receipt-main"><span>Run ID</span><code>{proof.runId}</code></div>
-            <dl>
-              <div><dt>Network</dt><dd>{proof.network}</dd></div>
-              <div><dt>Native value</dt><dd>0 MON</dd></div>
-              <div><dt>Deployment nonce</dt><dd>0</dd></div>
-              <div><dt>Exact-call nonce</dt><dd>1</dd></div>
-            </dl>
-            <footer><span>RUN RECORDED</span><b>✓</b></footer>
-          </aside>
-        </section>
-
-        <section className="monad-proof__strip" aria-label="What this record establishes"><span>01 · PRINCIPAL-SIGNED SCOPE</span><span>02 · EXACT ZERO-VALUE CALL</span><span>03 · OBSERVED EVENT</span><span>04 · READ-ONLY VERIFICATION</span></section>
-
-        <section className="monad-proof__record" id="evidence">
-          <header>
-            <p className="monad-proof__kicker">PUBLIC RECORD</p>
-            <h2>One bounded action,<br /><em>with receipts.</em></h2>
-            <p>These are the public identifiers of the completed technical run. Copy them into a Monad RPC or explorer to inspect the corresponding on-chain transactions and event independently.</p>
-          </header>
-          <div className="monad-proof__values">
-            <CopyValue label="Principal / executor" value={proof.principal} />
-            <CopyValue label="Deployed contract" value={proof.contract} />
-            <CopyValue label="Deployment transaction" value={proof.deploymentTx} />
-            <CopyValue label="Exact-call transaction" value={proof.callTx} />
-            <CopyValue label="Recorded run ID" value={proof.runId} />
-          </div>
-        </section>
-
-        <section className="monad-proof__sequence">
-          <header><p className="monad-proof__kicker">THE PROOF SEQUENCE</p><h2>Not “an agent did it.”<br /><em>Exactly this was allowed.</em></h2></header>
-          <ol>
-            <li><span>01</span><div><h3>Bound the authority</h3><p>The principal signed an EIP-712 PriorSeal authorization restricted to one contract, one calldata hash, zero native value, one nonce, one use, and a short time window.</p></div><b>BEFORE</b></li>
-            <li><span>02</span><div><h3>Execute the exact call</h3><p>The same principal deployed the minimal Ping contract and called <code>record(bytes32)</code>. The contract refuses native value and accepts no token approval or transfer path.</p></div><b>ON MONAD</b></li>
-            <li><span>03</span><div><h3>Match the observation</h3><p>The verifier matched sender, nonce, target, calldata, zero value, mined receipts, code, and the emitted <code>RunRecorded(runId, caller)</code> event against the prepared scope.</p></div><b>AFTER</b></li>
-          </ol>
-        </section>
-
-        <section className="monad-proof__verification">
-          <div>
-            <p className="monad-proof__kicker">LOCAL VERIFIER RESULT</p>
-            <h2>Four claims,<br /><em>all constrained.</em></h2>
-            <p>The repository’s read-only verifier recorded these results for this run. It reads chain data; it does not broadcast or alter a transaction.</p>
-          </div>
-          <ul>
-            <li><span>signatureValid</span><b>true</b><p>The evidence holder’s EIP-712 authorization was valid for its named principal and time window.</p></li>
-            <li><span>exactCallMatched</span><b>true</b><p>The observed destination, calldata, nonce, sender, and value matched the authorization.</p></li>
-            <li><span>zeroNativeValue</span><b>true</b><p>Both deployment and exact call carried zero MON as transaction value.</p></li>
-            <li><span>runRecordedEventMatched</span><b>true</b><p>The expected run ID and caller appeared in the contract’s emitted event.</p></li>
-          </ul>
-        </section>
-
-        <section className="monad-proof__boundary" id="boundary">
-          <div><p className="monad-proof__kicker">SCOPE, NOT HYPE</p><h2>This is a capability proof.<br /><em>Not a financial claim.</em></h2></div>
-          <div>
-            <p>The case record proves a principal-controlled, zero-value, exact-call evidence flow on Monad. It does not claim an Insight market assessment, x402 settlement, token safety, economic safety, investment result, production custody, or permission for autonomous trading.</p>
-            <p>For a financial agent action, Insight and PriorSeal stay separate but connected: Insight evaluates the bounded request; PriorSeal binds the accepted scope to the one authorized execution and preserves evidence afterward.</p>
-            <div className="monad-proof__boundary-links"><Link to="/">Explore PriorSeal <span>↗</span></Link><Link to="/app/actions/exact-call">See the exact-call flow <span>↗</span></Link></div>
-          </div>
-        </section>
-
-        <section className="monad-proof__chinese">
-          <p className="monad-proof__kicker">中文说明</p>
-          <h2>这是一次零金额的 Monad 精确调用实证。</h2>
-          <p>它证明“明确授权 → 固定调用 → 链上事件 → 可验证证据”的闭环，而不是价格判断、投资建议、x402 收款或资产安全背书。真正的金融动作还需要独立的 Insight 风险判断，以及更严格的金额、资产、协议和付款边界。</p>
-        </section>
-      </main>
-    </div>
-  )
+  return <div className="monad-proof">
+    <header className="monad-proof__nav"><Brand /><nav aria-label="Primary navigation"><Link to="/">Overview</Link><Link to="/solutions">Solutions</Link><Link to="/capabilities">Capabilities</Link><Link to="/integrations/mcp">MCP</Link></nav><Link className="monad-proof__console" to="/app">Open console <span>↗</span></Link></header>
+    <main id="main-content">
+      <section className="monad-proof__hero"><div><p className="monad-proof__kicker">TECHNICAL PROOF CASES / CONFIGURATION-GATED</p><p className="monad-proof__status"><span /> CHAIN-NEUTRAL CORE / DEPLOYMENT-SCOPED</p><h1 data-route-heading tabIndex={-1}>One protocol.<br /><em>Multiple execution environments.</em></h1><p className="monad-proof__lede">PriorSeal is not defined by one chain. It establishes one bounded, independently reviewable action path across configured EVM networks, Solana and selected execution venues—only where the deployment publishes the required authorization, proof and observation inputs.</p><div className="monad-proof__actions"><a href="#cases">See proof cases <span>↓</span></a><a href="#reference">Read a public reference <span>↓</span></a></div></div><aside className="monad-proof__receipt" aria-label="PriorSeal technical proof scope"><header><span>PRIORSEAL / CAPABILITY SCOPE</span><b>CONFIGURED</b></header><div className="monad-proof__receipt-main"><span>Runtime truth</span><code>/v1/capabilities</code></div><dl><div><dt>Authorization</dt><dd>Bounded principal scope</dd></div><div><dt>Proof</dt><dd>Deployment-selected</dd></div><div><dt>Observation</dt><dd>Chain or venue-specific</dd></div><div><dt>Review</dt><dd>Portable signed receipt</dd></div></dl><footer><span>NO IMPLIED COVERAGE</span><b>✓</b></footer></aside></section>
+      <section className="monad-proof__strip" aria-label="What every published proof case establishes"><span>01 · CONFIGURED CAPABILITY</span><span>02 · BOUNDED AUTHORIZATION</span><span>03 · OBSERVED EXECUTION</span><span>04 · INDEPENDENT REVIEW</span></section>
+      <section className="monad-proof__record" id="cases"><header><p className="monad-proof__kicker">PROOF CASES</p><h2>One evidence model.<br /><em>Different execution forms.</em></h2><p>These are technical profiles, not separate products. A deployment must advertise each profile and its dependencies before a user can prepare an authorization or rely on a receipt.</p></header><div className="monad-proof__case-grid">{proofCases.map((proofCase) => <article key={proofCase.index}><span>{proofCase.index} / {proofCase.scope}</span><h3>{proofCase.title}</h3><p>{proofCase.copy}</p></article>)}</div></section>
+      <section className="monad-proof__sequence"><header><p className="monad-proof__kicker">THE COMMON SEQUENCE</p><h2>Not “the chain supports it.”<br /><em>This deployment can prove it.</em></h2></header><ol><li><span>01</span><div><h3>Publish the scope</h3><p>The deployment advertises only its ready chain, profile, proof and observation inputs through its capability document.</p></div><b>BEFORE</b></li><li><span>02</span><div><h3>Bind one authorization</h3><p>A principal signs a time-bounded, single-use scope appropriate to that execution form: an exact call, compiled message or venue-specific order.</p></div><b>BEFORE</b></li><li><span>03</span><div><h3>Observe and match</h3><p>PriorSeal observes the named execution and compares only the fields that the signed profile supports. Uncertainty, failure and unsupported fields remain explicit.</p></div><b>AFTER</b></li></ol></section>
+      <section className="monad-proof__verification"><div><p className="monad-proof__kicker">PORTABLE REVIEW</p><h2>Four questions.<br /><em>No chain marketing.</em></h2><p>The local verifier recomputes signed artifacts and exposes any external checks still required. It does not infer a profile merely because a chain name appears in a marketing list.</p></div><ul><li><span>Was authority valid?</span><b>CHECKED</b><p>Signature, time window, principal and explicit authorization scope are assessed from signed evidence.</p></li><li><span>Was ordering established?</span><b>CHECKED</b><p>The receipt records the configured pre-execution proof mode; development issuer-only acceptance has a narrower scope.</p></li><li><span>Did supported fields match?</span><b>CHECKED</b><p>Observation compares the chain- or venue-profile fields explicitly bound before execution.</p></li><li><span>What still needs trust?</span><b>EXPLICIT</b><p>Issuer keys, chain state and external decision evidence remain separately reviewable rather than silently trusted.</p></li></ul></section>
+      <section className="monad-proof__boundary" id="reference"><div><p className="monad-proof__kicker">PUBLIC REFERENCE / MONAD</p><h2>One case record.<br /><em>Not the product boundary.</em></h2></div><div><p>Monad remains a useful public exact-call reference: a principal-controlled, zero-value call with a visible on-chain event. It demonstrates the generic EVM profile; it does not make Monad a requirement, preferred chain or claim of universal deployment readiness.</p><p>Use the runtime capability document for the live deployment’s actual scope. Payment rails, advanced profiles and a chain’s presence on this page are never substitutes for that check.</p></div></section>
+      <section className="monad-proof__reference-record" aria-labelledby="monad-reference-title"><header><p className="monad-proof__kicker">MONAD / EXACT-CALL REFERENCE</p><h2 id="monad-reference-title">A public record<br /><em>you can inspect.</em></h2><p>These identifiers remain here as one reproducible EVM proof case. Copy them into a Monad RPC or explorer to inspect the public transactions and event independently.</p></header><div className="monad-proof__values"><CopyValue label="Principal / executor" value={monadReference.principal} /><CopyValue label="Deployed contract" value={monadReference.contract} /><CopyValue label="Deployment transaction" value={monadReference.deploymentTx} /><CopyValue label="Exact-call transaction" value={monadReference.callTx} /><CopyValue label="Recorded run ID" value={monadReference.runId} /></div></section>
+      <section className="monad-proof__chinese"><p className="monad-proof__kicker">中文说明</p><h2>PriorSeal 是跨执行环境的证据能力，<br />不是 Monad 专用产品。</h2><p>它的通用核心是“明确授权 → 部署配置的预执行证明 → 观察执行 → 可独立验证的收据”。EVM、Solana 和特定交易场所只是不同技术 profile；每个部署必须通过 capabilities 明确公布自己真正配置并可用的范围。</p></section>
+    </main>
+  </div>
 }

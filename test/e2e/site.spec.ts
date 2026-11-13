@@ -243,6 +243,17 @@ test('public proof scope separates established claims from external decision use
   await expect(scope).toContainText('does not prove that another application read a decision')
 })
 
+test('technical proof cases keep Monad as a reference rather than the product boundary', async ({ page }) => {
+  await page.goto('/proof-cases')
+  await expect(page.getByRole('heading', { level: 1, name: /One protocol\. Multiple execution environments\./ })).toBeVisible()
+  await expect(page.getByText('Configured EVM', { exact: true })).toBeVisible()
+  await expect(page.getByText('Solana message', { exact: true })).toBeVisible()
+  await expect(page.getByText('Selected venues', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /One case record\. Not the product boundary\./ })).toBeVisible()
+  await page.goto('/monad')
+  await expect(page).toHaveURL(/\/proof-cases$/)
+})
+
 test('solutions route separates the flagship workflow from standalone offers', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Use without saving' }).click()
