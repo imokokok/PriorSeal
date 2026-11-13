@@ -141,14 +141,14 @@ export function LandingPage() {
           <header data-reveal>
             <div className="museum-section-id"><span>02</span><p>Flagship workflow</p></div>
             <div><p className="museum-kicker">INSIGHT + PRIORSEAL</p><h2>Trusted Agent<br /><em>Execution.</em></h2></div>
-            <p>One buyer outcome, delivered by separate systems with separate trust roots: a decision can be inspected, authority stays explicit, and the eventual execution remains reviewable.</p>
+            <p>One outcome across separate trust roots: an inspected decision, explicit authority, and reviewable execution.</p>
           </header>
           <div className="flagship-solution__path" data-reveal aria-label="Insight and PriorSeal flagship workflow">
-            <article><span>01 / DECISION</span><h3>Insight</h3><p>Provide oracle transparency and a signed risk or simulation assessment for the proposed action.</p><a href="https://www.oracleinsight.xyz/" target="_blank" rel="noreferrer">Explore Insight <span>↗</span></a></article>
-            <article><span>02 / CONTROL</span><h3>Your execution boundary</h3><p>Your wallet, Safe, policy service or Agent runtime decides whether a valid assessment and authorization are required before submission.</p><Link to="/integrations/mcp">Integration patterns <span>↗</span></Link></article>
-            <article><span>03 / ACCOUNTABILITY</span><h3>PriorSeal</h3><p>Bind the final, bounded authorization to observed execution and deliver portable evidence for independent review.</p><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/verify">Open local verifier <span>↗</span></Link></article>
+            <article><span>01 / DECISION</span><h3>Insight</h3><p>Signed risk or simulation assessment for the proposed action.</p><a href="https://www.oracleinsight.xyz/" target="_blank" rel="noreferrer">Explore Insight <span>↗</span></a></article>
+            <article><span>02 / CONTROL</span><h3>Your boundary</h3><p>Your wallet, policy service or Agent runtime decides what must be true before submission.</p><Link to="/integrations/mcp">Integration patterns <span>↗</span></Link></article>
+            <article><span>03 / ACCOUNTABILITY</span><h3>PriorSeal</h3><p>Bind bounded authorization to observed execution with portable evidence.</p><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/verify">Open local verifier <span>↗</span></Link></article>
           </div>
-          <aside className="flagship-solution__boundary" data-reveal><strong>One promise, no category confusion.</strong><p>Insight does not authorize or execute. PriorSeal does not issue the risk decision or hold funds. An execution block exists only when the integrating application places the required checks on its own submission path.</p></aside>
+          <aside className="flagship-solution__boundary" data-reveal><strong>One promise, clear boundaries.</strong><p>Insight does not authorize or execute. PriorSeal does not issue the risk decision or hold funds. The integrator enforces required checks.</p></aside>
         </section>
 
         <section className="museum-chain" id="chain">
@@ -226,7 +226,7 @@ export function LandingPage() {
           <div data-reveal>
             <p className="museum-kicker">DESIGN PARTNERS / AGENT SYSTEMS</p>
             <h2>Prove one controlled<br />Agent action.</h2>
-            <p className="museum-closing__statement">Start with one high-value execution path. Use Insight to make the decision evidence explicit, retain the final signature with the principal, and use PriorSeal to prove whether the supported execution matched that boundary. Each product remains independently usable; together they form the flagship Trusted Agent Execution workflow.</p>
+            <p className="museum-closing__statement">Start with one high-value path. Insight makes the decision evidence explicit; PriorSeal proves whether supported execution matched the signed boundary. Each product remains independently usable; together they form Trusted Agent Execution.</p>
             <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/integrations/mcp">Connect MCP <span>↗</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link className="museum-text-link" to="/capabilities">Review capabilities <span>↗</span></Link></div>
           </div>
           <footer><InstitutionMark inverse /><span>Pre-authorized execution proof for Agent-driven actions.</span><span><Link className="museum-footer-link" to="/solutions">Solutions</Link> · <Link className="museum-footer-link" to="/capabilities">Capabilities</Link> · <a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <Link className="museum-footer-link" to="/terms">Terms &amp; risk</Link> · <Link className="museum-footer-link" to="/support">Contact</Link> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
