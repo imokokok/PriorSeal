@@ -33,7 +33,7 @@ import type { AuthorizationAcceptance } from '../domain/authorization.mjs';
 const { Pool } = pg;
 
 /** Composes the protocol once for Node or Cloudflare without leaking runtime details into the domain. */
-type RuntimeOptions = { config?: ReturnType<typeof loadRuntimeConfig>; environment?: object; database?: InstanceType<typeof Pool>; d1?: D1Database; databaseConnectionString?: string; poolOptions?: PoolConfig; staticDir?: string; dispatchObservationJob?: (job: ObservationJob) => Promise<unknown>; rateLimiter?: NonNullable<Parameters<typeof createHttpServer>[0]>['rateLimiter']; logger?: NonNullable<Parameters<typeof createHttpServer>[0]>['logger']; assertSchema?: boolean };
+type RuntimeOptions = { config?: ReturnType<typeof loadRuntimeConfig>; environment?: object; database?: InstanceType<typeof Pool>; d1?: D1Database; evidenceBucket?: R2Bucket | null; databaseConnectionString?: string; poolOptions?: PoolConfig; staticDir?: string; dispatchObservationJob?: (job: ObservationJob) => Promise<unknown>; rateLimiter?: NonNullable<Parameters<typeof createHttpServer>[0]>['rateLimiter']; logger?: NonNullable<Parameters<typeof createHttpServer>[0]>['logger']; assertSchema?: boolean };
 export async function createPriorSealRuntime(options: RuntimeOptions = {}) {
   const runtime = await composeRuntime(options, true);
   if (!runtime.server) throw new TypeError('HTTP runtime requires a server');
@@ -45,13 +45,13 @@ export async function createPriorSealBackgroundRuntime(options: RuntimeOptions =
   return composeRuntime(options, false);
 }
 
-async function composeRuntime({ config, environment = process.env, database, d1, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, logger, assertSchema = true }: RuntimeOptions, http: boolean) {
+async function composeRuntime({ config, environment = process.env, database, d1, evidenceBucket, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, logger, assertSchema = true }: RuntimeOptions, http: boolean) {
   if (!config) throw new TypeError('Runtime config is required');
   const ownsPool = !database;
   const pool = d1 ? null : database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
   try {
     if (assertSchema && config.environment === 'production' && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials), x402Enabled: Boolean(config.x402), agentMeterEnabled: Boolean(config.agentMeter), x402CreditPacksEnabled: Boolean(config.x402CreditPacks) });
-    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : undefined;
+    const store = d1 ? createD1Store(d1, { evidenceBucket }) : pool ? createPostgresStore(pool) : undefined;
     const agentMeter = store ? createAgentMeter(config.agentMeter, store) : null;
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();

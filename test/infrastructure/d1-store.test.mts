@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createD1Store } from '../../src/infrastructure/persistence/d1-store.mjs';
 import { createMemoryStore } from '../../src/infrastructure/persistence/memory-store.mjs';
-import { archiveQuery, type ArchiveAccess } from '../../src/application/archive/evidence-archive.mjs';
+import { archiveEntry, archiveQuery, type ArchiveAccess } from '../../src/application/archive/evidence-archive.mjs';
 import type { ObservationJob } from '../../src/application/observations/observation-worker.mjs';
 import { buildX402PaymentLedgerEvent } from '../../src/domain/x402-payment-ledger.mjs';
 import { testD1 } from '../support/d1.mjs';
+import { testR2 } from '../support/r2.mjs';
 
 const txHash = `0x${'a'.repeat(64)}`;
 const x402LedgerContext = {
@@ -83,17 +84,18 @@ test('D1 preserves receipt identity across direct and atomic observation writes'
 test('D1 archive filters use existing indexes and retain snapshot, tenancy and export semantics', async () => {
   const fixture = testD1();
   try {
-    const store = createD1Store(fixture.database);
+    const r2 = testR2();
+    const store = createD1Store(fixture.database, { evidenceBucket: r2.bucket });
     const access: ArchiveAccess = { projectId: 'project', environment: 'test', role: 'reviewer' };
     const entries: Parameters<typeof store.saveArchiveEntry>[0][] = [];
     for (let index = 0; index < 90; index++) {
-      const entry = {
-        id: `entry-${index}`, projectId: index % 7 === 0 ? 'other-project' : access.projectId,
-        environment: index % 11 === 0 ? 'other-environment' : access.environment,
-        kind: 'authorization', createdAt: index, artifactHash: String(index), supersedesId: null,
-        txHash: index % 3 === 0 ? txHash : null, authorizationId: index % 2 === 0 ? 'auth-1' : null,
-        status: index % 4 === 0 ? 'BOUND' : 'ACCEPTED', artifact: { value: index }, verification: 'NOT_VERIFIED_BY_ARCHIVE',
-      };
+      const entry = archiveEntry({
+        authorization: { schema: 'priorseal.authorization.v2', authorizationId: index % 2 === 0 ? 'auth-1' : `auth-${index}` },
+        acceptance: { accepted: true },
+        status: index % 4 === 0 ? 'BOUND' : 'ACCEPTED',
+        value: index,
+        ...(index % 3 === 0 ? { boundTxHash: txHash } : {}),
+      }, { projectId: index % 7 === 0 ? 'other-project' : access.projectId, environment: index % 11 === 0 ? 'other-environment' : access.environment, role: 'reviewer' }, { now: index * 1000 });
       await store.saveArchiveEntry(entry);
       entries.push(entry);
     }
@@ -134,7 +136,7 @@ test('D1 archive filters use existing indexes and retain snapshot, tenancy and e
     }
     const first = await store.listArchiveEntries(archiveQuery(new URL('https://example.test/v1/archive?limit=3'), access));
     assert.ok(first.nextCursor);
-    const newest = { ...entries[1], id: 'inserted-after-snapshot', createdAt: 100 };
+    const newest = archiveEntry({ authorization: { schema: 'priorseal.authorization.v2', authorizationId: 'auth-newest' }, acceptance: { accepted: true }, status: 'ACCEPTED', value: 'newest' }, access, { now: 100_000 });
     await store.saveArchiveEntry(newest);
     const next = archiveQuery(new URL(`https://example.test/v1/archive?limit=3&cursor=${first.nextCursor}`), access);
     const remainder = await store.listArchiveEntries(next);

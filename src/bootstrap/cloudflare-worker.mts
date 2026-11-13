@@ -3,7 +3,8 @@ import { createPriorSealRuntime, createPriorSealBackgroundRuntime } from './crea
 import { loadRuntimeConfig } from './runtime-config.mjs';
 import { retryDelaySeconds } from './cloudflare-retry.mjs';
 import { processObservationQueue } from './cloudflare-observations.mjs';
-import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter } from './cloudflare-bindings.mjs';
+import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter, evidenceBucketBinding } from './cloudflare-bindings.mjs';
+import { reconcileEvidenceArchiveOutbox } from '../infrastructure/persistence/evidence-r2.mjs';
 import { errorMessage } from '../shared/error-code.mjs';
 import { createSchemaCapabilityGuard } from './cloudflare-schema.mjs';
 import type { ObservationJob } from '../application/observations/observation-worker.mjs';
@@ -14,6 +15,7 @@ const assertSchemaCapability = createSchemaCapabilityGuard();
 async function withRuntime<T, R extends { server?: Runtime['server'] }>(environment: Env, context: ExecutionContext, createRuntime: (options: Parameters<typeof createPriorSealRuntime>[0]) => Promise<R>, operation: (runtime: R) => Promise<T>): Promise<T> {
   const runtimeEnvironment = cloudflareRuntimeEnvironment(environment);
   const config = loadRuntimeConfig(runtimeEnvironment);
+  const evidenceBucket = evidenceBucketBinding(environment);
   let runtime: R | undefined;
   try {
     await assertSchemaCapability(environment.DB);
@@ -21,6 +23,7 @@ async function withRuntime<T, R extends { server?: Runtime['server'] }>(environm
       config,
       environment: runtimeEnvironment,
       d1: environment.DB,
+      evidenceBucket,
       assertSchema: false,
       rateLimiter: createCloudflareRateLimiter(environment.HTTP_RATE_LIMITER),
       logger: {
@@ -71,6 +74,14 @@ export default {
 
   async scheduled(_controller: ScheduledController, environment: Env, context: ExecutionContext) {
     context.waitUntil(withRuntime(environment, context, createPriorSealBackgroundRuntime, async (runtime) => {
+      const bucket = evidenceBucketBinding(environment);
+      if (bucket) {
+        try {
+          await reconcileEvidenceArchiveOutbox({ database: environment.DB, bucket, now: Date.now() });
+        } catch (error) {
+          console.error(JSON.stringify({ level: 'error', event: 'evidence.reconcile_failed', message: errorMessage(error) }));
+        }
+      }
       const jobs = await runtime.baseObservationWorker?.runOnce() ?? [];
       for (const job of jobs.filter((candidate) => candidate.state === 'RETRY_WAIT')) {
         await environment.OBSERVATION_QUEUE.send({ jobId: job.jobId }, { delaySeconds: retryDelaySeconds([job]) ?? undefined });

@@ -1,4 +1,4 @@
-export const REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY = 11;
+export const REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY = 12;
 const RUNTIME_CAPABILITY = 'cloudflare-runtime';
 
 /**

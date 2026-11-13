@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { createD1Store } from '../src/infrastructure/persistence/d1-store.mjs';
+import { archiveEntry } from '../src/application/archive/evidence-archive.mjs';
 
 const sqlite = new DatabaseSync(':memory:');
 sqlite.exec('PRAGMA foreign_keys=ON;');
 sqlite.exec(readFileSync(new URL('../d1/migrations/0001_initial.sql', import.meta.url), 'utf8'));
 sqlite.exec(readFileSync(new URL('../d1/migrations/0008_observation_job_coalescing.sql', import.meta.url), 'utf8'));
+sqlite.exec(readFileSync(new URL('../d1/migrations/0009_hyperliquid_cloid_uniqueness.sql', import.meta.url), 'utf8'));
+sqlite.exec(readFileSync(new URL('../d1/migrations/0011_runtime_schema_capability.sql', import.meta.url), 'utf8'));
+sqlite.exec(readFileSync(new URL('../d1/migrations/0012_evidence_archive_r2_index.sql', import.meta.url), 'utf8'));
 type MockStatement = D1PreparedStatement & { execute(): { results: unknown[]; meta?: { changes: number | bigint } } };
 const prepared = (sql: string, values: SQLInputValue[] = []): MockStatement => ({
   bind: (...next: unknown[]) => prepared(sql, next as SQLInputValue[]),
@@ -23,7 +28,29 @@ const d1 = {
     catch (error) { sqlite.exec('ROLLBACK'); throw error; }
   },
 } as unknown as D1Database;
-const store = createD1Store(d1);
+const sha256Bytes = (bytes: Uint8Array) => {
+  const digest = createHash('sha256').update(bytes).digest();
+  return new Uint8Array(digest.buffer, digest.byteOffset, digest.byteLength).slice().buffer;
+};
+const r2Objects = new Map<string, Uint8Array>();
+const r2 = {
+  async put(key: string, value: Uint8Array, options: { onlyIf?: { etagDoesNotMatch?: string } }) {
+    if (options.onlyIf?.etagDoesNotMatch === '*' && r2Objects.has(key)) return null;
+    const bytes = new Uint8Array(value);
+    r2Objects.set(key, bytes);
+    return { size: bytes.byteLength, checksums: { sha256: sha256Bytes(bytes) }, uploaded: new Date(), version: 'v1' };
+  },
+  async head(key: string) {
+    const bytes = r2Objects.get(key);
+    return bytes ? { size: bytes.byteLength, checksums: { sha256: sha256Bytes(bytes) }, uploaded: new Date(), version: 'v1' } : null;
+  },
+  async get(key: string) {
+    const bytes = r2Objects.get(key);
+    return bytes ? { arrayBuffer: async () => bytes.slice().buffer } : null;
+  },
+  async delete(key: string) { r2Objects.delete(key); },
+} as unknown as R2Bucket;
+const store = createD1Store(d1, { evidenceBucket: r2 });
 const intent = { intentId: 'test-intent', intentHash: 'test-intent-hash', schema: 'priorseal.intent.v1', chainId: 1, action: 'TRANSFER', sender: 'sender', recipient: 'recipient', asset: 'ETH', amount: '1', nonce: 'n1', validUntil: 2_000_000_000 };
 assert.equal((await store.saveIntent(intent)).intentId, intent.intentId);
 assert.deepEqual(await store.getIntent(intent.intentId), intent);
@@ -49,7 +76,7 @@ assert.equal(claimed.state, 'RUNNING');
 assert.equal(claimed.attempts, 1);
 assert.equal((await store.saveJob({ ...claimed, state: 'COMPLETED', result: { observation } }))!.state, 'COMPLETED');
 assert.equal((await store.getJob(job.jobId))!.state, 'COMPLETED');
-const entry = { id: 'test-entry', projectId: 'project', environment: 'test', kind: 'authorization', createdAt: 1_700_000_000, artifactHash: 'artifact-hash', supersedesId: null, txHash: observation.txHash, authorizationId: authorization.authorizationId, status: 'ACCEPTED', artifact: { hello: 'world' }, verification: 'NOT_VERIFIED_BY_ARCHIVE' };
+const entry = archiveEntry({ authorization: { schema: 'priorseal.authorization.v2', authorizationId: authorization.authorizationId }, acceptance: { accepted: true }, status: 'ACCEPTED' }, { projectId: 'project', environment: 'test', role: 'reviewer' }, { now: 1_700_000_000_000 });
 assert.equal((await store.saveArchiveEntry(entry)).id, entry.id);
 const page = await store.listArchiveEntries({ projectId: 'project', environment: 'test', role: 'reviewer', filters: { txHash: null, authorizationId: null, status: null, from: null, to: null }, filterHash: 'test', cursor: null, limit: 10 });
 assert.equal(page.items.length, 1);

@@ -15,6 +15,10 @@ function cloudflareRuntimeEnvironment(environment) {
     PRIORSEAL_BUILD_VERSION: environment.CF_VERSION_METADATA.tag || environment.CF_VERSION_METADATA.id
   };
 }
+function evidenceBucketBinding(environment) {
+  const binding = environment.EVIDENCE_BUCKET;
+  return binding && typeof binding.put === "function" && typeof binding.head === "function" && typeof binding.get === "function" ? binding : null;
+}
 function createCloudflareRateLimiter(binding) {
   if (!binding?.limit) throw new TypeError("A Cloudflare Rate Limiting binding is required");
   return {
@@ -31,5 +35,6 @@ function createCloudflareRateLimiter(binding) {
 export {
   assertCloudflareBindings,
   cloudflareRuntimeEnvironment,
-  createCloudflareRateLimiter
+  createCloudflareRateLimiter,
+  evidenceBucketBinding
 };

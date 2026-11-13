@@ -1,5 +1,5 @@
 // Generated from cloudflare-schema.mts by npm run core:build. Do not edit directly.
-const REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY = 11;
+const REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY = 12;
 const RUNTIME_CAPABILITY = "cloudflare-runtime";
 function createSchemaCapabilityGuard() {
   let ready = false;

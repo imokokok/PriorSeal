@@ -17,6 +17,16 @@ export function cloudflareRuntimeEnvironment(environment: Env) {
   };
 }
 
+/**
+ * R2 is optional. Without the binding, archive writes keep the D1 entry_json
+ * path; only existing R2-backed rows fail closed with
+ * ARCHIVE_STORAGE_NOT_CONFIGURED when read.
+ */
+export function evidenceBucketBinding(environment: Env): R2Bucket | null {
+  const binding = (environment as Env & { EVIDENCE_BUCKET?: R2Bucket }).EVIDENCE_BUCKET;
+  return binding && typeof binding.put === 'function' && typeof binding.head === 'function' && typeof binding.get === 'function' ? binding : null;
+}
+
 export function createCloudflareRateLimiter(binding: Env['HTTP_RATE_LIMITER']) {
   if (!binding?.limit) throw new TypeError('A Cloudflare Rate Limiting binding is required');
   return {
