@@ -74,6 +74,35 @@ async function request(server: TestServer, path: string, { method = 'GET', heade
   const done = new Promise<void>((resolve) => res.once('finish', resolve)); server.emit('request', req, res); await done; return { status: res.status, headers: res.headers ?? {}, buffer: () => Buffer.from(res.body ?? ''), json: (): HttpTestResponse => JSON.parse(Buffer.from(res.body ?? '').toString('utf8')) as HttpTestResponse, text: () => Buffer.from(res.body ?? '').toString('utf8') };
 }
 
+test('accepts only bounded, cookieless experience measurement events', async (t) => {
+  const metrics: Array<Record<string, unknown>> = [];
+  const server = createHttpServer({ logger: { info(entry) { metrics.push(entry); } } });
+  t.after(() => server.close());
+
+  const recorded = await request(server, '/v1/experience-events', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ event: 'choose_path' }),
+  });
+  assert.equal(recorded.status, 204);
+  assert.deepEqual(metrics, [{ event: 'experience.measurement', name: 'choose_path' }]);
+
+  const redirect = await request(server, '/i');
+  assert.equal(redirect.status, 302);
+  assert.equal(redirect.headers.location, 'https://www.oracleinsight.xyz/');
+  assert.deepEqual(metrics, [
+    { event: 'experience.measurement', name: 'choose_path' },
+    { event: 'experience.measurement', name: 'flagship_workflow' },
+  ]);
+
+  const rejected = await request(server, '/v1/experience-events', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ event: 'choose_path', receiptId: 'must-not-be-accepted' }),
+  });
+  assert.equal(rejected.status, 400);
+  assert.deepEqual(metrics, [
+    { event: 'experience.measurement', name: 'choose_path' },
+    { event: 'experience.measurement', name: 'flagship_workflow' },
+  ]);
+});
+
 test('PriorSeal MCP exposes stateless discovery, deterministic tools, and a JSON-only capability call', async (t) => {
   const server = await serverFor(t);
   const modernHeaders = { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2026-07-28' };

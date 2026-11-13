@@ -43,6 +43,7 @@ function requester(req, trustProxy) {
   return trustProxy ? String(req.headers["cf-connecting-ip"] ?? "").trim() || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress || "unknown" : req.socket.remoteAddress || "unknown";
 }
 const X402_ENTRY_SOURCES = /* @__PURE__ */ new Set(["direct", "docs", "bazaar", "mcp", "sdk", "unknown"]);
+const EXPERIENCE_EVENTS = /* @__PURE__ */ new Set(["choose_path", "flagship_workflow", "new_verified_action", "verification_completed"]);
 const ZERO_EVM_ADDRESS = "0x0000000000000000000000000000000000000000";
 function x402EntrySource(req) {
   const header = req.headers["x-priorseal-entry-source"];
@@ -106,11 +107,21 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
       if (req.method === "OPTIONS") return res.writeHead(204, cors).end();
       if (!["GET", "POST"].includes(req.method ?? "")) return respond(405, errorBody("METHOD_NOT_ALLOWED", "Method not allowed", requestId), { allow: "GET, POST, OPTIONS" });
       if (path === "/mcp" && req.method !== "POST") return respond(405, errorBody("METHOD_NOT_ALLOWED", "PriorSeal MCP accepts POST requests", requestId), { allow: "POST, OPTIONS" });
+      if (req.method === "GET" && path === "/i") {
+        logger?.info?.({ event: "experience.measurement", name: "flagship_workflow" });
+        return res.writeHead(302, { location: "https://www.oracleinsight.xyz/", "cache-control": "no-store" }).end();
+      }
       if (req.method === "GET" && path === "/health/live") return respond(200, { status: "ok", requestId });
       if (req.method === "GET" && path === "/health/ready") return respond(200, { status: "ready", storage: "health" in store ? await store.health() : "unknown", requestId });
       if (!paidRoute && req.method === "GET" && serveStaticAsset && await serveStaticAsset({ pathname: path, req, res })) return;
       if (!paidRoute && !await rateLimiter.allow(requester(req, trustProxy), now())) return respond(429, errorBody("RATE_LIMITED", "Too many requests", requestId), { "retry-after": "60" });
       const body = req.method === "POST" ? await readJsonBody(req, path === "/v1/archive" ? Math.max(maxBodyBytes, 1024 * 1024) : maxBodyBytes, deadline.signal) : {};
+      if (req.method === "POST" && path === "/v1/experience-events") {
+        assertOnlyFields(body, ["event"], "Experience event");
+        if (typeof body.event !== "string" || !EXPERIENCE_EVENTS.has(body.event)) throw new PriorSealError("INVALID_REQUEST", "Experience event is not supported");
+        logger?.info?.({ event: "experience.measurement", name: body.event });
+        return res.writeHead(204, { ...cors, "cache-control": "no-store" }).end();
+      }
       if (req.method === "POST" && path === "/mcp") {
         const response = await handlePriorSealMcpRequest(body, {
           version,

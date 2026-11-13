@@ -18,6 +18,7 @@ import { api } from "../lib/api";
 import { downloadJson } from "../lib/download";
 import { dateTime, verificationText } from "../lib/format";
 import { session } from "../lib/storage";
+import { trackConversion } from "../lib/conversion-measurement";
 import {
   getTrustProfiles,
   isConfirmedTrustProfile,
@@ -325,6 +326,7 @@ export function VerifyPage() {
       setVerifiedWithTrust(trusted);
       setResult(verified);
       setReviewedReceipt(receipt);
+      trackConversion("verification_completed");
       if (
         verified.valid &&
         verified.verificationScope === "LOCAL_COMPLETE" &&

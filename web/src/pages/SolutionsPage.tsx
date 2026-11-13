@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PriorSealMark } from '../brand'
+import { trackConversion } from '../lib/conversion-measurement'
 import './solutions-page.css'
 import '../landing/landing.css'
 
@@ -46,6 +47,7 @@ const roles = [
 
 export function SolutionsPage() {
   const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => { trackConversion('choose_path') }, [])
   return <div className="priorseal-museum solutions-public">
     <header className="museum-nav">
       <PublicMark />
