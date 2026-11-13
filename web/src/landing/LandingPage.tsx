@@ -92,8 +92,8 @@ export function LandingPage() {
         <InstitutionMark />
         <nav className={menuOpen ? 'is-open' : ''} aria-label="Homepage navigation" id="homepage-navigation">
           {sectionLinks.map(([label, id]) => <a href={`#${id}`} key={id} onClick={() => setMenuOpen(false)}>{label}</a>)}
+          <Link to="/solutions" onClick={() => setMenuOpen(false)}>Solutions</Link>
           <Link to="/capabilities" onClick={() => setMenuOpen(false)}>Capabilities</Link>
-          <Link to="/monad" onClick={() => setMenuOpen(false)}>Monad proof</Link>
         </nav>
         <button className="museum-nav__menu" type="button" aria-controls="homepage-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? 'Close' : 'Menu'} <span aria-hidden="true">{menuOpen ? '×' : '+'}</span></button>
         <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-nav__entry" to="/app">Open console <span>↗</span></Link>
@@ -104,9 +104,9 @@ export function LandingPage() {
           <div className="museum-hero__copy">
             <div className="museum-hero__eyebrow"><p className="museum-kicker"><span>PRIORSEAL</span> / VERIFIED ACTION</p><span className="museum-hero__edition">EDITION 001 — PRE-AUTHORIZED EXECUTION PROOF</span></div>
             <h1 data-route-heading tabIndex={-1}>Agent-ready.<br /><em>User-controlled.</em><br />Independently provable.</h1>
-            <p className="museum-hero__statement">Prove that an Agent-involved action was explicitly approved before execution and stayed within its approved boundary. PriorSeal connects one bounded authorization to observed EVM or Solana execution, with a signed receipt others can verify independently.</p>
+            <p className="museum-hero__statement">Make every high-value Agent action explainable, explicitly authorized and independently provable. PriorSeal connects one bounded authorization to observed EVM or Solana execution, with a signed receipt others can verify independently.</p>
             <div className="museum-actions">
-              <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/monad">View Monad proof <span>↗</span></Link><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Verify a receipt <span>↗</span></Link>
+              <Link className="museum-button" to="/solutions">Choose your path <span>→</span></Link><a className="museum-text-link" href="#flagship">See flagship workflow <span>↓</span></a>
               <Link className="museum-text-link" to="/capabilities">Review capabilities <span>↗</span></Link>
             </div>
             <div className="museum-hero__foot"><span>01 / 06</span><p>Bounded authority and portable evidence for Agents and their users.<br />No custody. No transaction-signing keys.</p><a href="#system" aria-label="Explore the PriorSeal system">↓</a></div>
@@ -136,9 +136,23 @@ export function LandingPage() {
           </dl>
         </section>
 
+        <section className="flagship-solution" id="flagship">
+          <header data-reveal>
+            <div className="museum-section-id"><span>02</span><p>Flagship workflow</p></div>
+            <div><p className="museum-kicker">INSIGHT + PRIORSEAL</p><h2>Trusted Agent<br /><em>Execution.</em></h2></div>
+            <p>One buyer outcome, delivered by separate systems with separate trust roots: a decision can be inspected, authority stays explicit, and the eventual execution remains reviewable.</p>
+          </header>
+          <div className="flagship-solution__path" data-reveal aria-label="Insight and PriorSeal flagship workflow">
+            <article><span>01 / DECISION</span><h3>Insight</h3><p>Provide oracle transparency and a signed risk or simulation assessment for the proposed action.</p><a href="https://www.oracleinsight.xyz/" target="_blank" rel="noreferrer">Explore Insight <span>↗</span></a></article>
+            <article><span>02 / CONTROL</span><h3>Your execution boundary</h3><p>Your wallet, Safe, policy service or Agent runtime decides whether a valid assessment and authorization are required before submission.</p><Link to="/integrations/mcp">Integration patterns <span>↗</span></Link></article>
+            <article><span>03 / ACCOUNTABILITY</span><h3>PriorSeal</h3><p>Bind the final, bounded authorization to observed execution and deliver portable evidence for independent review.</p><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/verify">Open local verifier <span>↗</span></Link></article>
+          </div>
+          <aside className="flagship-solution__boundary" data-reveal><strong>One promise, no category confusion.</strong><p>Insight does not authorize or execute. PriorSeal does not issue the risk decision or hold funds. An execution block exists only when the integrating application places the required checks on its own submission path.</p></aside>
+        </section>
+
         <section className="museum-chain" id="chain">
           <header data-reveal>
-            <div className="museum-section-id museum-section-id--light"><span>02</span><p>Evidence chain</p></div>
+            <div className="museum-section-id museum-section-id--light"><span>03</span><p>Evidence chain</p></div>
             <div><p className="museum-kicker">SEAL · WITNESS · MATCH · REVIEW</p><h2>One action.<br />One verifiable history.</h2></div>
             <p>Each transition is explicit. Uncertainty remains visible. Signatures and supported compliance rules can be checked independently.</p>
           </header>
@@ -162,7 +176,7 @@ export function LandingPage() {
             <figcaption><span>ARCHIVAL REFERENCE / 02</span><PhotoCredit href="https://unsplash.com/photos/rows-of-white-archive-boxes-on-wooden-shelves-5utYi64hnJ0">Oxford · Luke Caunt</PhotoCredit></figcaption>
           </figure>
           <div className="archive-room__copy" data-reveal>
-            <div className="museum-section-id"><span>03</span><p>The archive</p></div>
+            <div className="museum-section-id"><span>04</span><p>The archive</p></div>
             <p className="museum-kicker">RETAINED OUTSIDE THE SERVICE</p>
             <h2>Evidence<br />that leaves<br />with you.</h2>
             <p>A PriorSeal receipt is not a dashboard state or a promise held inside one database. It is the portable delivery of a Verified Action: signed authority, time, execution, and binding.</p>
@@ -176,7 +190,7 @@ export function LandingPage() {
 
         <section className="receipt-gallery" id="receipt">
           <div className="receipt-gallery__copy" data-reveal>
-            <div className="museum-section-id"><span>04</span><p>Receipt</p></div>
+            <div className="museum-section-id"><span>05</span><p>Receipt</p></div>
             <p className="museum-kicker">THE PORTABLE RECORD</p>
             <h2>Built to be<br />examined.</h2>
             <p>A v3 receipt carries signed authority, independent time evidence, observed execution and a separately recomputable compliance decision in one document.</p>
@@ -190,7 +204,7 @@ export function LandingPage() {
 
         <section className="claim-boundaries" id="boundaries">
           <header data-reveal>
-            <div className="museum-section-id"><span>05</span><p>Proof scope</p></div>
+            <div className="museum-section-id"><span>06</span><p>Proof scope</p></div>
             <div><p className="museum-kicker">WHAT THE RECORD ESTABLISHES</p><h2>What a receipt proves.<br /><em>And what it does not.</em></h2></div>
           </header>
           <dl data-reveal>
@@ -211,10 +225,10 @@ export function LandingPage() {
           <div data-reveal>
             <p className="museum-kicker">DESIGN PARTNERS / AGENT SYSTEMS</p>
             <h2>Prove one controlled<br />Agent action.</h2>
-            <p className="museum-closing__statement">Start with one high-value execution path. PriorSeal proves its explicit authorization and supported execution match while the user retains the final signature and portable evidence. Pair it with Insight when you also need simulation or oracle transparency; each product remains independently usable.</p>
+            <p className="museum-closing__statement">Start with one high-value execution path. Use Insight to make the decision evidence explicit, retain the final signature with the principal, and use PriorSeal to prove whether the supported execution matched that boundary. Each product remains independently usable; together they form the flagship Trusted Agent Execution workflow.</p>
             <div className="museum-actions"><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-button museum-button--light" to="/app">Open console <span>→</span></Link><Link className="museum-text-link" to="/integrations/mcp">Connect MCP <span>↗</span></Link><a className="museum-text-link" href="https://github.com/imokokok/PriorSeal/issues/new?template=pilot.yml" target="_blank" rel="noreferrer">Propose a pilot <span>↗</span></a><Link className="museum-text-link" to="/capabilities">Review capabilities <span>↗</span></Link></div>
           </div>
-          <footer><InstitutionMark inverse /><span>Pre-authorized execution proof for Agent-driven actions.</span><span><Link className="museum-footer-link" to="/capabilities">Capabilities</Link> · <a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <Link className="museum-footer-link" to="/terms">Terms &amp; risk</Link> · <Link className="museum-footer-link" to="/support">Contact</Link> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
+          <footer><InstitutionMark inverse /><span>Pre-authorized execution proof for Agent-driven actions.</span><span><Link className="museum-footer-link" to="/solutions">Solutions</Link> · <Link className="museum-footer-link" to="/capabilities">Capabilities</Link> · <a className="museum-footer-link" href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">Source</a> · <Link className="museum-footer-link" to="/terms">Terms &amp; risk</Link> · <Link className="museum-footer-link" to="/support">Contact</Link> · <button className="museum-footer-link" onClick={openStoragePreferences}>Privacy &amp; storage</button> · © {new Date().getFullYear()}</span></footer>
         </section>
       </main>
     </div>

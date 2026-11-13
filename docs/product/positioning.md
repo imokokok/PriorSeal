@@ -6,7 +6,7 @@
 
 PriorSeal's primary product is **Verified Action**. It preserves the relationship between what a principal authorized before action and what was observed afterward. A portable receipt lets another party check signed permission, supported ordering evidence, execution state, and compliance with the authorization's bound fields.
 
-Its product path is **Agent proposal → bounded intent → principal authorization → acceptance and time evidence → observed execution → signed receipt → independent review**. The primary user is an individual wallet owner using an Agent; wallets and Agent applications integrate PriorSeal on that person's behalf.
+Its product path is **Agent proposal → bounded intent → principal authorization → acceptance and time evidence → observed execution → signed receipt → independent review**. A wallet owner, a high-value operations team, or the wallet and Agent application serving them can adopt this bounded path without giving PriorSeal custody or transaction-signing power.
 
 中文：**证明 Agent 参与的链上行动在执行前获得了明确授权，并且实际执行没有超出批准边界。**
 
@@ -58,9 +58,9 @@ The commercial offer remains one **Verified Action**. A separate execution obser
 
 PriorSeal is currently optimizing for **one person, one wallet, one Agent-proposed action, and one portable proof trail**. The product work priority is understandable proposal review, explicit wallet confirmation, one-time execution recovery, and evidence the person can keep or independently verify. It is not organization workflow software: do not add SSO, RBAC, hosted team archives, approval chains, or enterprise retention as roadmap work without a new product decision.
 
-## Current product direction: personal Agent control
+## Current product direction: bounded high-value Agent actions
 
-PriorSeal is currently optimizing for **one person, one wallet, one Agent-proposed action, and one portable proof trail**. The product work priority is understandable proposal review, explicit wallet confirmation, one-time execution recovery, and evidence the person can keep or independently verify. It is not organization workflow software: do not add SSO, RBAC, hosted team archives, approval chains, or enterprise retention as roadmap work without a new product decision.
+PriorSeal is currently optimizing for **one consequential action, one explicit authorization boundary, and one portable proof trail**. That works for an individual wallet owner and for a wallet, treasury, or Agent application implementing a defined high-value path. The product work priority is understandable proposal review, explicit confirmation, one-time execution recovery, and evidence a user or independent reviewer can keep and verify. It is not generic organization workflow software: do not add SSO, RBAC, hosted team archives, approval chains, or enterprise retention as roadmap work without a new product decision.
 
 ## Three independently selectable offers
 
@@ -68,11 +68,25 @@ PriorSeal is currently optimizing for **one person, one wallet, one Agent-propos
 | --- | --- | --- |
 | Insight | Oracle transparency, monitoring, and risk assessment | Oracle observations and assessments; supported execution-price/fill evidence |
 | PriorSeal | Verified Action: explicit authorization and execution accountability | Principal-signed permission, ordering evidence, observed EVM or Solana execution, and supported authorization compliance |
-| Insight + PriorSeal | Connect Agent input, assessment, authorization, execution, and review | Linked original artifacts with separate keys, trust checks, and verification scopes |
+| Insight + PriorSeal — **Trusted Agent Execution** | Make one high-value Agent decision inspectable, explicitly authorized and independently provable | Linked original artifacts with separate keys, trust checks, and verification scopes |
 
-Combined description: **Decision-to-Action Assurance: oracle risk intelligence, explicit authorization, and verifiable execution evidence for onchain Agents.**
+Combined description: **Trusted Agent Execution: oracle risk intelligence, explicit authorization, and verifiable execution evidence for high-value onchain Agent actions.**
 
-中文：**提供预言机风险评估、明确授权与可独立复核的执行证据，连接链上行动的依据、权限和结果。**
+中文：**可信 Agent 执行：提供预言机风险评估、明确授权与可独立复核的执行证据，连接链上行动的依据、权限和结果。**
+
+### Flagship solution: Trusted Agent Execution
+
+The flagship is one buyer outcome, not a merged trust system or a fifth protocol:
+
+`Insight assessment → integrator-owned execution boundary → principal's bounded authorization → observed execution → PriorSeal receipt → independent review`
+
+| Stage | Responsible party | What it establishes | What it does not establish |
+| --- | --- | --- | --- |
+| Decision | Insight | The signed assessment or simulation evidence for the proposed action | Authority to transact or proof that an application enforced the assessment |
+| Control | Wallet, Safe, policy service, or Agent runtime | Whether the integrator requires the named evidence and authorization before its own submission path proceeds | A PriorSeal claim that every execution path was gated |
+| Accountability | PriorSeal | The scope and timing of authorization, observed execution, and supported compliance | Economic safety, risk scoring, custody, or transaction submission |
+
+The buyer promise is: **do not merely trust an Agent's explanation—inspect what informed the action, who approved its exact boundary, and whether the observed execution stayed within it.** Start with one defined execution route, an identified evidence consumer, explicit assessment and authorization inputs, and a reproducible review of the exported evidence.
 
 ## Claim boundaries
 

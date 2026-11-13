@@ -1,0 +1,66 @@
+.solutions-public { min-height: 100vh; background: var(--gallery); }
+.solutions-hero { min-height: min(760px, calc(100svh - 86px)); padding: clamp(100px, 12vw, 190px) clamp(26px, 8vw, 132px); display: grid; grid-template-columns: minmax(420px, 1.2fr) minmax(290px, .55fr); align-items: end; gap: clamp(54px, 11vw, 190px); background: radial-gradient(circle at 80% 10%, #eadbd2 0, transparent 32%), var(--gallery); }
+.solutions-hero h1, .solution-register h2, .solution-roles h2, .solution-boundary h2 { margin: 25px 0 0; font-family: "Iowan Old Style", Baskerville, Georgia, serif; font-weight: 400; letter-spacing: -.065em; line-height: .92; }
+.solutions-hero h1 { font-size: clamp(74px, 9.2vw, 152px); }
+.solutions-hero h1 em, .solution-roles h2 em { color: var(--wine); font-weight: 400; }
+.solutions-hero__copy { max-width: 440px; }
+.solutions-hero__copy p { margin: 0; color: var(--quiet); font-size: 18px; line-height: 1.7; }
+.solutions-hero__copy .museum-button { margin-top: 38px; }
+
+.solution-register { padding: clamp(110px, 12vw, 190px) clamp(26px, 8vw, 132px); color: var(--gallery); background: #211b1b; }
+.solution-register > header { display: grid; grid-template-columns: 185px 1fr; gap: clamp(40px, 8vw, 130px); }
+.solution-register .museum-section-id p { color: #d0c7bf; }
+.solution-register h2 { font-size: clamp(62px, 7vw, 116px); }
+.solution-register .museum-kicker { color: #dfa9ae; }
+.solution-register__list { margin-top: clamp(80px, 10vw, 150px); border-top: 1px solid #665a58; }
+.solution-register__list article { min-height: 300px; padding: 32px 0; display: grid; grid-template-columns: 80px minmax(290px, .7fr) minmax(260px, .62fr) max-content; align-items: center; gap: clamp(25px, 4.2vw, 78px); border-bottom: 1px solid #514746; }
+.solution-register__index { align-self: start; color: #d7a09b; font: 600 12px "JetBrains Mono", monospace; letter-spacing: .08em; }
+.solution-register__list h3 { margin: 20px 0; color: #fff7eb; font: 400 clamp(37px, 3.5vw, 55px)/.96 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.055em; }
+.solution-register__list p:not(.museum-kicker) { max-width: 430px; margin: 0; color: #c4b8b2; font-size: 16px; line-height: 1.7; }
+.solution-register__list ol { margin: 0; padding: 0; list-style: none; border-top: 1px solid #514746; }
+.solution-register__list li { padding: 8px 0; display: grid; grid-template-columns: 32px 1fr; gap: 12px; color: #d9d0c7; border-bottom: 1px solid #514746; font-size: 13px; }
+.solution-register__list li span { color: #bd6d73; font: 600 10px "JetBrains Mono", monospace; }
+.solution-register__list .museum-text-link { color: #fff7eb; white-space: nowrap; }
+
+.solution-roles { padding: clamp(110px, 12vw, 185px) clamp(26px, 8vw, 132px); display: grid; grid-template-columns: minmax(360px, .78fr) minmax(500px, 1.22fr); gap: clamp(70px, 11vw, 190px); background: #e8ddd2; }
+.solution-roles h2 { font-size: clamp(61px, 6.8vw, 110px); }
+.solution-roles > div { border-top: 1px solid var(--ink); }
+.solution-roles article { min-height: 150px; padding: 27px 0; display: grid; grid-template-columns: 48px minmax(160px, .65fr) minmax(220px, 1.35fr); gap: 24px; border-bottom: 1px solid var(--line); }
+.solution-roles article > span { color: var(--wine); font: 600 12px "JetBrains Mono", monospace; }
+.solution-roles h3 { margin: 0; font: 400 28px/1 "Iowan Old Style", Baskerville, Georgia, serif; letter-spacing: -.04em; }
+.solution-roles article p { margin: 0; color: var(--quiet); font-size: 15px; line-height: 1.68; }
+
+.solution-boundary { padding: clamp(110px, 12vw, 190px) clamp(26px, 8vw, 132px); display: grid; grid-template-columns: minmax(370px, .9fr) minmax(390px, .7fr); gap: clamp(65px, 13vw, 230px); color: var(--gallery); background: #642b38; }
+.solution-boundary .museum-kicker { color: #e5adb7; }
+.solution-boundary h2 { font-size: clamp(61px, 6.8vw, 110px); }
+.solution-boundary > div:last-child { align-self: end; }
+.solution-boundary p:not(.museum-kicker) { margin: 0 0 20px; color: #e0d0d0; font-size: 17px; line-height: 1.72; }
+.solution-boundary .museum-button { margin-top: 23px; color: var(--ink) !important; background: var(--gallery); border-color: var(--gallery); }
+.solution-boundary .museum-button:hover { background: #e7dcd2; border-color: #e7dcd2; }
+
+@media (max-width: 1000px) {
+  .solutions-hero { grid-template-columns: 1fr; }
+  .solutions-hero__copy { max-width: 620px; }
+  .solution-register__list article { grid-template-columns: 60px 1fr max-content; }
+  .solution-register__list article > div { grid-column: 2; }
+  .solution-register__list ol { grid-column: 2; }
+  .solution-register__list .museum-text-link { grid-column: 3; grid-row: 1 / span 2; }
+  .solution-roles, .solution-boundary { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .solutions-hero { min-height: 650px; padding: 90px 22px; }
+  .solutions-hero h1 { font-size: clamp(61px, 15.5vw, 88px); }
+  .solution-register, .solution-roles, .solution-boundary { padding: 90px 22px; }
+  .solution-register > header { grid-template-columns: 1fr; gap: 32px; }
+  .solution-register h2, .solution-roles h2, .solution-boundary h2 { font-size: clamp(52px, 13.2vw, 76px); }
+  .solution-register__list { margin-top: 68px; }
+  .solution-register__list article { min-height: 0; padding: 28px 0 34px; grid-template-columns: 38px 1fr; gap: 18px; }
+  .solution-register__list article > div, .solution-register__list ol, .solution-register__list .museum-text-link { grid-column: 2; grid-row: auto; }
+  .solution-register__list h3 { margin: 17px 0; }
+  .solution-register__list .museum-text-link { margin-top: 10px; }
+  .solution-roles { gap: 55px; }
+  .solution-roles article { grid-template-columns: 35px 1fr; gap: 12px; }
+  .solution-roles article p { grid-column: 2; }
+  .solution-boundary { gap: 55px; }
+}

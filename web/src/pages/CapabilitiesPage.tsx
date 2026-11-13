@@ -15,6 +15,7 @@ export function CapabilitiesPage() {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [error, setError] = useState('')
   const [refresh, setRefresh] = useState(0)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -30,7 +31,8 @@ export function CapabilitiesPage() {
   return <div className="priorseal-museum capabilities-public">
     <header className="museum-nav">
       <PublicMark />
-      <nav aria-label="Capabilities navigation"><Link to="/">Product</Link><Link to="/integrations/mcp">MCP integration</Link><Link to="/support">Support</Link></nav>
+      <nav className={menuOpen ? 'is-open' : ''} aria-label="Capabilities navigation" id="capabilities-navigation"><Link to="/" onClick={() => setMenuOpen(false)}>Product</Link><Link to="/solutions" onClick={() => setMenuOpen(false)}>Solutions</Link><Link to="/integrations/mcp" onClick={() => setMenuOpen(false)}>MCP integration</Link><Link to="/support" onClick={() => setMenuOpen(false)}>Support</Link></nav>
+      <button className="museum-nav__menu" type="button" aria-controls="capabilities-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? 'Close' : 'Menu'} <span aria-hidden="true">{menuOpen ? '×' : '+'}</span></button>
       <Link className="museum-nav__entry" to="/app">Open console <span>↗</span></Link>
     </header>
     <main id="main-content">
@@ -54,7 +56,7 @@ export function CapabilitiesPage() {
       </section>}
 
       <section className="capability-register" aria-labelledby="verified-action-layers-title">
-        <header><div className="museum-section-id"><span>02</span><p>Product architecture</p></div><div><p className="museum-kicker">ONE OUTCOME / FOUR RESPONSIBILITIES</p><h2 id="verified-action-layers-title">Seal, Witness,<br />Match, Review.</h2></div></header>
+        <header><div className="museum-section-id"><span>02</span><p>Product architecture</p></div><div><p className="museum-kicker">ONE OUTCOME / FOUR RESPONSIBILITIES</p><h2 id="verified-action-layers-title">The proof beneath<br />a Verified Action.</h2></div></header>
         <div className="capability-register__list">{verifiedActionLayers.map((layer, index) => <article key={layer.id}><div className="capability-register__index">{String(index + 1).padStart(2, '0')}<span>{layer.label.toUpperCase()}</span></div><div><h3>{layer.title}</h3><p>{layer.copy}</p><dl><div><dt>Boundary</dt><dd>{layer.boundary}</dd></div></dl></div></article>)}</div>
       </section>
 

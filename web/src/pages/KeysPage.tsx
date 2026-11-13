@@ -24,8 +24,8 @@ export function KeysPage() {
   const active = registry?.keys.filter((key) => key.status === 'active').length ?? 0
 
   return <AppShell>
-    <PageHeader eyebrow="TRUST" title="Issuer key directory">Keys are read directly from the configured PriorSeal API. No private key material is exposed here.</PageHeader>
-    <div className="key-directory-intro"><span>PUBLIC KEY DIRECTORY / 09</span><p>Published issuer keys support verification. Confirm your trust profile independently before treating any receipt as trusted.</p></div>
+    <PageHeader eyebrow="TRUST / VERIFICATION" title="Confirm the verification source.">Keys are read directly from the configured PriorSeal API. No private key material is exposed here, and discovery data is not an independent trust decision.</PageHeader>
+    <div className="key-directory-intro"><span>PUBLIC KEY DIRECTORY</span><p>Published issuer keys make local verification possible. Confirm your trust profile through a separate trusted channel before treating any receipt as trusted.</p></div>
     {loading ? <LoadingState label="Loading public key registry..." /> : error ?
       <section className="panel key-unavailable">
         <span className="key-section-index">DIRECTORY STATUS / UNAVAILABLE</span>

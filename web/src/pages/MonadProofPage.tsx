@@ -44,9 +44,9 @@ export function MonadProofPage() {
       <header className="monad-proof__nav">
         <Brand />
         <nav aria-label="Primary navigation">
-          <Link to="/">Overview</Link>
-          <Link to="/app/actions/exact-call">Exact call</Link>
-          <Link to="/integrations/mcp">MCP</Link>
+          <Link to="/solutions">Solutions</Link>
+          <Link to="/capabilities">Capabilities</Link>
+          <Link to="/app/develop">Developer hub</Link>
           <a href="https://github.com/imokokok/PriorSeal" target="_blank" rel="noreferrer">GitHub ↗</a>
         </nav>
         <Link className="monad-proof__console" to="/app">Open console <span>↗</span></Link>
@@ -55,10 +55,10 @@ export function MonadProofPage() {
       <main id="main-content">
         <section className="monad-proof__hero">
           <div>
-            <p className="monad-proof__kicker">VERIFIED ACTION / MONAD TECHNICAL CASE RECORD / 001</p>
+            <p className="monad-proof__kicker">TECHNICAL PROOF CASE / MONAD / 001</p>
             <p className="monad-proof__status"><span /> VERIFIED EXACT CALL</p>
             <h1 data-route-heading tabIndex={-1}>One authorized action<br />became <em>evidence.</em></h1>
-            <p className="monad-proof__lede">A public, zero-native-value Monad run: a principal signed one time-bounded PriorSeal authorization, then made one exact call. The call emitted the expected event and was checked against its authorized scope.</p>
+            <p className="monad-proof__lede">A public technical proof case, not a product plan: a principal signed one time-bounded PriorSeal authorization, then made one zero-native-value exact call on Monad. The call emitted the expected event and was checked against its authorized scope.</p>
             <div className="monad-proof__actions"><a href="#evidence">Read the evidence <span>↓</span></a><a href="#boundary">Read the boundary <span>↓</span></a></div>
           </div>
 

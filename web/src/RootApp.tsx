@@ -10,6 +10,7 @@ const SupportPage = lazy(() => import('./pages/SupportPage').then((module) => ({
 const McpPage = lazy(() => import('./pages/McpPage').then((module) => ({ default: module.McpPage })))
 const MonadProofPage = lazy(() => import('./pages/MonadProofPage').then((module) => ({ default: module.MonadProofPage })))
 const CapabilitiesPage = lazy(() => import('./pages/CapabilitiesPage').then((module) => ({ default: module.CapabilitiesPage })))
+const SolutionsPage = lazy(() => import('./pages/SolutionsPage').then((module) => ({ default: module.SolutionsPage })))
 const PublicNotFoundPage = lazy(() => import('./pages/OutcomePages').then((module) => ({ default: module.PublicNotFoundPage })))
 const Console = lazy(loadConsole)
 
@@ -94,5 +95,5 @@ function RouteFallback() {
 }
 
 export default function RootApp() {
-  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/capabilities" element={<CapabilitiesPage />} /><Route path="/monad" element={<MonadProofPage />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/terms" element={<PublicTermsPage />} /><Route path="/support" element={<SupportPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
+  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/solutions" element={<SolutionsPage />} /><Route path="/capabilities" element={<CapabilitiesPage />} /><Route path="/monad" element={<MonadProofPage />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/terms" element={<PublicTermsPage />} /><Route path="/support" element={<SupportPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
 }

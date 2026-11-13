@@ -72,6 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function AppShellFrame({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  const [secondaryNavigationOpen, setSecondaryNavigationOpen] = useState(false)
   const [compactNavigation, setCompactNavigation] = useState(false)
   const [apiState, setApiState] = useState<'checking' | 'online' | 'offline'>('checking')
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
@@ -117,7 +118,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
     if (!compactNavigation || !open) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const focusable = () => [...(sidebar.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [])]
+    const focusable = () => [...(sidebar.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [])].filter((element) => !element.closest('details:not([open])'))
     window.requestAnimationFrame(() => focusable()[0]?.focus())
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); setOpen(false); return }
@@ -143,14 +144,18 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   }
 
   const visibleNavigation = consoleNavigation.filter((item) => item.visible?.(capabilities) ?? true)
-  const groups = [...new Set(visibleNavigation.map((item) => item.group))]
+  const primaryKeys = new Set(['overview', 'new-action', 'evidence', 'verify'])
+  const primaryNavigation = visibleNavigation.filter((item) => primaryKeys.has(item.key))
+  const secondaryNavigation = visibleNavigation.filter((item) => !primaryKeys.has(item.key))
+  const secondaryGroups = [...new Set(secondaryNavigation.map((item) => item.group))]
+  const secondaryRouteActive = secondaryNavigation.some((item) => matchesConsoleNavigation(item, location.pathname))
   const actionAvailable = hasPublishedAuthorization(capabilities)
   return <AppShellContext.Provider value={{ inShell: true, capabilities, capabilitiesState, capabilitiesError, refreshCapabilities }}><div className="shell">
     {compactNavigation && open && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setOpen(false)} />}
     <aside ref={sidebar} id="console-navigation" className={open ? 'sidebar open' : 'sidebar'} aria-hidden={compactNavigation && !open} inert={compactNavigation && !open ? true : undefined}>
       <div className="side-top"><Logo /><button type="button" className="mobile-close" onClick={() => setOpen(false)} aria-label="Close navigation">×</button></div>
       <div className="environment"><span className={`live-dot ${apiState}`} /><span>Local collection</span><small>DEVICE SCOPE</small></div>
-      <nav aria-label="Console navigation">{groups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{visibleNavigation.filter((item) => item.group === group).map((item) => <Link key={item.to} to={item.to} onClick={() => setOpen(false)} aria-current={matchesConsoleNavigation(item, location.pathname) ? 'page' : undefined} className={matchesConsoleNavigation(item, location.pathname) ? 'active' : undefined}><span className="nav-index">{item.index}</span><span>{item.label}</span></Link>)}</div>)}</nav>
+      <nav aria-label="Console navigation"><div className="nav-group nav-group--primary"><p className="side-caption">Core workflow</p>{primaryNavigation.map((item, index) => <Link key={item.to} to={item.to} onClick={() => setOpen(false)} aria-current={matchesConsoleNavigation(item, location.pathname) ? 'page' : undefined} className={matchesConsoleNavigation(item, location.pathname) ? 'active' : undefined}><span className="nav-index">{String(index + 1).padStart(2, '0')}</span><span>{item.label}</span></Link>)}</div>{secondaryNavigation.length > 0 && <details className="nav-secondary" open={secondaryNavigationOpen || secondaryRouteActive} onToggle={(event) => setSecondaryNavigationOpen(event.currentTarget.open)}><summary>More workspace tools</summary><div className="nav-secondary__body">{secondaryGroups.map((group) => <div className="nav-group" key={group}><p className="side-caption">{group}</p>{secondaryNavigation.filter((item) => item.group === group).map((item) => <Link key={item.to} to={item.to} onClick={() => setOpen(false)} aria-current={matchesConsoleNavigation(item, location.pathname) ? 'page' : undefined} className={matchesConsoleNavigation(item, location.pathname) ? 'active' : undefined}><span className="nav-index">{item.index}</span><span>{item.label}</span></Link>)}</div>)}</div></details>}</nav>
       <div className="side-bottom"><span>Local evidence collection</span><small>Browser activity remains on this device when local saving is allowed. Project archive access appears above when the deployment enables it.</small><button type="button" className="side-privacy" onClick={() => { setOpen(false); openStoragePreferences() }}>Privacy &amp; storage</button><span className="side-accession">PRIORSEAL / LOCAL / 001</span></div>
   </aside>
     <main id="main-content"><header className="app-topbar"><button ref={menuButton} type="button" className="menu" onClick={showNavigation} aria-label="Open navigation" aria-controls="console-navigation" aria-expanded={open}>☰</button><div className="top-title"><span>{current.group} / {current.index}</span><strong>{current.label}</strong></div><div className="topbar-right"><Link className={`api-state ${apiState}`} to="/app/quickstart" aria-label={`API ${apiState}. Open deployment status and readiness details.`}><span className={`live-dot ${apiState}`} /> API {apiState}</Link><Link className="topbar-help" to="/support">Help</Link>{actionAvailable && <Link className="button primary topbar-action" to="/app/actions/new">New action</Link>}</div></header><div key={location.pathname} className={`page page-${pageKey}`}>{children}</div></main>
