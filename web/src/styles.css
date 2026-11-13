@@ -56,6 +56,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .nav-group + .nav-group { margin-top: 20px; }
 .side-caption { margin: 0 7px 8px; color: #77756e; font: 600 12px "JetBrains Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
 .sidebar nav { min-height: 0; flex: 1 1 auto; overflow-y: auto; display: block; scrollbar-gutter: stable; }
+.nav-secondary { margin-top: 20px; border-top: 1px solid rgba(255,255,255,.18); border-bottom: 1px solid rgba(255,255,255,.085); }
+.nav-secondary summary { min-height: 43px; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; color: #b9b6ae; cursor: pointer; font: 600 12px "JetBrains Mono", monospace; letter-spacing: .05em; text-transform: uppercase; list-style: none; }
+.nav-secondary summary::-webkit-details-marker { display: none; }
+.nav-secondary summary::after { content: '+'; margin-left: auto; color: #b47987; font-size: 18px; font-weight: 400; line-height: 1; }
+.nav-secondary[open] summary { color: white; background: rgba(255,255,255,.045); }
+.nav-secondary[open] summary::after { content: '−'; }
+.nav-secondary__body { padding: 14px 0 4px; }
+.nav-secondary__body .nav-group + .nav-group { margin-top: 18px; }
 .sidebar nav a { min-height: 41px; padding: 0 8px; display: grid; grid-template-columns: 31px 1fr; align-items: center; gap: 8px; color: #b9b6ae; border-top: 1px solid rgba(255,255,255,.085); font-size: 14px; }
 .sidebar nav a:last-child { border-bottom: 1px solid rgba(255,255,255,.085); }
 .sidebar nav a:hover { color: white; background: rgba(255,255,255,.045); }

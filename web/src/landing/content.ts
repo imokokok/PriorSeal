@@ -1,5 +1,6 @@
 export const sectionLinks = [
   ['System', 'system'],
+  ['Flagship workflow', 'flagship'],
   ['Evidence chain', 'chain'],
   ['Receipt', 'receipt'],
   ['Proof scope', 'boundaries'],
@@ -40,16 +41,16 @@ export const proofSequence = [
 
 export const audiences = [
   {
-    label: 'Agent builders',
-    text: 'Give an Agent enough authority to prepare and execute one bounded action, without giving it a blank check.',
+    label: 'Wallet & Agent builders',
+    text: 'Give an Agent one explicit action boundary without giving it a blank check or a transaction-signing key.',
   },
   {
-    label: 'Wallets & trading apps',
-    text: 'Embed a human-readable confirmation boundary before an Agent-mediated onchain action reaches a wallet.',
+    label: 'High-value operations',
+    text: 'Connect a risk assessment, the final approval and the observed result for one consequential treasury or trading path.',
   },
   {
     label: 'Users & reviewers',
-    text: 'Retain a portable record of what an Agent proposed, what a principal authorized, and what was observed afterward.',
+    text: 'Retain a portable record of the decision input, the approval boundary and what the chain actually recorded.',
   },
 ] as const
 
