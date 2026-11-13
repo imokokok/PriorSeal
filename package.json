@@ -165,6 +165,8 @@
         "ws": "8.22.0"
       }
     },
-    "follow-redirects": "1.16.2"
+    "follow-redirects": "1.16.2",
+    "minimatch": "11.0.1",
+    "undici": "7.30.1"
   }
 }
