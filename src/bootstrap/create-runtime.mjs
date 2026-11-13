@@ -35,13 +35,13 @@ async function createPriorSealRuntime(options = {}) {
 async function createPriorSealBackgroundRuntime(options = {}) {
   return composeRuntime(options, false);
 }
-async function composeRuntime({ config, environment = process.env, database, d1, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, logger, assertSchema = true }, http) {
+async function composeRuntime({ config, environment = process.env, database, d1, evidenceBucket, databaseConnectionString = config?.databaseUrl, poolOptions = {}, staticDir, dispatchObservationJob, rateLimiter, logger, assertSchema = true }, http) {
   if (!config) throw new TypeError("Runtime config is required");
   const ownsPool = !database;
   const pool = d1 ? null : database ?? (databaseConnectionString ? new Pool({ connectionString: databaseConnectionString, ...poolOptions }) : null);
   try {
     if (assertSchema && config.environment === "production" && !d1) await assertProductionSchema(pool, { preExecutionProofMode: config.preExecutionProofMode, archiveEnabled: Boolean(config.archiveCredentials), x402Enabled: Boolean(config.x402), agentMeterEnabled: Boolean(config.agentMeter), x402CreditPacksEnabled: Boolean(config.x402CreditPacks) });
-    const store = d1 ? createD1Store(d1) : pool ? createPostgresStore(pool) : void 0;
+    const store = d1 ? createD1Store(d1, { evidenceBucket }) : pool ? createPostgresStore(pool) : void 0;
     const agentMeter = store ? createAgentMeter(config.agentMeter, store) : null;
     const fileKeys = createFileKeyProvider({ privateKeyFile: config.privateKeyFile, publicKeyFile: config.publicKeyFile });
     const privateKeyPem = config.privateKeyPem ?? fileKeys.getPrivateKey();

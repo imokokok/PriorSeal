@@ -13,7 +13,7 @@ test('schema readiness is one primary-key capability lookup', async () => {
       sql: 'SELECT version FROM priorseal_schema_capabilities WHERE capability=?',
       values: ['cloudflare-runtime'],
     }]);
-    assert.equal(REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY, 11);
+    assert.equal(REQUIRED_D1_RUNTIME_SCHEMA_CAPABILITY, 12);
   } finally { fixture.sqlite.close(); }
 });
 
@@ -22,8 +22,8 @@ test('a missing schema capability fails closed and is never treated as ready', a
   try {
     fixture.sqlite.exec("DELETE FROM priorseal_schema_capabilities WHERE capability='cloudflare-runtime'");
     const guard = createSchemaCapabilityGuard();
-    await assert.rejects(() => guard(fixture.database), /schema capability 11 is required/);
-    await assert.rejects(() => guard(fixture.database), /schema capability 11 is required/);
+    await assert.rejects(() => guard(fixture.database), /schema capability 12 is required/);
+    await assert.rejects(() => guard(fixture.database), /schema capability 12 is required/);
     assert.equal(fixture.calls.length, 2);
   } finally { fixture.sqlite.close(); }
 });
@@ -32,6 +32,6 @@ test('a stale schema capability fails closed', async () => {
   const fixture = testD1();
   try {
     fixture.sqlite.exec("UPDATE priorseal_schema_capabilities SET version=10 WHERE capability='cloudflare-runtime'");
-    await assert.rejects(() => createSchemaCapabilityGuard()(fixture.database), /schema capability 11 is required/);
+    await assert.rejects(() => createSchemaCapabilityGuard()(fixture.database), /schema capability 12 is required/);
   } finally { fixture.sqlite.close(); }
 });

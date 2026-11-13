@@ -1,12 +1,17 @@
 // Generated from test-d1-store.mts by npm run core:build. Do not edit directly.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { createD1Store } from "../src/infrastructure/persistence/d1-store.mjs";
+import { archiveEntry } from "../src/application/archive/evidence-archive.mjs";
 const sqlite = new DatabaseSync(":memory:");
 sqlite.exec("PRAGMA foreign_keys=ON;");
 sqlite.exec(readFileSync(new URL("../d1/migrations/0001_initial.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../d1/migrations/0008_observation_job_coalescing.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../d1/migrations/0009_hyperliquid_cloid_uniqueness.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../d1/migrations/0011_runtime_schema_capability.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../d1/migrations/0012_evidence_archive_r2_index.sql", import.meta.url), "utf8"));
 const prepared = (sql, values = []) => ({
   bind: (...next) => prepared(sql, next),
   async first() {
@@ -38,7 +43,31 @@ const d1 = {
     }
   }
 };
-const store = createD1Store(d1);
+const sha256Bytes = (bytes) => {
+  const digest = createHash("sha256").update(bytes).digest();
+  return new Uint8Array(digest.buffer, digest.byteOffset, digest.byteLength).slice().buffer;
+};
+const r2Objects = /* @__PURE__ */ new Map();
+const r2 = {
+  async put(key, value, options) {
+    if (options.onlyIf?.etagDoesNotMatch === "*" && r2Objects.has(key)) return null;
+    const bytes = new Uint8Array(value);
+    r2Objects.set(key, bytes);
+    return { size: bytes.byteLength, checksums: { sha256: sha256Bytes(bytes) }, uploaded: /* @__PURE__ */ new Date(), version: "v1" };
+  },
+  async head(key) {
+    const bytes = r2Objects.get(key);
+    return bytes ? { size: bytes.byteLength, checksums: { sha256: sha256Bytes(bytes) }, uploaded: /* @__PURE__ */ new Date(), version: "v1" } : null;
+  },
+  async get(key) {
+    const bytes = r2Objects.get(key);
+    return bytes ? { arrayBuffer: async () => bytes.slice().buffer } : null;
+  },
+  async delete(key) {
+    r2Objects.delete(key);
+  }
+};
+const store = createD1Store(d1, { evidenceBucket: r2 });
 const intent = { intentId: "test-intent", intentHash: "test-intent-hash", schema: "priorseal.intent.v1", chainId: 1, action: "TRANSFER", sender: "sender", recipient: "recipient", asset: "ETH", amount: "1", nonce: "n1", validUntil: 2e9 };
 assert.equal((await store.saveIntent(intent)).intentId, intent.intentId);
 assert.deepEqual(await store.getIntent(intent.intentId), intent);
@@ -63,7 +92,7 @@ assert.equal(claimed.state, "RUNNING");
 assert.equal(claimed.attempts, 1);
 assert.equal((await store.saveJob({ ...claimed, state: "COMPLETED", result: { observation } })).state, "COMPLETED");
 assert.equal((await store.getJob(job.jobId)).state, "COMPLETED");
-const entry = { id: "test-entry", projectId: "project", environment: "test", kind: "authorization", createdAt: 17e8, artifactHash: "artifact-hash", supersedesId: null, txHash: observation.txHash, authorizationId: authorization.authorizationId, status: "ACCEPTED", artifact: { hello: "world" }, verification: "NOT_VERIFIED_BY_ARCHIVE" };
+const entry = archiveEntry({ authorization: { schema: "priorseal.authorization.v2", authorizationId: authorization.authorizationId }, acceptance: { accepted: true }, status: "ACCEPTED" }, { projectId: "project", environment: "test", role: "reviewer" }, { now: 17e11 });
 assert.equal((await store.saveArchiveEntry(entry)).id, entry.id);
 const page = await store.listArchiveEntries({ projectId: "project", environment: "test", role: "reviewer", filters: { txHash: null, authorizationId: null, status: null, from: null, to: null }, filterHash: "test", cursor: null, limit: 10 });
 assert.equal(page.items.length, 1);

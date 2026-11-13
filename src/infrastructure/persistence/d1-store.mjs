@@ -7,6 +7,7 @@ import { assertReceiptIdentity } from "./receipt-identity.mjs";
 import { assertX402PaymentLedgerEvent } from "../../domain/x402-payment-ledger.mjs";
 import { hyperliquidCloidReservation } from "../../domain/hyperliquid.mjs";
 import { persistedAcceptance, persistedArchiveEntry, persistedAuthorization, persistedCount, persistedIntent, persistedJobError, persistedJobInput, persistedJobResult, persistedJson, persistedObservation, persistedPolicy, persistedReceipt, persistedStatus, persistedWorkerObservation } from "./persisted-records.mjs";
+import { ARCHIVE_CONTENT_TYPE, encodeEvidenceArtifact, evidenceObjectKey, putVerifiedEvidenceObject, readVerifiedEvidenceObject } from "./evidence-r2.mjs";
 const json = (value) => value == null ? null : JSON.stringify(value);
 const parsed = (value, label) => value == null ? null : persistedJson(value, label);
 const numeric = (value) => value == null ? null : typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -61,13 +62,59 @@ function hyperliquidReservationValues(intent) {
   const reservation = hyperliquidCloidReservation(intent);
   return [reservation?.networkRef ?? null, reservation?.account ?? null, reservation?.clientOrderId ?? null];
 }
-function createD1Store(database) {
+function createD1Store(database, options = {}) {
   if (!database?.prepare || !database?.batch) throw new TypeError("createD1Store requires a D1 binding");
   const statement = (sql, ...values) => database.prepare(sql).bind(...values);
   const first = (sql, ...values) => statement(sql, ...values).first();
   const all = async (sql, ...values) => (await statement(sql, ...values).all()).results;
   const run = (sql, ...values) => statement(sql, ...values).run();
   const batch = (statements) => database.batch(statements);
+  const evidenceBucket = options.evidenceBucket ?? null;
+  const archiveColumns = "sequence,project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json,storage,r2_key,content_type,size,written_at,object_version";
+  const archiveMetadata = (row) => ({
+    id: row.entry_id,
+    projectId: row.project_id,
+    environment: row.environment,
+    kind: row.kind,
+    createdAt: Number(row.created_at),
+    artifactHash: row.artifact_hash,
+    supersedesId: row.supersedes_id,
+    txHash: row.tx_hash,
+    authorizationId: row.authorization_id,
+    status: row.status,
+    artifact: void 0,
+    verification: "NOT_VERIFIED_BY_ARCHIVE",
+    sequence: Number(row.sequence)
+  });
+  async function verifiedArchiveEntry(row) {
+    if (row.storage === "d1") {
+      const entry = persistedArchiveEntry(row.entry_json);
+      if (entry.id !== row.entry_id || entry.projectId !== row.project_id || entry.environment !== row.environment || entry.artifactHash !== row.artifact_hash || hashJson(entry.artifact) !== row.artifact_hash) {
+        throw failed("ARCHIVE_INTEGRITY_FAILURE", "The legacy D1 archive entry does not match its index");
+      }
+      return { ...entry, sequence: Number(row.sequence) };
+    }
+    if (row.storage !== "r2") throw failed("ARCHIVE_INTEGRITY_FAILURE", "The archive storage backend is not recognised");
+    if (!evidenceBucket) throw failed("ARCHIVE_STORAGE_NOT_CONFIGURED", "The R2 evidence bucket is not configured");
+    if (row.r2_key == null || row.size == null || row.object_version == null) throw failed("ARCHIVE_INTEGRITY_FAILURE", "The R2 archive index is incomplete");
+    if (row.r2_key !== evidenceObjectKey({ projectId: row.project_id, environment: row.environment, artifactHash: row.artifact_hash })) throw failed("ARCHIVE_INTEGRITY_FAILURE", "The R2 archive key does not match the D1 index");
+    const artifact = await readVerifiedEvidenceObject(evidenceBucket, row.r2_key, { artifactHash: row.artifact_hash, size: Number(row.size), objectVersion: Number(row.object_version) });
+    return {
+      id: row.entry_id,
+      projectId: row.project_id,
+      environment: row.environment,
+      kind: row.kind,
+      createdAt: Number(row.created_at),
+      artifactHash: row.artifact_hash,
+      supersedesId: row.supersedes_id,
+      txHash: row.tx_hash,
+      authorizationId: row.authorization_id,
+      status: row.status,
+      artifact,
+      verification: "NOT_VERIFIED_BY_ARCHIVE",
+      sequence: Number(row.sequence)
+    };
+  }
   async function merkleStatements(sequence, entryHash) {
     const previous = /* @__PURE__ */ new Map();
     const ranges = [];
@@ -256,18 +303,86 @@ function createD1Store(database) {
       return saved ? agentUsageRecord(saved) : null;
     },
     async saveArchiveEntry(entry) {
-      await run(`INSERT INTO project_evidence_archive (project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,environment,entry_id) DO NOTHING`, entry.projectId, entry.environment, entry.id, entry.artifactHash, entry.kind, entry.createdAt, entry.txHash, entry.authorizationId, entry.status, entry.supersedesId, json(entry));
-      const saved = await this.getArchiveEntry(entry, entry.id);
-      if (saved?.supersedesId !== entry.supersedesId) throw failed("ARCHIVE_CONFLICT", "Archive entry already has a different supersession relationship");
-      return saved;
+      if (!evidenceBucket) {
+        const encoded2 = encodeEvidenceArtifact(entry.artifact);
+        if (encoded2.artifactHash !== entry.artifactHash) throw failed("ARCHIVE_HASH_MISMATCH", "The artifact does not match the archive artifact hash");
+        await run(`INSERT INTO project_evidence_archive (project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,environment,entry_id) DO NOTHING`, entry.projectId, entry.environment, entry.id, encoded2.artifactHash, entry.kind, entry.createdAt, entry.txHash, entry.authorizationId, entry.status, entry.supersedesId, json(entry));
+        const saved2 = await this.getArchiveEntry(entry, entry.id);
+        if (!saved2) throw failed("ARCHIVE_INDEX_MISSING", "The archive index was not committed");
+        if (saved2.supersedesId !== entry.supersedesId) throw failed("ARCHIVE_CONFLICT", "Archive entry already has a different supersession relationship");
+        return saved2;
+      }
+      const existing = await first(`SELECT ${archiveColumns} FROM project_evidence_archive WHERE project_id=? AND environment=? AND entry_id=?`, entry.projectId, entry.environment, entry.id);
+      if (existing) {
+        if (existing.supersedes_id !== entry.supersedesId) throw failed("ARCHIVE_CONFLICT", "Archive entry already has a different supersession relationship");
+        return verifiedArchiveEntry(existing);
+      }
+      const encoded = encodeEvidenceArtifact(entry.artifact);
+      if (encoded.artifactHash !== entry.artifactHash) throw failed("ARCHIVE_HASH_MISMATCH", "The artifact does not match the archive artifact hash");
+      const key = evidenceObjectKey({ projectId: entry.projectId, environment: entry.environment, artifactHash: encoded.artifactHash });
+      const startedAt = Date.now();
+      const leaseToken = randomUUID();
+      await run(
+        `INSERT INTO project_evidence_archive_outbox (r2_key,project_id,environment,artifact_hash,size,content_type,object_version,attempts,created_at,updated_at,lease_token,lease_expires_at) VALUES (?,?,?,?,?,?,?,1,?,?,?,?) ON CONFLICT(r2_key) DO UPDATE SET project_id=excluded.project_id,environment=excluded.environment,artifact_hash=excluded.artifact_hash,size=excluded.size,content_type=excluded.content_type,object_version=excluded.object_version,attempts=project_evidence_archive_outbox.attempts+1,updated_at=excluded.updated_at,lease_token=excluded.lease_token,lease_expires_at=excluded.lease_expires_at,last_error=NULL WHERE project_evidence_archive_outbox.lease_expires_at IS NULL OR project_evidence_archive_outbox.lease_expires_at<=excluded.updated_at`,
+        key,
+        entry.projectId,
+        entry.environment,
+        encoded.artifactHash,
+        encoded.size,
+        ARCHIVE_CONTENT_TYPE,
+        1,
+        startedAt,
+        startedAt,
+        leaseToken,
+        startedAt + 6e4
+      );
+      try {
+        const written = await putVerifiedEvidenceObject(evidenceBucket, key, encoded.bytes, encoded.artifactHash, { projectId: entry.projectId, environment: entry.environment });
+        await batch([
+          statement(
+            `INSERT INTO project_evidence_archive (project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id,entry_json,storage,r2_key,content_type,size,written_at,object_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,environment,entry_id) DO NOTHING`,
+            entry.projectId,
+            entry.environment,
+            entry.id,
+            encoded.artifactHash,
+            entry.kind,
+            entry.createdAt,
+            entry.txHash,
+            entry.authorizationId,
+            entry.status,
+            entry.supersedesId,
+            json({ schema: "priorseal.archive-index-pointer.v1", r2Key: key }),
+            "r2",
+            key,
+            ARCHIVE_CONTENT_TYPE,
+            written.size,
+            written.writtenAt,
+            written.objectVersion
+          ),
+          statement("DELETE FROM project_evidence_archive_outbox WHERE r2_key=?", key)
+        ]);
+      } catch (error) {
+        await run(
+          `UPDATE project_evidence_archive_outbox SET lease_token=NULL, lease_expires_at=NULL, updated_at=?, last_error=? WHERE r2_key=? AND lease_token=?`,
+          Date.now(),
+          (error instanceof Error ? error.message : String(error)).slice(0, 512),
+          key,
+          leaseToken
+        ).catch(() => void 0);
+        throw error;
+      }
+      const saved = await first(`SELECT ${archiveColumns} FROM project_evidence_archive WHERE project_id=? AND environment=? AND entry_id=?`, entry.projectId, entry.environment, entry.id);
+      if (!saved) throw failed("ARCHIVE_INDEX_MISSING", "The archive index was not committed after the R2 write");
+      if (saved.supersedes_id !== entry.supersedesId) throw failed("ARCHIVE_CONFLICT", "Archive entry already has a different supersession relationship");
+      return verifiedArchiveEntry(saved);
     },
     async getArchiveEntry(access, id) {
-      const row = await first("SELECT entry_json,sequence FROM project_evidence_archive WHERE project_id=? AND environment=? AND entry_id=?", access.projectId, access.environment, id);
-      return row && { ...persistedArchiveEntry(row.entry_json), sequence: Number(row.sequence) };
+      const row = await first(`SELECT ${archiveColumns} FROM project_evidence_archive WHERE project_id=? AND environment=? AND entry_id=?`, access.projectId, access.environment, id);
+      return row && verifiedArchiveEntry(row);
     },
     async listArchiveEntries(query) {
       const snapshot = query.cursor?.snapshot ?? Number((await first("SELECT COALESCE(MAX(sequence),0) AS snapshot FROM project_evidence_archive WHERE project_id=? AND environment=?", query.projectId, query.environment))?.snapshot ?? 0);
-      const columns = query.includeArtifacts ? "entry_json,sequence" : "sequence,project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id";
+      const columns = query.includeArtifacts ? archiveColumns : "sequence,project_id,environment,entry_id,artifact_hash,kind,created_at,tx_hash,authorization_id,status,supersedes_id";
       const predicates = ["project_id=?", "environment=?", "sequence<=?"];
       const parameters = [query.projectId, query.environment, snapshot];
       for (const [predicate, value] of [
@@ -283,7 +398,12 @@ function createD1Store(database) {
         parameters.push(value);
       }
       const rows = await all(`SELECT ${columns} FROM project_evidence_archive WHERE ${predicates.join(" AND ")} ORDER BY sequence DESC LIMIT ?`, ...parameters, query.limit + 1);
-      return archivePage(rows.map((row) => query.includeArtifacts ? { ...persistedArchiveEntry(row.entry_json), sequence: Number(row.sequence) } : { id: row.entry_id, projectId: row.project_id, environment: row.environment, kind: row.kind, createdAt: Number(row.created_at), artifactHash: row.artifact_hash, supersedesId: row.supersedes_id, txHash: row.tx_hash, authorizationId: row.authorization_id, status: row.status, artifact: void 0, verification: "NOT_VERIFIED_BY_ARCHIVE", sequence: Number(row.sequence) }), query, snapshot);
+      const entries = await Promise.all(rows.map(async (row, index) => {
+        if (!query.includeArtifacts || index >= query.limit) return archiveMetadata(row);
+        if (row.entry_json == null || row.storage == null) throw failed("ARCHIVE_INTEGRITY_FAILURE", "The archive index row is incomplete");
+        return verifiedArchiveEntry(row);
+      }));
+      return archivePage(entries, query, snapshot);
     },
     async saveIntent(intent) {
       const saved = await first(`INSERT INTO intents (intent_id,intent_hash,schema_version,chain_id,action,sender,recipient,asset,amount,nonce,valid_until,constraints_json,intent_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(intent_id) DO UPDATE SET intent_id=excluded.intent_id WHERE intents.intent_hash=excluded.intent_hash RETURNING intent_json`, intent.intentId, intent.intentHash, intent.schema, Number(intent.chainId), intent.action, intent.sender, intent.recipient, intent.asset, intent.amount, intent.nonce, Number(intent.validUntil), json(intent.constraints), json(intent));
