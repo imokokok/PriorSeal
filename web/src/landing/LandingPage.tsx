@@ -144,7 +144,7 @@ export function LandingPage() {
             <p>One outcome across separate trust roots: an inspected decision, explicit authority, and reviewable execution.</p>
           </header>
           <div className="flagship-solution__path" data-reveal aria-label="Insight and PriorSeal flagship workflow">
-            <article><span>01 / DECISION</span><h3>Insight</h3><p>Signed risk or simulation assessment for the proposed action.</p><a href="https://www.oracleinsight.xyz/" target="_blank" rel="noreferrer">Explore Insight <span>↗</span></a></article>
+            <article><span>01 / DECISION</span><h3>Insight</h3><p>Signed risk or simulation assessment for the proposed action.</p><a href="/i" target="_blank" rel="noreferrer">Explore Insight <span>↗</span></a></article>
             <article><span>02 / CONTROL</span><h3>Your boundary</h3><p>Your wallet, policy service or Agent runtime decides what must be true before submission.</p><Link to="/integrations/mcp">Integration patterns <span>↗</span></Link></article>
             <article><span>03 / ACCOUNTABILITY</span><h3>PriorSeal</h3><p>Bind bounded authorization to observed execution with portable evidence.</p><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/verify">Open local verifier <span>↗</span></Link></article>
           </div>
