@@ -11,7 +11,7 @@ test('default doctor never sends credentials or requests a paid assessment', asy
     const url = requestUrl(input);
     calls.push({ url, options });
     if (url.includes('capabilities')) return Response.json({ audience: 'fixture' });
-    const status = url.includes('ready') ? 'ready' : 'ok';
+    const status = url.includes('oracleinsight') && url.includes('ready') ? 'live' : url.includes('ready') ? 'ready' : 'ok';
     return Response.json(url.includes('oracleinsight') ? { data: { status } } : { status });
   } });
   assert.equal(result.ok, true);
@@ -30,7 +30,7 @@ test('independent public health checks run concurrently while results retain the
     await new Promise(resolve => setTimeout(resolve, url.includes('capabilities') ? 5 : 20));
     active--;
     if (url.includes('capabilities')) return Response.json({ audience: 'fixture' });
-    const status = url.includes('ready') ? 'ready' : 'ok';
+    const status = url.includes('oracleinsight') && url.includes('ready') ? 'live' : url.includes('ready') ? 'ready' : 'ok';
     return Response.json(url.includes('oracleinsight') ? { data: { status } } : { status });
   } });
   assert.equal(maxActive, 5);
@@ -44,12 +44,23 @@ test('explicit insufficient-freshness probe reports a failed readiness check, no
   const result = await integrationDoctor({ offer: 'insight', probe: true, apiKey: 'private-fixture', fetcher: async input => {
     const url = requestUrl(input);
     if (url.includes('coverage')) return Response.json({ data: { diagnostic: { freshnessStatus: 'INSUFFICIENT_FRESH_EVIDENCE', providers: [] } } });
-    return Response.json({ data: { status: url.includes('ready') ? 'ready' : 'ok' } });
+    return Response.json({ data: { status: url.includes('ready') ? 'live' : 'ok' } });
   } });
   assert.equal(result.ok, false);
   assert.equal(result.checks[2]?.diagnostic?.freshnessStatus, 'INSUFFICIENT_FRESH_EVIDENCE');
   await assert.rejects(integrationDoctor({ samples: 99 }), /samples/);
   await assert.rejects(integrationDoctor({ offer: 'insight', insightUrl: 'http://remote.invalid' }), /HTTPS/);
+});
+
+test('Insight public readiness is a liveness contract, not the authenticated deep readiness probe', async () => {
+  const result = await integrationDoctor({ offer: 'insight', fetcher: async input => {
+    const url = requestUrl(input);
+    return Response.json({ data: { status: url.includes('ready') ? 'live' : 'ok' } });
+  } });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.checks[1]?.path, '/api/v1/health/ready');
+  assert.equal(result.checks[1]?.ok, true);
 });
 
 test('malformed remote JSON cannot pass health or paid coverage checks', async () => {

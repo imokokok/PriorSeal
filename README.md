@@ -1,6 +1,6 @@
 # PriorSeal
 
-**Let Agents prepare EVM, Solana, and bounded HyperCore spot actions while users retain explicit, independently verifiable control.**
+**Independently prove that an Agent-involved action was authorized before execution and stayed within its approved boundary.**
 
 [![CI](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml/badge.svg)](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
@@ -8,20 +8,20 @@
 
 [Live console](https://priorseal.xyz/app) · [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [TypeScript SDK](https://www.npmjs.com/package/priorseal-sdk) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [API specification](https://priorseal.xyz/openapi/v1.json) · [Pilot collaboration](COLLABORATING.md)
 
-An Agent can propose a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, whether the observed execution matched it, or whether the user still had a final say**. PriorSeal connects a principal-signed, time-bounded authorization to an identified EVM or Solana execution in a portable receipt that another party can verify independently. Its core is the relationship between **what an Agent proposed, what was authorized before action, and what was observed afterward**.
+An Agent can propose a transaction, but a transaction hash alone cannot show **who authorized the action, what they approved, whether the observed execution matched it, or whether the user still had a final say**. PriorSeal's primary product, **Verified Action**, connects a principal-signed, time-bounded authorization to an identified EVM or Solana execution in a portable receipt that another party can verify independently. It preserves the relationship between **what an Agent proposed, what was authorized before action, and what was observed afterward**.
 
 ```text
 Agent proposal → Bounded intent → Principal signature → Acceptance + time evidence
                                 → EVM / Solana observation → Signed receipt → Independent review
 ```
 
-PriorSeal is for teams building EVM and Solana Agents, treasury automation, wallets, trading applications, and transaction infrastructure. It sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys, move funds, or turn a single authorization into open-ended automation.
+PriorSeal is for an individual using an EVM or Solana wallet with an Agent, and for the wallet or Agent builder serving that person. A Verified Action is one bounded path through authorization, pre-execution proof, execution matching, and portable review. PriorSeal sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys, move funds, or turn a single authorization into open-ended automation.
 
 ## Choose your integration path
 
 | Need | Start here |
 | --- | --- |
-| Let an Agent prepare one user-controlled action with portable evidence | [Agent usage and payment model](docs/product/agent-usage-model.md) · [PriorSeal offline example](#run-the-offline-example) |
+| Prove one Agent-involved action was authorized before execution and matched its approved boundary | [Verified Action](docs/product/verified-action.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [PriorSeal offline example](#run-the-offline-example) |
 | Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 | Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
 | Start a reproducible exact-call integration and hand a reviewer a portable v3 receipt bundle | [Exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) |
@@ -32,11 +32,11 @@ PriorSeal is for teams building EVM and Solana Agents, treasury automation, wall
 | Embed one bounded action in a wallet or Agent runtime | [Guarded Action integration](docs/integrations/guarded-action.md) · [Base Sepolia rehearsal](docs/runbooks/base-sepolia-guarded-action-rehearsal.md) |
 | Bind an Insight Base or Monad lending risk decision to a user-authorized Aave/Morpho call | [Base binding](docs/insight-base-lending-guard.md) · [Monad binding](docs/insight-monad-lending-guard.md) |
 | Close Insight's reviewed Base direct DEX swap path with ordered approval and swap evidence | [Base Agent Swap Guard binding](docs/insight-base-agent-swap-guard.md) |
-| Let an AI agent use PriorSeal's reviewed authorization and evidence workflow | [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [controlled-execution example](docs/integrations/priorseal-mcp-controlled-execution-example.md) · [compatibility proof](docs/runbooks/mcp-compatibility-proof.md) · remote endpoint `https://priorseal.xyz/mcp` |
+| Let an AI Agent complete one reviewed Verified Action | [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [controlled-execution example](docs/integrations/priorseal-mcp-controlled-execution-example.md) · [compatibility proof](docs/runbooks/mcp-compatibility-proof.md) · remote endpoint `https://priorseal.xyz/mcp` |
 | Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
 | Keep assessment, authorization, and execution evidence together | [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) and [composite review manifests](sdk/README.md#composite-review-manifests) |
 
-Insight and PriorSeal work independently. Insight provides **oracle transparency and risk intelligence**; PriorSeal provides **authorization and execution evidence**. The combined path links assessment, authorization, execution, and review while keeping each product’s trust checks separate. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
+Insight and PriorSeal work independently. Insight provides **oracle transparency and risk intelligence**; PriorSeal's Verified Action provides **authorization and execution accountability**. The combined path links assessment, authorization, execution, and review while keeping each product’s trust checks separate. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
 
 PriorSeal is designed as an Agent-facing, user-controlled, per-use
 authorization and evidence layer: an Agent can call the service and, where
@@ -55,6 +55,17 @@ Polygon PoS, Monad, HyperEVM, X Layer, Sei, Base, Arbitrum One, Avalanche
 C-Chain, and Solana mainnet-beta. A rail is advertised only when its payee is configured and
 the selected facilitator currently supports it; execution observation still
 requires that chain's independently configured RPC endpoint.
+
+## Verified Action: four capability layers
+
+PriorSeal organizes its implementation around four layers. They can be called independently where their input exists, but they are not four parallel market claims: together they produce a Verified Action.
+
+1. **Seal — authorization.** A principal defines and signs one exact, time-bounded action.
+2. **Witness — pre-execution proof.** The deployment records that authorization before execution through its configured proof mode.
+3. **Match — execution verification.** PriorSeal observes the submitted action and checks supported fields against the authorization.
+4. **Review — portable evidence.** A customer or reviewer verifies the signed receipt and bundle independently.
+
+See [Verified Action](docs/product/verified-action.md) for the buyer, delivery, and boundaries. The [standard release profile](docs/product/verified-action.md#standard-release-profile-and-advanced-profiles) is the default product promise; witness quorum, EVM anchoring, ERC-4337/7702/Safe, and Hyperliquid are advanced profiles that require explicit deployment scope. Organization workspaces and enterprise retention are not on the current product roadmap. An execution observation without an authorization remains an execution fact; it is not a claim that an action complied with prior approval.
 
 ## What the evidence covers
 
@@ -156,13 +167,13 @@ These examples have different evidence scopes. Read each example's README before
 | [Open Evidence Lab exact-call matrix](examples/open-evidence-lab-exact-call-matrix-v1/README.md) | Synthetic, offline interoperability case for validating a signed request against its observed execution envelope. |
 | [Consumer disposition example](examples/priorseal-consumer-disposition-v1/README.md) | Applies a small downstream policy to the matrix report: accept an exact completed match, reject mismatches, and hold incomplete evidence for review. |
 
-Other partner fixtures are under [`examples/`](examples/). Insight can be used independently for assessment evidence; PriorSeal can be used independently for authorization and execution evidence; a combined workflow can bind the two without merging their trust roots.
+Other partner fixtures are under [`examples/`](examples/). Insight can be used independently for assessment evidence; PriorSeal can be used independently for Verified Action evidence; a combined workflow can bind the two without merging their trust roots.
 
 ## Documentation
 
 | Topic | Start here |
 | --- | --- |
-| Product scope, commercial direction and evidence limits | [Positioning](docs/product/positioning.md) · [First-release scope](docs/product/first-release-scope.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
+| Product scope, commercial direction and evidence limits | [Verified Action](docs/product/verified-action.md) · [Agent-first roadmap](docs/product/agent-first-roadmap.md) · [Positioning](docs/product/positioning.md) · [First-release scope](docs/product/first-release-scope.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [Evidence relationship levels](docs/architecture/evidence-relationship-levels.md) |
 | Authorization and receipt semantics | [Signed authorization](docs/architecture/signed-authorization.md) · [Temporal evidence and finality](docs/architecture/temporal-finality.md) · [Lifecycle](docs/architecture/lifecycle.md) · [API compatibility](docs/api/compatibility.md) |
 | Security and operations | [Threat model](docs/security/threat-model.md) · [Supply-chain controls](docs/security/supply-chain.md) · [Operations](docs/runbooks/operations.md) · [Agent/retail public operations](docs/runbooks/agent-retail-public-operations.md) · [Cloudflare deployment](docs/runbooks/cloudflare.md) |
 | SDK and integration recovery | [SDK guide](sdk/README.md) · [Reliability runbook](docs/runbooks/reliability.md) |

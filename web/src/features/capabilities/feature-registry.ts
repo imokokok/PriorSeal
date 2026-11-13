@@ -16,8 +16,16 @@ export type CapabilityFeature = {
   to: string
   action: string
   executionProfile?: string
+  layer: 'Seal' | 'Match' | 'Review'
   isPublished?: (capabilities: Capabilities) => boolean
 }
+
+export const verifiedActionLayers = [
+  { id: 'seal', label: 'Seal', title: 'Bounded authorization', copy: 'Define the exact action boundary and collect one principal-controlled authorization.', boundary: 'It does not submit an action.' },
+  { id: 'witness', label: 'Witness', title: 'Pre-execution proof', copy: 'Record that the authorization existed before execution through the deployment’s configured proof mode.', boundary: 'Proof mode and assurance remain deployment-specific.' },
+  { id: 'match', label: 'Match', title: 'Execution verification', copy: 'Compare the observed execution with supported fields in the signed authorization.', boundary: 'Observation alone is not authorization compliance.' },
+  { id: 'review', label: 'Review', title: 'Portable evidence', copy: 'Export and locally verify the signed receipt with independently established trust.', boundary: 'A delivered key is discovery data, not its own trust root.' },
+] as const
 
 const hasProfile = (profile: string) => (capabilities: Capabilities) => capabilities.executionProfiles.includes(profile)
 
@@ -32,6 +40,7 @@ export const capabilityFeatures: CapabilityFeature[] = [
     doesNotEstablish: 'That a transaction was submitted, finalized, economically safe or successful.',
     to: '/app/actions/standard',
     action: 'Create authorization',
+    layer: 'Seal',
     executionProfile: executionProfile.standardAuthorization,
     isPublished: hasProfile(executionProfile.standardAuthorization),
   },
@@ -45,6 +54,7 @@ export const capabilityFeatures: CapabilityFeature[] = [
     doesNotEstablish: 'Token settlement, output amount, price, slippage or contract safety.',
     to: '/app/actions/exact-call',
     action: 'Import exact call',
+    layer: 'Seal',
     executionProfile: executionProfile.exactEvmCall,
     isPublished: hasProfile(executionProfile.exactEvmCall),
   },
@@ -58,6 +68,7 @@ export const capabilityFeatures: CapabilityFeature[] = [
     doesNotEstablish: 'A right to transact, economic safety or complete application-level business correctness.',
     to: '/app/observe',
     action: 'Observe execution',
+    layer: 'Match',
     isPublished: (capabilities) => capabilities.workflowReady && capabilities.chains.length > 0 && hasPublishedAuthorization(capabilities),
   },
   {
@@ -70,6 +81,7 @@ export const capabilityFeatures: CapabilityFeature[] = [
     doesNotEstablish: 'That another system consumed the receipt or that external business claims are true.',
     to: '/app/verify',
     action: 'Open verifier',
+    layer: 'Review',
   },
 ]
 

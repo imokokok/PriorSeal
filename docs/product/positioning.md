@@ -2,22 +2,17 @@
 
 ## Core
 
-**Let Agents prepare onchain actions while people retain explicit control over observed EVM and Solana execution.**
+**Prove that an Agent-involved onchain action was explicitly authorized before execution and stayed within its approved boundary.**
 
-PriorSeal preserves the relationship between what a principal authorized before action and what was observed afterward. A portable receipt lets another party check signed permission, supported ordering evidence, execution state, and compliance with the authorization's bound fields.
+PriorSeal's primary product is **Verified Action**. It preserves the relationship between what a principal authorized before action and what was observed afterward. A portable receipt lets another party check signed permission, supported ordering evidence, execution state, and compliance with the authorization's bound fields.
 
-Its product path is **Agent proposal → bounded intent → principal authorization → acceptance and time evidence → observed execution → signed receipt → independent review**. Agent builders, wallets, trading applications, treasury teams and their users can use PriorSeal independently of Insight.
+Its product path is **Agent proposal → bounded intent → principal authorization → acceptance and time evidence → observed execution → signed receipt → independent review**. The primary user is an individual wallet owner using an Agent; wallets and Agent applications integrate PriorSeal on that person's behalf.
 
-中文：**让 Agent 提议链上行动，而由用户保留明确控制权；将事前的授权与事后的实际执行连接起来，形成可独立验证的证据。**
+中文：**证明 Agent 参与的链上行动在执行前获得了明确授权，并且实际执行没有超出批准边界。**
 
 ## Agent-native commercial framing
 
-PriorSeal is the **per-use authorization and evidence layer for Agents and the
-people they serve**. An Agent can prepare a bounded action, call PriorSeal to
-obtain authorization and observation evidence, and retrieve a portable receipt
-for its user, operator or reviewer. The principal—not PriorSeal and not the
-Agent's service-payment wallet—retains control of the onchain action through
-an explicit signed authorization.
+PriorSeal delivers **Verified Action**, the per-use authorization-and-execution proof for Agents and the people they serve. An Agent can prepare a bounded action, call PriorSeal to obtain authorization and observation evidence, and retrieve a portable receipt for its user, operator or reviewer. The principal—not PriorSeal and not the Agent's service-payment wallet—retains control of the onchain action through an explicit signed authorization.
 
 This deliberately separates three roles that can be held by different
 accounts:
@@ -35,7 +30,7 @@ payment form replaces principal authorization. A payment rail is separate from
 the subject-execution chain and never proves that the subject action was
 authorized.
 
-中文：**PriorSeal 是 Agent 按调用使用的授权与证据层；Agent 可以自动为服务
+中文：**Verified Action 是 Agent 按调用使用的行动证明：Agent 可以自动为服务
 付费，但只能在授权人可独立证明的边界内行动。**
 
 独立商业化的当前范围、已验证能力与生产上线门槛见
@@ -43,19 +38,36 @@ authorized.
 
 ## Public copy
 
-- Homepage headline: **Agent-ready. User-controlled.**
-- Short description: **Authorization and execution evidence for EVM and Solana Agent actions—what an Agent disclosed and committed, what a principal authorized, what was observed, and what an independent reviewer can verify.**
-- SDK description: **A TypeScript client for Agents and wallets to prepare explicit authorization, observe EVM and Solana execution, and produce independently verifiable receipts.**
+- Homepage headline: **Agent-ready. User-controlled. Independently provable.**
+- Short description: **Verified Action proves what a principal authorized before an EVM or Solana Agent action, what was observed afterward, and whether the supported fields matched.**
+- SDK description: **A TypeScript client for Agents and wallets to prepare explicit authorization, observe EVM and Solana execution, match supported fields, and produce independently verifiable receipts.**
+
+## Product architecture, not four SKUs
+
+`Seal`, `Witness`, `Match`, and `Review` are the four layers behind a Verified Action. They provide a stable way to organize product documentation and future capabilities, but they are not four parallel launches:
+
+| Layer | Customer-facing role | Commercial role now |
+| --- | --- | --- |
+| Seal | Bounded principal authorization | Required input to a Verified Action |
+| Witness | Proof that approval preceded execution | Assurance selection for the agreed path |
+| Match | Observed execution against approved boundaries | Primary value customers evaluate |
+| Review | Portable verification and user-controlled evidence handling | Included delivery; local evidence is the default |
+
+The commercial offer remains one **Verified Action**. A separate execution observation can be useful, but without a linked authorization it must not be marketed as authorization compliance. The default commercial promise is the [standard Verified Action profile](verified-action.md#standard-release-profile-and-advanced-profiles); advanced profiles require explicit deployment and customer scope.
+
+## Current product direction: personal Agent control
+
+PriorSeal is currently optimizing for **one person, one wallet, one Agent-proposed action, and one portable proof trail**. The product work priority is understandable proposal review, explicit wallet confirmation, one-time execution recovery, and evidence the person can keep or independently verify. It is not organization workflow software: do not add SSO, RBAC, hosted team archives, approval chains, or enterprise retention as roadmap work without a new product decision.
 
 ## Three independently selectable offers
 
 | Offer | Buyer need | Evidence scope |
 | --- | --- | --- |
 | Insight | Oracle transparency, monitoring, and risk assessment | Oracle observations and assessments; supported execution-price/fill evidence |
-| PriorSeal | Explicit authorization and execution accountability | Principal-signed permission, ordering evidence, observed EVM or Solana execution, and supported authorization compliance |
+| PriorSeal | Verified Action: explicit authorization and execution accountability | Principal-signed permission, ordering evidence, observed EVM or Solana execution, and supported authorization compliance |
 | Insight + PriorSeal | Connect Agent input, assessment, authorization, execution, and review | Linked original artifacts with separate keys, trust checks, and verification scopes |
 
-Combined description: **Oracle risk intelligence, explicit authorization, and verifiable execution evidence for onchain agents.**
+Combined description: **Decision-to-Action Assurance: oracle risk intelligence, explicit authorization, and verifiable execution evidence for onchain Agents.**
 
 中文：**提供预言机风险评估、明确授权与可独立复核的执行证据，连接链上行动的依据、权限和结果。**
 

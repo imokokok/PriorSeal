@@ -24,6 +24,20 @@ implicit claim that every other column is enabled.
 Base Sepolia (`eip155:84532`) remains an observation and integration-test chain;
 it is deliberately not a production payment rail.
 
+## Standard versus advanced release scope
+
+The rows above describe chain capability, not a blanket product commitment. The
+standard Verified Action release uses a configured generic EVM observation or a
+complete Solana mainnet-beta compiled-message observation, together with the
+deployment's standard RFC 3161 pre-execution proof and a portable local-review
+bundle. The selected deployment must publish all of those inputs in
+`GET /v1/capabilities` before a customer can rely on the path.
+
+Witness quorum, EVM anchoring, ERC-4337, Safe 4337, EIP-7702, and Hyperliquid
+are advanced profiles. Their additional pins, provider requirements, or venue
+dependencies must be verified separately for every deployment and should be
+named in the integration scope. See the [Verified Action release profile](../product/verified-action.md#standard-release-profile-and-advanced-profiles).
+
 ## ERC-8004 agent identity
 
 PriorSeal is registered on the BNB Smart Chain Identity Registry

@@ -1,0 +1,10 @@
+.treasury-pilot-status, .treasury-pilot-path { display: flex; gap: 30px; align-items: start; justify-content: space-between; }
+.treasury-pilot-status > div, .treasury-pilot-path > div { max-width: 720px; }
+.treasury-pilot-status span, .treasury-pilot-path span, .treasury-pilot-gates > article > span { display: block; margin-bottom: 12px; color: var(--wine); font: 700 11px/1.2 var(--mono); letter-spacing: .12em; }
+.treasury-pilot-status h2, .treasury-pilot-path h2, .treasury-pilot-gates h2 { margin: 0; }
+.treasury-pilot-status p, .treasury-pilot-path p, .treasury-pilot-gates p { margin: 12px 0 0; color: var(--muted); line-height: 1.58; }
+.treasury-pilot-gates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.treasury-pilot-gates > article { min-height: 190px; }
+.treasury-pilot-gates .status { margin-top: 14px; }
+.treasury-pilot-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 260px; }
+@media (max-width: 760px) { .treasury-pilot-status, .treasury-pilot-path { flex-direction: column; } .treasury-pilot-gates { grid-template-columns: 1fr; } .treasury-pilot-actions { min-width: 0; width: 100%; } .treasury-pilot-actions .button { width: 100%; } }

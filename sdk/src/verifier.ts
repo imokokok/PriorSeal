@@ -6,10 +6,12 @@ export async function verifyReceiptSignature(receipt: Receipt, publicKey: string
   try { return await verifyEd25519(receipt, publicKey) } catch { return false }
 }
 export { buildReviewManifest, verifyReviewManifestLocally, verifyReviewManifestWithChain, createInsightSwapRiskChainReader, parseTrustProfile } from './review-manifest.js'
+export { createActionEvidencePassport, parseActionEvidencePassport, summarizeActionEvidencePassport, verifyActionEvidencePassport } from './action-evidence-passport.js'
 export { verifyInsightDecisionInputAssessment, verifyInsightDecisionInputPair, isInsightDecisionInputPolicy } from './insight-decision-input.js'
 export type { InsightDecisionInputAssessment, InsightDecisionInputPolicy, InsightSwapRiskPolicy, DecisionInputVerification } from './insight-decision-input.js'
 export type { InsightProtocolTrust, InsightProtocolResult } from './insight-protocol-trust.js'
 export type { ReviewManifest, ReviewAttachment, ReviewAttachmentInput, ReviewArtifactResult, ReviewResult, ReviewManifestChainResult, InsightSwapRiskChainReader, InsightSwapRiskChainReplay, TrustProfile } from './review-manifest.js'
+export type { ActionEvidencePassport, ActionEvidencePassportSummary, ActionEvidencePassportVerification, ServicePaymentAttachment } from './action-evidence-passport.js'
 import {
   hashJson as hashCanonicalJson,
   verifyReceiptOffline as verifyWithTrustedKey,

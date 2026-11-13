@@ -9,7 +9,7 @@ import { openStoragePreferences } from './lib/storage'
 import { summarizeWalletGuardedAction, type WalletGuardedAction } from 'priorseal-sdk'
 import type { Receipt } from './types'
 
-export function Logo() { return <Link className="logo" to="/" aria-label="PriorSeal public home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Authority Evidence</small></span></Link> }
+export function Logo() { return <Link className="logo" to="/" aria-label="PriorSeal public home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Verified Action</small></span></Link> }
 export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) { const [copied, setCopied] = useState(false); return <button type="button" className="copy-button" aria-live="polite" onClick={async () => { try { await navigator.clipboard?.writeText(value); setCopied(true); window.setTimeout(() => setCopied(false), 1600) } catch { setCopied(false) } }}>{copied ? 'Copied' : label}</button> }
 export function CodeValue({ value, title }: { value?: string | null; title?: string }) { return <span className="code-value" title={title ?? value ?? ''}>{short(value)}{value && <CopyButton value={value} />}</span> }
 export function Status({ value, small = false }: { value?: string | null; small?: boolean }) {

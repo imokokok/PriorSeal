@@ -5,7 +5,7 @@ const contact = 'contact@priorseal.xyz'
 
 export function SupportPage() {
   return <main id="main-content" className="public-document">
-    <header className="public-document__nav"><Link className="logo" to="/" aria-label="PriorSeal home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Authority Evidence</small></span></Link><Link to="/app">Open console →</Link></header>
+    <header className="public-document__nav"><Link className="logo" to="/" aria-label="PriorSeal home"><span className="logo-symbol"><PriorSealMark /></span><span className="logo-type">PriorSeal<small>Verified Action</small></span></Link><Link to="/app">Open console →</Link></header>
     <article>
       <p className="eyebrow">SUPPORT &amp; SECURITY / 001</p>
       <h1 data-route-heading tabIndex={-1}>Contact PriorSeal.</h1>

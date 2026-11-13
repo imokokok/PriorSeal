@@ -1,126 +1,1173 @@
-import { FormEvent, useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import type { LocalVerificationResult, ReviewResult } from 'priorseal-sdk/verifier'
-import { AppShell, CodeValue, Field, Notice, PageHeader, Status } from '../components'
-import { EvidenceRelationshipView } from '../EvidenceRelationshipView'
-import { api } from '../lib/api'
-import { downloadJson } from '../lib/download'
-import { dateTime, verificationText } from '../lib/format'
-import { session } from '../lib/storage'
-import { getTrustProfiles, isConfirmedTrustProfile, keyFingerprint, parseTrustProfile, saveTrustProfile, type TrustProfile } from '../lib/trust-profiles'
-import type { KeyEntry, Receipt, VerificationBundle } from '../types'
-import '../console-verdict.css'
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import type {
+  LocalVerificationResult,
+  ReviewManifest,
+  ReviewResult,
+} from "priorseal-sdk/verifier";
+import {
+  AppShell,
+  CodeValue,
+  Field,
+  Notice,
+  PageHeader,
+  Status,
+} from "../components";
+import { EvidenceRelationshipView } from "../EvidenceRelationshipView";
+import { api } from "../lib/api";
+import { downloadJson } from "../lib/download";
+import { dateTime, verificationText } from "../lib/format";
+import { session } from "../lib/storage";
+import {
+  getTrustProfiles,
+  isConfirmedTrustProfile,
+  keyFingerprint,
+  parseTrustProfile,
+  saveTrustProfile,
+  type TrustProfile,
+} from "../lib/trust-profiles";
+import type { KeyEntry, Receipt, VerificationBundle } from "../types";
+import "../console-verdict.css";
+import "../verify.css";
 
 export function VerifyPage() {
-  const navigate = useNavigate()
-  const received = (useLocation().state as { receipt?: Receipt } | null)?.receipt
-  const [lookup, setLookup] = useState('')
-  const [originalFile, setOriginalFile] = useState<File | null>(null)
-  const [raw, setRaw] = useState(received ? JSON.stringify(received, null, 2) : '')
-  const [publicKey, setPublicKey] = useState('')
-  const [issuer, setIssuer] = useState('')
-  const [audience, setAudience] = useState('priorseal')
-  const [registryKeys, setRegistryKeys] = useState<KeyEntry[]>([])
-  const [keyTrusted, setKeyTrusted] = useState(false)
-  const [profiles, setProfiles] = useState(getTrustProfiles)
-  const [profile, setProfile] = useState<TrustProfile | null>(null)
-  const [profileRaw, setProfileRaw] = useState('')
-  const [fingerprints, setFingerprints] = useState<string[]>([])
-  const [insightKeys, setInsightKeys] = useState('')
-  const [insightProtocol, setInsightProtocol] = useState('')
-  const [insightTrusted, setInsightTrusted] = useState(false)
-  const [verifiedWithTrust, setVerifiedWithTrust] = useState(false)
-  const [result, setResult] = useState<LocalVerificationResult | null>(null)
-  const [review, setReview] = useState<ReviewResult | null>(null)
-  const [reviewedReceipt, setReviewedReceipt] = useState<Receipt | null>(null)
-  const [message, setMessage] = useState('')
-  const [notice, setNotice] = useState('')
-  const [busy, setBusy] = useState(false)
-  const verificationRun = useRef(0)
-  const resultRef = useRef<HTMLElement>(null)
-  const messageRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate();
+  const received = (useLocation().state as { receipt?: Receipt } | null)
+    ?.receipt;
+  const [lookup, setLookup] = useState("");
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
+  const [pendingEvidenceExport, setPendingEvidenceExport] = useState<{
+    filename: string;
+    url: string;
+  } | null>(null);
+  const [raw, setRaw] = useState(
+    received ? JSON.stringify(received, null, 2) : "",
+  );
+  const [publicKey, setPublicKey] = useState("");
+  const [issuer, setIssuer] = useState("");
+  const [audience, setAudience] = useState("priorseal");
+  const [registryKeys, setRegistryKeys] = useState<KeyEntry[]>([]);
+  const [keyTrusted, setKeyTrusted] = useState(false);
+  const [profiles, setProfiles] = useState(getTrustProfiles);
+  const [profile, setProfile] = useState<TrustProfile | null>(null);
+  const [profileRaw, setProfileRaw] = useState("");
+  const [fingerprints, setFingerprints] = useState<string[]>([]);
+  const [insightKeys, setInsightKeys] = useState("");
+  const [insightProtocol, setInsightProtocol] = useState("");
+  const [insightTrusted, setInsightTrusted] = useState(false);
+  const [verifiedWithTrust, setVerifiedWithTrust] = useState(false);
+  const [result, setResult] = useState<LocalVerificationResult | null>(null);
+  const [review, setReview] = useState<ReviewResult | null>(null);
+  const [reviewedReceipt, setReviewedReceipt] = useState<Receipt | null>(null);
+  const [reviewedManifest, setReviewedManifest] =
+    useState<ReviewManifest | null>(null);
+  const [passportTitle, setPassportTitle] = useState("");
+  const [passportPaymentRaw, setPassportPaymentRaw] = useState("");
+  const [passportServicePayment, setPassportServicePayment] = useState<
+    "ABSENT" | "UNVERIFIED_SERVICE_PAYMENT" | null
+  >(null);
+  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const verificationRun = useRef(0);
+  const resultRef = useRef<HTMLElement>(null);
+  const messageRef = useRef<HTMLDivElement>(null);
+  const evidenceExportLink = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
-    api.keys().then((registry) => {
-      setRegistryKeys(registry.keys)
-      const key = received && registry.keys.find((entry) => entry.keyId === received.keyId && entry.issuer === received.issuer)
-      if (key) { setPublicKey(key.publicKey); setIssuer(key.issuer) }
-    }).catch(() => { /* Local verification remains available without registry discovery. */ })
-  }, [received])
-  useEffect(() => { const cleared = () => { setProfiles([]); setProfile(null); setKeyTrusted(false); setPublicKey(''); setIssuer(''); setInsightKeys(''); setInsightProtocol(''); setInsightTrusted(false) }; window.addEventListener('priorseal:trust-clear', cleared); return () => window.removeEventListener('priorseal:trust-clear', cleared) }, [])
-  useEffect(() => { verificationRun.current += 1; setResult(null); setReview(null); setReviewedReceipt(null); setVerifiedWithTrust(false) }, [raw, publicKey, issuer, audience, keyTrusted, profile, insightKeys, insightProtocol, insightTrusted])
-  useEffect(() => { let active = true; const keys = profile?.keys.map((key) => key.publicKey) ?? (publicKey ? [publicKey] : []); Promise.all(keys.map(keyFingerprint)).then((values) => { if (active) setFingerprints(values) }).catch(() => { if (active) setFingerprints([]) }); return () => { active = false } }, [profile, publicKey])
-  useEffect(() => { if (!result) return; const frame = window.requestAnimationFrame(() => { resultRef.current?.scrollIntoView({ block: 'start' }); resultRef.current?.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true }) }); return () => window.cancelAnimationFrame(frame) }, [result])
-  useEffect(() => { if (!message) return; const frame = window.requestAnimationFrame(() => { messageRef.current?.scrollIntoView({ block: 'start' }); messageRef.current?.focus({ preventScroll: true }) }); return () => window.cancelAnimationFrame(frame) }, [message])
+    if (!pendingEvidenceExport) return;
+    evidenceExportLink.current?.click();
+    setPendingEvidenceExport(null);
+  }, [pendingEvidenceExport]);
+
+  useEffect(() => {
+    api
+      .keys()
+      .then((registry) => {
+        setRegistryKeys(registry.keys);
+        const key =
+          received &&
+          registry.keys.find(
+            (entry) =>
+              entry.keyId === received.keyId &&
+              entry.issuer === received.issuer,
+          );
+        if (key) {
+          setPublicKey(key.publicKey);
+          setIssuer(key.issuer);
+        }
+      })
+      .catch(() => {
+        /* Local verification remains available without registry discovery. */
+      });
+  }, [received]);
+  useEffect(() => {
+    const cleared = () => {
+      setProfiles([]);
+      setProfile(null);
+      setKeyTrusted(false);
+      setPublicKey("");
+      setIssuer("");
+      setInsightKeys("");
+      setInsightProtocol("");
+      setInsightTrusted(false);
+    };
+    window.addEventListener("priorseal:trust-clear", cleared);
+    return () => window.removeEventListener("priorseal:trust-clear", cleared);
+  }, []);
+  useEffect(() => {
+    verificationRun.current += 1;
+    setResult(null);
+    setReview(null);
+    setReviewedReceipt(null);
+    setReviewedManifest(null);
+    setPassportServicePayment(null);
+    setPassportPaymentRaw("");
+    setVerifiedWithTrust(false);
+  }, [
+    raw,
+    publicKey,
+    issuer,
+    audience,
+    keyTrusted,
+    profile,
+    insightKeys,
+    insightProtocol,
+    insightTrusted,
+  ]);
+  useEffect(() => {
+    let active = true;
+    const keys =
+      profile?.keys.map((key) => key.publicKey) ??
+      (publicKey ? [publicKey] : []);
+    Promise.all(keys.map(keyFingerprint))
+      .then((values) => {
+        if (active) setFingerprints(values);
+      })
+      .catch(() => {
+        if (active) setFingerprints([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [profile, publicKey]);
+  useEffect(() => {
+    if (!result) return;
+    const frame = window.requestAnimationFrame(() => {
+      resultRef.current?.scrollIntoView({ block: "start" });
+      resultRef.current
+        ?.querySelector<HTMLElement>("h2")
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [result]);
+  useEffect(() => {
+    if (!message) return;
+    const frame = window.requestAnimationFrame(() => {
+      messageRef.current?.scrollIntoView({ block: "start" });
+      messageRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [message]);
 
   function loadProfile(value: unknown, alreadyConfirmed = false) {
-    const parsed = parseTrustProfile(value)
-    setInsightKeys(parsed.insightKeyRegistry ? JSON.stringify(parsed.insightKeyRegistry, null, 2) : '')
-    setInsightProtocol(parsed.insightProtocolTrust ? JSON.stringify(parsed.insightProtocolTrust, null, 2) : '')
-    setInsightTrusted(false)
-    const trusted = alreadyConfirmed && isConfirmedTrustProfile(parsed)
-    setProfile(parsed); setAudience(parsed.audience); setIssuer(parsed.issuer); setKeyTrusted(trusted); setMessage(''); setNotice(trusted ? 'Saved trust profile selected.' : 'Profile imported. Confirm its issuer, audience and keys using your independent source before trusting it.')
+    const parsed = parseTrustProfile(value);
+    setInsightKeys(
+      parsed.insightKeyRegistry
+        ? JSON.stringify(parsed.insightKeyRegistry, null, 2)
+        : "",
+    );
+    setInsightProtocol(
+      parsed.insightProtocolTrust
+        ? JSON.stringify(parsed.insightProtocolTrust, null, 2)
+        : "",
+    );
+    setInsightTrusted(false);
+    const trusted = alreadyConfirmed && isConfirmedTrustProfile(parsed);
+    setProfile(parsed);
+    setAudience(parsed.audience);
+    setIssuer(parsed.issuer);
+    setKeyTrusted(trusted);
+    setMessage("");
+    setNotice(
+      trusted
+        ? "Saved trust profile selected."
+        : "Profile imported. Confirm its issuer, audience and keys using your independent source before trusting it.",
+    );
   }
-  async function readFile(file: File | undefined, setter: (value: string) => void) {
-    if (!file) return
-    try { if (file.size > 10_000_000) throw new Error('Use a JSON file smaller than 10 MB.'); setter(await file.text()); setMessage('') } catch (caught) { setMessage((caught as Error).message) }
+  async function readFile(
+    file: File | undefined,
+    setter: (value: string) => void,
+  ) {
+    if (!file) return;
+    try {
+      if (file.size > 10_000_000)
+        throw new Error("Use a JSON file smaller than 10 MB.");
+      setter(await file.text());
+      setMessage("");
+    } catch (caught) {
+      setMessage((caught as Error).message);
+    }
   }
   async function verifyText(text: string) {
-    setBusy(true); setMessage(''); setNotice(''); setResult(null); setReview(null); setReviewedReceipt(null)
-    const run = ++verificationRun.current
+    setBusy(true);
+    setMessage("");
+    setNotice("");
+    setResult(null);
+    setReview(null);
+    setReviewedReceipt(null);
+    setReviewedManifest(null);
+    setPassportServicePayment(null);
+    setPassportPaymentRaw("");
+    const run = ++verificationRun.current;
     try {
-      const parsed = JSON.parse(text)
-      const manifest = parsed.schema === 'priorseal.review-manifest.v1'
-      const bundle = parsed.schema === 'priorseal.verification-bundle.v1'
-      const receipt = (manifest ? parsed.bundle?.receipt : bundle ? parsed.receipt : parsed) as Receipt
-      if (!receipt?.receiptId) throw new Error('Import a complete receipt, PriorSeal verification bundle or review manifest.')
-      let keys: KeyEntry[]
-      if (profile) keys = profile.keys
+      const parsed = JSON.parse(text);
+      const passport =
+        parsed.schema === "priorseal.action-evidence-passport.v1";
+      const manifest =
+        (passport ? parsed.reviewManifest : parsed).schema ===
+        "priorseal.review-manifest.v1";
+      const bundle = parsed.schema === "priorseal.verification-bundle.v1";
+      const nativeManifest = (
+        passport ? parsed.reviewManifest : parsed
+      ) as ReviewManifest;
+      const receipt = (
+        manifest
+          ? nativeManifest.bundle?.receipt
+          : bundle
+            ? parsed.receipt
+            : parsed
+      ) as Receipt;
+      if (!receipt?.receiptId)
+        throw new Error(
+          "Import a complete receipt, PriorSeal verification bundle, review manifest or Action Evidence Passport.",
+        );
+      let keys: KeyEntry[];
+      if (profile) keys = profile.keys;
       else if (publicKey.trim()) {
-        const discovered = registryKeys.find((key) => key.keyId === receipt.keyId && key.issuer === issuer && key.publicKey.trim() === publicKey.trim())
-        keys = [{ issuer: issuer.trim() || receipt.issuer, keyId: receipt.keyId, algorithm: 'Ed25519', publicKey: publicKey.trim(), status: discovered?.status ?? 'active', validFrom: discovered?.validFrom ?? null, validUntil: discovered?.validUntil ?? null }]
-      } else keys = registryKeys
-      const trusted = Boolean(keyTrusted && (profile || publicKey.trim() && issuer.trim()))
-      const verifier = await import('priorseal-sdk/verifier')
-      const options = { trustedKeys: keys, expectedAudience: audience.trim() }
-      if (!options.expectedAudience) throw new Error('Specify the expected authorization audience from an independent source.')
-      let verified: LocalVerificationResult
-      if (manifest) {
-        const evaluated = await verifier.verifyReviewManifestLocally(parsed, { ...options, ...(insightTrusted && insightKeys.trim() ? { insightKeyRegistry: JSON.parse(insightKeys), ...(insightProtocol.trim() ? { insightProtocolTrust: JSON.parse(insightProtocol) } : {}) } : {}) })
-        if (run !== verificationRun.current) return
-        setReview(evaluated)
-        verified = evaluated.priorSeal
-      } else verified = bundle ? await verifier.verifyVerificationBundleLocally(parsed as VerificationBundle, options) : await verifier.verifyReceiptLocally(receipt, options)
-      if (run !== verificationRun.current) return
-      setVerifiedWithTrust(trusted); setResult(verified); setReviewedReceipt(receipt)
-      if (verified.valid && verified.verificationScope === 'LOCAL_COMPLETE' && trusted) session.saveReceipt(receipt)
-    } catch (caught) { if (run === verificationRun.current) setMessage((caught as Error).message) } finally { setBusy(false) }
+        const discovered = registryKeys.find(
+          (key) =>
+            key.keyId === receipt.keyId &&
+            key.issuer === issuer &&
+            key.publicKey.trim() === publicKey.trim(),
+        );
+        keys = [
+          {
+            issuer: issuer.trim() || receipt.issuer,
+            keyId: receipt.keyId,
+            algorithm: "Ed25519",
+            publicKey: publicKey.trim(),
+            status: discovered?.status ?? "active",
+            validFrom: discovered?.validFrom ?? null,
+            validUntil: discovered?.validUntil ?? null,
+          },
+        ];
+      } else keys = registryKeys;
+      const trusted = Boolean(
+        keyTrusted && (profile || (publicKey.trim() && issuer.trim())),
+      );
+      const verifier = await import("priorseal-sdk/verifier");
+      const options = { trustedKeys: keys, expectedAudience: audience.trim() };
+      if (!options.expectedAudience)
+        throw new Error(
+          "Specify the expected authorization audience from an independent source.",
+        );
+      let verified: LocalVerificationResult;
+      const reviewOptions = {
+        ...options,
+        ...(insightTrusted && insightKeys.trim()
+          ? {
+              insightKeyRegistry: JSON.parse(insightKeys),
+              ...(insightProtocol.trim()
+                ? { insightProtocolTrust: JSON.parse(insightProtocol) }
+                : {}),
+            }
+          : {}),
+      };
+      if (passport) {
+        const evaluated = await verifier.verifyActionEvidencePassport(
+          parsed,
+          reviewOptions,
+        );
+        if (run !== verificationRun.current) return;
+        setReview(evaluated.review);
+        setReviewedManifest(nativeManifest);
+        setPassportServicePayment(evaluated.servicePayment);
+        verified = evaluated.review?.priorSeal ?? {
+          valid: false,
+          code: evaluated.code,
+          verificationScope: "LOCAL_COMPLETE",
+          requiredExternalChecks: [],
+        };
+        setNotice(
+          evaluated.servicePayment === "UNVERIFIED_SERVICE_PAYMENT"
+            ? "Passport imported. Its x402 attachment is shown only as unverified service-payment metadata."
+            : "Passport imported. Native evidence remains locally verifiable with your independent trust configuration.",
+        );
+      } else if (manifest) {
+        const evaluated = await verifier.verifyReviewManifestLocally(
+          nativeManifest,
+          reviewOptions,
+        );
+        if (run !== verificationRun.current) return;
+        setReview(evaluated);
+        setReviewedManifest(nativeManifest);
+        setPassportTitle(`Action Evidence Passport · ${receipt.receiptId}`);
+        verified = evaluated.priorSeal;
+      } else
+        verified = bundle
+          ? await verifier.verifyVerificationBundleLocally(
+              parsed as VerificationBundle,
+              options,
+            )
+          : await verifier.verifyReceiptLocally(receipt, options);
+      if (run !== verificationRun.current) return;
+      setVerifiedWithTrust(trusted);
+      setResult(verified);
+      setReviewedReceipt(receipt);
+      if (
+        verified.valid &&
+        verified.verificationScope === "LOCAL_COMPLETE" &&
+        trusted
+      )
+        session.saveReceipt(receipt);
+    } catch (caught) {
+      if (run === verificationRun.current)
+        setMessage((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
-  async function pasteSubmit(event: FormEvent) { event.preventDefault(); await verifyText(raw) }
+  async function pasteSubmit(event: FormEvent) {
+    event.preventDefault();
+    await verifyText(raw);
+  }
   async function lookupSubmit(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setMessage(''); setNotice('')
-    try { const bundle = await api.getVerificationBundle(lookup.trim()); const text = JSON.stringify(bundle, null, 2); setOriginalFile(null); setRaw(text); setNotice('Bundle retrieved. Its embedded registry is discovery material; select independent trust and verify locally.'); setResult(null); setReview(null); setReviewedReceipt(null) } catch (caught) { setMessage((caught as Error).message) } finally { setBusy(false) }
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
+    setNotice("");
+    try {
+      const bundle = await api.getVerificationBundle(lookup.trim());
+      const text = JSON.stringify(bundle, null, 2);
+      setOriginalFile(null);
+      setRaw(text);
+      setNotice(
+        "Bundle retrieved. Its embedded registry is discovery material; select independent trust and verify locally.",
+      );
+      setResult(null);
+      setReview(null);
+      setReviewedReceipt(null);
+      setReviewedManifest(null);
+      setPassportServicePayment(null);
+    } catch (caught) {
+      setMessage((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
-  const externalPending = Boolean(result && (result.verificationScope === 'EXTERNAL_CHECK_REQUIRED' || result.code === 'AUTHORIZATION_REQUIRES_CHAIN_VERIFICATION'))
-  const complete = Boolean(result?.valid && !externalPending && verifiedWithTrust && (!review || review.valid && !review.unverified.length))
-  const displayStatus = complete ? 'VALID' : !result?.valid ? 'INVALID' : externalPending ? 'EXTERNAL CHECK REQUIRED' : !verifiedWithTrust ? 'TRUST SOURCE REQUIRED' : 'PARTIAL REVIEW'
-  const verdictTitle = complete ? 'Verified within scope.' : !result?.valid ? 'Evidence did not verify.' : externalPending ? 'External checks remain.' : !verifiedWithTrust ? 'Confirm the trust source.' : 'Review remains partial.'
-  const verdictNext = complete ? 'Keep the local report with the evidence and review the claim boundaries below.' : !result?.valid ? 'Check the imported bytes and independently selected trust configuration before relying on this evidence.' : externalPending ? 'Complete the named chain checks before treating this authorization as fully verified.' : !verifiedWithTrust ? 'Confirm the issuer, audience and key through a separate trusted source, then verify again.' : 'Review the remaining relationship or protocol checks before using this as a complete result.'
+  async function exportPassport() {
+    if (!reviewedManifest) return;
+    try {
+      const verifier = await import("priorseal-sdk/verifier");
+      const passport = await verifier.createActionEvidencePassport({
+        title:
+          passportTitle.trim() ||
+          `Action Evidence Passport · ${reviewedReceipt?.receiptId ?? "review"}`,
+        reviewManifest: reviewedManifest,
+        ...(passportPaymentRaw.trim()
+          ? {
+              servicePayment: {
+                kind: "x402-service-payment" as const,
+                rawJson: passportPaymentRaw,
+              },
+            }
+          : {}),
+      });
+      downloadJson(passport, "action-evidence-passport.json");
+      setNotice(
+        "Action Evidence Passport exported. It contains the native review manifest; it does not add a new signature or trust root.",
+      );
+    } catch (caught) {
+      setMessage((caught as Error).message);
+    }
+  }
+  const externalPending = Boolean(
+    result &&
+    (result.verificationScope === "EXTERNAL_CHECK_REQUIRED" ||
+      result.code === "AUTHORIZATION_REQUIRES_CHAIN_VERIFICATION"),
+  );
+  const complete = Boolean(
+    result?.valid &&
+    !externalPending &&
+    verifiedWithTrust &&
+    (!review || (review.valid && !review.unverified.length)),
+  );
+  const displayStatus = complete
+    ? "VALID"
+    : !result?.valid
+      ? "INVALID"
+      : externalPending
+        ? "EXTERNAL CHECK REQUIRED"
+        : !verifiedWithTrust
+          ? "TRUST SOURCE REQUIRED"
+          : "PARTIAL REVIEW";
+  const verdictTitle = complete
+    ? "Verified within scope."
+    : !result?.valid
+      ? "Evidence did not verify."
+      : externalPending
+        ? "External checks remain."
+        : !verifiedWithTrust
+          ? "Confirm the trust source."
+          : "Review remains partial.";
+  const verdictNext = complete
+    ? "Keep the local report with the evidence and review the claim boundaries below."
+    : !result?.valid
+      ? "Check the imported bytes and independently selected trust configuration before relying on this evidence."
+      : externalPending
+        ? "Complete the named chain checks before treating this authorization as fully verified."
+        : !verifiedWithTrust
+          ? "Confirm the issuer, audience and key through a separate trusted source, then verify again."
+          : "Review the remaining relationship or protocol checks before using this as a complete result.";
 
-  return <AppShell><PageHeader eyebrow="VERIFICATION" title="Verify receipt">Import a receipt, native verification bundle or combined review manifest. Verification runs locally; pasted evidence and trust profiles are not sent to the API.</PageHeader>
-    <div className="verify-sequence" aria-label="Local verification stages"><div><span>01 / EVIDENCE</span><strong>Bring the artifact</strong></div><div><span>02 / TRUST</span><strong>Confirm the source</strong></div><div><span>03 / RESULT</span><strong>Read the scope</strong></div></div>
-    <div className="verify-layout"><section className="panel verify-import"><p className="section-index">01 / THE ARTIFACT</p><h2>Import evidence</h2><p className="verify-panel-intro">Paste JSON or choose a file. Your imported evidence stays in this browser.</p><form onSubmit={pasteSubmit} aria-busy={busy}><Field label="Evidence JSON"><textarea value={raw} onChange={(event) => { setOriginalFile(null); setRaw(event.target.value) }} placeholder={'{\n  "schema": "priorseal.verification-bundle.v1",\n  "receipt": { … }\n}'} rows={12} /></Field><Field label="Evidence JSON file"><input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; void readFile(file, (text) => { setRaw(text); setOriginalFile(file ?? null) }) }} /></Field><div className="header-actions"><button className="button primary" disabled={busy || !raw.trim()}>{busy ? 'Verifying locally…' : 'Verify locally →'}</button><button type="button" className="button secondary" disabled={!raw.trim()} onClick={() => { const blob = originalFile ?? new Blob([raw], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'original-evidence.json'; link.click(); URL.revokeObjectURL(url) }}>{originalFile ? 'Export original bytes' : 'Export evidence JSON'}</button></div></form><details className="polish-details"><summary>Insight trust for a combined review</summary><Field label="Independent Insight key registry"><textarea value={insightKeys} onChange={(event) => { setInsightKeys(event.target.value); setInsightTrusted(false) }} rows={5} /></Field><Field label="Independent Insight protocol trust" hint="insight.protocol-trust.v1: exact registry bytes/hash/length, immutable releases/profile and your consumer policy."><textarea value={insightProtocol} onChange={(event) => { setInsightProtocol(event.target.value); setInsightTrusted(false) }} rows={6} /></Field><Field label="Insight protocol trust file"><input type="file" accept="application/json,.json" onChange={(event) => void readFile(event.target.files?.[0], (text) => { setInsightProtocol(text); setInsightTrusted(false) })} /></Field><label className="check-row"><input type="checkbox" checked={insightTrusted} disabled={!insightKeys.trim()} onChange={(event) => setInsightTrusted(event.target.checked)} /><span>I independently confirmed these Insight keys, registry bytes and consumer policy.</span></label><p className="panel-copy">V5 requires its signed semantic profile and a policy-admitted registry lineage. Legacy v1–v4 review is relative to the exact pinned registry bytes; missing evidence stays incomplete. Importing evidence does not establish trust.</p></details></section>
-    <section className="panel verify-trust"><p className="section-index">02 / THE TRUST ROOT</p><h2>Independent trust</h2><p className="verify-panel-intro">Select keys and an audience you confirmed outside the evidence itself.</p><Field label="Saved trust profile"><select value={profile?.name ?? ''} onChange={(event) => { const selected = profiles.find((entry) => entry.name === event.target.value); if (selected) loadProfile(selected, true); else { setProfile(null); setKeyTrusted(false) } }}><option value="">Manual key or new profile</option>{profiles.map((entry) => <option key={entry.name} value={entry.name}>{entry.name} · {entry.audience}</option>)}</select></Field>
-      <details className="polish-details"><summary>Import a trust profile</summary><Field label="Trust profile JSON" hint="Schema priorseal.trust-profile.v1; issuer, audience, keys and source are required. This console accepts drafts without confirmedAt, then records confirmation when you save. The SDK format requires confirmedAt (0 means unconfirmed)."><textarea value={profileRaw} onChange={(event) => setProfileRaw(event.target.value)} rows={5} /></Field><Field label="Trust profile file"><input type="file" accept="application/json,.json" onChange={(event) => void readFile(event.target.files?.[0], (text) => { setProfileRaw(text); try { loadProfile(JSON.parse(text)) } catch (caught) { setMessage((caught as Error).message) } })} /></Field><button className="button secondary" onClick={() => { try { loadProfile(JSON.parse(profileRaw)) } catch (caught) { setMessage((caught as Error).message) } }}>Import profile</button></details>
-      {profile ? <><dl className="data-grid"><div><dt>Issuer</dt><dd>{profile.issuer}</dd></div><div><dt>Source</dt><dd>{profile.source}</dd></div><div><dt>Prior confirmation</dt><dd>{profile.confirmedAt ? dateTime(profile.confirmedAt) : 'Not recorded'}</dd></div></dl>{profile.keys.map((key) => <div className="trust-key" key={key.keyId}><strong>{key.keyId}</strong> <Status value={key.status} small /><p>{key.validFrom === null ? 'No start bound' : dateTime(key.validFrom)} → {key.validUntil === null ? 'No expiry bound' : dateTime(key.validUntil)}</p></div>)}<button className="text-link" onClick={() => { setProfile(null); setKeyTrusted(false) }}>Use manual key instead</button></> : <><Field label="Expected issuer"><input value={issuer} onChange={(event) => { setIssuer(event.target.value); setKeyTrusted(false) }} /></Field><Field label="Issuer public key" hint="API-discovered keys and keys inside evidence are not independent trust roots."><textarea value={publicKey} onChange={(event) => { setPublicKey(event.target.value); setKeyTrusted(false) }} placeholder={'-----BEGIN PUBLIC KEY-----\n…\n-----END PUBLIC KEY-----'} rows={4} /></Field></>}
-      <Field label="Expected audience"><input value={audience} readOnly={Boolean(profile)} onChange={(event) => { setAudience(event.target.value); setKeyTrusted(false) }} /></Field>{fingerprints.map((fingerprint, index) => <p className="fingerprint" key={`${index}-${fingerprint}`}>SHA-256 key fingerprint <CodeValue value={fingerprint} /></p>)}<label className="check-row"><input type="checkbox" checked={keyTrusted} disabled={!profile && (!publicKey.trim() || !issuer.trim())} onChange={(event) => setKeyTrusted(event.target.checked)} /><span>I confirmed this issuer, audience and public key configuration through an independent trusted channel.</span></label>{profile && <div className="header-actions"><button className="button secondary" disabled={!keyTrusted} onClick={() => { const confirmed = { ...profile, confirmedAt: Math.floor(Date.now() / 1000) }; saveTrustProfile(confirmed); setProfiles(getTrustProfiles()); setNotice('Trust profile saved according to your local-storage choice.'); }}>Save confirmed profile</button><button className="button secondary" onClick={() => downloadJson(profile, 'trust-profile.json')}>Export profile</button></div>}
-    </section></div>
-    <section className="panel lookup"><p className="section-index">ALTERNATE INPUT / SERVICE LOOKUP</p><h2>Retrieve by receipt ID</h2><p className="verify-panel-intro">Fetch a bundle for import, then confirm trust independently before verifying it.</p><form onSubmit={lookupSubmit} className="archive-query" aria-busy={busy}><Field label="Receipt ID"><input value={lookup} onChange={(event) => setLookup(event.target.value)} placeholder="psr_…" /></Field><button className="button secondary" disabled={busy || !lookup.trim()}>Retrieve verification bundle</button></form></section>
-    {notice && <Notice tone="info" title="Evidence review">{notice}</Notice>}{message && <div className="verification-error" ref={messageRef} tabIndex={-1}><Notice tone="danger" title="Verification could not run">{message}</Notice></div>}
-    {result && <section ref={resultRef} className={`panel verification-result verification-result--${complete ? 'complete' : !result.valid ? 'invalid' : 'pending'}`} aria-label="Local verification result"><Status value={displayStatus} /><div className="verification-verdict"><div><span className="section-index">03 / LOCAL VERDICT</span><h2 tabIndex={-1}>{verdictTitle}</h2><p className="verification-verdict__code">{result.code}</p><p className="verification-verdict__reason">{verificationText[result.code] ?? result.code}</p><p className="verification-verdict__next">{verdictNext}</p></div><span className="verification-verdict__mark" aria-hidden="true">03</span></div><div className="verification-scope" aria-label="Verification scope"><div><span>LOCAL CHECKS</span><strong>{result.valid ? 'Passed within scope' : 'Did not pass'}</strong></div><div><span>TRUST ROOT</span><strong>{verifiedWithTrust ? 'Independently confirmed' : 'Not established'}</strong></div><div><span>REMAINING SCOPE</span><strong>{complete ? 'Local scope complete' : !result.valid ? 'Invalid' : externalPending ? 'Chain checks' : review ? 'Combined review' : 'Confirm trust'}</strong></div></div><dl className="data-grid"><div><dt>Verification performed by</dt><dd>This browser, using the local SDK verifier</dd></div><div><dt>Receipt</dt><dd>{result.receiptId ?? '—'}</dd></div><div><dt>Signature and evidence checks</dt><dd>{result.valid ? 'Passed within stated scope' : result.code}</dd></div><div><dt>Signer trust</dt><dd>{verifiedWithTrust ? 'Independently confirmed configuration' : 'Not independently established'}</dd></div><div><dt>Execution claim</dt><dd>{result.executionStatus ?? '—'}</dd></div><div><dt>Compliance claim</dt><dd>{result.complianceStatus ?? 'Legacy outcome'}</dd></div></dl>{!verifiedWithTrust && <Notice tone="warning" title="Independent key trust not established">Cryptographic consistency with a supplied or discovered key does not establish that its issuer is trusted.</Notice>}{externalPending && <Notice tone="warning" title="External verification is still required">{result.requiredExternalChecks.length ? result.requiredExternalChecks.map((check) => check.type === 'ERC1271' ? `Check contract authority ${check.address} on chain ${check.chainId}; a current-state check does not prove historical authority.` : `Check anchor transaction ${check.txHash} at block ${check.blockNumber} on chain ${check.chainId}.`).join(' ') : 'Verify the contract-wallet authorization against the relevant chain state.'}</Notice>}
-      {review && <><h3>Combined evidence review</h3><p>{review.code} · verification origin: {review.verificationOrigin}</p><div className="table-scroll"><table className="evidence-table"><thead><tr><th>Artifact</th><th>Integrity</th><th>Signature</th><th>Trust</th><th>Result</th></tr></thead><tbody>{review.artifacts.map((artifact) => <tr key={artifact.id}><td>{artifact.role}<small>{artifact.profile}</small></td><td>{artifact.integrityValid ? 'Verified' : 'Invalid'}</td><td>{artifact.signatureValid === null ? 'Not verified' : artifact.signatureValid ? 'Verified' : 'Invalid'}</td><td>{artifact.trusted === null ? 'Not established' : artifact.trusted ? 'Configured registry' : 'Untrusted'}</td><td>{artifact.code}</td></tr>)}</tbody></table></div><div>{review.artifacts.filter((artifact) => artifact.protocol).map((artifact) => <section className="trust-key" key={`protocol-${artifact.id}`}><h4>Insight protocol: {artifact.protocol!.code}</h4><dl className="data-grid"><div><dt>Review scope</dt><dd>{artifact.protocol!.scope}</dd></div><div><dt>Signed or snapshot profile</dt><dd><CodeValue value={artifact.protocol!.profileId ?? 'Not established'} /></dd></div><div><dt>Registry release</dt><dd><CodeValue value={artifact.protocol!.registryReleaseId ?? 'Not established'} /></dd></div><div><dt>Consumer policy</dt><dd><CodeValue value={artifact.protocol!.policyId ?? 'Independently selected admission pins'} /></dd></div><div><dt>Exact registry SHA-256</dt><dd><CodeValue value={artifact.protocol!.registrySnapshotSha256 ?? 'Not established'} /></dd></div><div><dt>Registry byte length</dt><dd>{artifact.protocol!.registrySnapshotByteLength ?? 'Not established'}</dd></div></dl>{artifact.protocol!.required.length > 0 && <p>Required: {artifact.protocol!.required.join('; ')}</p>}</section>)}</div><dl className="data-grid">{Object.entries(review.relations).map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value === null ? 'Not established' : value ? 'Matched' : 'Mismatch'}</dd></div>)}</dl>{review.unverified.length > 0 && <Notice tone="warning" title="Review remains partial">{review.unverified.join('; ')}</Notice>}</>}
-      <div className="header-actions"><button className="button secondary" onClick={() => downloadJson({ schema: 'priorseal.local-review-report.v1', verifiedAt: Math.floor(Date.now() / 1000), expectedAudience: audience, trustedIssuer: verifiedWithTrust ? issuer : null, result, review, complete, verificationOrigin: 'local' }, 'local-review-report.json')}>Export review report</button>{externalPending && <button className="button secondary" onClick={() => downloadJson({ schema: 'priorseal.external-check-plan.v1', receiptId: result.receiptId, requiredChecks: result.requiredExternalChecks, completed: false, notice: 'No chain checks were performed by this offline review. Current-state results do not establish historical authority.' }, 'external-check-plan.json')}>Export external check plan</button>}{complete && result.receiptId && <button className="text-link" onClick={() => navigate(`/app/evidence/${encodeURIComponent(result.receiptId!)}`)}>Open receipt detail →</button>}</div>
-    </section>}
-    {result && reviewedReceipt && <EvidenceRelationshipView receipt={reviewedReceipt} verification={{ valid: result.valid, code: result.code }} signerTrustConfirmed={verifiedWithTrust} relations={review?.relations} relationshipReviewComplete={Boolean(review && review.unverified.length === 0)} />}
-  </AppShell>
+  return (
+    <AppShell>
+      <a
+        aria-hidden="true"
+        download={pendingEvidenceExport?.filename}
+        hidden
+        href={pendingEvidenceExport?.url}
+        ref={evidenceExportLink}
+      />
+      <PageHeader eyebrow="VERIFIED ACTION / REVIEW" title="Verify receipt">
+        Finish the Review layer by importing a receipt, native verification
+        bundle or combined review manifest. Verification runs locally; pasted
+        evidence and trust profiles are not sent to the API.
+      </PageHeader>
+      <div className="verify-sequence" aria-label="Local review stages">
+        <div>
+          <span>01 / EVIDENCE</span>
+          <strong>Bring the artifact</strong>
+        </div>
+        <div>
+          <span>02 / TRUST</span>
+          <strong>Confirm the source</strong>
+        </div>
+        <div>
+          <span>03 / REVIEW</span>
+          <strong>Read the scope</strong>
+        </div>
+      </div>
+      <div className="verify-layout">
+        <section className="panel verify-import">
+          <p className="section-index">01 / THE ARTIFACT</p>
+          <h2>Import evidence</h2>
+          <p className="verify-panel-intro">
+            Paste JSON or choose a file. Your imported evidence stays in this
+            browser.
+          </p>
+          <form onSubmit={pasteSubmit} aria-busy={busy}>
+            <Field label="Evidence JSON">
+              <textarea
+                value={raw}
+                onChange={(event) => {
+                  setOriginalFile(null);
+                  setRaw(event.target.value);
+                }}
+                placeholder={
+                  '{\n  "schema": "priorseal.verification-bundle.v1",\n  "receipt": { … }\n}'
+                }
+                rows={12}
+              />
+            </Field>
+            <Field label="Evidence JSON file">
+              <input
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  void readFile(file, (text) => {
+                    setRaw(text);
+                    setOriginalFile(file ?? null);
+                  });
+                }}
+              />
+            </Field>
+            <div className="header-actions">
+              <button className="button primary" disabled={busy || !raw.trim()}>
+                {busy ? "Verifying locally…" : "Verify locally →"}
+              </button>
+              <button
+                type="button"
+                className="button secondary"
+                disabled={!raw.trim()}
+                onClick={() => {
+                  if (!originalFile) {
+                    downloadJson(JSON.parse(raw), "evidence.json");
+                    return;
+                  }
+                  setPendingEvidenceExport({
+                    filename: "original-evidence.json",
+                    url: `data:application/json;charset=utf-8,${encodeURIComponent(raw)}`,
+                  });
+                }}
+              >
+                {originalFile
+                  ? "Export original bytes"
+                  : "Export evidence JSON"}
+              </button>
+            </div>
+          </form>
+          <details className="polish-details">
+            <summary>Insight trust for a combined review</summary>
+            <Field label="Independent Insight key registry">
+              <textarea
+                value={insightKeys}
+                onChange={(event) => {
+                  setInsightKeys(event.target.value);
+                  setInsightTrusted(false);
+                }}
+                rows={5}
+              />
+            </Field>
+            <Field
+              label="Independent Insight protocol trust"
+              hint="insight.protocol-trust.v1: exact registry bytes/hash/length, immutable releases/profile and your consumer policy."
+            >
+              <textarea
+                value={insightProtocol}
+                onChange={(event) => {
+                  setInsightProtocol(event.target.value);
+                  setInsightTrusted(false);
+                }}
+                rows={6}
+              />
+            </Field>
+            <Field label="Insight protocol trust file">
+              <input
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) =>
+                  void readFile(event.target.files?.[0], (text) => {
+                    setInsightProtocol(text);
+                    setInsightTrusted(false);
+                  })
+                }
+              />
+            </Field>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={insightTrusted}
+                disabled={!insightKeys.trim()}
+                onChange={(event) => setInsightTrusted(event.target.checked)}
+              />
+              <span>
+                I independently confirmed these Insight keys, registry bytes and
+                consumer policy.
+              </span>
+            </label>
+            <p className="panel-copy">
+              V5 requires its signed semantic profile and a policy-admitted
+              registry lineage. Legacy v1–v4 review is relative to the exact
+              pinned registry bytes; missing evidence stays incomplete.
+              Importing evidence does not establish trust.
+            </p>
+          </details>
+        </section>
+        <section className="panel verify-trust">
+          <p className="section-index">02 / THE TRUST ROOT</p>
+          <h2>Independent trust</h2>
+          <p className="verify-panel-intro">
+            Select keys and an audience you confirmed outside the evidence
+            itself.
+          </p>
+          <Field label="Saved trust profile">
+            <select
+              value={profile?.name ?? ""}
+              onChange={(event) => {
+                const selected = profiles.find(
+                  (entry) => entry.name === event.target.value,
+                );
+                if (selected) loadProfile(selected, true);
+                else {
+                  setProfile(null);
+                  setKeyTrusted(false);
+                }
+              }}
+            >
+              <option value="">Manual key or new profile</option>
+              {profiles.map((entry) => (
+                <option key={entry.name} value={entry.name}>
+                  {entry.name} · {entry.audience}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <details className="polish-details">
+            <summary>Import a trust profile</summary>
+            <Field
+              label="Trust profile JSON"
+              hint="Schema priorseal.trust-profile.v1; issuer, audience, keys and source are required. This console accepts drafts without confirmedAt, then records confirmation when you save. The SDK format requires confirmedAt (0 means unconfirmed)."
+            >
+              <textarea
+                value={profileRaw}
+                onChange={(event) => setProfileRaw(event.target.value)}
+                rows={5}
+              />
+            </Field>
+            <Field label="Trust profile file">
+              <input
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) =>
+                  void readFile(event.target.files?.[0], (text) => {
+                    setProfileRaw(text);
+                    try {
+                      loadProfile(JSON.parse(text));
+                    } catch (caught) {
+                      setMessage((caught as Error).message);
+                    }
+                  })
+                }
+              />
+            </Field>
+            <button
+              className="button secondary"
+              onClick={() => {
+                try {
+                  loadProfile(JSON.parse(profileRaw));
+                } catch (caught) {
+                  setMessage((caught as Error).message);
+                }
+              }}
+            >
+              Import profile
+            </button>
+          </details>
+          {profile ? (
+            <>
+              <dl className="data-grid">
+                <div>
+                  <dt>Issuer</dt>
+                  <dd>{profile.issuer}</dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd>{profile.source}</dd>
+                </div>
+                <div>
+                  <dt>Prior confirmation</dt>
+                  <dd>
+                    {profile.confirmedAt
+                      ? dateTime(profile.confirmedAt)
+                      : "Not recorded"}
+                  </dd>
+                </div>
+              </dl>
+              {profile.keys.map((key) => (
+                <div className="trust-key" key={key.keyId}>
+                  <strong>{key.keyId}</strong>{" "}
+                  <Status value={key.status} small />
+                  <p>
+                    {key.validFrom === null
+                      ? "No start bound"
+                      : dateTime(key.validFrom)}{" "}
+                    →{" "}
+                    {key.validUntil === null
+                      ? "No expiry bound"
+                      : dateTime(key.validUntil)}
+                  </p>
+                </div>
+              ))}
+              <button
+                className="text-link"
+                onClick={() => {
+                  setProfile(null);
+                  setKeyTrusted(false);
+                }}
+              >
+                Use manual key instead
+              </button>
+            </>
+          ) : (
+            <>
+              <Field label="Expected issuer">
+                <input
+                  value={issuer}
+                  onChange={(event) => {
+                    setIssuer(event.target.value);
+                    setKeyTrusted(false);
+                  }}
+                />
+              </Field>
+              <Field
+                label="Issuer public key"
+                hint="API-discovered keys and keys inside evidence are not independent trust roots."
+              >
+                <textarea
+                  value={publicKey}
+                  onChange={(event) => {
+                    setPublicKey(event.target.value);
+                    setKeyTrusted(false);
+                  }}
+                  placeholder={
+                    "-----BEGIN PUBLIC KEY-----\n…\n-----END PUBLIC KEY-----"
+                  }
+                  rows={4}
+                />
+              </Field>
+            </>
+          )}
+          <Field label="Expected audience">
+            <input
+              value={audience}
+              readOnly={Boolean(profile)}
+              onChange={(event) => {
+                setAudience(event.target.value);
+                setKeyTrusted(false);
+              }}
+            />
+          </Field>
+          {fingerprints.map((fingerprint, index) => (
+            <p className="fingerprint" key={`${index}-${fingerprint}`}>
+              SHA-256 key fingerprint <CodeValue value={fingerprint} />
+            </p>
+          ))}
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={keyTrusted}
+              disabled={!profile && (!publicKey.trim() || !issuer.trim())}
+              onChange={(event) => setKeyTrusted(event.target.checked)}
+            />
+            <span>
+              I confirmed this issuer, audience and public key configuration
+              through an independent trusted channel.
+            </span>
+          </label>
+          {profile && (
+            <div className="header-actions">
+              <button
+                className="button secondary"
+                disabled={!keyTrusted}
+                onClick={() => {
+                  const confirmed = {
+                    ...profile,
+                    confirmedAt: Math.floor(Date.now() / 1000),
+                  };
+                  saveTrustProfile(confirmed);
+                  setProfiles(getTrustProfiles());
+                  setNotice(
+                    "Trust profile saved according to your local-storage choice.",
+                  );
+                }}
+              >
+                Save confirmed profile
+              </button>
+              <button
+                className="button secondary"
+                onClick={() => downloadJson(profile, "trust-profile.json")}
+              >
+                Export profile
+              </button>
+            </div>
+          )}
+        </section>
+      </div>
+      <section className="panel lookup">
+        <p className="section-index">ALTERNATE INPUT / SERVICE LOOKUP</p>
+        <h2>Retrieve by receipt ID</h2>
+        <p className="verify-panel-intro">
+          Fetch a bundle for import, then confirm trust independently before
+          verifying it.
+        </p>
+        <form
+          onSubmit={lookupSubmit}
+          className="archive-query"
+          aria-busy={busy}
+        >
+          <Field label="Receipt ID">
+            <input
+              value={lookup}
+              onChange={(event) => setLookup(event.target.value)}
+              placeholder="psr_…"
+            />
+          </Field>
+          <button
+            className="button secondary"
+            disabled={busy || !lookup.trim()}
+          >
+            Retrieve verification bundle
+          </button>
+        </form>
+      </section>
+      {notice && (
+        <Notice tone="info" title="Evidence review">
+          {notice}
+        </Notice>
+      )}
+      {message && (
+        <div className="verification-error" ref={messageRef} tabIndex={-1}>
+          <Notice tone="danger" title="Verification could not run">
+            {message}
+          </Notice>
+        </div>
+      )}
+      {result && (
+        <section
+          ref={resultRef}
+          className={`panel verification-result verification-result--${complete ? "complete" : !result.valid ? "invalid" : "pending"}`}
+          aria-label="Local verification result"
+        >
+          <Status value={displayStatus} />
+          <div className="verification-verdict">
+            <div>
+              <span className="section-index">03 / LOCAL VERDICT</span>
+              <h2 tabIndex={-1}>{verdictTitle}</h2>
+              <p className="verification-verdict__code">{result.code}</p>
+              <p className="verification-verdict__reason">
+                {verificationText[result.code] ?? result.code}
+              </p>
+              <p className="verification-verdict__next">{verdictNext}</p>
+            </div>
+            <span className="verification-verdict__mark" aria-hidden="true">
+              03
+            </span>
+          </div>
+          <div className="verification-scope" aria-label="Verification scope">
+            <div>
+              <span>LOCAL CHECKS</span>
+              <strong>
+                {result.valid ? "Passed within scope" : "Did not pass"}
+              </strong>
+            </div>
+            <div>
+              <span>TRUST ROOT</span>
+              <strong>
+                {verifiedWithTrust
+                  ? "Independently confirmed"
+                  : "Not established"}
+              </strong>
+            </div>
+            <div>
+              <span>REMAINING SCOPE</span>
+              <strong>
+                {complete
+                  ? "Local scope complete"
+                  : !result.valid
+                    ? "Invalid"
+                    : externalPending
+                      ? "Chain checks"
+                      : review
+                        ? "Combined review"
+                        : "Confirm trust"}
+              </strong>
+            </div>
+          </div>
+          <dl className="data-grid">
+            <div>
+              <dt>Verification performed by</dt>
+              <dd>This browser, using the local SDK verifier</dd>
+            </div>
+            <div>
+              <dt>Receipt</dt>
+              <dd>{result.receiptId ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Signature and evidence checks</dt>
+              <dd>
+                {result.valid ? "Passed within stated scope" : result.code}
+              </dd>
+            </div>
+            <div>
+              <dt>Signer trust</dt>
+              <dd>
+                {verifiedWithTrust
+                  ? "Independently confirmed configuration"
+                  : "Not independently established"}
+              </dd>
+            </div>
+            <div>
+              <dt>Execution claim</dt>
+              <dd>{result.executionStatus ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Compliance claim</dt>
+              <dd>{result.complianceStatus ?? "Legacy outcome"}</dd>
+            </div>
+          </dl>
+          {!verifiedWithTrust && (
+            <Notice
+              tone="warning"
+              title="Independent key trust not established"
+            >
+              Cryptographic consistency with a supplied or discovered key does
+              not establish that its issuer is trusted.
+            </Notice>
+          )}
+          {externalPending && (
+            <Notice
+              tone="warning"
+              title="External verification is still required"
+            >
+              {result.requiredExternalChecks.length
+                ? result.requiredExternalChecks
+                    .map((check) =>
+                      check.type === "ERC1271"
+                        ? `Check contract authority ${check.address} on chain ${check.chainId}; a current-state check does not prove historical authority.`
+                        : `Check anchor transaction ${check.txHash} at block ${check.blockNumber} on chain ${check.chainId}.`,
+                    )
+                    .join(" ")
+                : "Verify the contract-wallet authorization against the relevant chain state."}
+            </Notice>
+          )}
+          {review && (
+            <>
+              <h3>Combined evidence review</h3>
+              <p>
+                {review.code} · verification origin: {review.verificationOrigin}
+              </p>
+              {passportServicePayment === "UNVERIFIED_SERVICE_PAYMENT" && (
+                <Notice tone="warning" title="Service payment remains separate">
+                  An attached x402 record is unverified service-payment metadata.
+                  It does not authorize this action or prove its execution.
+                </Notice>
+              )}
+              {reviewedManifest && (
+                <div className="passport-export">
+                  <Field
+                    label="Passport title"
+                    hint="Convenience copy only; original evidence remains inside the native review manifest."
+                  >
+                    <input
+                      value={passportTitle}
+                      onChange={(event) => setPassportTitle(event.target.value)}
+                      placeholder={`Action Evidence Passport · ${result.receiptId ?? "review"}`}
+                    />
+                  </Field>
+                  <Field
+                    label="Optional x402 service-payment JSON"
+                    hint="Preserved as unverified service metadata. It cannot authorize the action or prove its execution."
+                  >
+                    <textarea
+                      value={passportPaymentRaw}
+                      onChange={(event) => setPassportPaymentRaw(event.target.value)}
+                      rows={3}
+                    />
+                  </Field>
+                  <button
+                    className="button secondary"
+                    onClick={() => void exportPassport()}
+                  >
+                    Export Action Evidence Passport
+                  </button>
+                </div>
+              )}
+              <div className="table-scroll">
+                <table className="evidence-table">
+                  <thead>
+                    <tr>
+                      <th>Artifact</th>
+                      <th>Integrity</th>
+                      <th>Signature</th>
+                      <th>Trust</th>
+                      <th>Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {review.artifacts.map((artifact) => (
+                      <tr key={artifact.id}>
+                        <td>
+                          {artifact.role}
+                          <small>{artifact.profile}</small>
+                        </td>
+                        <td>
+                          {artifact.integrityValid ? "Verified" : "Invalid"}
+                        </td>
+                        <td>
+                          {artifact.signatureValid === null
+                            ? "Not verified"
+                            : artifact.signatureValid
+                              ? "Verified"
+                              : "Invalid"}
+                        </td>
+                        <td>
+                          {artifact.trusted === null
+                            ? "Not established"
+                            : artifact.trusted
+                              ? "Configured registry"
+                              : "Untrusted"}
+                        </td>
+                        <td>{artifact.code}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                {review.artifacts
+                  .filter((artifact) => artifact.protocol)
+                  .map((artifact) => (
+                    <section
+                      className="trust-key"
+                      key={`protocol-${artifact.id}`}
+                    >
+                      <h4>Insight protocol: {artifact.protocol!.code}</h4>
+                      <dl className="data-grid">
+                        <div>
+                          <dt>Review scope</dt>
+                          <dd>{artifact.protocol!.scope}</dd>
+                        </div>
+                        <div>
+                          <dt>Signed or snapshot profile</dt>
+                          <dd>
+                            <CodeValue
+                              value={
+                                artifact.protocol!.profileId ??
+                                "Not established"
+                              }
+                            />
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Registry release</dt>
+                          <dd>
+                            <CodeValue
+                              value={
+                                artifact.protocol!.registryReleaseId ??
+                                "Not established"
+                              }
+                            />
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Consumer policy</dt>
+                          <dd>
+                            <CodeValue
+                              value={
+                                artifact.protocol!.policyId ??
+                                "Independently selected admission pins"
+                              }
+                            />
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Exact registry SHA-256</dt>
+                          <dd>
+                            <CodeValue
+                              value={
+                                artifact.protocol!.registrySnapshotSha256 ??
+                                "Not established"
+                              }
+                            />
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Registry byte length</dt>
+                          <dd>
+                            {artifact.protocol!.registrySnapshotByteLength ??
+                              "Not established"}
+                          </dd>
+                        </div>
+                      </dl>
+                      {artifact.protocol!.required.length > 0 && (
+                        <p>
+                          Required: {artifact.protocol!.required.join("; ")}
+                        </p>
+                      )}
+                    </section>
+                  ))}
+              </div>
+              <dl className="data-grid">
+                {Object.entries(review.relations).map(([name, value]) => (
+                  <div key={name}>
+                    <dt>{name}</dt>
+                    <dd>
+                      {value === null
+                        ? "Not established"
+                        : value
+                          ? "Matched"
+                          : "Mismatch"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {review.unverified.length > 0 && (
+                <Notice tone="warning" title="Review remains partial">
+                  {review.unverified.join("; ")}
+                </Notice>
+              )}
+            </>
+          )}
+          <div className="header-actions">
+            <button
+              className="button secondary"
+              onClick={() =>
+                downloadJson(
+                  {
+                    schema: "priorseal.local-review-report.v1",
+                    verifiedAt: Math.floor(Date.now() / 1000),
+                    expectedAudience: audience,
+                    trustedIssuer: verifiedWithTrust ? issuer : null,
+                    result,
+                    review,
+                    complete,
+                    verificationOrigin: "local",
+                  },
+                  "local-review-report.json",
+                )
+              }
+            >
+              Export review report
+            </button>
+            {externalPending && (
+              <button
+                className="button secondary"
+                onClick={() =>
+                  downloadJson(
+                    {
+                      schema: "priorseal.external-check-plan.v1",
+                      receiptId: result.receiptId,
+                      requiredChecks: result.requiredExternalChecks,
+                      completed: false,
+                      notice:
+                        "No chain checks were performed by this offline review. Current-state results do not establish historical authority.",
+                    },
+                    "external-check-plan.json",
+                  )
+                }
+              >
+                Export external check plan
+              </button>
+            )}
+            {complete && result.receiptId && (
+              <button
+                className="text-link"
+                onClick={() =>
+                  navigate(
+                    `/app/evidence/${encodeURIComponent(result.receiptId!)}`,
+                  )
+                }
+              >
+                Open receipt detail →
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+      {result && reviewedReceipt && (
+        <EvidenceRelationshipView
+          receipt={reviewedReceipt}
+          verification={{ valid: result.valid, code: result.code }}
+          signerTrustConfirmed={verifiedWithTrust}
+          relations={review?.relations}
+          relationshipReviewComplete={Boolean(
+            review && review.unverified.length === 0,
+          )}
+        />
+      )}
+    </AppShell>
+  );
 }

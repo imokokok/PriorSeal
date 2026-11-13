@@ -2,6 +2,8 @@
 
 PriorSeal keeps related claims separate so that one valid artifact is not presented as proof of another system's behavior. The console's evidence-relationship view is a read-only projection of existing signed fields and verifier results. It does not add a protocol schema, alter canonical bytes or issue a new verdict.
 
+At the product layer, these proof relationships support one **Verified Action**: an authorized action that is time-evidenced, observed, matched where supported, and independently reviewable. The product labels `Seal`, `Witness`, `Match`, and `Review` organize that journey; they do not alter the protocol claims below.
+
 ## Four distinct levels
 
 1. **Artifact integrity and authority.** Local verification recomputes the intent, authorization, execution and receipt identities and checks the applicable signatures against independently selected trust. This establishes only the claims covered by those artifacts and keys.
@@ -23,4 +25,4 @@ PriorSeal keeps related claims separate so that one valid artifact is not presen
 - Existing WAK envelopes, namespaces, fixed fixtures and repository ownership remain unchanged. Any runtime-enforcement conclusion belongs to the separately reviewed WAK implementation and revision, not to a PriorSeal receipt.
 - Supersession, correction and dispute metadata do not by themselves revoke an earlier signed artifact or establish an adjudication process.
 
-This separation lets Insight remain independently usable for assessment evidence, PriorSeal remain independently usable for authorization and execution evidence, and the combined workflow show exactly which cross-system relationships were established without overstating control, adoption, endorsement or economic safety.
+This separation lets Insight remain independently usable for assessment evidence, PriorSeal remain independently usable for Verified Action evidence, and the combined workflow show exactly which cross-system relationships were established without overstating control, adoption, endorsement or economic safety.

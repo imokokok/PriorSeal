@@ -37,7 +37,7 @@ async function integrationDoctor(options = {}) {
       read(base, "/api/v1/health/ready")
     ]);
     live.check.ok &&= record(live.body?.data)?.status === "ok";
-    ready.check.ok &&= record(ready.body?.data)?.status === "ready";
+    ready.check.ok &&= record(ready.body?.data)?.status === "live";
     const checks2 = [live.check, ready.check];
     if (probe) for (let i = 0; i < samples; i++) {
       if (i > 0) await new Promise((resolve) => setTimeout(resolve, 1e3));

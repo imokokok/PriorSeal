@@ -1,0 +1,18 @@
+.passport-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+  margin: 20px 0;
+  padding: 17px;
+  background: var(--porcelain);
+  border: 1px solid var(--rule);
+}
+
+.passport-export .field { min-width: min(100%, 260px); flex: 1 1 260px; margin: 0; }
+.passport-export .button { flex: 0 0 auto; }
+
+@media (max-width: 720px) {
+  .passport-export { align-items: stretch; flex-direction: column; }
+  .passport-export .button { width: 100%; }
+}
