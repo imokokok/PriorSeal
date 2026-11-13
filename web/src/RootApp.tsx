@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { BrowserRouter, Route, Routes, useLocation, useNavigationType } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigationType } from 'react-router-dom'
 import { PrivacyPreferences } from './PrivacyPreferences'
 import { loadConsole } from './route-loaders'
 import { LandingPage } from './landing/LandingPage'
@@ -95,5 +95,5 @@ function RouteFallback() {
 }
 
 export default function RootApp() {
-  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/solutions" element={<SolutionsPage />} /><Route path="/capabilities" element={<CapabilitiesPage />} /><Route path="/monad" element={<MonadProofPage />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/terms" element={<PublicTermsPage />} /><Route path="/support" element={<SupportPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
+  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/solutions" element={<SolutionsPage />} /><Route path="/capabilities" element={<CapabilitiesPage />} /><Route path="/proof-cases" element={<MonadProofPage />} /><Route path="/monad" element={<Navigate replace to="/proof-cases" />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/terms" element={<PublicTermsPage />} /><Route path="/support" element={<SupportPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
 }
