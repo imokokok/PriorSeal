@@ -25,12 +25,14 @@ test.beforeEach(async ({ page }) => {
 
 test('capability-aware navigation exposes the published action launcher and archive surfaces', async ({ page }) => {
   await page.goto('/app')
-  await expect(page.getByRole('link', { name: 'Quickstart' })).toBeVisible()
   await expect(page.locator('#console-navigation a[href="/app/actions/new"]')).toBeVisible()
+  await expect(page.locator('.nav-secondary')).not.toHaveAttribute('open', '')
+  await page.locator('.nav-secondary summary').click()
+  await expect(page.getByRole('link', { name: 'Quickstart' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Project archive' })).toBeVisible()
 
   await page.goto('/app/actions/new')
-  await expect(page.getByRole('heading', { name: 'Choose an authorization.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Choose the action boundary.' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Import exact call' })).toBeVisible()
 
   await page.goto('/app/actions/exact-call')

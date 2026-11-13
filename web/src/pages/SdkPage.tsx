@@ -87,9 +87,9 @@ export function SdkPage() {
   }, [])
 
   return <AppShell>
-    <PageHeader eyebrow="VERIFIED ACTION / TYPESCRIPT SDK" title="Connect one provable action." actions={<><Link className="button secondary" to="/app/develop">Developer hub</Link><CopyButton value={install} label="Copy install command" /></>}>One typed client prepares the Seal layer, collects the wallet signature, records configured Witness evidence, matches EVM execution and retrieves portable Review evidence. It never submits a transaction or receives a transaction-signing key.</PageHeader>
+    <PageHeader eyebrow="BUILD / TYPESCRIPT SDK" title="Add evidence to the path you own." actions={<><Link className="button secondary" to="/app/develop">Developer hub</Link><CopyButton value={install} label="Copy install command" /></>}>One typed client prepares bounded authorization, collects a wallet signature, records configured ordering evidence, matches EVM execution and retrieves portable proof. It never evaluates risk, submits a transaction or receives a transaction-signing key.</PageHeader>
 
-    <div className="sdk-path" aria-label="Verified Action integration path"><div><span>01 / SEAL</span><strong>Prepare bounded authority</strong></div><div><span>02 / WITNESS</span><strong>Accept with configured proof</strong></div><div><span>03 / MATCH</span><strong>Observe exact execution</strong></div><div><span>04 / REVIEW</span><strong>Check evidence locally</strong></div></div>
+    <div className="sdk-path" aria-label="Controlled action integration path"><div><span>01 / INPUT</span><strong>Verify decision evidence</strong></div><div><span>02 / AUTHORITY</span><strong>Prepare bounded approval</strong></div><div><span>03 / EXECUTION</span><strong>Observe your submission</strong></div><div><span>04 / REVIEW</span><strong>Check evidence locally</strong></div></div>
 
     <section className="sdk-hero panel">
       <div className="sdk-package">
@@ -106,6 +106,8 @@ export function SdkPage() {
       </div>
     </section>
 
+    <Notice tone="info" title="Place decision checks before authorization">When using Insight + PriorSeal, verify the Insight assessment and bind its approved digest to the intent before you ask a principal to sign. Your wallet, Safe or Agent runtime must enforce that requirement on the transaction submission path it owns.</Notice>
+
     <section className="sdk-workbench">
       <div className="sdk-code panel">
         <div className="panel-head"><div><span className="sdk-section-index">INTEGRATION / 02</span><h2>Complete integration</h2><p>Choose the environment that owns your signing interaction.</p></div><div className="sdk-tabs" role="group" aria-label="SDK environment"><button type="button" aria-pressed={target === 'browser'} className={target === 'browser' ? 'active' : ''} onClick={() => setTarget('browser')}>Browser wallet</button><button type="button" aria-pressed={target === 'node'} className={target === 'node' ? 'active' : ''} onClick={() => setTarget('node')}>Node service</button></div></div>
@@ -115,9 +117,9 @@ export function SdkPage() {
 
       <aside className="sdk-sequence">
         {[
-          ['01', 'Seal', 'Canonicalize the intent and collect one principal-controlled signature.'],
-          ['02', 'Witness', 'Accept the authorization with the deployment’s configured pre-execution proof mode.'],
-          ['03', 'Match', 'Attach the independently submitted EVM transaction hash.'],
+          ['01', 'Input', 'Verify any external assessment before it influences a proposal or authorization.'],
+          ['02', 'Authority', 'Canonicalize the intent and collect one principal-controlled signature.'],
+          ['03', 'Execution', 'Attach the independently submitted EVM transaction hash.'],
           ['04', 'Review', 'Retrieve the signed receipt and verify it independently.'],
         ].map(([number, title, copy]) => <article className="panel" key={number}><span>{number}</span><div><h3>{title}</h3><p>{copy}</p></div></article>)}
       </aside>

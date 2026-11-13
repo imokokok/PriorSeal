@@ -1,6 +1,6 @@
 # PriorSeal
 
-**Independently prove that an Agent-involved action was authorized before execution and stayed within its approved boundary.**
+**Make high-value Agent actions explainable, explicitly authorized, and independently provable.**
 
 [![CI](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml/badge.svg)](https://github.com/imokokok/PriorSeal/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/priorseal-sdk)](https://www.npmjs.com/package/priorseal-sdk)
@@ -36,7 +36,7 @@ PriorSeal is for an individual using an EVM or Solana wallet with an Agent, and 
 | Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
 | Keep assessment, authorization, and execution evidence together | [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) and [composite review manifests](sdk/README.md#composite-review-manifests) |
 
-Insight and PriorSeal work independently. Insight provides **oracle transparency and risk intelligence**; PriorSeal's Verified Action provides **authorization and execution accountability**. The combined path links assessment, authorization, execution, and review while keeping each product’s trust checks separate. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
+Insight and PriorSeal work independently. Insight provides **oracle transparency and risk intelligence**; PriorSeal's Verified Action provides **authorization and execution accountability**. Together, **Trusted Agent Execution** links assessment, an integrator-owned execution boundary, authorization, execution, and review while keeping each product’s trust checks separate. The integration—not PriorSeal alone—must enforce any required assessment or authorization before it submits an action. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
 
 PriorSeal is designed as an Agent-facing, user-controlled, per-use
 authorization and evidence layer: an Agent can call the service and, where

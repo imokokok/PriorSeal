@@ -13,11 +13,11 @@ const toolGroups = [
 ]
 
 const flow = [
-  ['01', 'Inspect', 'Read live capabilities before constructing a workflow.'],
-  ['02', 'Prepare', 'Prepare the bounded authorization and exact signing payload.'],
-  ['03', 'Principal signs', 'A human-controlled principal reviews and signs outside MCP.'],
-  ['04', 'Accept', 'Accept that exact signature with an idempotency key.'],
-  ['05', 'Execute', 'A separate executor submits only the exact, still-valid action.'],
+  ['01', 'Inspect the decision input', 'Verify any Insight assessment or other external evidence before it influences a proposal.'],
+  ['02', 'Inspect capabilities', 'Read live deployment capabilities before constructing a workflow.'],
+  ['03', 'Prepare authority', 'Prepare the bounded authorization and exact signing payload.'],
+  ['04', 'Principal signs', 'A human-controlled principal reviews and signs outside MCP.'],
+  ['05', 'Enforce and execute', 'Your executor checks the requirements it owns, then submits only the exact, still-valid action.'],
   ['06', 'Observe & verify', 'Observe the submitted transaction, export evidence, then verify it independently.'],
 ]
 
@@ -33,8 +33,8 @@ export function McpPage() {
       <section className="mcp-guide__hero">
         <div>
           <p className="mcp-guide__kicker">PRIORSEAL / VERIFIED ACTION / REMOTE MCP</p>
-          <h1 data-route-heading tabIndex={-1}>One provable action,<br /><em>ready for agents.</em></h1>
-          <p>Connect an MCP client to prepare principal-reviewed authorizations, record configured pre-execution proof, match already-submitted actions, and discover portable evidence resources. The server never holds wallet keys, signs for a principal, or broadcasts a transaction.</p>
+          <h1 data-route-heading tabIndex={-1}>Controlled actions,<br /><em>ready for agents.</em></h1>
+          <p>Connect an MCP client to prepare principal-reviewed authorizations, record configured ordering evidence, match already-submitted actions, and discover portable evidence resources. The server never evaluates risk, holds wallet keys, signs for a principal or broadcasts a transaction.</p>
           <div className="mcp-guide__actions"><a href="#connect">Connect the endpoint <span>↓</span></a><a href="https://registry.modelcontextprotocol.io/v0/servers/io.github.imokokok%2Fpriorseal/versions/0.1.1" target="_blank" rel="noreferrer">View in MCP Registry <span>↗</span></a></div>
         </div>
         <aside className="mcp-guide__endpoint" aria-label="PriorSeal MCP endpoint">
@@ -55,13 +55,13 @@ export function McpPage() {
       </section>
 
       <section className="mcp-guide__workflow" id="workflow">
-        <header><p className="mcp-guide__kicker">03 / VERIFIED ACTION</p><h2>Seal, Witness,<br />Match, Review.</h2><p><code>priorseal_prepare_controlled_execution</code> returns the reviewed preparation material and this sequence. It does not accept the authorization or execute an action.</p></header>
+        <header><p className="mcp-guide__kicker">03 / CONTROLLED ACTION</p><h2>Decision, control,<br />authority, proof.</h2><p><code>priorseal_prepare_controlled_execution</code> returns reviewed preparation material for a bounded authorization. It does not assess risk, accept the authorization or execute an action.</p></header>
         <ol>{flow.map(([number, title, description]) => <li key={number}><span>{number}</span><div><h3>{title}</h3><p>{description}</p></div></li>)}</ol>
       </section>
 
       <section className="mcp-guide__boundaries">
-        <div><p className="mcp-guide__kicker">OPERATING BOUNDARIES</p><h2>What the integration will not do.</h2></div>
-        <ul><li><b>No custody</b><span>No wallet keys, principal signature, or transaction broadcast passes through PriorSeal.</span></li><li><b>No implied permission</b><span>A prepared or accepted authorization never permits an altered, expired, or unmatched action.</span></li><li><b>Explicit state changes</b><span>Acceptance and observation can persist records and consume configured Agent credits; use an idempotency key.</span></li><li><b>Paid evidence stays paid</b><span>MCP offers discovery and a purchase URL; it does not bypass x402 by embedding the bundle or fresh-check report.</span></li><li><b>Independent evidence</b><span>Verify the delivered signature using independently established issuer-key trust.</span></li></ul>
+        <div><p className="mcp-guide__kicker">OPERATING BOUNDARIES</p><h2>MCP is not the policy gate.</h2></div>
+        <ul><li><b>Your execution boundary</b><span>Your wallet, Safe, policy service or Agent runtime must enforce any required decision and authorization checks before submission.</span></li><li><b>No custody</b><span>No wallet keys, principal signature, or transaction broadcast passes through PriorSeal.</span></li><li><b>No implied permission</b><span>A prepared or accepted authorization never permits an altered, expired, or unmatched action.</span></li><li><b>Explicit state changes</b><span>Acceptance and observation can persist records and consume configured Agent credits; use an idempotency key.</span></li><li><b>Independent evidence</b><span>Verify the delivered signature using independently established issuer-key trust.</span></li></ul>
       </section>
 
       <section className="mcp-guide__compatibility" id="compatibility">
