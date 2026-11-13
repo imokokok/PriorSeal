@@ -71,6 +71,7 @@ function EvidenceIllustration() {
 }
 
 export function LandingPage() {
+  useEffect(() => { void import('../pages/solutions-page.css') }, [])
   const [menuOpen, setMenuOpen] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
   useEffect(() => {
