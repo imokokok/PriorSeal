@@ -3,6 +3,7 @@ import { assertOnlyFields, assertSafeJson } from '../../shared/safe-json.mjs';
 import { chainId, evmAddress, protocolId, uintString } from '../../domain/values.mjs';
 import { buildWitnessPolicy } from '../../domain/witness.mjs';
 import { buildTimestampPolicy } from '../../domain/rfc3161.mjs';
+import { HYPERLIQUID_MAINNET_CHAIN_REF } from '../../domain/hyperliquid.mjs';
 
 export function readPolicyFile(file: string | null | undefined) {
   if (!file) return null;
@@ -72,6 +73,9 @@ function assetId(value: unknown) {
 }
 
 function policyChainReference(value: unknown): number | string {
+  // HyperCore has no EIP-155 id. Its network reference is deliberately
+  // profile-scoped rather than forced through the numeric chain-id parser.
+  if (value === HYPERLIQUID_MAINNET_CHAIN_REF) return value;
   if (typeof value === 'string' && !/^eip155:[1-9][0-9]*$/.test(value)) {
     if (/^[a-z][-a-z0-9]{2,7}:[a-zA-Z0-9][a-zA-Z0-9._-]{0,40}$/.test(value)) return value;
   }
