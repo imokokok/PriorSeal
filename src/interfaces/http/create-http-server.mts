@@ -423,7 +423,7 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
       if (req.method === 'GET' && path === '/.well-known/priorseal-agent.json') {
         return respond(200, agentIntegrationManifest({ version }), { 'cache-control': 'public, max-age=300' });
       }
-      if (req.method === 'GET' && path === '/.well-known/x402.json') {
+      if ((req.method === 'GET' && (path === '/.well-known/x402.json' || path === '/.well-known/x402'))) {
         if (!x402 || !x402Payments) throw new PriorSealError('NOT_FOUND', 'Route not found');
         const entries: Record<string, unknown>[] = [];
         for (const route of x402.routes) {
