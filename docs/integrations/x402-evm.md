@@ -53,7 +53,7 @@ Example route configuration (choose the price and routes for the deployment):
   {
     "method": "GET",
     "path": "/v1/receipts/:receiptId/bundle",
-    "description": "Export a portable PriorSeal receipt bundle",
+    "description": "Review-layer export of a Verified Action: a portable bundle proving what the principal authorized (Seal), that approval preceded execution (Witness), and whether observed execution matched the approved boundaries (Match), independently verifiable by third parties. Per-call x402 v2 export in USDC.",
     "price": "$0.01"
   }
 ]
