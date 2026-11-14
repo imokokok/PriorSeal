@@ -45,7 +45,7 @@ PRIORSEAL_X402_RESOURCE_ORIGIN=https://priorseal.xyz
 PRIORSEAL_X402_PAY_TO=0x...reviewed-mainnet-payee...
 PRIORSEAL_X402_NETWORKS=eip155:8453
 PRIORSEAL_X402_TIMEOUT_MS=15000
-PRIORSEAL_X402_ROUTES_JSON=[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Export a portable PriorSeal receipt bundle","price":"$0.02"}]
+PRIORSEAL_X402_ROUTES_JSON=[{"method":"GET","path":"/v1/receipts/:receiptId/bundle","description":"Review-layer export of a Verified Action: a portable bundle proving what the principal authorized (Seal), that approval preceded execution (Witness), and whether observed execution matched the approved boundaries (Match), independently verifiable by third parties. Per-call x402 v2 export in USDC.","price":"$0.02"}]
 ```
 
 Store any facilitator credentials only in

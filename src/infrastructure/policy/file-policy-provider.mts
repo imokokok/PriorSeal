@@ -77,7 +77,7 @@ function policyChainReference(value: unknown): number | string {
   // profile-scoped rather than forced through the numeric chain-id parser.
   if (value === HYPERLIQUID_MAINNET_CHAIN_REF) return value;
   if (typeof value === 'string' && !/^eip155:[1-9][0-9]*$/.test(value)) {
-    if (/^[a-z][-a-z0-9]{2,7}:[a-zA-Z0-9][a-zA-Z0-9._-]{0,40}$/.test(value)) return value;
+    if (/^[a-z][-a-z0-9]{2,15}:[a-zA-Z0-9][a-zA-Z0-9._-]{0,80}$/.test(value)) return value;
   }
   return chainId(value);
 }
