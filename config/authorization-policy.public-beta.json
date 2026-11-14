@@ -1,16 +1,19 @@
 {
-  "policyId": "priorseal-public-beta-v2",
+  "policyId": "priorseal-public-beta-v3",
   "allowedChainIds": [
     1,
     56,
     8453,
     42161,
-    "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+    999,
+    "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+    "hyperliquid:mainnet"
   ],
   "allowedActions": [
     "TRANSFER",
     "CONTRACT_CALL",
-    "SOLANA_TRANSACTION"
+    "SOLANA_TRANSACTION",
+    "HYPERLIQUID_SPOT_IOC_ORDER"
   ],
   "maxValiditySeconds": 86400,
   "timestampPolicy": {
