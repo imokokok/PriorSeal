@@ -4,6 +4,7 @@ import { assertOnlyFields, assertSafeJson } from "../../shared/safe-json.mjs";
 import { chainId, evmAddress, protocolId, uintString } from "../../domain/values.mjs";
 import { buildWitnessPolicy } from "../../domain/witness.mjs";
 import { buildTimestampPolicy } from "../../domain/rfc3161.mjs";
+import { HYPERLIQUID_MAINNET_CHAIN_REF } from "../../domain/hyperliquid.mjs";
 function readPolicyFile(file) {
   if (!file) return null;
   return parsePolicyDocument(JSON.parse(readFileSync(file, "utf8")));
@@ -68,6 +69,7 @@ function assetId(value) {
   return value.toLowerCase();
 }
 function policyChainReference(value) {
+  if (value === HYPERLIQUID_MAINNET_CHAIN_REF) return value;
   if (typeof value === "string" && !/^eip155:[1-9][0-9]*$/.test(value)) {
     if (/^[a-z][-a-z0-9]{2,15}:[a-zA-Z0-9][a-zA-Z0-9._-]{0,80}$/.test(value)) return value;
   }
