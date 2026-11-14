@@ -69,3 +69,19 @@ Solana execution fees and compute units are recorded as available RPC facts. Tok
 Read `GET /v1/capabilities` before wallet signing. A configured `chainReadiness` entry with `chainId: 0` reports RPC configuration, not endpoint reachability. The profile and `solana-ed25519` authorizer appear when the deployment policy permits the Solana transaction action.
 
 The SDK verifier checks the Ed25519 authorization and recomputes the signed intent, execution, policy, and authorization-binding results offline. It validates the v1 resource configuration as part of the message commitment. It cannot turn a configured RPC observation into an independent consensus proof.
+
+## Five-chain release evidence
+
+Before describing Solana as a complete Seal / Witness / Match / Review path,
+retain one controlled mainnet evidence pack for each supported message form:
+
+1. legacy message;
+2. v0 message with resolved address lookup tables; and
+3. v1 message with its resource configuration.
+
+Each pack must contain the principal authorization, RFC 3161 token, submitted
+transaction signature, raw RPC observation retained by the operator, signed
+receipt, and an independently verified bundle. Include one intentional
+message-mismatch case to prove that Match fails closed. This is a release
+evidence requirement, not a request to send user funds or to decode a program's
+business semantics. See the [five-chain release gate](../runbooks/five-chain-four-products.md).
