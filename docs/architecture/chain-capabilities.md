@@ -4,6 +4,34 @@ PriorSeal treats payment, authorization, execution observation, and external
 anchoring as separate capabilities. A chain appearing in one column is not an
 implicit claim that every other column is enabled.
 
+## Seal / Witness / Match / Review coverage
+
+The product vocabulary is deliberately separate from payment rails:
+
+- **Seal** — the principal's bounded authorization before an action;
+- **Witness** — independent pre-execution time/order evidence;
+- **Match** — comparison of an observed execution with the signed boundary;
+- **Review** — portable receipt, bundle, and independent verification path.
+
+`GET /v1/capabilities` exposes `fourProductCoverage` for every network that
+the deployment actually advertises. It is a configuration report, not a live
+RPC/TSA/venue availability guarantee. A payment rail never fills a missing
+Seal, Witness, Match, or Review stage.
+
+The intended five-chain release scope is:
+
+| Network | Seal | Witness | Match | Review | Deliberate boundary |
+|---|---|---|---|---|---|
+| Base (`eip155:8453`) | EIP-712; optional ERC-1271 | RFC 3161 | EVM receipt, transfer logs and exact-call envelope | EVM bundle and Evidence API profile | ERC-4337/Safe/EIP-7702 remain separately pinned profiles. |
+| BNB Smart Chain (`eip155:56`) | EIP-712; optional ERC-1271 | RFC 3161 | EVM receipt, transfer logs and exact-call envelope | EVM bundle and Evidence API profile | The ERC-8004 registry entry is discovery only, not execution evidence. |
+| HyperEVM (`eip155:999`) | EIP-712; optional ERC-1271 | RFC 3161 | EVM receipt, transfer logs and exact-call envelope | EVM bundle and Evidence API profile | No HyperEVM-specific account or finality semantics are inferred. |
+| Solana mainnet-beta | Ed25519 message authorization | RFC 3161 | Complete compiled transaction message | Solana bundle and Evidence API profile | No arbitrary-program semantic or token-balance interpretation. |
+| HyperCore (`hyperliquid:mainnet`) | EIP-712 authorization for the bounded order | RFC 3161 | HyperCore spot IOC cloid/status/fill matching | HyperCore spot-IOC bundle and Evidence API profile | Spot IOC only; it is not HyperEVM or general Hyperliquid support. |
+
+Use the [five-chain release gate](../runbooks/five-chain-four-products.md)
+before adding any of these networks to an active production authorization
+policy.
+
 ## Production-aligned execution and payment rails
 
 | Chain | CAIP-2 payment rail | Generic execution observation | Notes |

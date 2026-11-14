@@ -5,10 +5,10 @@ one **mainnet spot** IOC limit order, authorized before submission and later
 observed through Hyperliquid's public Info API. It is an order-book profile,
 not a Uniswap-style AMM adapter and not a HyperEVM transaction integration.
 
-For **perpetual** orders, Insight's Hyperliquid Perp Guard decision can now be
-bound to the exact unsigned IOC envelope before authorization; see
-[insight-hyperliquid-perp-guard.md](../insight-hyperliquid-perp-guard.md).
-Perp observation reuses the cloid-based Info API flow documented below.
+Insight's Hyperliquid Perp Guard decision can be committed as external context
+where an integrator has separately reviewed the order. It does **not** expand
+this PriorSeal execution profile to perpetual orders: the current Match and
+Review claims remain restricted to the spot IOC boundary below.
 
 The profile is observation-only. It never receives an API wallet secret,
 creates an API wallet, signs a Hyperliquid exchange action, submits an order,
@@ -213,3 +213,21 @@ evidence store; Info API retention and response availability constrain later
 reconstruction. Monitor `hyperliquid_info_request` and
 `hyperliquid_observation` metrics, and set `PRIORSEAL_HYPERLIQUID_ENABLED=false`
 as the operational kill switch on endpoint/schema anomalies.
+
+## Five-chain release evidence
+
+Treat HyperCore as a distinct profile, not as an EVM-chain toggle or an x402
+payment setting. Before enabling it in a production authorization policy:
+
+1. apply the required cloid uniqueness migration and prove it is present;
+2. configure the explicit HTTPS Info API endpoint and verify its kill switch;
+3. capture one zero-risk or otherwise explicitly approved spot IOC case and
+   one altered-cloid/order-field rejection case;
+4. retain the raw `orderStatus` and paginated `userFillsByTime` responses with
+   retrieval times, plus the RFC 3161 token, receipt and locally verified
+   bundle; and
+5. confirm the release policy names only `hyperliquid:mainnet` and
+   `HYPERLIQUID_SPOT_IOC_ORDER` for this profile.
+
+The separately configured HyperCore x402 facilitator pays for an API resource.
+It does not complete any of these execution-profile gates.

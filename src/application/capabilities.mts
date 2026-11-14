@@ -43,6 +43,34 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
   const verifiedAction = agentMeter ? verifiedActionProduct(agentMeter.routes) : undefined;
   const proofConfigured = proofMode === 'issuer' || (proofMode === 'rfc3161' ? timestampConfigured : proofMode === 'witness-quorum' ? witnessConfigured : anchorConfigured);
   const rpc = rpcChainIds === undefined ? 'unknown' : chains.some(id => rpcChainIds.includes(id)) ? 'configured' : 'unavailable';
+  const fourProductCoverage = [
+    ...chains.map(chainId => chainProductCoverage({
+      chainId,
+      network: chainId === 0 ? SOLANA_MAINNET_CAIP2 : `eip155:${chainId}`,
+      family: chainId === 0 ? 'svm' : 'evm',
+      authorizers: chainId === 0 ? ['solana-ed25519'] : ['eip712', ...(contractSignatureConfigured ? ['eip1271'] : [])],
+      matchProfile: chainId === 0 ? 'compiled_solana_transaction' : 'evm_transaction_receipt',
+      reviewProfile: chainId === 0 ? 'priorseal.evidence-profile.solana-transaction.v1' : 'priorseal.evidence-profile.evm.v1',
+      matchConfigured: rpcChainIds === undefined ? 'unknown' : rpcChainIds.includes(chainId) ? 'configured' : 'unavailable',
+      proofMode,
+      proofConfigured,
+      keyConfigured,
+      storage,
+    })),
+    ...(hyperliquidSpotIoc ? [chainProductCoverage({
+      chainId: 0,
+      network: HYPERLIQUID_MAINNET_CHAIN_REF,
+      family: 'hypercore',
+      authorizers: ['eip712'],
+      matchProfile: 'hyperliquid_spot_ioc',
+      reviewProfile: 'priorseal.evidence-profile.hyperliquid-spot-ioc.v1',
+      matchConfigured: hyperliquidSpotIocConfigured ? 'configured' : 'unavailable',
+      proofMode,
+      proofConfigured,
+      keyConfigured,
+      storage,
+    })] : []),
+  ];
   return {
     schema: 'priorseal.capabilities.v1', issuer, audience,
     payments: { publicPaidCommerce: { enabled: publicPaidCommerceEnabled, mode: publicPaidCommerceEnabled ? 'PUBLIC_PAID' : 'PILOT_OPERATOR_MANAGED' }, x402: { configured: Boolean(x402), networks: x402 ? x402AvailableNetworks ?? X402_STAGING_NETWORKS
@@ -60,6 +88,7 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
     dependencies: { issuer: keyConfigured ? 'configured' : 'unavailable', timestamp: proofMode === 'issuer' ? 'not_required' : proofConfigured ? 'configured' : 'unavailable', rpc, hyperliquidInfo: hyperliquidSpotIocConfigured ? 'configured' : 'not_configured', storage },
     workflowReady: Boolean(keyConfigured && proofConfigured && (rpc === 'configured' || hyperliquidSpotIoc) && storage === 'available' && (chains.length || hyperliquidSpotIoc) && (transfer || exactCall || erc4337 || solanaTransaction || hyperliquidSpotIoc)),
     chainReadiness: chains.map(chainId => ({ chainId, rpc: rpcChainIds === undefined ? 'unknown' : rpcChainIds.includes(chainId) ? 'configured' : 'unavailable' })),
+    fourProductCoverage,
     readinessScope: 'Configuration and storage check only; prepare evaluates the actual request policy. RPC/TSA reachability is not probed.',
     checkedAt: Math.floor(now / 1000),
     evidenceApi: {
@@ -83,6 +112,40 @@ export async function deploymentCapabilities({ issuer, audience, keyConfigured, 
       boundary: 'Read-only point-in-time EVM RPC configuration and bytecode presence check. It never proves ownership, contract safety, execution authority, or a right to transact.',
     } : { enabled: false },
     archive: { enabled: archiveEnabled, retention: store.archiveRetention ?? 'operator_defined', scope: 'project_uploaded_evidence' },
+  };
+}
+
+/**
+ * These are configuration facts, not a live reachability claim. Publishing
+ * them beside the normal capability response makes the Seal/Witness/Match/
+ * Review product boundary explicit for every advertised subject network.
+ */
+function chainProductCoverage({ chainId, network, family, authorizers, matchProfile, reviewProfile, matchConfigured, proofMode, proofConfigured, keyConfigured, storage }: {
+  chainId: number;
+  network: string;
+  family: 'evm' | 'svm' | 'hypercore';
+  authorizers: string[];
+  matchProfile: string;
+  reviewProfile: string;
+  matchConfigured: 'configured' | 'unavailable' | 'unknown';
+  proofMode: string;
+  proofConfigured: boolean;
+  keyConfigured: boolean;
+  storage: string;
+}) {
+  const witnessStatus = !keyConfigured
+    ? 'unavailable'
+    : proofMode === 'issuer'
+    ? 'issuer_only'
+    : proofConfigured ? 'configured' : 'unavailable';
+  return {
+    chainId,
+    network,
+    family,
+    seal: { status: keyConfigured ? 'configured' : 'unavailable', authorizers },
+    witness: { status: witnessStatus, mode: proofMode },
+    match: { status: matchConfigured, profile: matchProfile },
+    review: { status: keyConfigured && storage === 'available' ? 'configured' : 'unavailable', profile: reviewProfile },
   };
 }
 
