@@ -66,3 +66,12 @@ test('solana transaction intents admit by CAIP-2 chain reference', () => {
   assert.deepEqual(evaluateIntentPolicy({ ...solanaIntent, chainRef: undefined }, policy, 1000).reasonCodes, ['POLICY_CHAIN_NOT_ALLOWED']);
   assert.throws(() => parsePolicyDocument({ ...policy, allowedChainIds: [0] }));
 });
+
+test('HyperCore spot IOC policies admit the explicit Hyperliquid network reference', () => {
+  const policy = {
+    policyId: 'priorseal-public-beta-v3',
+    allowedChainIds: [999, 'hyperliquid:mainnet'],
+    allowedActions: ['HYPERLIQUID_SPOT_IOC_ORDER'],
+  };
+  assert.deepEqual(parsePolicyDocument(policy), policy);
+});
