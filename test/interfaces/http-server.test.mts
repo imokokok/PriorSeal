@@ -792,7 +792,7 @@ test('well-known agent8004 registration is served byte-stable with the x402 surf
   assert.equal(record.name, 'PriorSeal');
   assert.equal(record.x402Support, true);
   assert.equal(record.x402.payTo, '0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231');
-  assert.deepEqual(record.x402.networks, ['eip155:8453', 'eip155:999', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp']);
+  assert.deepEqual(record.x402.networks, ['eip155:8453', 'eip155:56', 'eip155:999', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp']);
   assert.equal(record.active, true);
   // No request-scoped fields: the registry agentURI points at this exact document.
   const second = await request(server, '/.well-known/agent8004.json');
