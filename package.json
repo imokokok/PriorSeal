@@ -136,7 +136,7 @@
   ],
   "dependencies": {
     "@solana/web3.js": "3.1.0",
-    "asn1js": "^3.0.6",
+    "asn1js": "^4.0.0",
     "pg": "^8.16.3",
     "pkijs": "^3.4.0",
     "priorseal-sdk": "file:sdk",
