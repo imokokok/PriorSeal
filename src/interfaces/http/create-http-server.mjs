@@ -494,7 +494,7 @@ function createHttpServer({ archiveCredentials = null, rpcChainIds, erc4337Entry
         let prepared;
         try {
           const requestUrl = new URL(req.url ?? path, x402.resourceOrigin);
-          const resourceUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, x402.resourceOrigin).toString();
+          const resourceUrl = new URL(requestUrl.pathname, x402.resourceOrigin).toString();
           paymentResourceUrl = resourceUrl;
           const rawPaymentHeader = req.headers["payment-signature"];
           prepared = await x402Payments.prepare(paidRoute, resourceUrl, typeof rawPaymentHeader === "string" ? rawPaymentHeader : rawPaymentHeader ? "invalid" : void 0, deadline.signal);
