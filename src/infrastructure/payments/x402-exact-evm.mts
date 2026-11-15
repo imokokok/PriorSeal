@@ -275,9 +275,14 @@ export function createX402PaymentService(config: X402Config) {
         // absent, preserve the existing fail-closed behaviour.
         if (!hypercoreClient) throw error;
       }
-      if (hypercoreClient && config.hypercore) {
-        requirements.push(await hypercoreClient.quote(resourceUrl, priceToHypercoreUsd(route.price)));
-      }
+      // Core-USDC requirements are deliberately NEVER fabricated into the
+      // bare 402 accepts[]: `hyperliquid:mainnet` is an application protocol
+      // identifier, not a CAIP-2 network, and one malformed entry fails
+      // CDP/Bazaar discovery validation for the whole manifest (observed
+      // 2026-11-15). The self-hosted HyperCore facilitator (C3 worker) is its
+      // own discoverable resource; Core payments are still verified and
+      // settled by the branch above when the client presents a requirement
+      // obtained directly from it.
       if (requirements.length === 0) throw new Error('Configured facilitator does not support exact payments on any locally configured network');
       // Bazaar receives a self-validating description of the exact paid HTTP
       // resource. Receipt IDs are path parameters, not service metadata.
@@ -499,14 +504,6 @@ function priceToAtomicUnits(price: string) {
   const atomic = BigInt(match[1]) * 1_000_000n + BigInt((match[2] ?? '').padEnd(6, '0'));
   if (atomic <= 0n || atomic > 9_000_000_000_000_000_000n) throw new TypeError('x402 route price is outside the supported range');
   return atomic.toString();
-}
-
-/** Convert the six-decimal route price into the canonical human USD string Core signs. */
-function priceToHypercoreUsd(price: string) {
-  const atomic = BigInt(priceToAtomicUnits(price));
-  const whole = atomic / 1_000_000n;
-  const fraction = (atomic % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
-  return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 
 /**
