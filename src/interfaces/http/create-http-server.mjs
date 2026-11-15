@@ -753,7 +753,7 @@ const AGENT8004_REGISTRATION = Object.freeze({
     manifest: "https://priorseal.xyz/openapi/v1.json",
     pricePerRequest: "0.02",
     acceptedTokens: ["USDC"],
-    networks: ["eip155:8453", "eip155:56"],
+    networks: ["eip155:8453", "eip155:999", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"],
     payTo: "0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231"
   },
   active: true,
