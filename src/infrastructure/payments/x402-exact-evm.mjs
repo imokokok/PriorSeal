@@ -157,9 +157,6 @@ function createX402PaymentService(config) {
       } catch (error) {
         if (!hypercoreClient) throw error;
       }
-      if (hypercoreClient && config.hypercore) {
-        requirements.push(await hypercoreClient.quote(resourceUrl, priceToHypercoreUsd(route.price)));
-      }
       if (requirements.length === 0) throw new Error("Configured facilitator does not support exact payments on any locally configured network");
       const extensions = { bazaar: bazaarDiscovery(route, resourceUrl) };
       const paymentRequired = (error) => ({ x402Version: 2, error, resource, accepts: requirements, extensions });
@@ -367,12 +364,6 @@ function priceToAtomicUnits(price) {
   const atomic = BigInt(match[1]) * 1000000n + BigInt((match[2] ?? "").padEnd(6, "0"));
   if (atomic <= 0n || atomic > 9000000000000000000n) throw new TypeError("x402 route price is outside the supported range");
   return atomic.toString();
-}
-function priceToHypercoreUsd(price) {
-  const atomic = BigInt(priceToAtomicUnits(price));
-  const whole = atomic / 1000000n;
-  const fraction = (atomic % 1000000n).toString().padStart(6, "0").replace(/0+$/, "");
-  return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 function bazaarDiscovery(route, resourceUrl) {
   const pathParams = bazaarPathParams(route.path, resourceUrl);
