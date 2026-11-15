@@ -743,7 +743,7 @@ function matchPaidRoute(config, method, path) {
 const AGENT8004_REGISTRATION = Object.freeze({
   type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   name: "PriorSeal",
-  description: "Verifiable evidence space for AI agent work: signed authorizations and observed executions are bound into portable receipts with RFC-3161 timestamps, witness quorum, and optional on-chain anchoring, independently verifiable by third parties. Pay-per-call x402 v2 receipt-bundle export in USDC.",
+  description: "Verifiable evidence space for AI agent work: signed authorizations and observed executions are bound into portable receipts with RFC-3161 timestamps, witness quorum, and optional on-chain anchoring, independently verifiable by third parties. Reproducible decision-input evidence samples (HyperEVM and BNB Smart Chain) are published in the sibling Insight repository (github.com/imokokok/Insight) under docs/evidence/. Pay-per-call x402 v2 receipt-bundle export in USDC.",
   services: [
     { name: "OpenAPI", endpoint: "https://priorseal.xyz/openapi/v1.json", version: "2.0.0" }
   ],
