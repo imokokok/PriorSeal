@@ -496,7 +496,11 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
         let prepared: Awaited<ReturnType<typeof x402Payments.prepare>>;
         try {
           const requestUrl = new URL(req.url ?? path, x402.resourceOrigin);
-          const resourceUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, x402.resourceOrigin).toString();
+          // Canonical resource: per-payer query strings (chainId/subjectAddress)
+          // would make every settlement record a unique URL, which CDP Bazaar
+          // cannot index. Query parameters stay on the HTTP request; only the
+          // payment resource identifier is canonicalized.
+          const resourceUrl = new URL(requestUrl.pathname, x402.resourceOrigin).toString();
           paymentResourceUrl = resourceUrl;
           const rawPaymentHeader = req.headers['payment-signature'];
           prepared = await x402Payments.prepare(paidRoute, resourceUrl, typeof rawPaymentHeader === 'string' ? rawPaymentHeader : rawPaymentHeader ? 'invalid' : undefined, deadline.signal);
