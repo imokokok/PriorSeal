@@ -94,23 +94,20 @@ test('a HyperCore-only rollout suppresses all ordinary facilitator rails', async
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
-    if (url.toString() === 'https://hypercore-facilitator.example/v1/quotes') {
-      return Response.json({
-        requirement: {
-          scheme: 'exact', network: 'hyperliquid:mainnet', amount: '0.01', asset: 'USDC',
-          payTo: '0xDEF0000000000000000000000000000000000002', maxTimeoutSeconds: 60,
-          extra: { assetTransferMethod: 'hypercore-usd-send', protocolVersion: '1', quoteId: 'a'.repeat(43) },
-        },
-      });
-    }
-    throw new TypeError(`ordinary facilitator should not be called: ${url.toString()}`);
+    throw new TypeError(`no facilitator may be contacted for a bare Core-only quote: ${url.toString()}`);
   }) as typeof fetch;
   t.after(() => { globalThis.fetch = originalFetch; });
 
-  const prepared = await createX402PaymentService(config!).prepare(config!.routes[0]!, 'https://api.example.test/v1/receipts/example/bundle', undefined);
-  assert.equal(prepared.kind, 'required');
-  if (prepared.kind !== 'required') throw new Error('expected HyperCore payment requirement');
-  assert.deepEqual((prepared.response.accepts as Array<{ network: string }>).map(({ network }) => network), ['hyperliquid:mainnet']);
+  // A bare discovery quote never fabricates a Core quote into accepts[]:
+  // `hyperliquid:mainnet` is an application protocol identifier, not CAIP-2,
+  // and one malformed entry fails CDP/Bazaar validation for the whole
+  // manifest (2026-11-15). With no standard rails configured the bare 402
+  // fails closed; Core payments still work when the client presents a
+  // requirement obtained from the dedicated C3 worker resource.
+  await assert.rejects(
+    () => createX402PaymentService(config!).prepare(config!.routes[0]!, 'https://api.example.test/v1/receipts/example/bundle', undefined),
+    /does not support exact payments on any locally configured network/
+  );
 });
 
 test('per-network facilitator overrides parse and validate strictly', () => {
