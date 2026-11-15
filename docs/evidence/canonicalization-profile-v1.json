@@ -1,0 +1,218 @@
+{
+  "schema": "priorseal-decision-input-evidence/canonicalization-profile/v1",
+  "generatedAt": "2026-11-15",
+  "status": "measured implementation profile; NOT a conformance claim",
+  "implementation": {
+    "file": "PriorSeal/src/domain/canonical-json.mjs",
+    "runtime": "Node >= 20; node:crypto only; zero third-party dependencies",
+    "hash": "hashJson(v) = sha256Hex(canonicalize(v)), SHA-256 over UTF-8 bytes of the canonical string",
+    "rules": [
+      "undefined, NaN, Infinity are rejected",
+      "scalar values use JSON.stringify",
+      "arrays preserve order, joined by comma without spaces",
+      "objects require Object.prototype or null prototype; non-plain objects are rejected",
+      "object keys are sorted with Object.keys().sort() (UTF-16 code unit order)",
+      "keys __proto__, prototype, constructor are rejected",
+      "string escaping follows JSON.stringify; non-ASCII is emitted as-is (UTF-8)"
+    ]
+  },
+  "rfc8785": {
+    "section322Sample": {
+      "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"€$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}",
+      "sha256": "2d5e01a318d0f0879ab568c4be289c8b1f64ef8921a53c6277d5e069978baacb",
+      "byteIdenticalToRfcExpectedOutput": true
+    },
+    "appendixB": {
+      "vectors": 26,
+      "pass": 26,
+      "fail": 0,
+      "note": "NaN and Infinity correctly rejected; all 24 finite number samples match RFC 8785 Appendix B JSON Representation"
+    },
+    "conclusion": "PriorSeal canonicalize matches RFC 8785 JCS on the 3.2.2 reference sample and all 26 Appendix B number vectors. V8 JSON.stringify uses the same ECMAScript number/string serialization that JCS requires.",
+    "notClaimed": [
+      "No full I-JSON input-constraint validation (lone surrogates, duplicate keys, BOM) has been run",
+      "Extra restrictions beyond JCS (non-plain objects and unsafe keys) are stricter, not equivalent",
+      "No official full JCS conformance suite has been executed",
+      "Therefore: JCS-like deterministic canonicalization, verified on published vectors, NOT RFC 8785 conformant"
+    ]
+  },
+  "rfc6962": {
+    "local": "merkle-log.mjs: merkleLeafHash = hashJson({domain,entryHash}); merkleParentHash = hashJson({domain,left,right}); complete power-of-two subtrees persisted for O(log n) proofs",
+    "differences": [
+      "No 0x00/0x01 domain prefixes",
+      "Hash input is canonical JSON, not raw byte concatenation",
+      "Tree shape is power-of-two decomposition, not the RFC 6962 split rule"
+    ],
+    "conclusion": "Functionally an append-only Merkle inclusion-proof log; NOT RFC 6962 wire-compatible"
+  },
+  "rfc3161": {
+    "local": "file-anchor-provider.mts: eip155 anchor(uint256 size, bytes32 head) transaction, independently re-verified over RPC (tx hash, receipt status, blockHash, block.timestamp, calldata decode, confirmations)",
+    "differences": [
+      "External anchor is an on-chain transaction, not an RFC 3161 TSA token",
+      "No tsa_url/token/anchored_at fields are emitted"
+    ],
+    "conclusion": "Equivalent external existence proof with a different carrier; NOT RFC 3161"
+  },
+  "testVectors": [
+    {
+      "name": "key-order",
+      "input": {
+        "b": 1,
+        "a": 2
+      },
+      "canonical": "{\"a\":2,\"b\":1}",
+      "sha256": "d3626ac30a87e6f7a6428233b3c68299976865fa5508e4267c5415c76af7a772"
+    },
+    {
+      "name": "unicode-and-escape",
+      "input": {
+        "msg": "café \"q\" \\ 中",
+        "n": [
+          1,
+          2.5,
+          null,
+          true
+        ]
+      },
+      "canonical": "{\"msg\":\"café \\\"q\\\" \\\\ 中\",\"n\":[1,2.5,null,true]}",
+      "sha256": "8e744f24ea04b41362bc20848f0a468284c0ba8f9ea8a123cef2ac5e24056fad"
+    },
+    {
+      "name": "number-edges",
+      "input": {
+        "big": 1e+21,
+        "negZero": 0,
+        "small": 1e-7
+      },
+      "canonical": "{\"big\":1e+21,\"negZero\":0,\"small\":1e-7}",
+      "sha256": "ad44428074ce556c0f03668d748ce2ad13875864f0983b2d113d55b9509ff091"
+    }
+  ],
+  "merkleVectors": {
+    "entryHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "leaf": "c65f3a5907c266f9d20035fdc9e19f93e023cd1ff06ab5f3a83e31c0ef697e46",
+    "siblingEntryHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "siblingLeaf": "add0074e1ab6e39257e161b6debb0706877ee6106a349b0312fdc92f152add27",
+    "parent": "5fbfefd214dcf68becd0ab583f5042a199c7473dec16da8c4390e7e61aacd773"
+  },
+  "rejectionCases": [
+    "nonfinite -> TypeError: non-finite number is not valid canonical JSON",
+    "unsafe-key -> TypeError: unsafe canonical JSON key",
+    "non-plain-object -> TypeError: canonical JSON requires a plain object",
+    "undefined -> TypeError: undefined is not valid canonical JSON"
+  ],
+  "appendixBMeasured": [
+    {
+      "ieee754": "0000000000000000",
+      "canonicalNumber": "0"
+    },
+    {
+      "ieee754": "8000000000000000",
+      "canonicalNumber": "0"
+    },
+    {
+      "ieee754": "0000000000000001",
+      "canonicalNumber": "5e-324"
+    },
+    {
+      "ieee754": "8000000000000001",
+      "canonicalNumber": "-5e-324"
+    },
+    {
+      "ieee754": "7fefffffffffffff",
+      "canonicalNumber": "1.7976931348623157e+308"
+    },
+    {
+      "ieee754": "ffefffffffffffff",
+      "canonicalNumber": "-1.7976931348623157e+308"
+    },
+    {
+      "ieee754": "4340000000000000",
+      "canonicalNumber": "9007199254740992"
+    },
+    {
+      "ieee754": "c340000000000000",
+      "canonicalNumber": "-9007199254740992"
+    },
+    {
+      "ieee754": "4430000000000000",
+      "canonicalNumber": "295147905179352830000"
+    },
+    {
+      "ieee754": "7fffffffffffffff",
+      "canonicalNumber": "THROW"
+    },
+    {
+      "ieee754": "7ff0000000000000",
+      "canonicalNumber": "THROW"
+    },
+    {
+      "ieee754": "44b52d02c7e14af5",
+      "canonicalNumber": "9.999999999999997e+22"
+    },
+    {
+      "ieee754": "44b52d02c7e14af6",
+      "canonicalNumber": "1e+23"
+    },
+    {
+      "ieee754": "44b52d02c7e14af7",
+      "canonicalNumber": "1.0000000000000001e+23"
+    },
+    {
+      "ieee754": "444b1ae4d6e2ef4e",
+      "canonicalNumber": "999999999999999700000"
+    },
+    {
+      "ieee754": "444b1ae4d6e2ef4f",
+      "canonicalNumber": "999999999999999900000"
+    },
+    {
+      "ieee754": "444b1ae4d6e2ef50",
+      "canonicalNumber": "1e+21"
+    },
+    {
+      "ieee754": "3eb0c6f7a0b5ed8c",
+      "canonicalNumber": "9.999999999999997e-7"
+    },
+    {
+      "ieee754": "3eb0c6f7a0b5ed8d",
+      "canonicalNumber": "0.000001"
+    },
+    {
+      "ieee754": "41b3de4355555553",
+      "canonicalNumber": "333333333.3333332"
+    },
+    {
+      "ieee754": "41b3de4355555554",
+      "canonicalNumber": "333333333.33333325"
+    },
+    {
+      "ieee754": "41b3de4355555555",
+      "canonicalNumber": "333333333.3333333"
+    },
+    {
+      "ieee754": "41b3de4355555556",
+      "canonicalNumber": "333333333.3333334"
+    },
+    {
+      "ieee754": "41b3de4355555557",
+      "canonicalNumber": "333333333.33333343"
+    },
+    {
+      "ieee754": "becbf647612f3696",
+      "canonicalNumber": "-0.0000033333333333333333"
+    },
+    {
+      "ieee754": "43143ff3c1cb0959",
+      "canonicalNumber": "1424953923781206.2"
+    }
+  ],
+  "verificationRecipe": [
+    "Obtain a portable verification bundle (GET /v1/evidence/receipts/{receiptId})",
+    "Pin the issuer public key OUT OF BAND (bundled keys are discovery metadata, not a trust anchor)",
+    "Verify the Ed25519 signed checkpoint with verifyEd25519Statement (ed25519.mjs, node:crypto only)",
+    "Verify chain continuity and inclusion proof with verifyTransparencyEvidence / verifyMerkleProof",
+    "Independently re-verify the on-chain anchor over any RPC for that chain",
+    "No vendor server is required for steps 3-4"
+  ]
+}
