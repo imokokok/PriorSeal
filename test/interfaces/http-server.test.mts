@@ -524,7 +524,10 @@ test('x402 integration readiness is receipt-independent, exposes Bazaar query me
   assert.deepEqual(challenge.extensions.bazaar.schema.properties.input.properties.queryParams.required, ['chainId', 'subjectAddress']);
   assert.equal(challenge.extensions.bazaar.info.output.format, 'priorseal.integration-readiness.v1');
   assert.equal(challenge.extensions.bazaar.routeTemplate, undefined, 'a static route must not claim a dynamic route template');
-  const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: challenge.accepts[0], payload: {}, resource: { url: `https://api.example.test${path}` }, extensions: challenge.extensions })).toString('base64');
+  // The server canonicalizes the payment resource (query stripped), so the
+  // client payload and ledger lookups must use the canonical URL too.
+  const canonicalResourceUrl = 'https://api.example.test/v1/integration-readiness';
+  const paymentHeader = Buffer.from(JSON.stringify({ x402Version: 2, accepted: challenge.accepts[0], payload: {}, resource: { url: canonicalResourceUrl }, extensions: challenge.extensions })).toString('base64');
   const paid = await request(server, path, { headers: { 'payment-signature': paymentHeader } });
   assert.equal(paid.status, 200);
   assert.equal(paid.headers['cache-control'], 'private, no-store');
@@ -543,7 +546,7 @@ test('x402 integration readiness is receipt-independent, exposes Bazaar query me
   assert.equal(verifyIntegrationReadiness(paid.json() as unknown as Record<string, unknown>, publicKeyPem), true);
   assert.deepEqual(calls, ['GET /supported', 'POST /verify', 'POST /settle']);
   assert.deepEqual(metrics.slice(0, 4).map((entry) => entry.journeyStage), ['TARGET_INSPECTED', 'TARGET_INSPECTED', 'TARGET_INSPECTED', 'TARGET_INSPECTED']);
-  const ledger = await store.listX402PaymentLedgerEvents(x402PaymentLedgerId({ payload: { x402Version: 2, accepted: challenge.accepts[0] as never, payload: {}, resource: { url: `https://api.example.test${path}` }, extensions: challenge.extensions }, requirement: challenge.accepts[0] as never }, `https://api.example.test${path}`));
+  const ledger = await store.listX402PaymentLedgerEvents(x402PaymentLedgerId({ payload: { x402Version: 2, accepted: challenge.accepts[0] as never, payload: {}, resource: { url: canonicalResourceUrl }, extensions: challenge.extensions }, requirement: challenge.accepts[0] as never }, canonicalResourceUrl));
   assert.deepEqual(ledger.map(event => event.type), ['PAYMENT_AUTHORIZED', 'DELIVERED']);
   const invalid = await request(server, `/v1/integration-readiness?chainId=bad&subjectAddress=0x${'a'.repeat(40)}`, { headers: { 'payment-signature': paymentHeader } });
   assert.equal(invalid.status, 400);
