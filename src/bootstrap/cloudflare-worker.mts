@@ -29,7 +29,10 @@ function withSecurityHeaders(response: Response) {
 }
 
 function isWorkerRoute(pathname: string) {
+  // Static ownership-verification files are served from web/dist via ASSETS;
+  // everything else under /.well-known/ belongs to the API router.
   if (pathname === '/.well-known/sati-agent.json') return false;
+  if (pathname === '/.well-known/mcp-registry-auth') return false;
   return pathname === '/i'
     || pathname === '/mcp'
     || pathname.startsWith('/v1/')
