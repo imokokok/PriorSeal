@@ -328,3 +328,23 @@ export async function verifyBaseAgentSwapGuardReceiptBundle(input: { approvalRec
   if (!approvalResult.valid || !swapResult.valid || !isRecord(input.approvalReceipt) || !isRecord(input.swapReceipt) || !isRecord(input.approvalReceipt.authorizationEvidence) || !isRecord(input.swapReceipt.authorizationEvidence)) return { valid: false, reason: `PRIORSEAL_${!approvalResult.valid ? approvalResult.code : swapResult.code}` }
   return verifyBaseAgentSwapGuardAuthorizationBundle({ approval: input.approvalReceipt.authorizationEvidence.authorization, swap: input.swapReceipt.authorizationEvidence.authorization, decision: input.decision }, input.insightTrust)
 }
+
+/**
+ * Neutral public names for the multichain Agent Swap Guard. The Base-prefixed
+ * exports above remain stable wire-compatible aliases for existing consumers;
+ * these names reflect that the same verifier accepts Base, BNB and Monad.
+ */
+export const AGENT_SWAP_GUARD_CHAIN_IDS = BASE_AGENT_SWAP_GUARD_CHAIN_IDS
+export type AgentSwapGuardChainId = InsightBaseAgentSwapGuardChainId
+export type AgentSwapGuardBoundIntents = BaseAgentSwapGuardBoundIntents
+export type AgentSwapGuardVerificationOptions = BaseAgentSwapGuardVerificationOptions
+export type InsightAgentSwapGuardDecision = InsightBaseAgentSwapGuardDecision
+export type InsightAgentSwapGuardVerification = InsightBaseAgentSwapGuardVerification
+export const AGENT_SWAP_GUARD_NAMESPACE = INSIGHT_BASE_AGENT_SWAP_GUARD_NAMESPACE
+export const AGENT_SWAP_GUARD_SCHEMA = INSIGHT_BASE_AGENT_SWAP_GUARD_SCHEMA
+export const agentSwapGuardCommitment = baseAgentSwapGuardCommitment
+export const agentSwapGuardIntentAsset = baseAgentSwapGuardIntentAsset
+export const verifyInsightAgentSwapGuardDecision = verifyInsightBaseAgentSwapGuardDecision
+export const buildAgentSwapGuardBoundIntents = buildBaseAgentSwapGuardBoundIntents
+export const verifyAgentSwapGuardAuthorizationBundle = verifyBaseAgentSwapGuardAuthorizationBundle
+export const verifyAgentSwapGuardReceiptBundle = verifyBaseAgentSwapGuardReceiptBundle

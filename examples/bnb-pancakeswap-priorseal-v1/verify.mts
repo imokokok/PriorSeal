@@ -7,7 +7,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import {
   baseAgentSwapGuardIntentAsset,
-  buildBaseAgentSwapGuardBoundIntents,
+  buildAgentSwapGuardBoundIntents,
   verifyBaseAgentSwapGuardAuthorizationBundle,
   verifyInsightBaseAgentSwapGuardDecision,
 } from "../../sdk/dist/index.js";
@@ -147,7 +147,7 @@ const inputs: { approval: ExactCallIntentInput; swap: ExactCallIntentInput } = {
     validUntil: now + 60,
   },
 };
-const intents = await buildBaseAgentSwapGuardBoundIntents(inputs, decision, trust);
+const intents = await buildAgentSwapGuardBoundIntents(inputs, decision, trust);
 assert.equal(intents.approval.chainId, chainId);
 assert.equal(BigInt(String(intents.swap.nonce)) - BigInt(String(intents.approval.nonce)), 1n);
 
@@ -161,7 +161,7 @@ assert.deepEqual(
   { valid: true, reason: "OK" },
 );
 
-await assert.rejects(() => buildBaseAgentSwapGuardBoundIntents({
+await assert.rejects(() => buildAgentSwapGuardBoundIntents({
   approval: inputs.approval,
   swap: { ...inputs.swap, transaction: { ...inputs.swap.transaction, data: "0xdeadbeef" } },
 }, decision, trust));

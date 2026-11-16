@@ -311,3 +311,14 @@ export async function detectInsightBaseAgentSwapGuardSettlementContradictions(se
   }
   return report
 }
+
+/** Neutral public names for the multichain Agent Swap Guard settlement APIs. */
+export type InsightAgentSwapGuardSettlement = InsightBaseAgentSwapGuardSettlement
+export type InsightAgentSwapGuardSettlementContradiction = InsightBaseAgentSwapGuardSettlementContradiction
+export type InsightAgentSwapGuardSettlementData = InsightBaseAgentSwapGuardSettlementData
+export type InsightAgentSwapGuardSettlementOptions = InsightBaseAgentSwapGuardSettlementOptions
+export type InsightAgentSwapGuardSettlementSetReport = InsightBaseAgentSwapGuardSettlementSetReport
+export type InsightAgentSwapGuardSettlementVerification = InsightBaseAgentSwapGuardSettlementVerification
+export const verifyInsightAgentSwapGuardSettlement = verifyInsightBaseAgentSwapGuardSettlement
+export const verifyAgentSwapGuardSettlementForDecision = verifyBaseAgentSwapGuardSettlementForDecision
+export const detectInsightAgentSwapGuardSettlementContradictions = detectInsightBaseAgentSwapGuardSettlementContradictions

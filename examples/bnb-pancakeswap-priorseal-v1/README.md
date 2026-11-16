@@ -24,7 +24,7 @@ transaction, or handles a real private key. It demonstrates the evidence
 boundary; it is not a price quote, token audit, route optimizer, or execution
 authority.
 
-The SDK function is intentionally named
-`buildBaseAgentSwapGuardBoundIntents` for compatibility with the existing
-multichain API. The BNB-specific semantic MCP entrypoint is
+The public SDK function is `buildAgentSwapGuardBoundIntents`. The older
+`buildBaseAgentSwapGuardBoundIntents` export remains available for existing
+integrations. The BNB-specific semantic MCP entrypoint is
 `prepare_bnb_pancakeswap_v3_guard`.
