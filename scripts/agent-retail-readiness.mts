@@ -5,6 +5,7 @@
  * instruction to retry a transaction or change a production setting.
  */
 import { pathToFileURL } from 'node:url';
+import { runMcpCompatibilityProof } from './mcp-compatibility-proof.mjs';
 
 type JsonObject = Record<string, unknown>;
 type ReadinessOptions = { env?: NodeJS.ProcessEnv; fetcher?: typeof fetch; log?: (message: string) => void };
@@ -34,6 +35,19 @@ function nested(value: JsonObject, path: string[], label: string): JsonObject {
     current = (current as JsonObject)[key];
   }
   return record(current, label);
+}
+
+function array(value: unknown, label: string): unknown[] {
+  assert(Array.isArray(value), `${label} must be an array`);
+  return value;
+}
+
+function canonicalOpenApiPath(resourcePath: string): string {
+  if (/^\/v1\/receipts\/[^/]+\/bundle$/.test(resourcePath)) return '/v1/receipts/{receiptId}/bundle';
+  if (/^\/v1\/evidence\/receipts\/[^/]+\/check$/.test(resourcePath)) return '/v1/evidence/receipts/{receiptId}/check';
+  if (/^\/v1\/evidence\/receipts\/[^/]+$/.test(resourcePath)) return '/v1/evidence/receipts/{receiptId}';
+  if (/^\/v1\/agent-credit-packs\/[^/]+\/checkout$/.test(resourcePath)) return '/v1/agent-credit-packs/{packId}/checkout';
+  return resourcePath;
 }
 
 async function readLimitedJson(response: Response, label: string): Promise<JsonObject> {
@@ -68,7 +82,7 @@ async function readLimitedJson(response: Response, label: string): Promise<JsonO
   return record(value, label);
 }
 
-/** Runs only GET requests. It deliberately never sends PAYMENT-SIGNATURE. */
+/** Runs only public reads plus protocol discovery. It never sends PAYMENT-SIGNATURE. */
 export async function runAgentRetailReadiness({ env = process.env, fetcher = fetch, log = console.log }: ReadinessOptions = {}) {
   const baseUrl = new URL(env.PRIORSEAL_BASE_URL ?? 'https://priorseal.xyz');
   const expectPublicPaidCommerce = env.PRIORSEAL_EXPECT_PUBLIC_PAID_COMMERCE === 'true';
@@ -95,6 +109,7 @@ export async function runAgentRetailReadiness({ env = process.env, fetcher = fet
   const version = await get('/v1/version');
   const capabilities = await get('/v1/capabilities');
   const agent = await get('/.well-known/priorseal-agent.json');
+  const openApi = await get('/openapi/v1.json');
 
   assert(live.body.status === 'ok', 'Liveness is not healthy');
   assert(ready.body.status === 'ready' && ready.body.storage === 'd1', 'Durable storage is not ready');
@@ -124,6 +139,38 @@ export async function runAgentRetailReadiness({ env = process.env, fetcher = fet
   const safety = nested(agent.body, ['safety'], 'Agent discovery safety boundary');
   assert(safety.executionMode === 'PROPOSAL_AND_PRINCIPAL_CONFIRMATION', 'Agent discovery does not require principal confirmation');
   assert(safety.principalSignature === 'REQUIRED_FOR_EVERY_EXACT_ACTION' && safety.transactionSigningKey === 'NEVER_REQUESTED_BY_PRIORSEAL', 'Agent discovery weakens the signing boundary');
+
+  assert(openApi.body.openapi === '3.1.0' && nested(openApi.body, ['info'], 'OpenAPI info').version === '2.0.0', 'Published OpenAPI document has an unexpected version');
+  const openApiPaths = nested(openApi.body, ['paths'], 'OpenAPI paths');
+  const openApiDiscovery = nested(agent.body, ['discovery'], 'Agent discovery links');
+  assert(openApiDiscovery.openapi === '/openapi/v1.json' && openApiDiscovery.mcp === '/mcp', 'Agent discovery links do not point at the public protocol endpoints');
+
+  let x402Summary: { resources: number; baseResources: number; paths: string[] } | null = null;
+  if (expectPublicPaidCommerce) {
+    const x402 = await get('/.well-known/x402.json');
+    assert(x402.body.x402Version === 2, 'Published x402 manifest is not x402 v2');
+    const resources = array(x402.body.resources, 'x402 manifest resources').map((value, index) => record(value, `x402 manifest resource ${index + 1}`));
+    assert(resources.length > 0, 'Published x402 manifest has no paid resources');
+    const paths: string[] = [];
+    let baseResources = 0;
+    for (const [index, resource] of resources.entries()) {
+      const resourceUrl = new URL(string(resource.resource, `x402 manifest resource ${index + 1} URL`));
+      assert(resourceUrl.origin === baseUrl.origin && !resourceUrl.search && !resourceUrl.hash, `x402 manifest resource ${index + 1} leaves the configured origin`);
+      assert(resource.method === 'GET', `x402 manifest resource ${index + 1} is not a GET route`);
+      const accepts = array(resource.accepts, `x402 manifest resource ${index + 1} accepts`);
+      assert(accepts.length > 0, `x402 manifest resource ${index + 1} has no payment requirements`);
+      if (accepts.some((value) => record(value, `x402 manifest resource ${index + 1} payment requirement`).network === 'eip155:8453')) baseResources += 1;
+      const path = canonicalOpenApiPath(resourceUrl.pathname);
+      const operation = openApiPaths[path];
+      assert(record(operation, `OpenAPI path ${path}`).get, `x402 resource ${resourceUrl.pathname} is missing from OpenAPI`);
+      paths.push(path);
+    }
+    assert(baseResources === resources.length, 'Every public x402 resource must advertise a Base mainnet payment requirement');
+    x402Summary = { resources: resources.length, baseResources, paths };
+  }
+
+  const mcp = await runMcpCompatibilityProof({ env, fetcher, log: () => undefined });
+  assert(mcp.baseUrl === baseUrl.origin && mcp.businessWritesPerformed === 0 && mcp.broadcastTransactions === 0, 'MCP compatibility proof crossed the safe read-only boundary');
   const result = {
     ok: true,
     schema: 'priorseal.agent-retail-readiness.v1',
@@ -133,7 +180,11 @@ export async function runAgentRetailReadiness({ env = process.env, fetcher = fet
     agentCredits: 'CONFIGURED',
     selfserveClaim: expectPublicPaidCommerce ? 'PUBLIC_SELF_SERVE_ENABLED' : 'OPERATOR_MANAGED_ONLY',
     x402: expectPublicPaidCommerce ? 'PUBLIC_ENABLED' : 'DISABLED_FOR_PILOT',
+    x402Manifest: x402Summary,
+    openApi: { version: nested(openApi.body, ['info'], 'OpenAPI info').version, checkedPaths: x402Summary?.paths ?? [] },
+    mcp: { statelessProtocol: mcp.statelessProtocol, legacyProtocol: mcp.legacyProtocol, toolCount: mcp.toolCount },
     getRequests,
+    mcpRequests: mcp.requestCount,
     writesPerformed: 0,
     walletOrTransactionSignatures: 0,
   };
