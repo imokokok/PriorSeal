@@ -104,6 +104,27 @@ If the result is pending, unknown, reorged, reverted, or mismatched, do not
 retry under the same authorization. Re-observe the original transaction or ask
 the principal to approve a new bounded action.
 
+## BNB PancakeSwap V3 direct-call adapter
+
+For the two reviewed BNB PancakeSwap V3 profiles, Insight exposes the semantic
+MCP entrypoint `prepare_bnb_pancakeswap_v3_guard`:
+
+- `bnb-pancakeswap-v3-usdt-usdc-100`
+- `bnb-pancakeswap-v3-usdt-wbnb-100`
+
+The alias keeps the same fail-closed behavior as
+`prepare_base_agent_swap_guard`: it returns exact approval and swap calldata
+only for an `ALLOW` result. It is a reviewed single-pool, single-hop direct
+router path, not an aggregator or a general PancakeSwap transaction builder.
+
+When binding the result in PriorSeal, use the SDK function
+`buildBaseAgentSwapGuardBoundIntents` (the historical `Base` name is retained
+for SDK compatibility). Create approval intent nonce `N` and swap intent nonce
+`N + 1`, keep the same source amount and expiry, require the principal's two
+signatures, observe approval before swap, and retain both portable receipts.
+The complete offline BNB reference is
+[`examples/bnb-pancakeswap-priorseal-v1`](../../examples/bnb-pancakeswap-priorseal-v1/README.md).
+
 ## BNB-specific distribution surfaces
 
 This skill is designed to be embedded in:
