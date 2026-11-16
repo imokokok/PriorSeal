@@ -1,4 +1,4 @@
-# Insight Base Agent Swap Guard binding
+# Insight Agent Swap Guard binding
 
 This adapter completes the narrow Base DEX path without granting either
 service wallet authority:
@@ -15,6 +15,8 @@ A self-contained offline reference of the full assess → bind → authorize →
 observe → review loop, with deterministic demo keys and a machine-readable
 report, ships as
 [examples/insight-base-agent-swap-guard-reference-v1](../examples/insight-base-agent-swap-guard-reference-v1/README.md).
+For the reviewed BNB Smart Chain PancakeSwap V3 path, see the smaller
+[BNB PancakeSwap reference](../examples/bnb-pancakeswap-priorseal-v1/README.md).
 
 After execution, the loop closes with Insight's signed settlement artifact;
 see
@@ -105,10 +107,10 @@ rejects an authorization whose own expiry outlives the Insight decision.
 
 ## Scope boundary
 
-This is the closure for Insight's current Base direct-call profiles only:
-Aerodrome Slipstream WETH→USDC CL100 and PancakeSwap V3 USDC→USDT 0.01%.
-It does not add support for aggregators, permits, native token input,
-multicalls, smart-account UserOperations, arbitrary approval patterns, or an
-automatic execution authority. A valid evidence bundle proves bounded signed
-claims and observed executions; it does not guarantee price, fill, MEV
-protection, allowance safety outside the exact call, or token security.
+This binding covers the reviewed direct-call profiles exposed by Insight:
+Base, BNB Smart Chain, and Monad. It does not add support for aggregators,
+permits, native token input, multicalls, smart-account UserOperations,
+arbitrary approval patterns, or an automatic execution authority. A valid
+evidence bundle proves bounded signed claims and observed executions; it does
+not guarantee price, fill, MEV protection, allowance safety outside the exact
+call, or token security.

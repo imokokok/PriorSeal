@@ -24,6 +24,7 @@ reviewed protocol coverage.
 
 ## Related implementations
 
+- BNB PancakeSwap V3 PriorSeal reference: `../../examples/bnb-pancakeswap-priorseal-v1`
 - PriorSeal MCP: `https://priorseal.xyz/mcp`
 - Insight MCP: `https://www.oracleinsight.xyz/api/mcp`
 - PriorSeal SDK: `https://www.npmjs.com/package/priorseal-sdk`
