@@ -33,6 +33,7 @@ function isWorkerRoute(pathname: string) {
   // everything else under /.well-known/ belongs to the API router.
   if (pathname === '/.well-known/sati-agent.json') return false;
   if (pathname === '/.well-known/mcp-registry-auth') return false;
+  if (pathname === '/.well-known/glama.json') return false;
   return pathname === '/i'
     || pathname === '/mcp'
     || pathname.startsWith('/v1/')
