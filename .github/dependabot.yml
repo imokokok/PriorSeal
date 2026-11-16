@@ -20,27 +20,24 @@ updates:
         update-types:
           - minor
           - patch
-
-  # Console web app.
-  - package-ecosystem: npm
-    directory: /web
-    schedule:
-      interval: weekly
-      day: monday
-      time: '03:00'
-      timezone: Asia/Shanghai
-    open-pull-requests-limit: 5
-    groups:
-      web-production-dependencies:
-        dependency-type: production
+    # Major upgrades are deliberate migrations, not independent automatic
+    # bumps: Vite and its React plugin have a peer-version contract, while
+    # asn1js and PKI.js must move together or TypeScript sees two incompatible
+    # ASN.1 type trees. Keep the tested stack quiet until such a migration is
+    # prepared as one branch and validated end to end.
+    ignore:
+      - dependency-name: vite
         update-types:
-          - minor
-          - patch
-      web-development-dependencies:
-        dependency-type: development
+          - version-update:semver-major
+      - dependency-name: '@vitejs/plugin-react'
         update-types:
-          - minor
-          - patch
+          - version-update:semver-major
+      - dependency-name: asn1js
+        update-types:
+          - version-update:semver-major
+      - dependency-name: pkijs
+        update-types:
+          - version-update:semver-major
 
   # SBOM tooling.
   - package-ecosystem: npm

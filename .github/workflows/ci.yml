@@ -126,7 +126,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             examples/aps-priorseal-decision-binding-v1/package-lock.json
-      - name: Verify Node.js version pins agree
+      - name: Verify Node.js and workspace lock pins agree
         shell: bash
         run: |
           set -euo pipefail
@@ -147,6 +147,10 @@ jobs:
           fi
           if grep -rInE 'node-version:[[:space:]]*[0-9]' .github/workflows; then
             echo "::error::workflows must use node-version-file: .node-version" >&2
+            exit 1
+          fi
+          if [[ -e web/package-lock.json ]]; then
+            echo "::error::web is a root npm workspace; its dependency lock must live in package-lock.json" >&2
             exit 1
           fi
           echo "Node.js pins agree on $expected."
