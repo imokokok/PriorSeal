@@ -84,7 +84,7 @@ For ERC-4337 smart accounts, a second `intent.v2` profile binds the canonical Us
 
 ### Use the hosted console
 
-Open the [PriorSeal console](https://priorseal.xyz/app). Its quickstart checks the deployment's configured capabilities before wallet signing. You can create an authorization, observe a transaction, export the receipt, and review it in the [local verifier](https://priorseal.xyz/app/verify). The console's activity list is browser-local; it is not a complete server-side history.
+Open the [PriorSeal console](https://priorseal.xyz/app). Its quickstart checks the deployment's configured capabilities before wallet signing. You can create an authorization, observe a transaction, export the receipt, and review it in the [public verifier](https://priorseal.xyz/verify). The console's activity list is browser-local; it is not a complete server-side history.
 
 ### Run the offline example
 
