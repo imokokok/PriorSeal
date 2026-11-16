@@ -146,7 +146,7 @@ export function LandingPage() {
           <div className="flagship-solution__path" data-reveal aria-label="Insight and PriorSeal flagship workflow">
             <article><span>01 / DECISION</span><h3>Insight</h3><p>Signed risk or simulation assessment for the proposed action.</p><a href="/i" target="_blank" rel="noreferrer">Explore Insight <span>↗</span></a></article>
             <article><span>02 / CONTROL</span><h3>Your boundary</h3><p>Your wallet, policy service or Agent runtime decides what must be true before submission.</p><Link to="/integrations/mcp">Integration patterns <span>↗</span></Link></article>
-            <article><span>03 / ACCOUNTABILITY</span><h3>PriorSeal</h3><p>Bind bounded authorization to observed execution with portable evidence.</p><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/app/verify">Open local verifier <span>↗</span></Link></article>
+            <article><span>03 / ACCOUNTABILITY</span><h3>PriorSeal</h3><p>Bind bounded authorization to observed execution with portable evidence.</p><Link onPointerEnter={preloadConsole} onFocus={preloadConsole} to="/verify">Open public verifier <span>↗</span></Link></article>
           </div>
           <aside className="flagship-solution__boundary" data-reveal><strong>One promise, clear boundaries.</strong><p>Insight does not authorize or execute. PriorSeal does not issue the risk decision or hold funds. The integrator enforces required checks.</p></aside>
         </section>
@@ -195,7 +195,7 @@ export function LandingPage() {
             <p className="museum-kicker">THE PORTABLE RECORD</p>
             <h2>Built to be<br />examined.</h2>
             <p>A v3 receipt carries signed authority, independent time evidence, observed execution and a separately recomputable compliance decision in one document.</p>
-            <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/app/verify">Open the local verifier <span>↗</span></Link>
+            <Link onPointerEnter={preloadConsole} onFocus={preloadConsole} className="museum-text-link" to="/verify">Open the public verifier <span>↗</span></Link>
           </div>
           <div className="receipt-gallery__record" data-reveal>
             <p>ILLUSTRATIVE RECEIPT / NOT LIVE EXECUTION EVIDENCE</p>
