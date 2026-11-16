@@ -23,12 +23,21 @@ if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error('Could not determine the r
 const mainRevision = git('rev-parse', 'origin/main');
 if (revision !== mainRevision) throw new Error(`Refusing to deploy ${revision}: production must deploy the exact origin/main commit ${mainRevision}`);
 
-const result = spawnSync('npm', ['exec', '--', 'wrangler', 'deploy', '--env', '', '--tag', revision, '--var', `PRIORSEAL_BUILD_VERSION:${revision}`, '--message', `Git ${revision}`], { stdio: 'inherit', env: process.env });
+const result = spawnSync('npm', ['exec', '--', 'wrangler', 'deploy', '--env', '', '--tag', revision, '--var', `PRIORSEAL_BUILD_VERSION:${revision}`, '--message', `Git ${revision}`], {
+  encoding: 'utf8',
+  env: process.env,
+  stdio: ['inherit', 'pipe', 'pipe'],
+});
 if (result.error) throw result.error;
+if (result.stdout) process.stdout.write(result.stdout);
+if (result.stderr) process.stderr.write(result.stderr);
 const status = result.status ?? 1;
 if (status !== 0) {
   process.exitCode = status;
 } else {
+  const deployedVersionId = result.stdout.match(/Current Version ID:\s*([0-9a-f-]{36})/i)?.[1];
+  if (!deployedVersionId) throw new Error('Wrangler deploy did not report the uploaded version ID; refusing to verify an ambiguous release');
+
   const readWranglerJson = <T,>(args: string[]): T => {
     const inspection = spawnSync('npm', ['exec', '--', 'wrangler', ...args, '--json'], {
       encoding: 'utf8',
@@ -49,14 +58,14 @@ if (status !== 0) {
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       try {
         const versions = readWranglerJson<WorkerVersion[]>(['versions', 'list', '--env', '']);
-        const version = versions.find((candidate) => candidate.annotations?.['workers/tag'] === revision);
+        const version = versions.find((candidate) => candidate.id === deployedVersionId && candidate.annotations?.['workers/tag'] === revision);
         if (!version) throw new Error(`No Cloudflare Worker version is tagged with ${revision}`);
 
         const deployments = readWranglerJson<WorkerDeployment[]>(['deployments', 'list', '--env', '']);
         const activeDeployment = deployments.find((deployment) => deployment.versions?.some((entry) => entry.version_id === version.id && entry.percentage === 100));
         if (!activeDeployment) throw new Error(`Cloudflare Worker version ${version.number} is not deployed at 100%`);
 
-        console.log(`Verified Cloudflare Worker version ${version.number} (${version.id}) at 100% with Git SHA ${revision}`);
+        console.log(`Verified uploaded Cloudflare Worker version ${version.number} (${version.id}) at 100% with Git SHA ${revision}`);
         return;
       } catch (error) {
         lastError = error;
