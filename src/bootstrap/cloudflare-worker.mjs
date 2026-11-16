@@ -24,6 +24,7 @@ function withSecurityHeaders(response) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 function isWorkerRoute(pathname) {
+  if (pathname === "/.well-known/sati-agent.json") return false;
   return pathname === "/i" || pathname === "/mcp" || pathname.startsWith("/v1/") || pathname.startsWith("/health/") || pathname.startsWith("/.well-known/") || pathname.startsWith("/openapi/") || pathname === "/openapi.json";
 }
 function httpsRedirect(request) {
