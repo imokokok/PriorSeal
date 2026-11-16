@@ -80,6 +80,12 @@ so the two products are discoverable side by side through the same registry.
 Re-register or update via `npm run agent8004:register`; the registrar key
 lives only in `.env.local`.
 
+For ecosystem discovery, use the [PriorSeal Guardian discovery card](../integrations/erc-8004-discovery-card.md).
+It is the canonical human-readable index of the existing identity's MCP
+endpoint, supported operation-specific checks, example receipts, failure
+semantics and commercial boundary. The service label does not create a second
+ERC-8004 identity.
+
 “Generic EVM observation” means PriorSeal validates the RPC chain identity and
 records the transaction, receipt, block, native transfer envelope, and verified
 ERC-20 `Transfer` logs. A deployment must configure the corresponding
