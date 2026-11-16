@@ -21,6 +21,14 @@ test('Cloudflare runtime requires production bindings and uses the Git version t
   assert.equal(cloudflareRuntimeEnvironment(environment).PRIORSEAL_BUILD_VERSION, environment.CF_VERSION_METADATA.tag);
   assert.equal(cloudflareRuntimeEnvironment(environment).PRIORSEAL_DATABASE_BACKEND, 'd1');
   assert.equal(cloudflareRuntimeEnvironment(bindings({ CF_VERSION_METADATA: { id: 'version-only' } })).PRIORSEAL_BUILD_VERSION, 'version-only');
+  assert.equal(
+    cloudflareRuntimeEnvironment(bindings({ PRIORSEAL_BUILD_VERSION: 'fedcba9876543210fedcba9876543210fedcba98' })).PRIORSEAL_BUILD_VERSION,
+    'fedcba9876543210fedcba9876543210fedcba98',
+  );
+  assert.equal(
+    cloudflareRuntimeEnvironment(bindings({ PRIORSEAL_ENVIRONMENT: 'staging', PRIORSEAL_BUILD_VERSION: 'staging' })).PRIORSEAL_BUILD_VERSION,
+    'staging',
+  );
   assert.throws(() => assertCloudflareBindings(bindings({ HTTP_RATE_LIMITER: undefined })), /HTTP_RATE_LIMITER/);
   assert.throws(() => assertCloudflareBindings(bindings({ DB: undefined })), /DB D1 binding/);
   assert.throws(() => assertCloudflareBindings(bindings({ CF_VERSION_METADATA: undefined })), /CF_VERSION_METADATA/);

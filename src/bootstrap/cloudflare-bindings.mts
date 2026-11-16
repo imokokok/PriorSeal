@@ -9,11 +9,21 @@ export function assertCloudflareBindings(environment: Env) {
 
 export function cloudflareRuntimeEnvironment(environment: Env) {
   assertCloudflareBindings(environment);
+  const configuredVersion = environment.PRIORSEAL_BUILD_VERSION;
+  const metadataVersion = environment.CF_VERSION_METADATA.tag || environment.CF_VERSION_METADATA.id;
+  // Staging intentionally uses its named environment version. Production
+  // deployments inject the exact Git SHA through deploy-worker.mts; the
+  // metadata tag remains the fallback for manually uploaded versions.
+  const version = environment.PRIORSEAL_ENVIRONMENT === 'staging'
+    ? configuredVersion || metadataVersion
+    : configuredVersion && /^[0-9a-f]{40}$/.test(configuredVersion)
+      ? configuredVersion
+      : metadataVersion;
   return {
     ...environment,
     PRIORSEAL_RUNTIME: 'cloudflare-workers',
     PRIORSEAL_DATABASE_BACKEND: 'd1',
-    PRIORSEAL_BUILD_VERSION: environment.CF_VERSION_METADATA.tag || environment.CF_VERSION_METADATA.id,
+    PRIORSEAL_BUILD_VERSION: version,
   };
 }
 

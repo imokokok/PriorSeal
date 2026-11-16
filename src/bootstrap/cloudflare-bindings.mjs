@@ -8,11 +8,14 @@ function assertCloudflareBindings(environment) {
 }
 function cloudflareRuntimeEnvironment(environment) {
   assertCloudflareBindings(environment);
+  const configuredVersion = environment.PRIORSEAL_BUILD_VERSION;
+  const metadataVersion = environment.CF_VERSION_METADATA.tag || environment.CF_VERSION_METADATA.id;
+  const version = environment.PRIORSEAL_ENVIRONMENT === "staging" ? configuredVersion || metadataVersion : configuredVersion && /^[0-9a-f]{40}$/.test(configuredVersion) ? configuredVersion : metadataVersion;
   return {
     ...environment,
     PRIORSEAL_RUNTIME: "cloudflare-workers",
     PRIORSEAL_DATABASE_BACKEND: "d1",
-    PRIORSEAL_BUILD_VERSION: environment.CF_VERSION_METADATA.tag || environment.CF_VERSION_METADATA.id
+    PRIORSEAL_BUILD_VERSION: version
   };
 }
 function evidenceBucketBinding(environment) {

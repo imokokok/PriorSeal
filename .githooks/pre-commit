@@ -10,4 +10,4 @@ fi
 # (see scripts/run-checks-parallel.mjs). The heavy suite (build, coverage,
 # release:check, e2e) is enforced by required GitHub Actions checks on
 # protected branches; run `npm run release:check` manually for the full suite.
-node scripts/run-checks-parallel.mjs lint source:policy
+WRANGLER_WRITE_LOGS=false node scripts/run-checks-parallel.mjs lint format:check source:policy core:check portable:check worker:types:check
