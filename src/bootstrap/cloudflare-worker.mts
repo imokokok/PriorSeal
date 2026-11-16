@@ -29,6 +29,7 @@ function withSecurityHeaders(response: Response) {
 }
 
 function isWorkerRoute(pathname: string) {
+  if (pathname === '/.well-known/sati-agent.json') return false;
   return pathname === '/i'
     || pathname === '/mcp'
     || pathname.startsWith('/v1/')
