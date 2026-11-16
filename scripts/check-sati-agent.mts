@@ -25,6 +25,11 @@ async function json(url: string) {
   return { response, body }
 }
 
+function isRateLimited(result: Awaited<ReturnType<typeof json>>) {
+  const serialized = JSON.stringify(result.body)
+  return result.response.status === 429 || serialized.includes('Too Many Requests') || serialized.includes('statusCode=429') || serialized.includes('statusCode%3D429')
+}
+
 async function main() {
   const mint = arg('--mint')
   const registrationUrl = arg('--registration') ?? REGISTRATION_URL
@@ -47,7 +52,7 @@ async function main() {
   searchUrl.searchParams.set('limit', '50')
   searchUrl.searchParams.set('name', 'PriorSeal')
   const search = await json(searchUrl.toString())
-  if (search.response.status === 429) {
+  if (isRateLimited(search)) {
     console.log(JSON.stringify({ status: 'SATI_QUERY_RATE_LIMITED', httpStatus: 429, retryAfter: search.response.headers.get('retry-after') }, null, 2))
     return
   }
@@ -63,7 +68,7 @@ async function main() {
   const agentUrl = new URL(`/api/agents/${encodeURIComponent(mint)}`, SATI_API)
   agentUrl.searchParams.set('network', 'mainnet')
   const agent = await json(agentUrl.toString())
-  if (agent.response.status === 429) {
+  if (isRateLimited(agent)) {
     console.log(JSON.stringify({ status: 'SATI_QUERY_RATE_LIMITED', mint, httpStatus: 429, retryAfter: agent.response.headers.get('retry-after') }, null, 2))
     return
   }
@@ -73,7 +78,7 @@ async function main() {
   const reputationUrl = new URL(`/api/reputation/${encodeURIComponent(mint)}`, SATI_API)
   reputationUrl.searchParams.set('network', 'mainnet')
   const reputation = await json(reputationUrl.toString())
-  if (reputation.response.status === 429) {
+  if (isRateLimited(reputation)) {
     console.log(JSON.stringify({ status: 'SATI_IDENTITY_FOUND_REPUTATION_RATE_LIMITED', mint, httpStatus: 429 }, null, 2))
     return
   }
