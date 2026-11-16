@@ -41,6 +41,7 @@ const onDemandGeneratorSources = [
 ].map((path) => join(projectRoot, path));
 const onDemandToolSources = [
   "scripts/check-web-performance.mts",
+  "scripts/check-sati-agent.mts",
   "scripts/compile-contracts.mts",
   "scripts/deploy-worker.mts",
   "scripts/preview-web.mts",
