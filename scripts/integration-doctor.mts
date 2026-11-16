@@ -5,6 +5,17 @@ type JsonObject = Record<string, unknown>;
 type DiagnosticCheck = { path: string; status: number | null; durationMs: number; ok: boolean; error?: string; billing?: JsonObject; diagnostic?: JsonObject | null; capabilities?: JsonObject | null };
 type DoctorOptions = { offer?: 'insight' | 'priorseal' | 'combined'; probe?: boolean; samples?: number; asset?: string; chainId?: number; maxSourceAgeSeconds?: number; fetcher?: typeof fetch; apiKey?: string; insightUrl?: string; priorsealUrl?: string };
 
+const MAX_REQUEST_ATTEMPTS = 3;
+const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+function retryDelayMs(attempt: number): number {
+  return 250 * 2 ** (attempt - 1);
+}
+
+async function waitBeforeRetry(attempt: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, retryDelayMs(attempt)));
+}
+
 function record(value: unknown): JsonObject | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : null;
 }
@@ -25,16 +36,29 @@ export async function integrationDoctor(options: DoctorOptions = {}) {
   if (probe && (offer === 'priorseal' || !apiKey)) throw new Error('An Insight offer and INSIGHT_API_KEY are required for the explicit, billable probe');
   const read = async (base: string, path: string, authenticated = false): Promise<{ check: DiagnosticCheck; body: JsonObject | null }> => {
     const startedAt = performance.now();
-    try {
-      const response = await fetcher(`${base}${path}`, { headers: authenticated ? { 'x-api-key': apiKey! } : {}, redirect: 'error', signal: AbortSignal.timeout(30_000) });
-      const body = record(await response.json() as unknown);
-      const check: DiagnosticCheck = { path: path.split('?')[0], status: response.status, durationMs: Math.round(performance.now() - startedAt), ok: response.ok && body !== null };
-      if (authenticated) check.billing = { requestId: response.headers.get('x-request-id'), cost: response.headers.get('x-credit-cost'), status: response.headers.get('x-credit-status'), receipt: response.headers.get('x-credit-receipt'), balanceAfter: response.headers.get('x-credit-balance-after') };
-      return { check, body };
-    } catch {
-      const check: DiagnosticCheck = { path: path.split('?')[0], ok: false, status: null, durationMs: Math.round(performance.now() - startedAt), error: 'REQUEST_UNAVAILABLE' };
-      return { check, body: null };
+    for (let attempt = 1; attempt <= MAX_REQUEST_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetcher(`${base}${path}`, { headers: authenticated ? { 'x-api-key': apiKey! } : {}, redirect: 'error', signal: AbortSignal.timeout(30_000) });
+        const body = record(await response.json() as unknown);
+        const transient = RETRYABLE_STATUSES.has(response.status) || body === null;
+        if (transient && attempt < MAX_REQUEST_ATTEMPTS) {
+          await response.body?.cancel();
+          await waitBeforeRetry(attempt);
+          continue;
+        }
+        const check: DiagnosticCheck = { path: path.split('?')[0], status: response.status, durationMs: Math.round(performance.now() - startedAt), ok: response.ok && body !== null };
+        if (authenticated) check.billing = { requestId: response.headers.get('x-request-id'), cost: response.headers.get('x-credit-cost'), status: response.headers.get('x-credit-status'), receipt: response.headers.get('x-credit-receipt'), balanceAfter: response.headers.get('x-credit-balance-after') };
+        return { check, body };
+      } catch {
+        if (attempt < MAX_REQUEST_ATTEMPTS) {
+          await waitBeforeRetry(attempt);
+          continue;
+        }
+        const check: DiagnosticCheck = { path: path.split('?')[0], ok: false, status: null, durationMs: Math.round(performance.now() - startedAt), error: 'REQUEST_UNAVAILABLE' };
+        return { check, body: null };
+      }
     }
+    throw new Error(`Health request failed after ${MAX_REQUEST_ATTEMPTS} attempts`);
   };
   const insightChecksPromise = offer !== 'priorseal' ? (async () => {
     const base = origin(insightUrl);

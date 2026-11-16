@@ -76,3 +76,21 @@ test('malformed remote JSON cannot pass health or paid coverage checks', async (
   assert.equal(coverage.ok, false);
   assert.equal(coverage.checks[2]?.ok, false);
 });
+
+test('health checks retry transient transport and upstream failures without weakening validation', async () => {
+  const attempts = new Map<string, number>();
+  const result = await integrationDoctor({ fetcher: async input => {
+    const url = requestUrl(input);
+    const count = (attempts.get(url) ?? 0) + 1;
+    attempts.set(url, count);
+    if (url.includes('oracleinsight') && url.endsWith('/api/v1/health') && count === 1) throw new TypeError('simulated connection reset');
+    if (url.endsWith('/health/ready') && count === 1) return new Response(JSON.stringify({ status: 'temporarily unavailable' }), { status: 503 });
+    if (url.includes('capabilities')) return Response.json({ audience: 'fixture' });
+    const status = url.includes('oracleinsight') && url.includes('ready') ? 'live' : url.includes('ready') ? 'ready' : 'ok';
+    return Response.json(url.includes('oracleinsight') ? { data: { status } } : { status });
+  } });
+
+  assert.equal(result.ok, true);
+  assert.equal(attempts.get('https://www.oracleinsight.xyz/api/v1/health'), 2);
+  assert.equal(attempts.get('https://priorseal.xyz/health/ready'), 2);
+});
