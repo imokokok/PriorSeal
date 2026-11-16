@@ -32,11 +32,20 @@ export const X402_EVM_NETWORKS = Object.freeze([
     network: 'eip155:56',
     chainId: 56,
     name: 'BNB Smart Chain',
-    /** Binance-bridged USDC (18 decimals) as listed by the AEON facilitator's exact v2 registry (verified 2026-10-17 in Insight production). */
+    /** Binance-bridged USDC (18 decimals) as listed by the AEON facilitator's exact v2 registry (verified 2026-10-17 in Insight production); the same token PayAI settles on BSC. */
     asset: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
     assetName: 'USD Coin',
     assetVersion: '2',
     assetDecimals: 18,
+    /**
+     * Binance-pegged tokens are plain ERC-20s without EIP-3009, and the
+     * facilitator serving this rail (PayAI, docs.payai.network/x402/supported-networks)
+     * only supports v2 exact Permit2 payments on BSC. Advertising the transfer
+     * method routes x402 SDK clients to Permit2 signing; the payer must grant
+     * the canonical Permit2 contract one token approval (buyer gas), after
+     * which the facilitator pays settlement gas.
+     */
+    assetTransferMethod: 'permit2',
   },
 ] as const);
 
@@ -404,7 +413,13 @@ function makeRequirement(config: X402Config, route: X402Route, network: typeof X
     asset: network.asset,
     payTo: config.payTo,
     maxTimeoutSeconds: 300,
-    extra: { name: network.assetName, version: network.assetVersion },
+    extra: {
+      name: network.assetName,
+      version: network.assetVersion,
+      // x402 SDK clients route to EIP-3009 or Permit2 signing based on this
+      // field (absent defaults to EIP-3009); only Permit2-capable rails set it.
+      ...('assetTransferMethod' in network ? { assetTransferMethod: network.assetTransferMethod } : {}),
+    },
   };
 }
 
