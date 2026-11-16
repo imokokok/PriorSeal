@@ -27,7 +27,7 @@ async function json(url: string) {
 
 function isRateLimited(result: Awaited<ReturnType<typeof json>>) {
   const serialized = JSON.stringify(result.body)
-  return result.response.status === 429 || serialized.includes('Too Many Requests') || serialized.includes('statusCode=429') || serialized.includes('statusCode%3D429')
+  return result.response.status === 429 || serialized.includes('Too Many Requests') || serialized.includes('statusCode=429') || serialized.includes('statusCode%3D429') || serialized.includes('Solana error #8100002')
 }
 
 async function main() {
