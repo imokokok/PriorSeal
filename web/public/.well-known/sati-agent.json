@@ -1,0 +1,20 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "PriorSeal",
+  "description": "A verification and evidence layer for AI-agent actions: bounded authorization before signing, independent observation after execution, and portable receipts that third parties can verify.",
+  "services": [
+    {
+      "name": "MCP",
+      "endpoint": "https://priorseal.xyz/mcp",
+      "version": "2025-06-18"
+    },
+    {
+      "name": "OpenAPI",
+      "endpoint": "https://priorseal.xyz/openapi/v1.json",
+      "version": "2.0.0"
+    }
+  ],
+  "x402Support": true,
+  "active": true,
+  "supportedTrust": ["reputation"]
+}
