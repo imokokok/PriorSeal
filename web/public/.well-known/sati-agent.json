@@ -16,5 +16,11 @@
   ],
   "x402Support": true,
   "active": true,
-  "supportedTrust": ["reputation"]
+  "supportedTrust": ["reputation"],
+  "registrations": [
+    {
+      "agentId": "EJmxBQbzTNrvPM3C22V7oJNgDGoFnagyXe1c9EoRs4aS",
+      "agentRegistry": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:satiRkxEiwZ51cv8PRu8UMzuaqeaNU9jABo6oAFMsLe"
+    }
+  ]
 }
