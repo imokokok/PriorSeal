@@ -902,6 +902,7 @@ function openApiSpec() {
     ...OPENAPI,
     paths: {
       ...OPENAPI.paths,
+      '/v1/integration-readiness/smoke': { get: { summary: 'Verify x402 payment and signed delivery compatibility without inspecting an Agent target' } },
       '/v1/integration-readiness': { get: INTEGRATION_READINESS_OPENAPI },
     },
   };

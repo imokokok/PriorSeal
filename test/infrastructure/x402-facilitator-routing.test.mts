@@ -238,7 +238,7 @@ test('BNB requirements use 18-decimal amounts and route to the override facilita
   assert.ok(bnb, 'BNB requirement must be advertised');
   assert.equal(bnb.asset, '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d');
   assert.equal(bnb.amount, '10000000000000000', '$0.01 must scale to 18 decimals');
-  assert.deepEqual(bnb.extra, { name: 'USD Coin', version: '2' });
+  assert.deepEqual(bnb.extra, { name: 'USD Coin', version: '2', assetTransferMethod: 'permit2' });
   const baseEntry = accepts.find((entry) => entry.network === 'eip155:8453');
   assert.equal(baseEntry?.amount, '10000', '6-decimal rails keep the micro-USDC grid');
   const discovered = (expected: string): boolean => requested.some((entry) => entry === expected);
