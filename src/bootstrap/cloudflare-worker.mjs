@@ -9,6 +9,29 @@ import { reconcileEvidenceArchiveOutbox } from "../infrastructure/persistence/ev
 import { errorMessage } from "../shared/error-code.mjs";
 import { createSchemaCapabilityGuard } from "./cloudflare-schema.mjs";
 const assertSchemaCapability = createSchemaCapabilityGuard();
+const SECURITY_HEADERS = Object.freeze({
+  "content-security-policy": "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+  "permissions-policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
+  "referrer-policy": "no-referrer",
+  "strict-transport-security": "max-age=63072000; includeSubDomains",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "x-permitted-cross-domain-policies": "none"
+});
+function withSecurityHeaders(response) {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+function isWorkerRoute(pathname) {
+  return pathname === "/i" || pathname === "/mcp" || pathname.startsWith("/v1/") || pathname.startsWith("/health/") || pathname.startsWith("/.well-known/") || pathname.startsWith("/openapi/") || pathname === "/openapi.json";
+}
+function httpsRedirect(request) {
+  const target = new URL(request.url);
+  if (target.protocol === "https:") return null;
+  target.protocol = "https:";
+  return withSecurityHeaders(new Response(null, { status: 301, headers: { "cache-control": "no-store", location: target.toString() } }));
+}
 async function withRuntime(environment, context, createRuntime, operation) {
   const runtimeEnvironment = cloudflareRuntimeEnvironment(environment);
   const config = loadRuntimeConfig(runtimeEnvironment);
@@ -38,16 +61,21 @@ async function withRuntime(environment, context, createRuntime, operation) {
 function unavailable(error) {
   const requestId = crypto.randomUUID();
   console.error(JSON.stringify({ level: "error", event: "worker.request_failed", requestId, message: errorMessage(error) }));
-  return Response.json({ error: { code: "SERVICE_UNAVAILABLE", message: "Service initialization failed", requestId } }, { status: 503, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff", "x-request-id": requestId } });
+  return withSecurityHeaders(Response.json({ error: { code: "SERVICE_UNAVAILABLE", message: "Service initialization failed", requestId } }, { status: 503, headers: { "cache-control": "no-store", "x-request-id": requestId } }));
 }
 var stdin_default = {
   async fetch(request, environment, context) {
+    const redirect = httpsRedirect(request);
+    if (redirect) return redirect;
+    const pathname = new URL(request.url).pathname;
+    if (!isWorkerRoute(pathname)) return withSecurityHeaders(await environment.ASSETS.fetch(request));
     try {
-      return await withRuntime(environment, context, createPriorSealRuntime, async (runtime) => {
+      const response = await withRuntime(environment, context, createPriorSealRuntime, async (runtime) => {
         const handler = httpServerHandler(runtime.server);
         if (!handler.fetch) throw new TypeError("Cloudflare Node HTTP handler is unavailable");
         return handler.fetch(request, environment, context);
       });
+      return withSecurityHeaders(response);
     } catch (error) {
       return unavailable(error);
     }
