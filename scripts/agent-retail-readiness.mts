@@ -13,6 +13,16 @@ type GetResult = { body: JsonObject; headers: Headers };
 
 const MAX_RESPONSE_BYTES = 128 * 1024;
 const TIMEOUT_MS = 20_000;
+const MAX_REQUEST_ATTEMPTS = 3;
+const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+function retryDelayMs(attempt: number): number {
+  return 250 * 2 ** (attempt - 1);
+}
+
+async function waitBeforeRetry(attempt: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, retryDelayMs(attempt)));
+}
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -93,15 +103,40 @@ export async function runAgentRetailReadiness({ env = process.env, fetcher = fet
   async function get(path: string, expectedStatus = 200): Promise<GetResult> {
     const url = new URL(path, baseUrl);
     assert(url.origin === baseUrl.origin, 'Readiness check refuses to leave the configured origin');
-    getRequests += 1;
-    const response = await fetcher(url, {
-      method: 'GET',
-      headers: { accept: 'application/json' },
-      redirect: 'error',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    assert(response.status === expectedStatus, `GET ${url.pathname} returned HTTP ${response.status}; expected ${expectedStatus}`);
-    return { body: await readLimitedJson(response, `GET ${url.pathname}`), headers: response.headers };
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= MAX_REQUEST_ATTEMPTS; attempt += 1) {
+      getRequests += 1;
+      let response: Response;
+      try {
+        response = await fetcher(url, {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+          redirect: 'error',
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+      } catch (error) {
+        lastError = error;
+        if (attempt === MAX_REQUEST_ATTEMPTS) throw error;
+        await waitBeforeRetry(attempt);
+        continue;
+      }
+
+      if (RETRYABLE_STATUSES.has(response.status) && attempt < MAX_REQUEST_ATTEMPTS) {
+        await response.body?.cancel();
+        await waitBeforeRetry(attempt);
+        continue;
+      }
+      assert(response.status === expectedStatus, `GET ${url.pathname} returned HTTP ${response.status}; expected ${expectedStatus}`);
+
+      try {
+        return { body: await readLimitedJson(response, `GET ${url.pathname}`), headers: response.headers };
+      } catch (error) {
+        lastError = error;
+        if (attempt === MAX_REQUEST_ATTEMPTS) throw error;
+        await waitBeforeRetry(attempt);
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(`GET ${url.pathname} failed after ${MAX_REQUEST_ATTEMPTS} attempts`);
   }
 
   const live = await get('/health/live');

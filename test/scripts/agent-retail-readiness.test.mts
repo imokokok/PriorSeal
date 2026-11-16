@@ -119,3 +119,32 @@ test('public Agent-and-retail readiness accepts the enabled self-service payment
   assert.deepEqual(result.x402Manifest, { resources: 1, baseResources: 1, paths: ['/v1/receipts/{receiptId}/bundle'] });
   assert.equal(result.writesPerformed, 0);
 });
+
+test('public Agent-and-retail readiness retries transient transport and upstream failures', async () => {
+  const attempts = new Map<string, number>();
+  const result = await runAgentRetailReadiness({
+    env: { ...process.env, PRIORSEAL_BASE_URL: origin },
+    log: () => {},
+    fetcher: async (input, init) => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      const count = (attempts.get(url.pathname) ?? 0) + 1;
+      attempts.set(url.pathname, count);
+      if (url.pathname === '/health/live' && count === 1) throw new TypeError('simulated connection reset');
+      if (url.pathname === '/v1/version' && count === 1) return json({ error: 'upstream unavailable' }, 503);
+      if (url.pathname === '/health/live') return json({ status: 'ok' });
+      if (url.pathname === '/health/ready') return json({ status: 'ready', storage: 'd1' });
+      if (url.pathname === '/v1/version') return json({ service: 'priorseal', version });
+      if (url.pathname === '/v1/capabilities') return json(capabilities());
+      if (url.pathname === '/.well-known/priorseal-agent.json') return json(discovery());
+      if (url.pathname === '/openapi/v1.json') return json(openApi());
+      if (url.pathname === '/mcp') return mcpResponse(request);
+      throw new Error(`Unexpected request ${request.url}`);
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.getRequests, 8);
+  assert.equal(attempts.get('/health/live'), 2);
+  assert.equal(attempts.get('/v1/version'), 2);
+});
