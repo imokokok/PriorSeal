@@ -64,3 +64,11 @@ by the reviewed envelope. The settlement statuses `SETTLED`, `REVERTED` and
 explicit, never guessed. `detectSolanaSwapGuardSettlementContradictions`
 flags two verified settlements claiming one decisionHash for different
 executed transactions.
+
+Jupiter is a separate route profile. Use
+`buildSolanaJupiterSwapBoundIntent` with Insight's `solana_jupiter` READY result
+only after the caller has converted the returned base64 transaction into the
+complete compiled message, including resolved address lookup accounts. The
+Jupiter helper binds the exact message and `quoteDigest`, but deliberately does
+not claim the signed Insight attestation and does not reuse the Orca settlement
+schema.

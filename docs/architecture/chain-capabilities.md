@@ -32,6 +32,12 @@ Use the [five-chain release gate](../runbooks/five-chain-four-products.md)
 before adding any of these networks to an active production authorization
 policy.
 
+HyperCore's Spot IOC profile is a venue-order profile, not a DEX swap profile.
+It binds the account, asset id, side, limit price, size, cloid, IOC expiry and
+observed fills. Do not describe it as Hyperliquid DEX coverage. Solana Jupiter
+is likewise a route-provider boundary: the exact compiled Solana message is the
+execution object, while the Jupiter quote digest is external route context.
+
 ## Production-aligned execution and payment rails
 
 | Chain | CAIP-2 payment rail | Generic execution observation | Notes |
