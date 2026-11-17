@@ -135,6 +135,24 @@ export {
 } from './insight-monad-lending-guard.js'
 export type { InsightMonadLendingGuardDecision, InsightMonadLendingGuardVerification } from './insight-monad-lending-guard.js'
 export {
+  HYPEREVM_CHAIN_ID,
+  HYPERLEND_CORE_POOL,
+  HYPEREVM_LENDING_GUARD_INTENT_ASSET_PREFIX,
+  INSIGHT_HYPEREVM_LENDING_GUARD_NAMESPACE,
+  INSIGHT_HYPEREVM_LENDING_GUARD_SCHEMA,
+  buildHyperEvmLendingGuardBoundIntent,
+  hyperEvmLendingGuardCommitment,
+  hyperEvmLendingGuardIntentAsset,
+  verifyHyperEvmLendingGuardAuthorizationBinding,
+  verifyHyperEvmLendingGuardReceiptBundle,
+  verifyInsightHyperEvmLendingGuardDecision,
+} from './insight-hyperevm-lending-guard.js'
+export type {
+  HyperEvmLendingGuardVerificationOptions,
+  InsightHyperEvmLendingGuardDecision,
+  InsightHyperEvmLendingGuardVerification,
+} from './insight-hyperevm-lending-guard.js'
+export {
   INSIGHT_MULTICHAIN_EVM_LENDING_GUARD_NAMESPACE,
   INSIGHT_MULTICHAIN_EVM_LENDING_GUARD_SCHEMA,
   MULTICHAIN_EVM_LENDING_GUARD_INTENT_ASSET_PREFIX,
