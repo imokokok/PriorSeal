@@ -12,7 +12,7 @@ export const MULTICHAIN_EVM_LENDING_GUARD_INTENT_ASSET_PREFIX = 'lending:' as co
 /** Morpho Blue's canonical HyperEVM singleton (chain 999). */
 export const MORPHO_BLUE_HYPEREVM = '0x68e37dE8d93d3496ae143F2E900490f6280C57cD' as const
 /** Euler V2's canonical EVC deployment on HyperEVM (chain 999). */
-export const EULER_V2_HYPEREVM_EVC = '0x0C9a3dd6b8F28529d72d7f9cE918D493519EE383' as const
+export const EULER_V2_HYPEREVM_EVC = '0xceAA7cdCD7dDBee8601127a9Abb17A974d613db4' as const
 const DOMAIN = { name: 'Insight Multichain EVM Lending Guard', version: '1', chainId: 1 } as const
 const TYPES = { MultichainEvmLendingGuardDecision: [
   { name: 'decisionHash', type: 'bytes32' }, { name: 'calldataHash', type: 'bytes32' },
