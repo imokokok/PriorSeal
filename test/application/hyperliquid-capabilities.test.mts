@@ -29,15 +29,15 @@ test('Hyperliquid capability stays hidden without an explicit network policy ent
   assert.equal(capabilities.executionProfiles.includes('priorseal.execution-profile.hyperliquid-spot-ioc.v1'), false);
 });
 
-test('five-chain capability discovery reports Seal, Witness, Match, and Review separately', async () => {
+test('six-chain capability discovery reports Seal, Witness, Match, and Review separately', async () => {
   const capabilities = await deploymentCapabilities({
     ...base,
     proofMode: 'rfc3161',
     timestampConfigured: true,
-    rpcChainIds: [56, 999, 8453, 0],
+    rpcChainIds: [56, 143, 999, 8453, 0],
     hyperliquidSpotIocConfigured: true,
     policy: {
-      allowedChainIds: [56, 8453, 999, 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', 'hyperliquid:mainnet'],
+      allowedChainIds: [56, 143, 8453, 999, 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', 'hyperliquid:mainnet'],
       allowedActions: ['TRANSFER', 'CONTRACT_CALL', 'SOLANA_TRANSACTION', 'HYPERLIQUID_SPOT_IOC_ORDER'],
       minConfirmations: 1,
       maxToleratedReorgDepth: 0,
@@ -45,6 +45,7 @@ test('five-chain capability discovery reports Seal, Witness, Match, and Review s
   });
   assert.deepEqual(capabilities.fourProductCoverage.map(coverage => coverage.network), [
     'eip155:56',
+    'eip155:143',
     'eip155:999',
     'eip155:8453',
     'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
