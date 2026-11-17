@@ -49,7 +49,7 @@ function canonical(value: unknown): string {
     .map(([key, entry]) => `${JSON.stringify(key)}:${canonical(entry)}`).join(",")}}`;
 }
 
-async function decision(protocolId: "aave-v3-monad" | "morpho-blue-monad" = "aave-v3-monad") {
+async function decision(protocolId: "aave-v3-monad" | "morpho-blue-monad" | "euler-v2-monad" = "aave-v3-monad") {
   const action = {
     protocolId, action: "borrow" as const, target: aavePool, calldataHash: keccak256(transaction.data),
     amount: "1000000", account, receiver: account, asset: usdc, marketId: null,
@@ -109,4 +109,15 @@ test("rejects tampered Monad calldata before authorization preparation", async (
     transaction, intentId: "monad-lending-test", asset: monadLendingGuardIntentAsset("aave-v3-monad"),
     amount: proof.action.amount, validUntil: now + 100,
   }, proof, { keyRegistry, now }));
+});
+
+test("accepts the reviewed Monad Euler V2 protocol identifier", async () => {
+  const proof = await decision("euler-v2-monad");
+  const verification = await verifyInsightMonadLendingGuardDecision(proof, { keyRegistry, now });
+  assert.equal(verification.valid, true);
+  const intent = await buildMonadLendingGuardBoundIntent({
+    transaction, intentId: "monad-euler-lending-test", asset: monadLendingGuardIntentAsset("euler-v2-monad"),
+    amount: proof.action.amount, validUntil: now + 500,
+  }, proof, { keyRegistry, now });
+  assert.equal(intent.asset, "eip155:143/lending:euler-v2-monad");
 });

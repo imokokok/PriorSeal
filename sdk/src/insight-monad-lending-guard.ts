@@ -25,7 +25,7 @@ const SIGNATURE = /^0x[0-9a-fA-F]{130}$/;
 const UINT = /^(?:0|[1-9][0-9]*)$/;
 const VALID_FOR_SECONDS = 300;
 const LABEL = "Insight Monad Lending Guard attester";
-const SUPPORTED_PROTOCOL_IDS = ["aave-v3-monad", "morpho-blue-monad"] as const;
+const SUPPORTED_PROTOCOL_IDS = ["aave-v3-monad", "morpho-blue-monad", "euler-v2-monad"] as const;
 type SupportedProtocolId = (typeof SUPPORTED_PROTOCOL_IDS)[number];
 
 export type InsightMonadLendingGuardDecision = {
