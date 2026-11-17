@@ -1,11 +1,12 @@
 {
-  "policyId": "priorseal-public-beta-v3",
+  "policyId": "priorseal-public-beta-v4",
   "allowedChainIds": [
     1,
     56,
     8453,
     42161,
     999,
+    143,
     "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
     "hyperliquid:mainnet"
   ],
