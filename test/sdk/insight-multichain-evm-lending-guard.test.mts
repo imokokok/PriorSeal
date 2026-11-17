@@ -5,6 +5,8 @@ import { hashTypedData, keccak256, toBytes } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 import {
+  EULER_V2_HYPEREVM_EVC,
+  MORPHO_BLUE_HYPEREVM,
   buildMultichainEvmLendingGuardBoundIntent,
   multichainEvmLendingGuardIntentAsset,
   verifyInsightMultichainEvmLendingGuardDecision,
@@ -117,4 +119,81 @@ test('binds an Euler EVC borrow batch only to the canonical Base EVC', async () 
   tampered.attestation!.uid = hashTypedData(typedData)
   tampered.attestation!.signature = await signer.signTypedData(typedData)
   assert.equal((await verifyInsightMultichainEvmLendingGuardDecision(tampered, { keyRegistry, now })).reason, 'MALFORMED')
+})
+
+async function hyperEvmMorphoDecision() {
+  const hyperTransaction = { chainId: 999 as const, from: sender, to: MORPHO_BLUE_HYPEREVM as `0x${string}`, data: '0x1234' as const, nonce: '11', value: '0' }
+  const action = {
+    protocolId: 'morpho-blue-hyperevm' as const, action: 'borrow' as const, target: MORPHO_BLUE_HYPEREVM,
+    calldataHash: keccak256(hyperTransaction.data), amount: '1000000', account: sender,
+    receiver: sender, asset: '0x3333333333333333333333333333333333333333', marketId,
+  }
+  const guard = {
+    schema: 'insight.multichain-evm-lending-guard.v1' as const, verdict: 'ALLOW' as const,
+    chainId: 999 as const, protocolId: 'morpho-blue-hyperevm' as const, action: 'borrow' as const,
+    scope: { chainId: 999 as const, transactionAuthority: 'none', valuation: 'caller_declared_post_action_usd' },
+    market: { marketId, collateralSymbol: 'WHYPE', loanSymbol: 'USDC', maxLtv: 0.8, liquidationLtv: 0.85, parameterSource: 'morpho-blue-market' },
+  }
+  const decisionHash = keccak256(toBytes(canonical({ schema: 'insight.multichain-evm-lending-guard-decision.v1', guard, transaction: hyperTransaction, action })))
+  const data = { decisionHash, calldataHash: action.calldataHash, account: sender, chainId: 999 as const, verdict: 0 as const, issuedAt: now, validUntil: now + 300, schemaVersion: 1 as const }
+  const typedData = { domain, types, primaryType: 'MultichainEvmLendingGuardDecision' as const, message: { ...data, chainId: 999n, issuedAt: BigInt(now), validUntil: BigInt(now + 300), schemaVersion: 1n } }
+  return {
+    schema: 'insight.multichain-evm-lending-guard-decision.v1' as const, guard, transaction: hyperTransaction, action, decisionHash,
+    attestation: {
+      type: 'MultichainEvmLendingGuardDecision' as const, schemaVersion: 1 as const, uid: hashTypedData(typedData),
+      attester: signer.address, attesterLabel: 'Insight Multichain EVM Lending Guard attester' as const,
+      signedAt: new Date(now * 1000).toISOString(), validForSeconds: 300 as const,
+      signature: await signer.signTypedData(typedData), verifyUrl: 'https://www.oracleinsight.xyz/api/v1/safety/multichain-evm-lending-guard/verify',
+      data, eip712: { domain, types, primaryType: 'MultichainEvmLendingGuardDecision' },
+    },
+  }
+}
+
+test('binds a HyperEVM Morpho Blue market to the canonical singleton', async () => {
+  const proof = await hyperEvmMorphoDecision()
+  assert.equal((await verifyInsightMultichainEvmLendingGuardDecision(proof, { keyRegistry, now })).valid, true)
+  const intent = await buildMultichainEvmLendingGuardBoundIntent({
+    transaction: proof.transaction, intentId: 'hyperevm-morpho-test', asset: multichainEvmLendingGuardIntentAsset(999, 'morpho-blue-hyperevm'), amount: proof.action.amount, validUntil: now + 500,
+  }, proof, { keyRegistry, now })
+  assert.equal(intent.asset, 'eip155:999/lending:morpho-blue-hyperevm')
+})
+
+test('rejects a HyperEVM Morpho decision that substitutes another target', async () => {
+  const proof = await hyperEvmMorphoDecision()
+  const tampered = structuredClone(proof) as unknown as { transaction: { to: string }; action: { target: string } }
+  tampered.transaction.to = '0x5555555555555555555555555555555555555555'
+  tampered.action.target = tampered.transaction.to
+  assert.equal((await verifyInsightMultichainEvmLendingGuardDecision(tampered, { keyRegistry, now })).reason, 'MALFORMED')
+})
+
+test('accepts a HyperEVM Euler V2 EVC borrow scope', async () => {
+  const borrowVault = '0x5555555555555555555555555555555555555555' as const
+  const collateralVault = '0x6666666666666666666666666666666666666666' as const
+  const hyperTransaction = { chainId: 999 as const, from: sender, to: EULER_V2_HYPEREVM_EVC, data: '0x1234' as const, nonce: '12', value: '0' }
+  const action = {
+    protocolId: 'euler-v2-hyperevm' as const, action: 'borrow' as const, target: EULER_V2_HYPEREVM_EVC,
+    calldataHash: keccak256(hyperTransaction.data), amount: '1000000', account: sender,
+    receiver: sender, asset: '0x3333333333333333333333333333333333333333', marketId: null,
+  }
+  const guard = {
+    schema: 'insight.multichain-evm-lending-guard.v1' as const, verdict: 'ALLOW' as const,
+    chainId: 999 as const, protocolId: 'euler-v2-hyperevm' as const, action: 'borrow' as const,
+    scope: { chainId: 999 as const, transactionAuthority: 'none', valuation: 'caller_declared_post_action_usd' },
+    market: { marketAddress: borrowVault, collateralVaultAddress: collateralVault, collateralSymbol: 'WHYPE', loanSymbol: 'USDC', maxLtv: 0.8, liquidationLtv: 0.85, parameterSource: 'euler-evault' },
+  }
+  const decisionHash = keccak256(toBytes(canonical({ schema: 'insight.multichain-evm-lending-guard-decision.v1', guard, transaction: hyperTransaction, action })))
+  const data = { decisionHash, calldataHash: action.calldataHash, account: sender, chainId: 999 as const, verdict: 0 as const, issuedAt: now, validUntil: now + 300, schemaVersion: 1 as const }
+  const typedData = { domain, types, primaryType: 'MultichainEvmLendingGuardDecision' as const, message: { ...data, chainId: 999n, issuedAt: BigInt(now), validUntil: BigInt(now + 300), schemaVersion: 1n } }
+  const proof = {
+    schema: 'insight.multichain-evm-lending-guard-decision.v1' as const, guard, transaction: hyperTransaction, action, decisionHash,
+    attestation: {
+      type: 'MultichainEvmLendingGuardDecision' as const, schemaVersion: 1 as const, uid: hashTypedData(typedData),
+      attester: signer.address, attesterLabel: 'Insight Multichain EVM Lending Guard attester' as const,
+      signedAt: new Date(now * 1000).toISOString(), validForSeconds: 300 as const,
+      signature: await signer.signTypedData(typedData), verifyUrl: 'https://www.oracleinsight.xyz/api/v1/safety/multichain-evm-lending-guard/verify',
+      data, eip712: { domain, types, primaryType: 'MultichainEvmLendingGuardDecision' },
+    },
+  }
+  const verification = await verifyInsightMultichainEvmLendingGuardDecision(proof, { keyRegistry, now })
+  assert.equal(verification.valid, true, verification.reason)
 })

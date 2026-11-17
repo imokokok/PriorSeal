@@ -153,8 +153,10 @@ export type {
   InsightHyperEvmLendingGuardVerification,
 } from './insight-hyperevm-lending-guard.js'
 export {
+  EULER_V2_HYPEREVM_EVC,
   INSIGHT_MULTICHAIN_EVM_LENDING_GUARD_NAMESPACE,
   INSIGHT_MULTICHAIN_EVM_LENDING_GUARD_SCHEMA,
+  MORPHO_BLUE_HYPEREVM,
   MULTICHAIN_EVM_LENDING_GUARD_INTENT_ASSET_PREFIX,
   multichainEvmLendingGuardCommitment,
   multichainEvmLendingGuardIntentAsset,
