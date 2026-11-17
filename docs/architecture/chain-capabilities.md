@@ -18,17 +18,18 @@ the deployment actually advertises. It is a configuration report, not a live
 RPC/TSA/venue availability guarantee. A payment rail never fills a missing
 Seal, Witness, Match, or Review stage.
 
-The intended five-chain release scope is:
+The intended six-chain release scope is:
 
 | Network | Seal | Witness | Match | Review | Deliberate boundary |
 |---|---|---|---|---|---|
 | Base (`eip155:8453`) | EIP-712; optional ERC-1271 | RFC 3161 | EVM receipt, transfer logs and exact-call envelope | EVM bundle and Evidence API profile | ERC-4337/Safe/EIP-7702 remain separately pinned profiles. |
 | BNB Smart Chain (`eip155:56`) | EIP-712; optional ERC-1271 | RFC 3161 | EVM receipt, transfer logs and exact-call envelope | EVM bundle and Evidence API profile | The ERC-8004 registry entry is discovery only, not execution evidence. |
+| Monad (`eip155:143`) | EIP-712; optional ERC-1271 | RFC 3161 | EVM receipt, transfer logs and exact-call envelope | EVM bundle and Evidence API profile | Monad-specific concurrency or account-model semantics are not inferred; reviewed Insight bindings remain separate. |
 | HyperEVM (`eip155:999`) | EIP-712; optional ERC-1271 | RFC 3161 | EVM receipt, transfer logs and exact-call envelope | EVM bundle and Evidence API profile | No HyperEVM-specific account or finality semantics are inferred. |
 | Solana mainnet-beta | Ed25519 message authorization | RFC 3161 | Complete compiled transaction message | Solana bundle and Evidence API profile | No arbitrary-program semantic or token-balance interpretation. |
 | HyperCore (`hyperliquid:mainnet`) | EIP-712 authorization for the bounded order | RFC 3161 | HyperCore spot IOC cloid/status/fill matching | HyperCore spot-IOC bundle and Evidence API profile | Spot IOC only; it is not HyperEVM or general Hyperliquid support. |
 
-Use the [five-chain release gate](../runbooks/five-chain-four-products.md)
+Use the [six-chain release gate](../runbooks/five-chain-four-products.md)
 before adding any of these networks to an active production authorization
 policy.
 
