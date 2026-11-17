@@ -57,10 +57,38 @@ coverage.
 
 ## Jupiter
 
-For a Solana Jupiter route, use the existing
-`buildSolanaSwapGuardBoundIntent` only when Insight returns an approved,
-reviewed route result. Bind the exact returned Solana transaction message; do
-not substitute a different route after authorization.
+For a Solana Jupiter route, use `buildSolanaJupiterSwapBoundIntent` only when
+Insight returns a `READY` result whose `risk_verdict_ref` is `PASS` and whose
+`quoteDigest` is present. The caller must deserialize the returned base64
+transaction, resolve every address lookup table, and pass that exact compiled
+message to PriorSeal. PriorSeal binds the quote digest and message together; it
+does not reconstruct the Jupiter route or treat the unsigned READY result as a
+signed Insight attestation.
+
+The older `buildSolanaSwapGuardBoundIntent` remains the signed Orca Whirlpool
+profile and must not be used for a Jupiter result.
+
+## BNB PancakeSwap V2 and SmartRouter
+
+The SDK exposes a narrow final-call boundary for the BNB V2 router and
+SmartRouter:
+
+```ts
+import {
+  assertPancakeSwapBnbApprovalSpender,
+  assertPancakeSwapBnbExactInputCall,
+  PANCAKESWAP_BNB_SMART_ROUTER_PROFILE,
+} from 'priorseal-sdk'
+
+assertPancakeSwapBnbExactInputCall(finalSwapCall, PANCAKESWAP_BNB_SMART_ROUTER_PROFILE)
+assertPancakeSwapBnbApprovalSpender(finalSwapCall.to, PANCAKESWAP_BNB_SMART_ROUTER_PROFILE)
+```
+
+This admits only chain 56, the reviewed router, an ERC-20 exact-input selector,
+and zero native value. The complete approval and swap calldata still enters the
+ordinary PriorSeal exact-call authorization flow unchanged. It does not claim
+that PriorSeal quotes V2/SmartRouter routes or signs an Insight risk decision;
+those claims require a separate upstream reviewed profile.
 
 This example is documentation only. It does not connect to an RPC, sign a
 wallet transaction, or submit an order.

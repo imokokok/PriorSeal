@@ -19,6 +19,8 @@ export {
 export type { HeadlessH4EntryHash, HeadlessH4ExactCallInput } from './headless-h4.js'
 export { buildSolanaTransactionIntent, encodeSolanaTransactionMessageBytes, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
 export type { SolanaTransactionIntentInput } from './solana-transaction.js'
+export { assertPancakeSwapBnbApprovalSpender, assertPancakeSwapBnbExactInputCall, pancakeSwapBnbProfile, PANCAKESWAP_BNB_CHAIN_ID, PANCAKESWAP_BNB_SMART_ROUTER, PANCAKESWAP_BNB_SMART_ROUTER_PROFILE, PANCAKESWAP_BNB_V2_PROFILE, PANCAKESWAP_BNB_V2_ROUTER } from './pancakeswap-bnb.js'
+export type { PancakeSwapBnbCall, PancakeSwapBnbProfile } from './pancakeswap-bnb.js'
 export { buildHyperliquidBuilderFeeApproval, buildHyperliquidSpotIocBuilderFeeSubmission, buildHyperliquidSpotIocIntent, buildHyperliquidSpotIocSubmission, HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_MAX_SPOT_BUILDER_FEE_TENTHS_BPS, HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS, HYPERLIQUID_OUTCOME_ASSET_ID_MIN, HYPERLIQUID_SPOT_IOC_ACTION, HYPERLIQUID_SPOT_IOC_PROFILE, hyperliquidSpotBuilderFeeTerms } from './hyperliquid-spot.js'
 export type { HyperliquidBuilderFeeApproval, HyperliquidSpotBuilderFeePolicy, HyperliquidSpotIocBuilderFeeSubmission, HyperliquidSpotIocIntentInput, HyperliquidSpotIocSubmission } from './hyperliquid-spot.js'
 export { EXECUTION_COMMERCE_NAMESPACE, EXECUTION_COMMERCE_SCHEMA, executionCommerceCommitment, normalizeExecutionCommerceTerms } from './execution-commerce.js'
@@ -186,6 +188,19 @@ export type {
   InsightSolanaSwapGuardVerification,
   InsightSolanaSwapGuardVerificationOptions,
 } from './insight-solana-swap-guard.js'
+export {
+  INSIGHT_SOLANA_JUPITER_SWAP_GUARD_NAMESPACE,
+  INSIGHT_SOLANA_JUPITER_SWAP_GUARD_SCHEMA,
+  INSIGHT_SOLANA_JUPITER_SWAP_SCHEMA,
+  buildSolanaJupiterSwapBoundIntent,
+  solanaJupiterSwapGuardCommitment,
+  verifyInsightSolanaJupiterSwapGuardResult,
+  verifySolanaJupiterSwapAuthorizationBinding,
+} from './insight-solana-jupiter-swap-guard.js'
+export type {
+  InsightSolanaJupiterSwapGuardResult,
+  InsightSolanaJupiterSwapGuardVerification,
+} from './insight-solana-jupiter-swap-guard.js'
 export {
   HYPERLIQUID_MAX_PERP_BUILDER_FEE_TENTHS_BPS,
   HYPERLIQUID_PERP_ASSET_INDEX_MAX,

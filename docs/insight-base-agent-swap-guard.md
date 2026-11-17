@@ -114,3 +114,16 @@ arbitrary approval patterns, or an automatic execution authority. A valid
 evidence bundle proves bounded signed claims and observed executions; it does
 not guarantee price, fill, MEV protection, allowance safety outside the exact
 call, or token security.
+
+Insight's Base Uniswap V3 market profiles are currently pre-trade market
+evidence profiles, not `insight.base-agent-swap-guard.v1` signing profiles. A
+caller may bind the final Uniswap transaction through `buildExactCallIntent`,
+but must not label it as the signed Agent Swap Guard path until Insight issues
+the reviewed router code pin, direct-call profile, and matching attestation.
+
+For BNB PancakeSwap V2 and SmartRouter, the SDK's
+`assertPancakeSwapBnbExactInputCall` and
+`assertPancakeSwapBnbApprovalSpender` helpers constrain the final router call
+before the generic exact-call authorization. They do not turn an arbitrary
+route quote into a signed Insight decision; route pricing and risk evidence
+remain an upstream review item.
