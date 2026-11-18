@@ -17,44 +17,41 @@ Agent proposal → Bounded intent → Principal signature → Acceptance + time 
 
 PriorSeal is for an individual using an EVM or Solana wallet with an Agent, and for the wallet or Agent builder serving that person. A Verified Action is one bounded path through authorization, pre-execution proof, execution matching, and portable review. PriorSeal sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys, move funds, or turn a single authorization into open-ended automation.
 
+## Try it
+
+### Use the hosted console
+
+Open the [PriorSeal console](https://priorseal.xyz/app). Its quickstart checks the deployment's configured capabilities before wallet signing. You can create an authorization, observe a transaction, export the receipt, and review it in the [public verifier](https://priorseal.xyz/verify). The console's activity list is browser-local; it is not a complete server-side history.
+
+### Run the offline example
+
+Repository development requires **Node.js 22.x** (pinned to 22.23.2). This example generates a temporary key pair and a **synthetic execution** so you can inspect the receipt and verifier without an RPC endpoint or funds:
+
+```bash
+npm ci
+npm run example:receipt
+npm run verify:receipt
+```
+
+The verifier should report `valid: true`, `code: OK`, `outcome: COMPLETED`, `executionStatus: CONFIRMED`, and `complianceStatus: COMPLIANT`. These are results for the synthetic fixture, not proof of an on-chain transaction. Confirm the public key independently before relying on a receipt from another issuer.
+
+The artifacts are written to the ignored `examples/receipt-artifacts/` directory. To verify a different receipt and trusted public key:
+
+```bash
+npm run verify:receipt -- /path/to/receipt.json /path/to/public-key.pem
+```
+
 ## Choose your integration path
 
 | Need | Start here |
 | --- | --- |
-| Prove one Agent-involved action was authorized before execution and matched its approved boundary | [Verified Action](docs/product/verified-action.md) · [Agent usage and payment model](docs/product/agent-usage-model.md) · [PriorSeal offline example](#run-the-offline-example) |
-| Inspect oracle data and assess its use in a trade | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
-| Prove who authorized an exact EVM call and what was observed | [PriorSeal offline example](#run-the-offline-example) and [`priorseal-sdk`](sdk/README.md) |
-| Start a reproducible exact-call integration and hand a reviewer a portable v3 receipt bundle | [Exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) |
-| Bind a Solana mainnet transaction message to a wallet authorization and observed transaction | [Solana integration guide](docs/integrations/solana.md) |
-| Bind a Hyperliquid HyperCore spot IOC limit order to a cloid and observed fills, including an optional user-approved builder fee | [Hyperliquid integration guide](docs/integrations/hyperliquid.md) |
-| Configure x402 payment for eligible read-only evidence exports | [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md) |
-| Use an eligible Base Wallet MCP call with Insight assessment and PriorSeal evidence | [Wallet MCP × Insight × PriorSeal](docs/integrations/wallet-mcp-insight-priorseal.md) · [local skill package](skills/wallet-mcp-insight-priorseal/README.md) |
-| Embed one bounded action in a wallet or Agent runtime | [Guarded Action integration](docs/integrations/guarded-action.md) · [Base Sepolia rehearsal](docs/runbooks/base-sepolia-guarded-action-rehearsal.md) |
-| Bind an Insight Base or Monad lending risk decision to a user-authorized Aave/Morpho call | [Base binding](docs/insight-base-lending-guard.md) · [Monad binding](docs/insight-monad-lending-guard.md) |
-| Close Insight's reviewed Base direct DEX swap path with ordered approval and swap evidence | [Base Agent Swap Guard binding](docs/insight-base-agent-swap-guard.md) |
-| Let an AI Agent complete one reviewed Verified Action | [MCP adoption guide](https://priorseal.xyz/integrations/mcp) · [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [controlled-execution example](docs/integrations/priorseal-mcp-controlled-execution-example.md) · [compatibility proof](docs/runbooks/mcp-compatibility-proof.md) · remote endpoint `https://priorseal.xyz/mcp` |
-| Bind an ERC-8004 agent identity and trust evidence to authorization | [ERC-8004 integration guide](docs/integrations/erc-8004.md) and [read-only inspector](examples/erc8004-agent-accountability-v1/README.md) |
-| Keep assessment, authorization, and execution evidence together | [Base swap v2 fixture](examples/web3-agent-kit-base-swap-v2/README.md) and [composite review manifests](sdk/README.md#composite-review-manifests) |
+| Integrate a bounded action from TypeScript | [SDK guide](sdk/README.md) and [exact-call partner reference](examples/exact-call-partner-reference-v1/README.md) |
+| Let an AI Agent discover or complete a Verified Action | [MCP adoption guide](https://priorseal.xyz/integrations/mcp) and [PriorSeal MCP](docs/integrations/priorseal-mcp.md) |
+| Assess oracle inputs independently | [Insight](https://github.com/imokokok/Insight#readme) and [`oracle-insight-guard`](https://www.npmjs.com/package/oracle-insight-guard) |
 
-Insight and PriorSeal work independently. Insight provides **oracle transparency and risk intelligence**; PriorSeal's Verified Action provides **authorization and execution accountability**. Together, **Trusted Agent Execution** links assessment, an integrator-owned execution boundary, authorization, execution, and review while keeping each product’s trust checks separate. The integration—not PriorSeal alone—must enforce any required assessment or authorization before it submits an action. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
+Insight and PriorSeal work independently. Insight provides oracle transparency and risk intelligence; PriorSeal provides authorization and execution evidence. Together, an integrator can connect assessment, its own execution boundary, authorization, execution, and review while keeping each product’s trust checks separate. The integration must enforce required checks before submitting an action. Start with the offline example before connecting a wallet, RPC endpoint, or API key.
 
-PriorSeal is designed as an Agent-facing, user-controlled, per-use
-authorization and evidence layer: an Agent can call the service and, where
-enabled, pay for an eligible evidence export or **Fresh Evidence Check**, but
-its service payment never gives it authority over a customer transaction. The
-principal's explicit single-use signed authorization remains separate. A Fresh
-Evidence Check re-observes the transaction named by an authorization-bound
-receipt, then returns a new issuer-signed report; it does not submit an action
-or make a future-safety claim. The free MCP surface provides discovery and a
-purchase handoff only—it cannot materialize a paid bundle or check. Live
-pricing, enabled rails and exact resources are available from
-`GET /v1/capabilities`. See the [agent usage and payment model](docs/product/agent-usage-model.md).
-
-For x402 API payments, the aligned production rails are Ethereum, OP Mainnet,
-Polygon PoS, Monad, HyperEVM, X Layer, Sei, Base, Arbitrum One, Avalanche
-C-Chain, and Solana mainnet-beta. A rail is advertised only when its payee is configured and
-the selected facilitator currently supports it; execution observation still
-requires that chain's independently configured RPC endpoint.
+Agents may pay for eligible evidence exports or a **Fresh Evidence Check**, but service payment never authorizes a customer transaction. A Fresh Evidence Check re-observes the transaction named in an authorization-bound receipt and returns a new issuer-signed report; it does not submit an action or predict future safety. The free MCP surface supports discovery and purchase handoff only. See [agent usage and payment model](docs/product/agent-usage-model.md) and `GET /v1/capabilities` for live pricing, rails, and resources.
 
 ## Verified Action: four capability layers
 
@@ -80,29 +77,7 @@ For ERC-4337 smart accounts, a second `intent.v2` profile binds the canonical Us
 
 **A valid receipt is evidence of signed claims, not a guarantee of economic safety or an infallible RPC view.** ERC-1271 authority and EVM anchors require additional chain-state checks for complete verification. A key included in a downloaded bundle is discovery data; the reviewer must establish trust in that key separately.
 
-## Try it
-
-### Use the hosted console
-
-Open the [PriorSeal console](https://priorseal.xyz/app). Its quickstart checks the deployment's configured capabilities before wallet signing. You can create an authorization, observe a transaction, export the receipt, and review it in the [public verifier](https://priorseal.xyz/verify). The console's activity list is browser-local; it is not a complete server-side history.
-
-### Run the offline example
-
-Repository development requires **Node.js 22+**. This example generates a temporary key pair and a **synthetic execution** so you can inspect the receipt and verifier without an RPC endpoint or funds:
-
-```bash
-npm ci
-npm run example:receipt
-npm run verify:receipt
-```
-
-The verifier should report `valid: true`, `code: OK`, `outcome: COMPLETED`, `executionStatus: CONFIRMED`, and `complianceStatus: COMPLIANT`. These are results for the synthetic fixture, not proof of an on-chain transaction. Confirm the public key independently before relying on a receipt from another issuer.
-
-The artifacts are written to the ignored `examples/receipt-artifacts/` directory. To verify a different receipt and trusted public key:
-
-```bash
-npm run verify:receipt -- /path/to/receipt.json /path/to/public-key.pem
-```
+## Local development
 
 ### Run the API and console locally
 
@@ -166,6 +141,13 @@ These examples have different evidence scopes. Read each example's README before
 | [APS decision binding](examples/aps-priorseal-decision-binding-v1/README.md) | Correlates an independently verified APS decision with authorization and synthetic execution evidence. |
 | [Open Evidence Lab exact-call matrix](examples/open-evidence-lab-exact-call-matrix-v1/README.md) | Synthetic, offline interoperability case for validating a signed request against its observed execution envelope. |
 | [Consumer disposition example](examples/priorseal-consumer-disposition-v1/README.md) | Applies a small downstream policy to the matrix report: accept an exact completed match, reject mismatches, and hold incomplete evidence for review. |
+
+### Advanced integration guides
+
+- **Agent and wallet integrations:** [PriorSeal MCP](docs/integrations/priorseal-mcp.md) · [controlled-execution example](docs/integrations/priorseal-mcp-controlled-execution-example.md) · [MCP compatibility proof](docs/runbooks/mcp-compatibility-proof.md) · [Wallet MCP × Insight × PriorSeal](docs/integrations/wallet-mcp-insight-priorseal.md) · [local skill package](skills/wallet-mcp-insight-priorseal/README.md)
+- **Chain and account profiles:** [Solana](docs/integrations/solana.md) · [Hyperliquid](docs/integrations/hyperliquid.md) · [ERC-4337](docs/integrations/erc-4337.md) · [ERC-8004](docs/integrations/erc-8004.md) and its [read-only inspector](examples/erc8004-agent-accountability-v1/README.md)
+- **Insight + PriorSeal bindings:** [Base lending](docs/insight-base-lending-guard.md) · [Monad lending](docs/insight-monad-lending-guard.md) · [Base swap](docs/insight-base-agent-swap-guard.md) · [composite review manifests](sdk/README.md#composite-review-manifests)
+- **Execution and payment:** [Guarded Action](docs/integrations/guarded-action.md) · [Base Sepolia rehearsal](docs/runbooks/base-sepolia-guarded-action-rehearsal.md) · [x402 payment integration](docs/integrations/x402-evm.md) · [staged rollout](docs/runbooks/x402-staging.md)
 
 Other partner fixtures are under [`examples/`](examples/). Insight can be used independently for assessment evidence; PriorSeal can be used independently for Verified Action evidence; a combined workflow can bind the two without merging their trust roots.
 
