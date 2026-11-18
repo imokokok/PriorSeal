@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMemoryStore } from '../../src/index.mjs';
 import { createRpcClient } from '../../src/infrastructure/blockchain/evm/rpc-client.mjs';
-import { createSelfserveClaim, selfserveClaimMessage, type SelfserveClaimConfig } from '../../src/application/commerce/selfserve-claim.mjs';
+import { createSelfserveClaim, selfserveAccountId, selfserveClaimMessage, type SelfserveClaimConfig } from '../../src/application/commerce/selfserve-claim.mjs';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const PAY_TO = '0x5fbbbcbf2ade44f5c604e5e55f11945e1addd231';
@@ -14,7 +14,7 @@ const BLOCK_HASH = `0x${'1'.repeat(64)}`;
 
 const payer = privateKeyToAccount(PAYER_KEY);
 const other = privateKeyToAccount(OTHER_KEY);
-const payerAccountId = `selfserve-${payer.address.toLowerCase().slice(2, 10)}`;
+const payerAccountId = selfserveAccountId(payer.address);
 
 function claimConfig(): SelfserveClaimConfig {
   return { schema: 'priorseal.selfserve-claim.v1', chainId: 8453, payTo: PAY_TO, usdcAddress: USDC, minRawUnits: 1_000_000n, rawUnitsPerCredit: 10_000n, credentialKeyHex: 'ab'.repeat(32) };
@@ -51,6 +51,13 @@ function fund(chain: Map<string, FakeTransfer>, txHash: string, from: string, re
 }
 
 const sign = (account: ReturnType<typeof privateKeyToAccount>, txHash: string) => account.signMessage({ message: selfserveClaimMessage(PAY_TO, txHash) });
+
+test('selfserve account IDs distinguish full payer addresses that share a 32-bit prefix', () => {
+  const first = selfserveAccountId('0x1234abcd' + '1'.repeat(32));
+  const second = selfserveAccountId('0x1234abcd' + '2'.repeat(32));
+  assert.notEqual(first, second);
+  assert.equal(first, 'selfserve-1234abcd' + '1'.repeat(32));
+});
 
 test('selfserve claim message commits to the deployment payTo and transaction hash in lowercase', () => {
   assert.equal(selfserveClaimMessage('0x5FBBbcBF2ade44F5C604e5E55F11945E1adDd231', '0x' + 'A'.repeat(64)), `priorseal-selfserve-claim-v1:${PAY_TO}:0x${'a'.repeat(64)}`);

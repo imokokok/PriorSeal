@@ -14,6 +14,9 @@ const USDC_RAW_DECIMALS = 6n;
 function selfserveClaimMessage(payTo, txHash) {
   return `${CLAIM_DOMAIN}:${payTo.toLowerCase()}:${txHash.toLowerCase()}`;
 }
+function selfserveAccountId(payer) {
+  return "selfserve-" + payer.toLowerCase().slice(2);
+}
 function createSelfserveClaim(config, { store, rpc, rpcUrls, now = () => Date.now() }) {
   const credentialKey = Buffer.from(config.credentialKeyHex, "hex");
   const credentialFor = (accountId) => `psa_${createHmac("sha256", credentialKey).update(`${CREDENTIAL_DOMAIN}:${accountId}`, "utf8").digest("base64url")}`;
@@ -42,7 +45,7 @@ function createSelfserveClaim(config, { store, rpc, rpcUrls, now = () => Date.no
       if (amountRaw < config.minRawUnits) throw new PriorSealError("CLAIM_BELOW_MINIMUM", `The claimed transfer is below the ${minPayUsd} USD minimum`);
       const credits = amountRaw / config.rawUnitsPerCredit;
       if (credits < 1n) throw new PriorSealError("CLAIM_BELOW_MINIMUM", `The claimed transfer converts to less than one credit at ${creditUnitUsdLabel(config.rawUnitsPerCredit)} USD per credit`);
-      const accountId = `selfserve-${payer.slice(2, 10)}`;
+      const accountId = selfserveAccountId(payer);
       const credential = credentialFor(accountId);
       const credentialDigest = createHash("sha256").update(credential, "utf8").digest("hex");
       const createAccount = !await store.getAgentMeterAccount(accountId);
@@ -128,5 +131,6 @@ export {
   SELFSEEK_BASE_MAINNET_CHAIN_ID,
   SELFSEEK_BASE_MAINNET_USDC,
   createSelfserveClaim,
+  selfserveAccountId,
   selfserveClaimMessage
 };

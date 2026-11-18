@@ -17,6 +17,10 @@ Agent proposal → Bounded intent → Principal signature → Acceptance + time 
 
 PriorSeal is for an individual using an EVM or Solana wallet with an Agent, and for the wallet or Agent builder serving that person. A Verified Action is one bounded path through authorization, pre-execution proof, execution matching, and portable review. PriorSeal sits beside the system that constructs, signs, and submits transactions; it does not hold wallet keys, move funds, or turn a single authorization into open-ended automation.
 
+## Local repository hooks
+
+Npm install does not change your Git configuration. To enable the repository hooks explicitly for this checkout, run npm run hooks:install.
+
 ## Choose your integration path
 
 | Need | Start here |

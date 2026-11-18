@@ -13,10 +13,12 @@ test("runtime configuration normalizes explicit startup dependencies", () => {
     DATABASE_URL: "postgresql://app:secret@db.example/priorseal?sslmode=require",
     DATABASE_URL_UNPOOLED: "postgresql://app:secret@db.example/priorseal?sslmode=require",
     PRIORSEAL_CORS_ORIGINS: "https://console.example, https://console.example",
+    PRIORSEAL_RUNTIME: "cloudflare-workers",
     PRIORSEAL_TRUST_PROXY: "true"
   });
   assert.deepEqual(config, {
     environment: "development",
+    runtime: "cloudflare-workers",
     port: 3001,
     issuer: "issuer-1",
     keyId: "key-1",
@@ -113,6 +115,7 @@ test("runtime configuration rejects ambiguous or invalid values before startup",
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_PRIVATE_KEY_FILE: "/private.pem" }), /configured together/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_CORS_ORIGINS: "https://console.example/path" }), /without paths/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_TRUST_PROXY: "yes" }), /true or false/);
+  assert.throws(() => loadRuntimeConfig({ PRIORSEAL_TRUST_PROXY: "true" }), /only on Cloudflare Workers/);
   assert.throws(() => loadRuntimeConfig({ DATABASE_URL: "https://db.example" }), /PostgreSQL/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_ENVIRONMENT: "live" }), /development, test, or production/);
   assert.throws(() => loadRuntimeConfig({ PRIORSEAL_DATABASE_BACKEND: "mysql" }), /DATABASE_BACKEND/);

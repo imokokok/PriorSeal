@@ -72,6 +72,10 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process.env) {
   const runtimeEnvironment = environmentValue(environment.PRIORSEAL_ENVIRONMENT);
   const runtime = runtimeValue(environment.PRIORSEAL_RUNTIME);
+  const trustProxy = booleanValue(environment.PRIORSEAL_TRUST_PROXY, 'PRIORSEAL_TRUST_PROXY', false);
+  if (trustProxy && runtime !== 'cloudflare-workers') {
+    throw new TypeError('PRIORSEAL_TRUST_PROXY=true is supported only on Cloudflare Workers');
+  }
   const privateKeyFile = optionalValue(environment.PRIORSEAL_PRIVATE_KEY_FILE);
   const publicKeyFile = optionalValue(environment.PRIORSEAL_PUBLIC_KEY_FILE);
   const privateKeyPem = optionalPem(environment.PRIORSEAL_PRIVATE_KEY_PEM);
@@ -153,7 +157,7 @@ export function loadRuntimeConfig(environment: RuntimeEnvironmentInput = process
     databaseDirectUrl: databaseUrl(environment.DATABASE_URL_UNPOOLED, 'DATABASE_URL_UNPOOLED'),
     databaseBackend: databaseBackendValue(environment.PRIORSEAL_DATABASE_BACKEND),
     corsOrigins: corsOrigins(environment.PRIORSEAL_CORS_ORIGINS),
-    trustProxy: booleanValue(environment.PRIORSEAL_TRUST_PROXY, 'PRIORSEAL_TRUST_PROXY', false),
+    trustProxy,
     x402,
     ...(x402CreditPacks ? { x402CreditPacks } : {}),
     ...(selfserveClaim ? { selfserveClaim } : {}),
