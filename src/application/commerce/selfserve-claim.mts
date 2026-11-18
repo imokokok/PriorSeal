@@ -58,6 +58,11 @@ export function selfserveClaimMessage(payTo: string, txHash: string): string {
   return `${CLAIM_DOMAIN}:${payTo.toLowerCase()}:${txHash.toLowerCase()}`;
 }
 
+/** Stable, collision-resistant self-serve account namespace for one payer. */
+export function selfserveAccountId(payer: string): string {
+  return "selfserve-" + payer.toLowerCase().slice(2);
+}
+
 /**
  * Self-serve funding claim: an agent that transferred USDC to the deployment
  * payTo proves ownership of the payer wallet with an EIP-191 signature over a
@@ -102,7 +107,7 @@ export function createSelfserveClaim(config: SelfserveClaimConfig, { store, rpc,
       if (amountRaw < config.minRawUnits) throw new PriorSealError('CLAIM_BELOW_MINIMUM', `The claimed transfer is below the ${minPayUsd} USD minimum`);
       const credits = amountRaw / config.rawUnitsPerCredit;
       if (credits < 1n) throw new PriorSealError('CLAIM_BELOW_MINIMUM', `The claimed transfer converts to less than one credit at ${creditUnitUsdLabel(config.rawUnitsPerCredit)} USD per credit`);
-      const accountId = `selfserve-${payer.slice(2, 10)}`;
+      const accountId = selfserveAccountId(payer);
       const credential = credentialFor(accountId);
       const credentialDigest = createHash('sha256').update(credential, 'utf8').digest('hex');
       // A freshly created account seeds at zero; every credit, including the
