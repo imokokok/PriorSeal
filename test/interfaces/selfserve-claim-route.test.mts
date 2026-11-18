@@ -70,7 +70,7 @@ test('POST /v1/selfserve/claim provisions a funded account and returns the crede
   assert.equal(response.status, 201);
   assert.equal(response.json().credits, '150');
   assert.match(response.json().credential as string, /^psa_/);
-  assert.equal(response.json().account && (response.json().account as Record<string, unknown>).accountId, `selfserve-${payer.address.toLowerCase().slice(2, 10)}`);
+  assert.equal(response.json().account && (response.json().account as Record<string, unknown>).accountId, `selfserve-${payer.address.toLowerCase().slice(2)}`);
   const replay = await request(server, '/v1/selfserve/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ txHash, signature }) });
   assert.equal(replay.status, 200);
   assert.equal(replay.json().credential, response.json().credential);
