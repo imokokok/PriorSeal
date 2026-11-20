@@ -5,6 +5,7 @@ import { fetch as undiciFetch, ProxyAgent } from 'undici'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { PILOT_ENTRY_POINT, PILOT_USER_OPERATION_EVENT_TOPIC } from './src/lib/erc4337-profile'
+import { handleBaseSepoliaDemoStatusRequest } from '../src/demo/base-sepolia-demo-status.mjs'
 
 const sdkPackage = JSON.parse(readFileSync(new URL('../sdk/package.json', import.meta.url), 'utf8')) as { version: string }
 const localApiTarget = process.env.PRIORSEAL_LOCAL_API_URL?.trim() || 'http://127.0.0.1:3000'
@@ -114,8 +115,31 @@ function localSafe4337RpcProxy(): Plugin {
   }
 }
 
+function transactionRecoveryDemoApi(): Plugin {
+  return {
+    name: 'priorseal-transaction-recovery-demo-api',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((incoming, outgoing, next) => {
+        const url = new URL(incoming.url ?? '/', 'http://localhost')
+        if (url.pathname !== '/demo-api/base-sepolia/transaction') { next(); return }
+        void (async () => {
+          const response = await handleBaseSepoliaDemoStatusRequest(new Request(url, { method: incoming.method ?? 'GET' }))
+          outgoing.statusCode = response.status
+          response.headers.forEach((value, name) => outgoing.setHeader(name, value))
+          outgoing.end(await response.text())
+        })().catch(() => {
+          if (outgoing.headersSent) return
+          outgoing.writeHead(502, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+          outgoing.end(JSON.stringify({ error: { code: 'RPC_UNAVAILABLE', message: 'Could not verify the recorded transaction against Base Sepolia.' } }))
+        })
+      })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), localSafe4337RpcProxy()],
+  plugins: [react(), localSafe4337RpcProxy(), transactionRecoveryDemoApi()],
   resolve: {
     alias: [{ find: /^buffer$/, replacement: fileURLToPath(new URL('./src/shims/buffer.ts', import.meta.url)) }],
   },

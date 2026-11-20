@@ -8,6 +8,7 @@ import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter, evidenceBuck
 import { reconcileEvidenceArchiveOutbox } from "../infrastructure/persistence/evidence-r2.mjs";
 import { errorMessage } from "../shared/error-code.mjs";
 import { createSchemaCapabilityGuard } from "./cloudflare-schema.mjs";
+import { handleBaseSepoliaDemoStatusRequest } from "../demo/base-sepolia-demo-status.mjs";
 const assertSchemaCapability = createSchemaCapabilityGuard();
 const SECURITY_HEADERS = Object.freeze({
   "content-security-policy": "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
@@ -71,6 +72,9 @@ var stdin_default = {
     const redirect = httpsRedirect(request);
     if (redirect) return redirect;
     const pathname = new URL(request.url).pathname;
+    if (pathname === "/demo-api/base-sepolia/transaction") {
+      return withSecurityHeaders(await handleBaseSepoliaDemoStatusRequest(request));
+    }
     if (!isWorkerRoute(pathname)) return withSecurityHeaders(await environment.ASSETS.fetch(request));
     try {
       const response = await withRuntime(environment, context, createPriorSealRuntime, async (runtime) => {
