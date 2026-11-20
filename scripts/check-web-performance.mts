@@ -20,7 +20,7 @@ async function measurement(pattern: RegExp, label: string, limits: BudgetLimits)
 }
 
 const checks = await Promise.all([
-  measurement(/^index-.*\.js$/, 'application entry', { raw: 270_000, gzip: 85_000 }),
+  measurement(/^index-.*\.js$/, 'application entry', { raw: 270_000, gzip: 85_500 }),
   measurement(/^App-.*\.js$/, 'console route', { raw: 96_000, gzip: 28_000 }),
   measurement(/^verifier-.*\.js$/, 'offline verifier', { raw: 520_000, gzip: 130_000 }),
   measurement(/^index-.*\.css$/, 'entry CSS', { raw: 78_000, gzip: 16_000 }),

@@ -1,18 +1,22 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigationType } from 'react-router-dom'
 import { PrivacyPreferences } from './PrivacyPreferences'
 import { loadConsole } from './route-loaders'
 import { LandingPage } from './landing/LandingPage'
 
-const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((module) => ({ default: module.PrivacyPage })))
-const PublicTermsPage = lazy(() => import('./pages/PublicTermsPage').then((module) => ({ default: module.PublicTermsPage })))
-const SupportPage = lazy(() => import('./pages/SupportPage').then((module) => ({ default: module.SupportPage })))
-const McpPage = lazy(() => import('./pages/McpPage').then((module) => ({ default: module.McpPage })))
-const MonadProofPage = lazy(() => import('./pages/MonadProofPage').then((module) => ({ default: module.MonadProofPage })))
-const TransactionRecoveryDemoPage = lazy(() => import('./pages/TransactionRecoveryDemoPage').then((module) => ({ default: module.TransactionRecoveryDemoPage })))
-const CapabilitiesPage = lazy(() => import('./pages/CapabilitiesPage').then((module) => ({ default: module.CapabilitiesPage })))
-const SolutionsPage = lazy(() => import('./pages/SolutionsPage').then((module) => ({ default: module.SolutionsPage })))
-const PublicNotFoundPage = lazy(() => import('./pages/OutcomePages').then((module) => ({ default: module.PublicNotFoundPage })))
+function lazyPage<K extends string>(load: () => Promise<Record<K, ComponentType>>, key: K) {
+  return lazy(() => load().then((module) => ({ default: module[key] })))
+}
+
+const PrivacyPage = lazyPage(() => import('./pages/PrivacyPage'), 'PrivacyPage')
+const PublicTermsPage = lazyPage(() => import('./pages/PublicTermsPage'), 'PublicTermsPage')
+const SupportPage = lazyPage(() => import('./pages/SupportPage'), 'SupportPage')
+const McpPage = lazyPage(() => import('./pages/McpPage'), 'McpPage')
+const MonadProofPage = lazyPage(() => import('./pages/MonadProofPage'), 'MonadProofPage')
+const TransactionRecoveryDemoPage = lazyPage(() => import('./pages/TransactionRecoveryDemoPage'), 'TransactionRecoveryDemoPage')
+const CapabilitiesPage = lazyPage(() => import('./pages/CapabilitiesPage'), 'CapabilitiesPage')
+const SolutionsPage = lazyPage(() => import('./pages/SolutionsPage'), 'SolutionsPage')
+const PublicNotFoundPage = lazyPage(() => import('./pages/OutcomePages'), 'PublicNotFoundPage')
 const Console = lazy(loadConsole)
 
 type ScrollPosition = { left: number; top: number }
