@@ -38,10 +38,10 @@
     "access": "public"
   },
   "dependencies": {
-    "asn1js": "^3.0.6",
-    "pkijs": "^3.4.0",
-    "verify-insight-receipt": "0.3.1",
-    "viem": "2.56.3"
+    "asn1js": "^3.1.0",
+    "pkijs": "^3.4.3",
+    "verify-insight-receipt": "0.5.0",
+    "viem": "2.58.1"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
