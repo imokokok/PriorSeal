@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "devDependencies": {
-    "@cyclonedx/cyclonedx-npm": "7.0.0",
+    "@cyclonedx/cyclonedx-npm": "7.0.1",
     "libxmljs2": "0.37.0"
   },
   "overrides": {
