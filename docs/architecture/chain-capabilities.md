@@ -50,7 +50,7 @@ execution object, while the Jupiter quote digest is external route context.
 | HyperEVM | `eip155:999` | Yes | Native Circle USDC; configure `PRIORSEAL_RPC_HYPEREVM` for observation. x402 is offered only when the selected facilitator supports `exact`. |
 | Sei | `eip155:1329` | Yes | EVM JSON-RPC, deployment RPC required. |
 | X Layer | `eip155:196` | Yes | EVM JSON-RPC, deployment RPC required. |
-| BNB Smart Chain | `eip155:56` | Yes | EVM JSON-RPC, deployment RPC required. x402 settles 18-decimal bridged USDC through a facilitator with a non-EIP-3009 mandate flow (AEON; set `PRIORSEAL_X402_FACILITATOR_URLS`). |
+| BNB Smart Chain | `eip155:56` | Yes | EVM JSON-RPC, deployment RPC required. x402 settles 18-decimal bridged USDC through a facilitator with a non-EIP-3009 mandate flow (PayAI Permit2; set `PRIORSEAL_X402_FACILITATOR_URLS`). |
 | Base | `eip155:8453` | Yes | EVM JSON-RPC, deployment RPC required. |
 | Arbitrum One | `eip155:42161` | Yes | EVM JSON-RPC, deployment RPC required. |
 | Avalanche C-Chain | `eip155:43114` | Yes | EVM JSON-RPC, deployment RPC required. |
@@ -80,8 +80,8 @@ PriorSeal is registered on the BNB Smart Chain Identity Registry
 (registration tx `0x5c5bc79f2600e2c7dd2a28318e84a7fd66e7d42ebc7fdd47fa291829eb15`,
 block 1228378614, 2026-10-18). The token URI points at
 `https://priorseal.xyz/.well-known/agent8004.json`, which declares the OpenAPI
-surface and the x402 payment rails (`eip155:8453` + `eip155:56`, exact v2
-USDC). Owner and agent wallet: `0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231` —
+surface and the x402 payment rails (`eip155:8453`, `eip155:56`, `eip155:999`,
+and `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`, exact v2 USDC). Owner and agent wallet: `0x5FBbbCbF2Ade44F5c604E5E55f11945E1ADdD231` —
 the same registrar wallet holds Insight's ERC-8004 identity (agentId 375779),
 so the two products are discoverable side by side through the same registry.
 Re-register or update via `npm run agent8004:register`; the registrar key
