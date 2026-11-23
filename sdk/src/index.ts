@@ -31,6 +31,19 @@ export * from './rwa-binding.js'
 export { verifyRwaReceiptBundle, inspectRwaReceiptBundle } from './rwa-receipt.js'
 export * from './insight-rwa.js'
 export * from './insight-decision-input.js'
+export {
+  INSIGHT_POLYMARKET_GUARD_DECISION_SCHEMA,
+  INSIGHT_POLYMARKET_GUARD_DOMAIN,
+  INSIGHT_POLYMARKET_GUARD_NAMESPACE,
+  INSIGHT_POLYMARKET_GUARD_TYPES,
+  insightPolymarketGuardCommitment,
+  verifyInsightPolymarketGuardDecision,
+} from './insight-polymarket-guard.js'
+export type {
+  InsightPolymarketGuardDecision,
+  InsightPolymarketGuardVerification,
+  InsightPolymarketGuardVerificationOptions,
+} from './insight-polymarket-guard.js'
 export * from './insight-rwa-call.js'
 export * from './insight-rwa-v2.js'
 export { matchContextCommitment, matchUniqueContextCommitment } from './context-commitment.js'

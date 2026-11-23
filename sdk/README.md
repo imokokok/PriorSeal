@@ -222,6 +222,37 @@ Portable bundles are available with `getVerificationBundle(receiptId)`. Verify t
 
 The SDK ships offline adapters for Insight's signed guard decisions. These are verification and binding helpers only: none of them signs, submits, or authorizes an on-chain action. The full inventory exported from the package root:
 
+### Polymarket Guard screening evidence
+
+PriorSeal can independently verify Insight's short-lived, read-only Polymarket
+Guard attestation and bind its assessment digest into a PriorSeal context
+commitment. The verifier requires the caller's current Insight key registry;
+an embedded signer address is never treated as a trust root.
+
+```ts
+import {
+  insightPolymarketGuardCommitment,
+  matchUniqueContextCommitment,
+  verifyInsightPolymarketGuardDecision,
+} from 'priorseal-sdk'
+
+const response = await fetch(attestationUrl, { headers: { Authorization: `Bearer ${apiKey}` } }).then(r => r.json())
+const verification = await verifyInsightPolymarketGuardDecision(response, {
+  keyRegistry: insightKeyRegistry,
+})
+if (!verification.valid) throw new Error(`Polymarket evidence rejected: ${verification.reason}`)
+
+const commitment = insightPolymarketGuardCommitment(response.data)
+const binding = matchUniqueContextCommitment(intent, commitment)
+if (!binding.matched) throw new Error('Intent does not bind this exact assessment')
+```
+
+The commitment binds the complete signed screening result. The attestation is
+valid for at most 60 seconds and does not prove event truth, fair value, an
+order, or a transaction. PriorSeal verifies and records evidence; it does not
+place or sign Polymarket orders or trade for a user. A valid Insight signature
+does not itself authorize execution.
+
 | Family | Adapter module | What it verifies / binds |
 | --- | --- | --- |
 | Lending | `insight-base-lending-guard` | Base lending EIP-712 decision, bound intent, receipt bundle |
@@ -232,6 +263,7 @@ The SDK ships offline adapters for Insight's signed guard decisions. These are v
 | Swap | `insight-base-agent-swap-guard-settlement` (0.15.0) | Offline settlement verification, decision↔settlement cross-binding, double-settlement contradiction detection over the same three EVM chains |
 | Swap | `insight-solana-swap-guard` (0.15.0) | Orca Whirlpool Ed25519 decision and settlement over the exact attested message bytes |
 | Perp | `insight-hyperliquid-perp-guard` (0.15.0) | Exact unsigned IOC envelope binding and EIP-712 decision; builder-fee envelopes fail closed |
+| Prediction market | `insight-polymarket-guard` | Read-only Polymarket screening attestation verification and assessment context commitment |
 
 0.15.0 added the Solana Swap Guard adapter, the Hyperliquid Perp Guard adapter, the Base Agent Swap Guard settlement closure, and `priorseal.agent-proposal.v1` (`agent-proposal`). The last one is a caller-retained Agent rationale record with a canonical SHA-256 context commitment — a disclosure/evidence binding, **not a guard** and not a reputation, identity, trading-safety, or investment claim. The 0.14.0 Base Agent Swap Guard adapter and the four lending adapters predate 0.15.0; the settlement closure extends the Base swap adapter rather than being a separate guard family. Since the 2026-11-05 close-out the swap adapter and its settlement closure cover all three reviewed EVM chains (Base 8453 / BNB 56 / Monad 143). See the [SDK changelog](CHANGELOG.md) for the release-by-release list.
 
