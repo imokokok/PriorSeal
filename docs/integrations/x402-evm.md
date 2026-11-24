@@ -33,7 +33,7 @@ secrets/vars:
 | Variable | Required | Purpose |
 |---|---:|---|
 | `PRIORSEAL_X402_FACILITATOR_URL` | Yes | Facilitator base URL; the service calls `/supported`, `/verify`, and `/settle`. |
-| `PRIORSEAL_X402_FACILITATOR_URLS` | No | Per-network facilitator overrides as comma-separated `network=url` pairs (for example `eip155:56=https://facilitator.aeon.xyz` or `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp=https://facilitator.payai.network`); each entry must reference a known rail and an HTTPS URL. May be combined with CDP authentication — CDP bearer JWTs are only ever attached to the CDP base URL, never to an override. |
+| `PRIORSEAL_X402_FACILITATOR_URLS` | No | Per-network facilitator overrides as comma-separated `network=url` pairs (for example `eip155:56=https://facilitator.payai.network`, `eip155:999=https://facilitator.ultravioletadao.xyz`, or `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp=https://facilitator.payai.network`); each entry must reference a known rail and an HTTPS URL. May be combined with CDP authentication — CDP bearer JWTs are only ever attached to the CDP base URL, never to an override. |
 | `PRIORSEAL_X402_FACILITATOR_HEADERS_JSON` | No | Per-operation authentication headers, stored as a secret. |
 | `PRIORSEAL_X402_FACILITATOR_AUTH_MODE` | No | Set only to `cdp` for CDP's hosted facilitator; it creates a short-lived JWT for each operation. |
 | `PRIORSEAL_X402_CDP_API_KEY_ID` | With `AUTH_MODE=cdp` | CDP API-key identifier, stored as a Worker secret. |
@@ -133,15 +133,15 @@ facilitator itself and are never sent to an overridden endpoint.
 BNB Smart Chain (`eip155:56`) settles Binance-bridged USDC (18 decimals,
 `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d`). The bridged token exposes no
 on-chain EIP-3009 domain, so this rail requires a facilitator that verifies
-its own mandate-flow authorization — the AEON facilitator advertises exact v2
-on `eip155:56` and is the validated production pairing (first exercised in
-Insight production, 2026-10-17). This is the canonical CDP-plus-override
-shape: CDP serves Base, the AEON override serves BNB:
+its own mandate-flow authorization — the PayAI facilitator settles it through
+a Permit2 flow and is the validated production pairing (migrated from AEON in
+commit `404e922`, 2026-11-16). This is the canonical CDP-plus-override
+shape: CDP serves Base, the PayAI override serves BNB:
 
 ```dotenv
 PRIORSEAL_X402_NETWORKS=eip155:8453,eip155:56
 PRIORSEAL_X402_FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402
-PRIORSEAL_X402_FACILITATOR_URLS=eip155:56=https://facilitator.aeon.xyz
+PRIORSEAL_X402_FACILITATOR_URLS=eip155:56=https://facilitator.payai.network
 ```
 
 Record the facilitator's live `/supported` response for `eip155:56` in the
