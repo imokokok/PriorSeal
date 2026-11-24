@@ -1,0 +1,21 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "priorseal-polymarket-telegram-bot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true,
+    "traces": { "enabled": false }
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "STATE", "class_name": "TelegramBotState" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TelegramBotState"] }],
+  "vars": {
+    "INSIGHT_BASE_URL": "https://www.oracleinsight.xyz",
+    "INSIGHT_KEY_REGISTRY_URL": "https://www.oracleinsight.xyz/.well-known/oracle-keys.json"
+  }
+}
