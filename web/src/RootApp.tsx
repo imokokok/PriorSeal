@@ -13,7 +13,6 @@ const PublicTermsPage = lazyPage(() => import('./pages/PublicTermsPage'), 'Publi
 const SupportPage = lazyPage(() => import('./pages/SupportPage'), 'SupportPage')
 const McpPage = lazyPage(() => import('./pages/McpPage'), 'McpPage')
 const MonadProofPage = lazyPage(() => import('./pages/MonadProofPage'), 'MonadProofPage')
-const TransactionRecoveryDemoPage = lazyPage(() => import('./pages/TransactionRecoveryDemoPage'), 'TransactionRecoveryDemoPage')
 const CapabilitiesPage = lazyPage(() => import('./pages/CapabilitiesPage'), 'CapabilitiesPage')
 const SolutionsPage = lazyPage(() => import('./pages/SolutionsPage'), 'SolutionsPage')
 const PublicNotFoundPage = lazyPage(() => import('./pages/OutcomePages'), 'PublicNotFoundPage')
@@ -100,5 +99,5 @@ function RouteFallback() {
 }
 
 export default function RootApp() {
-  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/solutions" element={<SolutionsPage />} /><Route path="/capabilities" element={<CapabilitiesPage />} /><Route path="/proof-cases" element={<MonadProofPage />} /><Route path="/demo/transaction-recovery" element={<TransactionRecoveryDemoPage />} /><Route path="/monad" element={<Navigate replace to="/proof-cases" />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/terms" element={<PublicTermsPage />} /><Route path="/support" element={<SupportPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
+  return <BrowserRouter><a className="skip-link" href="#main-content">Skip to main content</a><ScrollManager /><RouteAccessibility /><Suspense fallback={<RouteFallback />}><Routes><Route path="/" element={<LandingPage />} /><Route path="/solutions" element={<SolutionsPage />} /><Route path="/capabilities" element={<CapabilitiesPage />} /><Route path="/proof-cases" element={<MonadProofPage />} /><Route path="/monad" element={<Navigate replace to="/proof-cases" />} /><Route path="/integrations/mcp" element={<McpPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/terms" element={<PublicTermsPage />} /><Route path="/support" element={<SupportPage />} /><Route path="/app/*" element={<Console />} /><Route path="*" element={<PublicNotFoundPage />} /></Routes></Suspense><PrivacyPreferences /></BrowserRouter>
 }

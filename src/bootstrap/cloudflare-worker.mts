@@ -7,7 +7,6 @@ import { cloudflareRuntimeEnvironment, createCloudflareRateLimiter, evidenceBuck
 import { reconcileEvidenceArchiveOutbox } from '../infrastructure/persistence/evidence-r2.mjs';
 import { errorMessage } from '../shared/error-code.mjs';
 import { createSchemaCapabilityGuard } from './cloudflare-schema.mjs';
-import { handleBaseSepoliaDemoStatusRequest } from '../demo/base-sepolia-demo-status.mjs';
 import type { ObservationJob } from '../application/observations/observation-worker.mjs';
 
 type Runtime = Awaited<ReturnType<typeof createPriorSealRuntime>>;
@@ -89,9 +88,6 @@ export default {
     const redirect = httpsRedirect(request);
     if (redirect) return redirect;
     const pathname = new URL(request.url).pathname;
-    if (pathname === '/demo-api/base-sepolia/transaction') {
-      return withSecurityHeaders(await handleBaseSepoliaDemoStatusRequest(request));
-    }
     if (!isWorkerRoute(pathname)) return withSecurityHeaders(await environment.ASSETS.fetch(request));
     try {
       const response = await withRuntime(environment, context, createPriorSealRuntime, async (runtime) => {
