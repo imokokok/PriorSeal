@@ -3,6 +3,7 @@ import {
   collectMarketEvidence,
 } from './source-evidence.js'
 import { handleBaseLendingAssessmentRequest } from './base-lending.js'
+import { handleTelegramSwapSettlementRequest } from './base-swap-settlement.js'
 import {
   assessHyperliquidCommand,
   assessSwapCommand,
@@ -171,6 +172,9 @@ async function sendTelegramScenarioArtifact(
     form.set('chat_id', String(chatId))
     form.set('caption', caption.slice(0, 1_024))
     form.set('document', new Blob([content], { type: 'application/json' }), fileName)
+    form.set('reply_markup', JSON.stringify({
+      inline_keyboard: [[{ text: 'Continue in PriorSeal', web_app: { url: 'https://priorseal.xyz/app/telegram-scenarios' } }]],
+    }))
     const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
       method: 'POST',
       body: form,
@@ -278,6 +282,9 @@ export default {
     if (request.method === 'GET' && url.pathname === '/health') return new Response('ok')
     if (url.pathname === '/telegram/lending/assess') {
       return handleBaseLendingAssessmentRequest(request, env)
+    }
+    if (url.pathname === '/telegram/swap/settle') {
+      return handleTelegramSwapSettlementRequest(request, env)
     }
     if (request.method === 'POST' && url.pathname === '/admin/register-webhook') {
       if (!env.WEBHOOK_SETUP_SECRET) return new Response('not found', { status: 404 })

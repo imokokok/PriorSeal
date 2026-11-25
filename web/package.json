@@ -13,6 +13,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@nktkas/hyperliquid": "0.33.3",
     "@safe-global/relay-kit": "6.1.5",
     "@solana/web3.js": "^3.2.1",
     "priorseal-sdk": "file:../sdk",
