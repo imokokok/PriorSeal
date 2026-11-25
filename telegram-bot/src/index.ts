@@ -2,6 +2,7 @@ import { verifyInsightPolymarketGuardDecision } from '../../sdk/src/insight-poly
 import {
   collectMarketEvidence,
 } from './source-evidence.js'
+import { handleBaseLendingAssessmentRequest } from './base-lending.js'
 import { TelegramBotState } from './telegram-state.js'
 import type { KeyRegistry } from 'verify-insight-receipt'
 
@@ -16,17 +17,19 @@ type Env = {
   INSIGHT_BASE_URL?: string
   INSIGHT_KEY_REGISTRY_URL?: string
   ALLOWED_CHAT_IDS?: string
+  LENDING_MINI_APP_ORIGIN?: string
+  LENDING_MINI_APP_URL?: string
 }
 
 type TelegramMessage = { chat: { id: number }; text?: string }
 type TelegramUpdate = { update_id: number; message?: TelegramMessage }
 type GuardVerdict = 'ALLOW' | 'CAUTION' | 'BLOCK'
-type BotCommand = 'start' | 'help' | 'check' | 'evidence'
+type BotCommand = 'start' | 'help' | 'check' | 'evidence' | 'lending'
 
 const MAX_BODY_BYTES = 32 * 1024
 const MAX_RESPONSE_BYTES = 512 * 1024
 const PROTOCOL_ID = 'polymarket-prediction-mainnet'
-const COMMAND_PATTERN = /^\/(start|help|check|evidence)(?:@[a-z0-9_]+)?(?:\s+([\s\S]*))?$/i
+const COMMAND_PATTERN = /^\/(start|help|check|evidence|lending)(?:@[a-z0-9_]+)?(?:\s+([\s\S]*))?$/i
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -97,17 +100,36 @@ function commandOf(text: string): { command: BotCommand; args: string } | null {
   const match = COMMAND_PATTERN.exec(text.trim())
   if (!match) return null
   const command = match[1]?.toLowerCase()
-  if (command !== 'start' && command !== 'help' && command !== 'check' && command !== 'evidence') return null
+  if (command !== 'start' && command !== 'help' && command !== 'check' && command !== 'evidence' && command !== 'lending') return null
   return { command, args: match[2]?.trim() ?? '' }
 }
 
-async function sendTelegramMessage(env: Env, chatId: number, text: string): Promise<boolean> {
+function lendingMiniAppKeyboard(env: Env): Record<string, unknown> | undefined {
+  if (!env.LENDING_MINI_APP_URL || !env.LENDING_MINI_APP_ORIGIN) return undefined
+  try {
+    const url = new URL(env.LENDING_MINI_APP_URL)
+    if (url.protocol !== 'https:' || url.origin !== env.LENDING_MINI_APP_ORIGIN || url.username || url.password) return undefined
+    return { inline_keyboard: [[{ text: 'Open Base Lending', web_app: { url: url.toString() } }]] }
+  } catch { return undefined }
+}
+
+async function sendTelegramMessage(
+  env: Env,
+  chatId: number,
+  text: string,
+  replyMarkup?: Record<string, unknown>,
+): Promise<boolean> {
   if (!env.TELEGRAM_BOT_TOKEN) return false
   try {
     const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: true,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      }),
       signal: AbortSignal.timeout(10_000),
     })
     if (!response.ok) return false
@@ -208,6 +230,9 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
     if (request.method === 'GET' && url.pathname === '/health') return new Response('ok')
+    if (url.pathname === '/telegram/lending/assess') {
+      return handleBaseLendingAssessmentRequest(request, env)
+    }
     if (request.method === 'POST' && url.pathname === '/admin/register-webhook') {
       if (!env.WEBHOOK_SETUP_SECRET) return new Response('not found', { status: 404 })
       const authorization = request.headers.get('Authorization')
@@ -275,10 +300,16 @@ export default {
     const reservation = await object.reserveUpdate(update.update_id, Math.floor(Date.now() / 1000), validCheck || validEvidence ? 'check' : 'other')
     if (reservation === 'duplicate') return new Response('ok')
     let reply: string | null = null
+    let replyMarkup: Record<string, unknown> | undefined
     if (reservation === 'rate_limited') {
       reply = 'Free beta limit reached: up to 3 read-only requests per hour and 10 per day per chat.'
     } else if (command.command === 'start' || command.command === 'help') {
-      reply = 'Use /check <market-slug> <up|down> for a read-only market-integrity check, or /evidence <market-id> for signed source data. PriorSeal verifies Insight’s signature. Neither command predicts outcomes or authorizes trades.'
+      reply = 'Use /check <market-slug> <up|down> for a read-only market-integrity check, /evidence <market-id> for signed source data, or /lending to open the Base lending Mini App. PriorSeal verifies Insight’s signatures. These tools do not predict outcomes or authorize trades by themselves.'
+    } else if (command.command === 'lending') {
+      replyMarkup = lendingMiniAppKeyboard(env)
+      reply = replyMarkup
+        ? 'Open the Base lending Mini App. It checks one exact unsigned call; your wallet remains the signer and submits only after your confirmation.'
+        : 'The Base lending Mini App is not configured yet. Please try again later.'
     } else {
       if (command.command === 'check' && (!validCheck || !requestedSlug || !requestedSide)) {
         reply = 'Usage: /check <market-slug> <up|down>'
@@ -312,7 +343,7 @@ export default {
       }
     }
 
-    const delivered = await sendTelegramMessage(env, message.chat.id, reply)
+    const delivered = await sendTelegramMessage(env, message.chat.id, reply, replyMarkup)
     if (!delivered) {
       await object.releaseUpdate(update.update_id)
       return new Response('telegram delivery failed', { status: 502 })
