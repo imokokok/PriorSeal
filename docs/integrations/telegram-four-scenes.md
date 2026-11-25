@@ -9,7 +9,7 @@ The PriorSeal Telegram Worker provides one allowlisted bot for four entry points
 | Hyperliquid perps | `/perp <JSON>` | Signed risk decision for one exact IOC order envelope | Verify the signature, expiry, and exact envelope; build an intent only for `ALLOW` | JSON sent to the requesting private chat; no account authorization or submission |
 | DEX swap | `/swap <JSON>` | Reviewed direct-router guard over a pinned quote and two decision prices | Verify the signed decision and byte-exact approval/swap calls; build ordered intents only for `ALLOW` | JSON sent to the requesting private chat; no wallet signing, relay, or broadcast |
 
-All four flows use the same Telegram bot, chat allowlist, webhook, and per-chat guard/evidence rate limit. The bot does not accept free-form messages, hold a wallet key, or send unsolicited notifications.
+All four flows use the same Telegram bot, chat allowlist, webhook, and per-chat guard/evidence rate limit. Lending, perpetual, and swap flows must be opened from a private chat. The bot does not accept free-form messages, hold a wallet key, or send unsolicited notifications.
 
 ## Hyperliquid perpetual assessment
 

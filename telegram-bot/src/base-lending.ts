@@ -185,6 +185,29 @@ function responseData(value: unknown): unknown {
   return value
 }
 
+/** Ensure the verified attestation still describes the exact UI risk inputs and call. */
+export function assertLendingDecisionMatchesRequest(
+  decision: InsightBaseLendingGuardDecision,
+  input: BaseLendingAssessmentInput,
+): void {
+  const guard = decision.guard
+  const market = isRecord(guard.market) ? guard.market : null
+  const projected = isRecord(guard.projected) ? guard.projected : null
+  const sameAddress = (left: unknown, right: string) =>
+    typeof left === 'string' && left.toLowerCase() === right.toLowerCase()
+  if (!market || !projected || guard.protocolId !== input.guard.protocolId || guard.action !== input.guard.action ||
+      typeof market.collateralSymbol !== 'string' || market.collateralSymbol.toLowerCase() !== input.guard.collateralSymbol.toLowerCase() ||
+      typeof market.loanSymbol !== 'string' || market.loanSymbol.toLowerCase() !== input.guard.loanSymbol.toLowerCase() ||
+      (input.guard.marketId !== undefined && (typeof market.marketId !== 'string' || market.marketId.toLowerCase() !== input.guard.marketId.toLowerCase())) ||
+      projected.collateralValueUsd !== input.guard.collateralValueUsd || projected.debtValueUsd !== input.guard.debtValueUsd ||
+      decision.transaction.chainId !== input.transaction.chainId ||
+      !sameAddress(decision.transaction.from, input.transaction.from) || !sameAddress(decision.transaction.to, input.transaction.to) ||
+      decision.transaction.data.toLowerCase() !== input.transaction.data.toLowerCase() ||
+      String(decision.transaction.nonce) !== String(input.transaction.nonce) || String(decision.transaction.value) !== '0') {
+    throw new Error('LENDING_DECISION_REQUEST_MISMATCH')
+  }
+}
+
 /** Fetches a signed, exact-call Insight decision and builds its PriorSeal-bound intent. */
 export async function assessAndBindBaseLendingAction(
   rawInput: unknown,
@@ -223,6 +246,7 @@ export async function assessAndBindBaseLendingAction(
     throw new Error('LENDING_DECISION_INVALID')
   }
   const typedDecision = decision as unknown as InsightBaseLendingGuardDecision
+  assertLendingDecisionMatchesRequest(typedDecision, input)
   const priorSealIntent = typedDecision.guard.verdict === 'ALLOW'
     ? await buildBaseLendingGuardBoundIntent({
         transaction: typedDecision.transaction,

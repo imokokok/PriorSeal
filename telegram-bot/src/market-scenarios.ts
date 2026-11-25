@@ -177,6 +177,56 @@ function jsonFileResult(summary: string, artifact: Record<string, unknown>) {
   return { summary, artifact }
 }
 
+function sameJson(left: unknown, right: unknown): boolean {
+  const canonical = (value: unknown): string => {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'undefined'
+    if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(',')}}`
+  }
+  return canonical(left) === canonical(right)
+}
+
+/** Fail closed if a trusted signed decision is valid but for different request inputs. */
+export function assertPerpDecisionMatchesRequest(
+  decision: Record<string, unknown>,
+  input: z.infer<typeof PerpRequestSchema>,
+): void {
+  const guard = isRecord(decision.guard) ? decision.guard : null
+  const market = guard && isRecord(guard.market) ? guard.market : null
+  const projected = guard && isRecord(guard.projected) ? guard.projected : null
+  const venue = guard && isRecord(guard.venue) ? guard.venue : null
+  const requestedOrder = input.order.action.orders[0]
+  const decisionOrder = isRecord(decision.order) ? decision.order : null
+  if (!guard || !market || !projected || !venue || !requestedOrder ||
+      guard.protocolId !== input.guard.protocolId || guard.action !== input.guard.action ||
+      market.assetSymbol !== input.guard.assetSymbol || market.marginAssetSymbol !== input.guard.marginAssetSymbol ||
+      projected.sizeUsd !== input.guard.sizeUsd || projected.marginValueUsd !== input.guard.marginValueUsd ||
+      venue.observedAssetIndex !== requestedOrder.a || !sameJson(decisionOrder, input.order)) {
+    throw new Error('INSIGHT_DECISION_REQUEST_MISMATCH')
+  }
+}
+
+/** Compare the attested swap profile, user, and risk policy with the submitted request. */
+export function assertSwapDecisionMatchesRequest(
+  decision: Record<string, unknown>,
+  input: z.infer<typeof SwapRequestSchema>,
+): void {
+  const guard = isRecord(decision.guard) ? decision.guard : null
+  const scope = guard && isRecord(guard.scope) ? guard.scope : null
+  const binding = guard && isRecord(guard.binding) ? guard.binding : null
+  const policy = guard && isRecord(guard.policy) ? guard.policy : null
+  if (!guard || !scope || !policy ||
+      scope.profileId !== input.guard.profileId ||
+      !sameJson(policy, input.guard.policy)) {
+    throw new Error('INSIGHT_DECISION_REQUEST_MISMATCH')
+  }
+  if (binding && (typeof binding.recipient !== 'string' || binding.recipient.toLowerCase() !== input.guard.recipient.toLowerCase())) {
+    throw new Error('INSIGHT_DECISION_REQUEST_MISMATCH')
+  }
+  if (guard.verdict === 'ALLOW' && !binding) throw new Error('INSIGHT_DECISION_REQUEST_MISMATCH')
+}
+
 export async function assessHyperliquidCommand(env: ScenarioEnv, payload: unknown): Promise<{ summary: string; artifact: Record<string, unknown> }> {
   const input = PerpRequestSchema.parse(payload)
   const { apiKey, base } = configured(env)
@@ -193,6 +243,7 @@ export async function assessHyperliquidCommand(env: ScenarioEnv, payload: unknow
   const registry = await getKeyRegistry(env)
   const verification = await verifyInsightHyperliquidPerpGuardDecision(decision, { keyRegistry: registry })
   if (!verification.valid) throw new Error(`INSIGHT_DECISION_${verification.reason}`)
+  assertPerpDecisionMatchesRequest(decision, input)
 
   const guard = isRecord(decision.guard) ? decision.guard : null
   const model = guard && isRecord(guard.projected) ? guard.projected : null
@@ -248,6 +299,7 @@ export async function assessSwapCommand(env: ScenarioEnv, payload: unknown): Pro
   const registry = await getKeyRegistry(env)
   const verification = await verifyInsightAgentSwapGuardDecision(decision, { keyRegistry: registry })
   if (!verification.valid) throw new Error(`INSIGHT_DECISION_${verification.reason}`)
+  assertSwapDecisionMatchesRequest(decision, input)
   const guard = isRecord(decision.guard) ? decision.guard : null
   const verdict = guard && typeof guard.verdict === 'string' ? guard.verdict : 'UNKNOWN'
   let intents: unknown = null
