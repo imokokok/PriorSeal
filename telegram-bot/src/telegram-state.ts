@@ -38,6 +38,8 @@ export class TelegramBotState extends DurableObject<Env> {
       ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS source_evidence_expires_at ON source_evidence(expires_at)')
       ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS lending_assessments (id INTEGER PRIMARY KEY AUTOINCREMENT, requested_at INTEGER NOT NULL)')
       ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS lending_assessments_requested_at ON lending_assessments(requested_at)')
+      ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS swap_settlements (id INTEGER PRIMARY KEY AUTOINCREMENT, requested_at INTEGER NOT NULL)')
+      ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS swap_settlements_requested_at ON swap_settlements(requested_at)')
     })
   }
 
@@ -115,5 +117,18 @@ export class TelegramBotState extends DurableObject<Env> {
     sql.exec('INSERT INTO lending_assessments(requested_at) VALUES (?)', now)
     return true
   }
+
+  reserveSwapSettlement(now: number): boolean {
+    const sql = this.ctx.storage.sql
+    sql.exec('DELETE FROM swap_settlements WHERE requested_at < ?', now - 86_400)
+    const hourly = sql.exec<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM swap_settlements WHERE requested_at > ?', now - 3_600,
+    ).toArray()[0]?.total ?? 0
+    const daily = sql.exec<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM swap_settlements WHERE requested_at > ?', now - 86_400,
+    ).toArray()[0]?.total ?? 0
+    if (hourly >= 3 || daily >= 10) return false
+    sql.exec('INSERT INTO swap_settlements(requested_at) VALUES (?)', now)
+    return true
   }
 }
