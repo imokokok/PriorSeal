@@ -491,6 +491,7 @@ export type {
   SignedCoverageReport,
 } from "./insight-coverage.js";
 export {
+  verifyReceiptLocally,
   buildReviewManifest,
   verifyReviewManifestLocally,
   verifyReviewManifestWithChain,
@@ -498,6 +499,8 @@ export {
   parseTrustProfile,
 } from "./verifier.js";
 export type {
+  LocalVerifierOptions,
+  LocalVerificationResult,
   ReviewManifest,
   ReviewAttachment,
   ReviewAttachmentInput,
