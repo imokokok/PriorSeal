@@ -172,10 +172,14 @@ export function BaseLendingTelegramPage() {
       const verified = await verifyInsightBaseLendingGuardDecision(decision, { keyRegistry: keys })
       if (!verified.valid) throw new Error(`Insight decision is not trusted: ${verified.reason}`)
       const decisionMarket = isRecord(decision.guard.market) ? decision.guard.market : null
+      const decisionProjected = isRecord(decision.guard.projected) ? decision.guard.projected : null
       if (decision.guard.protocolId !== protocolId || decision.guard.action !== action ||
           !decisionMarket || typeof decisionMarket.collateralSymbol !== 'string' || typeof decisionMarket.loanSymbol !== 'string' ||
           decisionMarket.collateralSymbol.toLowerCase() !== collateralSymbol.trim().toLowerCase() ||
           decisionMarket.loanSymbol.toLowerCase() !== loanSymbol.trim().toLowerCase() ||
+          !decisionProjected || decisionProjected.collateralValueUsd !== Number(collateralValueUsd) ||
+          decisionProjected.debtValueUsd !== Number(debtValueUsd) ||
+          (morphoRequired && (typeof decisionMarket.marketId !== 'string' || decisionMarket.marketId.toLowerCase() !== marketId.toLowerCase())) ||
           decision.transaction.from.toLowerCase() !== transaction.value.from.toLowerCase() ||
           decision.transaction.to.toLowerCase() !== transaction.value.to.toLowerCase() ||
           decision.transaction.data.toLowerCase() !== transaction.value.data.toLowerCase() ||

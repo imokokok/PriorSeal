@@ -332,8 +332,8 @@ export default {
       }
       return new Response('ok')
     }
-    if ((command.command === 'perp' || command.command === 'swap') && message.chat.id <= 0) {
-      await sendTelegramMessage(env, message.chat.id, 'Send Perp and Swap guard requests in a private chat so wallet and order details are not exposed in a group.')
+    if ((command.command === 'lending' || command.command === 'perp' || command.command === 'swap') && message.chat.id <= 0) {
+      await sendTelegramMessage(env, message.chat.id, 'Open lending, Perp, and Swap flows in a private chat so wallet, order, and transaction details are not exposed in a group.')
       return new Response('ok')
     }
 
@@ -376,7 +376,7 @@ export default {
         '/lending — open the Base lending Mini App',
         '/perp <JSON> — Hyperliquid IOC assessment and PriorSeal intent verification',
         '/swap <JSON> — reviewed DEX swap guard and PriorSeal intent verification',
-        'Send Perp and Swap JSON only in private chat; verified assessments return a JSON artifact with the signed decision and PriorSeal intent. No transaction is signed or submitted.',
+        'Open Lending, Perp, and Swap only in private chat; Perp and Swap verified assessments return a JSON artifact with the signed decision and PriorSeal intent. No trade is signed or submitted by the bot.',
         'Perp and swap guard calls use the configured Insight API quota/credits. PriorSeal independently verifies signed decisions. Guard commands never sign or submit trades.',
       ].join('\n')
     } else if (command.command === 'lending') {
