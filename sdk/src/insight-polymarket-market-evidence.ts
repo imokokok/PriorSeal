@@ -67,7 +67,7 @@ type Evidence = {
   };
   observations: Array<{
     id: string;
-    provider: "bls.series" | "bls.percent-change";
+    provider: "bls.series" | "bls.percent-change" | "nws.latest-observation";
     evidence: Record<string, unknown>;
   }>;
   reviewWarnings: string[];
@@ -168,7 +168,7 @@ function makeWarnings(observations: Evidence["observations"]): string[] | null {
             );
         }
       }
-    } else {
+    } else if (item.provider === "bls.percent-change") {
       if (
         !verifyInsightPolymarketBlsPercentChangeEvidence(item.evidence).valid ||
         !record(item.evidence.observation) ||
@@ -194,6 +194,18 @@ function makeWarnings(observations: Evidence["observations"]): string[] | null {
             );
         }
       }
+    } else {
+      const result = verifyInsightPolymarketNwsObservationEvidence(
+        item.evidence,
+      );
+      if (!result.valid) return null;
+      const measurement = item.evidence.measurement as Record<string, unknown>;
+      const qualityControl = measurement.qualityControl as string[];
+      if (qualityControl.length > 0) {
+        warnings.push(
+          `NWS quality-control flags are present for ${String(item.evidence.property)}; review their source meaning.`,
+        );
+      }
     }
   }
   return [...new Set(warnings)];
@@ -203,9 +215,10 @@ function parse(value: unknown): Evidence | null {
     record(value) && value.success === true && record(value.data)
       ? value.data
       : value;
-  const root = record(envelope) && record(envelope.evidence)
-    ? envelope.evidence
-    : envelope;
+  const root =
+    record(envelope) && record(envelope.evidence)
+      ? envelope.evidence
+      : envelope;
   if (
     !record(root) ||
     hasOutcomeDerivation(root) ||
@@ -306,7 +319,8 @@ function parse(value: unknown): Evidence | null {
       item.id.length > 64 ||
       seen.has(item.id) ||
       (item.provider !== "bls.series" &&
-        item.provider !== "bls.percent-change") ||
+        item.provider !== "bls.percent-change" &&
+        item.provider !== "nws.latest-observation") ||
       !record(item.evidence)
     )
       return null;
@@ -323,6 +337,101 @@ function parse(value: unknown): Evidence | null {
   return root as unknown as Evidence;
 }
 
+const NWS_PROPERTIES = new Set([
+  "temperature",
+  "dewpoint",
+  "windSpeed",
+  "windDirection",
+  "windGust",
+  "barometricPressure",
+  "seaLevelPressure",
+  "visibility",
+  "maxTemperatureLast24Hours",
+  "minTemperatureLast24Hours",
+  "precipitationLastHour",
+  "precipitationLast3Hours",
+  "precipitationLast6Hours",
+]);
+
+/** Validate one raw NWS measurement without deriving a market outcome. */
+export function verifyInsightPolymarketNwsObservationEvidence(value: unknown) {
+  const invalid = { valid: false as const, reason: "MALFORMED" as const };
+  if (
+    !record(value) ||
+    !exactKeys(value, [
+      "schema",
+      "source",
+      "sourceUrl",
+      "observationUrl",
+      "stationId",
+      "observedAt",
+      "description",
+      "property",
+      "measurement",
+      "retrievedAt",
+      "disclosure",
+    ]) ||
+    value.schema !== "insight.polymarket-nws-observation.v1" ||
+    value.source !== "us-national-weather-service-api" ||
+    typeof value.stationId !== "string" ||
+    !/^[A-Z0-9-]{3,10}$/.test(value.stationId) ||
+    typeof value.property !== "string" ||
+    !NWS_PROPERTIES.has(value.property) ||
+    typeof value.sourceUrl !== "string" ||
+    typeof value.observationUrl !== "string" ||
+    typeof value.observedAt !== "string" ||
+    !Number.isFinite(Date.parse(value.observedAt)) ||
+    typeof value.retrievedAt !== "string" ||
+    !Number.isFinite(Date.parse(value.retrievedAt)) ||
+    (value.description !== null &&
+      (typeof value.description !== "string" ||
+        value.description.length > 160)) ||
+    !record(value.measurement) ||
+    !exactKeys(value.measurement, ["value", "unitCode", "qualityControl"]) ||
+    typeof value.measurement.value !== "number" ||
+    !Number.isFinite(value.measurement.value) ||
+    typeof value.measurement.unitCode !== "string" ||
+    value.measurement.unitCode.length < 1 ||
+    value.measurement.unitCode.length > 80 ||
+    !Array.isArray(value.measurement.qualityControl) ||
+    value.measurement.qualityControl.length > 20 ||
+    !value.measurement.qualityControl.every(
+      (flag) => typeof flag === "string" && flag.length <= 40,
+    ) ||
+    typeof value.disclosure !== "string" ||
+    value.disclosure.length > 2000 ||
+    !value.disclosure.includes("does not compare values to thresholds") ||
+    !value.disclosure.includes("does not determine event outcomes")
+  )
+    return invalid;
+  const stationPath = `/stations/${value.stationId}`;
+  try {
+    const source = new URL(value.sourceUrl);
+    const observation = new URL(value.observationUrl);
+    if (
+      source.protocol !== "https:" ||
+      source.hostname !== "api.weather.gov" ||
+      source.username ||
+      source.password ||
+      source.search ||
+      source.hash ||
+      source.pathname !== `${stationPath}/observations/latest` ||
+      observation.protocol !== "https:" ||
+      observation.hostname !== "api.weather.gov" ||
+      observation.username ||
+      observation.password ||
+      observation.search ||
+      observation.hash ||
+      (observation.pathname !== stationPath &&
+        !observation.pathname.startsWith(`${stationPath}/observations/`))
+    )
+      return invalid;
+  } catch {
+    return invalid;
+  }
+  return { valid: true as const, reason: "OK" as const };
+}
+
 function isHttps(value: string): boolean {
   try {
     return new URL(value).protocol === "https:";
@@ -331,17 +440,50 @@ function isHttps(value: string): boolean {
   }
 }
 
-function registryTrust(registry: KeyRegistry | undefined, address: string, issuedAt: number): boolean {
-  if (!registry || !record(registry) || (registry.public_keys && registry.keys) || (registry.revoked_keys && registry.revoked)) return false;
+function registryTrust(
+  registry: KeyRegistry | undefined,
+  address: string,
+  issuedAt: number,
+): boolean {
+  if (
+    !registry ||
+    !record(registry) ||
+    (registry.public_keys && registry.keys) ||
+    (registry.revoked_keys && registry.revoked)
+  )
+    return false;
   const keys = registry.public_keys ?? registry.keys;
-  if (!Array.isArray(keys) || keys.length < 1 || keys.length > 100) return false;
-  const matches = keys.filter((entry) => record(entry) && typeof entry.public_key === "string" && entry.public_key.toLowerCase() === address.toLowerCase());
+  if (!Array.isArray(keys) || keys.length < 1 || keys.length > 100)
+    return false;
+  const matches = keys.filter(
+    (entry) =>
+      record(entry) &&
+      typeof entry.public_key === "string" &&
+      entry.public_key.toLowerCase() === address.toLowerCase(),
+  );
   if (matches.length !== 1) return false;
   const key = matches[0];
-  if (key.revoked !== false || (key.role !== undefined && key.role !== "attester") || typeof key.key_id !== "string" || typeof key.validFrom !== "string" || !Number.isFinite(Date.parse(key.validFrom)) || (key.validUntil !== null && (typeof key.validUntil !== "string" || !Number.isFinite(Date.parse(key.validUntil))))) return false;
-  if (issuedAt < Date.parse(key.validFrom) / 1000 || (key.validUntil !== null && issuedAt >= Date.parse(key.validUntil) / 1000)) return false;
+  if (
+    key.revoked !== false ||
+    (key.role !== undefined && key.role !== "attester") ||
+    typeof key.key_id !== "string" ||
+    typeof key.validFrom !== "string" ||
+    !Number.isFinite(Date.parse(key.validFrom)) ||
+    (key.validUntil !== null &&
+      (typeof key.validUntil !== "string" ||
+        !Number.isFinite(Date.parse(key.validUntil))))
+  )
+    return false;
+  if (
+    issuedAt < Date.parse(key.validFrom) / 1000 ||
+    (key.validUntil !== null && issuedAt >= Date.parse(key.validUntil) / 1000)
+  )
+    return false;
   const revoked = registry.revoked_keys ?? registry.revoked ?? [];
-  return Array.isArray(revoked) && !revoked.some((entry) => record(entry) && entry.key_id === key.key_id);
+  return (
+    Array.isArray(revoked) &&
+    !revoked.some((entry) => record(entry) && entry.key_id === key.key_id)
+  );
 }
 
 export type InsightPolymarketSourceEvidenceAttestationOptions = {
@@ -365,44 +507,133 @@ export async function verifyInsightPolymarketSourceEvidenceAttestation(
   value: unknown,
   options: InsightPolymarketSourceEvidenceAttestationOptions = {},
 ): Promise<InsightPolymarketSourceEvidenceAttestationVerification> {
-  const empty = { valid: false, signatureValid: false, trusted: false, expired: false, reason: "MALFORMED", evidenceHash: null, attester: null, issuedAt: null, validUntil: null } as const;
+  const empty = {
+    valid: false,
+    signatureValid: false,
+    trusted: false,
+    expired: false,
+    reason: "MALFORMED",
+    evidenceHash: null,
+    attester: null,
+    issuedAt: null,
+    validUntil: null,
+  } as const;
   try {
-    const envelope = record(value) && value.success === true && record(value.data) ? value.data : value;
-    if (!record(envelope) || !record(envelope.evidence) || !record(envelope.attestation)) return empty;
+    const envelope =
+      record(value) && value.success === true && record(value.data)
+        ? value.data
+        : value;
+    if (
+      !record(envelope) ||
+      !record(envelope.evidence) ||
+      !record(envelope.attestation)
+    )
+      return empty;
     const evidence = parse(envelope.evidence);
     if (!evidence) return empty;
     const decision = envelope.attestation;
-    const attestation = record(decision.attestation) ? decision.attestation : null;
-    const data = attestation && record(attestation.data) ? attestation.data : null;
-    if (!attestation || !data || decision.schema !== INSIGHT_POLYMARKET_SOURCE_EVIDENCE_ATTESTATION_SCHEMA || !HASH.test(String(decision.decisionHash)) ||
-      attestation.type !== "PolymarketSourceEvidence" || attestation.schemaVersion !== 1 || !HASH.test(String(attestation.uid)) ||
-      !ADDRESS.test(String(attestation.attester)) || !SIGNATURE.test(String(attestation.signature)) || attestation.validForSeconds !== MAX_VALIDITY_SECONDS ||
-      !HASH.test(String(data.evidenceHash)) || data.marketId !== evidence.market.id || data.schemaVersion !== 1 ||
-      !Number.isSafeInteger(data.issuedAt) || (data.issuedAt as number) < 0 || !Number.isSafeInteger(data.validUntil) ||
-      (data.validUntil as number) <= (data.issuedAt as number) || (data.validUntil as number) - (data.issuedAt as number) > MAX_VALIDITY_SECONDS ||
-      attestation.signedAt !== new Date((data.issuedAt as number) * 1000).toISOString() ||
-      canonical(attestation.eip712) !== canonical({ domain: INSIGHT_POLYMARKET_SOURCE_EVIDENCE_DOMAIN, types: INSIGHT_POLYMARKET_SOURCE_EVIDENCE_TYPES, primaryType: "PolymarketSourceEvidence" })) return empty;
+    const attestation = record(decision.attestation)
+      ? decision.attestation
+      : null;
+    const data =
+      attestation && record(attestation.data) ? attestation.data : null;
+    if (
+      !attestation ||
+      !data ||
+      decision.schema !==
+        INSIGHT_POLYMARKET_SOURCE_EVIDENCE_ATTESTATION_SCHEMA ||
+      !HASH.test(String(decision.decisionHash)) ||
+      attestation.type !== "PolymarketSourceEvidence" ||
+      attestation.schemaVersion !== 1 ||
+      !HASH.test(String(attestation.uid)) ||
+      !ADDRESS.test(String(attestation.attester)) ||
+      !SIGNATURE.test(String(attestation.signature)) ||
+      attestation.validForSeconds !== MAX_VALIDITY_SECONDS ||
+      !HASH.test(String(data.evidenceHash)) ||
+      data.marketId !== evidence.market.id ||
+      data.schemaVersion !== 1 ||
+      !Number.isSafeInteger(data.issuedAt) ||
+      (data.issuedAt as number) < 0 ||
+      !Number.isSafeInteger(data.validUntil) ||
+      (data.validUntil as number) <= (data.issuedAt as number) ||
+      (data.validUntil as number) - (data.issuedAt as number) >
+        MAX_VALIDITY_SECONDS ||
+      attestation.signedAt !==
+        new Date((data.issuedAt as number) * 1000).toISOString() ||
+      canonical(attestation.eip712) !==
+        canonical({
+          domain: INSIGHT_POLYMARKET_SOURCE_EVIDENCE_DOMAIN,
+          types: INSIGHT_POLYMARKET_SOURCE_EVIDENCE_TYPES,
+          primaryType: "PolymarketSourceEvidence",
+        })
+    )
+      return empty;
 
     const evidenceHash = keccak256(toBytes(canonical(envelope.evidence)));
-    if (evidenceHash.toLowerCase() !== String(decision.decisionHash).toLowerCase() || evidenceHash.toLowerCase() !== String(data.evidenceHash).toLowerCase()) return { ...empty, reason: "EVIDENCE_HASH_MISMATCH" };
+    if (
+      evidenceHash.toLowerCase() !==
+        String(decision.decisionHash).toLowerCase() ||
+      evidenceHash.toLowerCase() !== String(data.evidenceHash).toLowerCase()
+    )
+      return { ...empty, reason: "EVIDENCE_HASH_MISMATCH" };
     const issuedAt = data.issuedAt as number;
     const validUntil = data.validUntil as number;
     const collectedAt = Math.floor(Date.parse(evidence.collectedAt) / 1000);
-    if (issuedAt < collectedAt || validUntil > issuedAt + MAX_VALIDITY_SECONDS) return { ...empty, reason: "EVIDENCE_STALE" };
+    if (issuedAt < collectedAt || validUntil > issuedAt + MAX_VALIDITY_SECONDS)
+      return { ...empty, reason: "EVIDENCE_STALE" };
     const typedData = {
       domain: INSIGHT_POLYMARKET_SOURCE_EVIDENCE_DOMAIN,
       types: INSIGHT_POLYMARKET_SOURCE_EVIDENCE_TYPES,
       primaryType: "PolymarketSourceEvidence" as const,
-      message: { evidenceHash: String(data.evidenceHash) as `0x${string}`, marketId: String(data.marketId), issuedAt: BigInt(issuedAt), validUntil: BigInt(validUntil), schemaVersion: 1n },
+      message: {
+        evidenceHash: String(data.evidenceHash) as `0x${string}`,
+        marketId: String(data.marketId),
+        issuedAt: BigInt(issuedAt),
+        validUntil: BigInt(validUntil),
+        schemaVersion: 1n,
+      },
     };
-    if (hashTypedData(typedData).toLowerCase() !== String(attestation.uid).toLowerCase()) return { ...empty, reason: "UID_MISMATCH" };
-    const signatureValid = await verifyTypedData({ ...typedData, address: String(attestation.attester) as `0x${string}`, signature: String(attestation.signature) as `0x${string}` });
+    if (
+      hashTypedData(typedData).toLowerCase() !==
+      String(attestation.uid).toLowerCase()
+    )
+      return { ...empty, reason: "UID_MISMATCH" };
+    const signatureValid = await verifyTypedData({
+      ...typedData,
+      address: String(attestation.attester) as `0x${string}`,
+      signature: String(attestation.signature) as `0x${string}`,
+    });
     if (!signatureValid) return { ...empty, reason: "SIGNATURE_INVALID" };
-    if (!registryTrust(options.keyRegistry, String(attestation.attester), issuedAt)) return { ...empty, signatureValid: true, reason: "SIGNER_UNTRUSTED", evidenceHash, attester: String(attestation.attester), issuedAt, validUntil };
+    if (
+      !registryTrust(
+        options.keyRegistry,
+        String(attestation.attester),
+        issuedAt,
+      )
+    )
+      return {
+        ...empty,
+        signatureValid: true,
+        reason: "SIGNER_UNTRUSTED",
+        evidenceHash,
+        attester: String(attestation.attester),
+        issuedAt,
+        validUntil,
+      };
     const now = options.now ?? Math.floor(Date.now() / 1000);
     const expired = validUntil <= now;
     const issuedInFuture = issuedAt > now + 5;
-    return { valid: !expired && !issuedInFuture, signatureValid: true, trusted: true, expired, reason: expired ? "EXPIRED" : issuedInFuture ? "ISSUED_IN_FUTURE" : "OK", evidenceHash, attester: String(attestation.attester), issuedAt, validUntil };
+    return {
+      valid: !expired && !issuedInFuture,
+      signatureValid: true,
+      trusted: true,
+      expired,
+      reason: expired ? "EXPIRED" : issuedInFuture ? "ISSUED_IN_FUTURE" : "OK",
+      evidenceHash,
+      attester: String(attestation.attester),
+      issuedAt,
+      validUntil,
+    };
   } catch {
     return { ...empty, reason: "VERIFICATION_ERROR" };
   }

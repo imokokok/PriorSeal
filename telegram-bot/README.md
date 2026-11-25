@@ -2,7 +2,7 @@
 
 An opt-in, read-only free-beta interface to Insight's Polymarket services. It handles `/start`, `/help`, `/check <market-slug> <up|down>`, and `/evidence <market-id>`. `/check` verifies the existing short-horizon market-integrity guard. `/evidence` collects only sources configured in Insight's reviewed market binding and verifies the signed source record with PriorSeal before showing a summary and commitment. It does not send unsolicited messages, forecast event outcomes, connect wallets, submit trades, or hold user funds. `/check`'s selected side is an input label for an integrity check, not a trading recommendation.
 
-Each successful `/check` verifies the short-lived guard attestation. Each `/evidence` request verifies Insight's EIP-712 signature, signer epoch, expiry and exact record hash with PriorSeal's verifier; it then stores the signed response and commitment in that chat's Durable Object and emits the commitment digest and record ID in the Telegram reply. Storage is capped at 100 records per chat, prunes expired/old records, and retains entries for up to 30 days. Missing, expired, modified, oversized or untrusted evidence is never presented as verified. Both commands share the existing limit of three requests per rolling hour and ten per rolling day per chat. This is a private bot evidence record, not a PriorSeal receipt or a public transparency anchor. Insight API-key usage may incur the account's normal metering or credit consumption.
+Each successful `/check` verifies the short-lived guard attestation. Each `/evidence` request verifies Insight's EIP-712 signature, signer epoch, expiry and exact record hash with PriorSeal's verifier; it then stores the signed response and commitment in that chat's Durable Object and emits the commitment digest and record ID in the Telegram reply. BLS and NWS station observations are supported when a server-side reviewed market binding names the exact source. Storage is capped at 100 records per chat, prunes expired/old records, and retains entries for up to 30 days. Missing, expired, modified, oversized or untrusted evidence is never presented as verified. Both commands share the existing limit of three requests per rolling hour and ten per rolling day per chat. This is a private bot evidence record, not a PriorSeal receipt or a public transparency anchor. Insight API-key usage may incur the account's normal metering or credit consumption.
 
 ## Configure
 
@@ -19,6 +19,7 @@ From the repository root, use the pinned Node.js version (`nvm use`). Use the ro
    ```
 
    Enter secret values only at Wrangler's prompt. Do not put them in source, the config, shell command arguments, or logs.
+
 3. Generate the worker binding types, inspect the deployment preview, then deploy:
 
    ```sh

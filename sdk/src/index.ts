@@ -527,6 +527,7 @@ export {
   INSIGHT_POLYMARKET_SOURCE_EVIDENCE_SCHEMA,
   INSIGHT_POLYMARKET_SOURCE_EVIDENCE_TYPES,
   insightPolymarketSourceEvidenceCommitment,
+  verifyInsightPolymarketNwsObservationEvidence,
   verifyInsightPolymarketSourceEvidenceAttestation,
   verifyInsightPolymarketSourceEvidence,
 } from "./insight-polymarket-market-evidence.js";

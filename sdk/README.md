@@ -310,9 +310,10 @@ For source evidence collected by Insight's read-only Polymarket evidence route,
 use `verifyInsightPolymarketSourceEvidence()` and
 `insightPolymarketSourceEvidenceCommitment()`. The verifier checks the market
 metadata snapshot, stable reviewed rules digest, integrity-check fields, BLS
-source records, calculation consistency and footnote warnings. Its schema
-explicitly records `outcomeEvaluation: "not_performed"`; it rejects attached
-outcome conclusions. New source providers require their own schema verifier.
+source records, NWS station measurements, calculation consistency and source
+quality warnings. Its schema explicitly records
+`outcomeEvaluation: "not_performed"`; it rejects attached outcome conclusions.
+New source providers require their own schema verifier.
 
 Insight now returns a signed `{ evidence, attestation }` envelope. Verify it
 before trusting or displaying the record, using a caller-pinned Insight key
@@ -323,7 +324,8 @@ const verification = await verifyInsightPolymarketSourceEvidenceAttestation(
   response,
   { keyRegistry: pinnedInsightKeyRegistry },
 );
-if (!verification.valid) throw new Error(`Insight evidence rejected: ${verification.reason}`);
+if (!verification.valid)
+  throw new Error(`Insight evidence rejected: ${verification.reason}`);
 
 const commitment = insightPolymarketSourceEvidenceCommitment(response);
 // Store this digest with the separately retained evidence or a relevant
@@ -333,7 +335,11 @@ const commitment = insightPolymarketSourceEvidenceCommitment(response);
 The signature binds the exact evidence bytes, market ID and five-minute
 validity window. The SDK checks the trusted key's role, validity interval and
 revocation status. A valid signature identifies the Insight signer; it does
-not independently authenticate Polymarket/BLS or establish event settlement.
+not independently authenticate Polymarket, BLS or NWS, or establish event
+settlement. `verifyInsightPolymarketNwsObservationEvidence()` validates the
+fixed NWS source host and station path, explicit measurement field, finite
+value, unit, timestamp and quality-control list. It does not compare the
+measurement with a threshold.
 
 For BLS v2 calculated percent changes, use
 `verifyInsightPolymarketBlsPercentChangeEvidence()` and
