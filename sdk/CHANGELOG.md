@@ -1,5 +1,40 @@
 # Changelog
 
+## Unreleased — Polymarket source-evidence authentication
+
+- Added EIP-712 verification of Insight's source-evidence envelope, including
+  trusted-key epoch, revocation, five-minute expiry and exact record hashing.
+- The SDK accepts the signed API envelope or bare evidence record when creating
+  a commitment; the commitment remains distinct from authentication and durable
+  receipt creation.
+
+## Unreleased — Polymarket source-evidence commitments
+
+- Added a source-evidence commitment that validates reviewed market metadata,
+  stable rules digest, integrity checks, BLS source records and footnote warnings.
+- The schema explicitly marks event-outcome evaluation as not performed and
+  rejects comparison predicates, side mappings and candidate outcomes.
+- BLS v2 12-month percent-change evidence is validated against captured current
+  and prior-year observations before its record can be committed.
+
+## Unreleased — Polymarket BLS evidence binding
+
+- Added a schema-checked commitment adapter for exact BLS series observations
+  returned by Insight. It validates the declared public source, series, period,
+  observation value, footnotes, and retrieval timestamp before hashing.
+- The commitment binds bytes to an intent; it does not authenticate the BLS
+  server response or determine a Polymarket settlement outcome.
+
+## Unreleased — Polymarket market assessment context binding
+
+- Added a separate SDK adapter for Insight's general binary-market integrity
+  assessment schema. It verifies the optional short-lived EIP-712 attestation,
+  trusted key epoch, read-only scope, and canonical Keccak-256 commitment that
+  can be attached to a PriorSeal intent.
+- A valid signature establishes the trusted Insight issuer and exact payload;
+  it is not a forecast or independent proof that venue metadata is correct.
+- The existing signed Up/Down Polymarket Guard v1 adapter remains unchanged.
+
 ## 2026-11-05 — capability-gap documentation close-out (P1-3 / P1-5 / P2)
 
 Documentation close-out across the insight and PriorSeal repositories. Every
@@ -52,7 +87,7 @@ items are recorded here as well.
   Solana-native venues.
 - **Settlement independent re-read** (PriorSeal SDK,
   `settlement-independent-reread.ts`): `independentlyVerifySettlement(
-  settlement, { rpcUrl | provider | reader })` uses the caller's own RPC to
+settlement, { rpcUrl | provider | reader })` uses the caller's own RPC to
   recompute the calldata hash, ERC-20 `Transfer` amounts and chain/block
   against the settlement's claims; `verifySettlementWithIndependentReread`
   composes it with the offline verifier. **opt-in, default off** — with no RPC

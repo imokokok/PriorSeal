@@ -2,6 +2,8 @@ import { DurableObject } from 'cloudflare:workers'
 
 type CheckCommand = 'check' | 'other'
 type Reservation = 'reserved' | 'duplicate' | 'rate_limited'
+const EVIDENCE_RETENTION_SECONDS = 30 * 86_400
+const MAX_SOURCE_EVIDENCE_RECORDS = 100
 
 /** Per-chat durable update deduplication and rolling usage limits. */
 export class TelegramBotState extends DurableObject<Env> {
@@ -22,6 +24,18 @@ export class TelegramBotState extends DurableObject<Env> {
         )
       `)
       ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS checks_requested_at ON checks(requested_at)')
+      ctx.storage.sql.exec(`
+        CREATE TABLE IF NOT EXISTS source_evidence (
+          update_id INTEGER PRIMARY KEY,
+          market_id TEXT NOT NULL,
+          collected_at TEXT NOT NULL,
+          evidence_hash TEXT NOT NULL,
+          payload_json TEXT NOT NULL,
+          recorded_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL
+        )
+      `)
+      ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS source_evidence_expires_at ON source_evidence(expires_at)')
     })
   }
 
@@ -59,5 +73,30 @@ export class TelegramBotState extends DurableObject<Env> {
   releaseUpdate(updateId: number): void {
     this.ctx.storage.sql.exec('DELETE FROM checks WHERE update_id = ?', updateId)
     this.ctx.storage.sql.exec('DELETE FROM updates WHERE update_id = ? AND completed = 0', updateId)
+  }
+
+  storeSourceEvidence(
+    updateId: number,
+    marketId: string,
+    collectedAt: string,
+    evidenceHash: string,
+    payloadJson: string,
+    now: number,
+  ): void {
+    if (!Number.isSafeInteger(updateId) || updateId < 0 || !marketId || marketId.length > 100 ||
+        !Number.isFinite(Date.parse(collectedAt)) || !/^0x[\da-f]{64}$/i.test(evidenceHash) ||
+        new TextEncoder().encode(payloadJson).byteLength > 64 * 1024 || !Number.isSafeInteger(now) || now < 0) {
+      throw new TypeError('Invalid verified Polymarket source evidence record')
+    }
+    const sql = this.ctx.storage.sql
+    sql.exec('DELETE FROM source_evidence WHERE expires_at <= ?', now)
+    sql.exec(
+      'INSERT OR REPLACE INTO source_evidence(update_id, market_id, collected_at, evidence_hash, payload_json, recorded_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      updateId, marketId, collectedAt, evidenceHash.toLowerCase(), payloadJson, now, now + EVIDENCE_RETENTION_SECONDS,
+    )
+    sql.exec(
+      'DELETE FROM source_evidence WHERE update_id IN (SELECT update_id FROM source_evidence ORDER BY recorded_at DESC LIMIT -1 OFFSET ?)',
+      MAX_SOURCE_EVIDENCE_RECORDS,
+    )
   }
 }

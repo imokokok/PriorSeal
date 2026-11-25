@@ -1,36 +1,141 @@
-export { PriorSealApiError, PriorSealClient, createPriorSealClient, generateAuthorizationNonce } from './client.js'
-export { createX402AgentFetch } from './x402-agent-fetch.js'
-export type { X402ExactRequirement, X402PaymentChallenge, X402PaymentPolicy, X402PaymentSigner } from './x402-agent-fetch.js'
-export { selfServeTopup, selfServeClaimMessage } from './selfserve-topup.js'
-export type { SelfServeTopupPayer, SelfServeTopupResult, SelfserveClaimCapabilities } from './selfserve-topup.js'
-export { parseAuthorizationCheckpoint } from './checkpoint.js'
-export { validatePriorSealResponse } from './response-validation.js'
-export { WALLET_GUARDED_ACTION_SCHEMA, createWalletGuardedAction, summarizeWalletGuardedAction, transitionWalletGuardedAction } from './wallet-guard.js'
-export type { WalletGuardedAction, WalletGuardedActionEvent, WalletGuardedActionState, WalletGuardedActionSummary, WalletGuardedActionTransition, WalletGuardRiskVerdict } from './wallet-guard.js'
-export { buildExactCallIntent, parseExactCallTransaction, parseContextCommitments } from './exact-call.js'
-export { AGENT_PROPOSAL_NAMESPACE, agentProposalCommitment, assertAgentId, canonicalAgentProposalBytes, createAgentProposal, parseAgentProposal, verifyAgentProposalCommitment } from './agent-proposal.js'
-export type { AgentProposal } from './agent-proposal.js'
+export {
+  PriorSealApiError,
+  PriorSealClient,
+  createPriorSealClient,
+  generateAuthorizationNonce,
+} from "./client.js";
+export { createX402AgentFetch } from "./x402-agent-fetch.js";
+export type {
+  X402ExactRequirement,
+  X402PaymentChallenge,
+  X402PaymentPolicy,
+  X402PaymentSigner,
+} from "./x402-agent-fetch.js";
+export { selfServeTopup, selfServeClaimMessage } from "./selfserve-topup.js";
+export type {
+  SelfServeTopupPayer,
+  SelfServeTopupResult,
+  SelfserveClaimCapabilities,
+} from "./selfserve-topup.js";
+export { parseAuthorizationCheckpoint } from "./checkpoint.js";
+export { validatePriorSealResponse } from "./response-validation.js";
+export {
+  WALLET_GUARDED_ACTION_SCHEMA,
+  createWalletGuardedAction,
+  summarizeWalletGuardedAction,
+  transitionWalletGuardedAction,
+} from "./wallet-guard.js";
+export type {
+  WalletGuardedAction,
+  WalletGuardedActionEvent,
+  WalletGuardedActionState,
+  WalletGuardedActionSummary,
+  WalletGuardedActionTransition,
+  WalletGuardRiskVerdict,
+} from "./wallet-guard.js";
+export {
+  buildExactCallIntent,
+  parseExactCallTransaction,
+  parseContextCommitments,
+} from "./exact-call.js";
+export {
+  AGENT_PROPOSAL_NAMESPACE,
+  agentProposalCommitment,
+  assertAgentId,
+  canonicalAgentProposalBytes,
+  createAgentProposal,
+  parseAgentProposal,
+  verifyAgentProposalCommitment,
+} from "./agent-proposal.js";
+export type { AgentProposal } from "./agent-proposal.js";
 export {
   HEADLESS_H4_ENTRY_HASH_NAMESPACE,
   buildHeadlessH4ExactCallIntent,
   headlessH4EntryHashCommitment,
   parseHeadlessH4EntryHash,
-} from './headless-h4.js'
-export type { HeadlessH4EntryHash, HeadlessH4ExactCallInput } from './headless-h4.js'
-export { buildSolanaTransactionIntent, encodeSolanaTransactionMessageBytes, hashSolanaTransactionMessage, solanaAuthorizationMessage, SOLANA_MAINNET_CAIP2, SOLANA_TRANSACTION_PROFILE } from './solana-transaction.js'
-export type { SolanaTransactionIntentInput } from './solana-transaction.js'
-export { assertPancakeSwapBnbApprovalSpender, assertPancakeSwapBnbExactInputCall, pancakeSwapBnbProfile, PANCAKESWAP_BNB_CHAIN_ID, PANCAKESWAP_BNB_SMART_ROUTER, PANCAKESWAP_BNB_SMART_ROUTER_PROFILE, PANCAKESWAP_BNB_V2_PROFILE, PANCAKESWAP_BNB_V2_ROUTER } from './pancakeswap-bnb.js'
-export type { PancakeSwapBnbCall, PancakeSwapBnbProfile } from './pancakeswap-bnb.js'
-export { buildHyperliquidBuilderFeeApproval, buildHyperliquidSpotIocBuilderFeeSubmission, buildHyperliquidSpotIocIntent, buildHyperliquidSpotIocSubmission, HYPERLIQUID_MAINNET_CHAIN_REF, HYPERLIQUID_MAX_SPOT_BUILDER_FEE_TENTHS_BPS, HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS, HYPERLIQUID_OUTCOME_ASSET_ID_MIN, HYPERLIQUID_SPOT_IOC_ACTION, HYPERLIQUID_SPOT_IOC_PROFILE, hyperliquidSpotBuilderFeeTerms } from './hyperliquid-spot.js'
-export type { HyperliquidBuilderFeeApproval, HyperliquidSpotBuilderFeePolicy, HyperliquidSpotIocBuilderFeeSubmission, HyperliquidSpotIocIntentInput, HyperliquidSpotIocSubmission } from './hyperliquid-spot.js'
-export { EXECUTION_COMMERCE_NAMESPACE, EXECUTION_COMMERCE_SCHEMA, executionCommerceCommitment, normalizeExecutionCommerceTerms } from './execution-commerce.js'
-export type { ExecutionCommerceTerms } from './execution-commerce.js'
-export { ERC4337_USER_OPERATION_NAMESPACE, ERC4337_EXECUTION_EVENT_NAMESPACE, ERC4337_EXECUTION_PROFILE, ERC4337_EIP7702_FACTORY_MARKER, computeERC4337EntryPointCodeHash, computeEIP7702AuthorizationTupleHash, decodeSafe4337CallData, parseERC4337UserOperationInput, bindERC4337UserOperation, buildERC4337UserOperationIntent, verifyERC4337ExecutionEvidence } from './erc4337.js'
-export type { ERC4337Version, ERC4337UserOperationInput, ERC4337AuthorizationIntentInput, ERC4337OperationBinding, ERC4337ExecutionEvidence, ERC4337EIP7702DelegationEvidence } from './erc4337.js'
-export * from './rwa-binding.js'
-export { verifyRwaReceiptBundle, inspectRwaReceiptBundle } from './rwa-receipt.js'
-export * from './insight-rwa.js'
-export * from './insight-decision-input.js'
+} from "./headless-h4.js";
+export type {
+  HeadlessH4EntryHash,
+  HeadlessH4ExactCallInput,
+} from "./headless-h4.js";
+export {
+  buildSolanaTransactionIntent,
+  encodeSolanaTransactionMessageBytes,
+  hashSolanaTransactionMessage,
+  solanaAuthorizationMessage,
+  SOLANA_MAINNET_CAIP2,
+  SOLANA_TRANSACTION_PROFILE,
+} from "./solana-transaction.js";
+export type { SolanaTransactionIntentInput } from "./solana-transaction.js";
+export {
+  assertPancakeSwapBnbApprovalSpender,
+  assertPancakeSwapBnbExactInputCall,
+  pancakeSwapBnbProfile,
+  PANCAKESWAP_BNB_CHAIN_ID,
+  PANCAKESWAP_BNB_SMART_ROUTER,
+  PANCAKESWAP_BNB_SMART_ROUTER_PROFILE,
+  PANCAKESWAP_BNB_V2_PROFILE,
+  PANCAKESWAP_BNB_V2_ROUTER,
+} from "./pancakeswap-bnb.js";
+export type {
+  PancakeSwapBnbCall,
+  PancakeSwapBnbProfile,
+} from "./pancakeswap-bnb.js";
+export {
+  buildHyperliquidBuilderFeeApproval,
+  buildHyperliquidSpotIocBuilderFeeSubmission,
+  buildHyperliquidSpotIocIntent,
+  buildHyperliquidSpotIocSubmission,
+  HYPERLIQUID_MAINNET_CHAIN_REF,
+  HYPERLIQUID_MAX_SPOT_BUILDER_FEE_TENTHS_BPS,
+  HYPERLIQUID_MAX_SPOT_IOC_LIFETIME_MS,
+  HYPERLIQUID_OUTCOME_ASSET_ID_MIN,
+  HYPERLIQUID_SPOT_IOC_ACTION,
+  HYPERLIQUID_SPOT_IOC_PROFILE,
+  hyperliquidSpotBuilderFeeTerms,
+} from "./hyperliquid-spot.js";
+export type {
+  HyperliquidBuilderFeeApproval,
+  HyperliquidSpotBuilderFeePolicy,
+  HyperliquidSpotIocBuilderFeeSubmission,
+  HyperliquidSpotIocIntentInput,
+  HyperliquidSpotIocSubmission,
+} from "./hyperliquid-spot.js";
+export {
+  EXECUTION_COMMERCE_NAMESPACE,
+  EXECUTION_COMMERCE_SCHEMA,
+  executionCommerceCommitment,
+  normalizeExecutionCommerceTerms,
+} from "./execution-commerce.js";
+export type { ExecutionCommerceTerms } from "./execution-commerce.js";
+export {
+  ERC4337_USER_OPERATION_NAMESPACE,
+  ERC4337_EXECUTION_EVENT_NAMESPACE,
+  ERC4337_EXECUTION_PROFILE,
+  ERC4337_EIP7702_FACTORY_MARKER,
+  computeERC4337EntryPointCodeHash,
+  computeEIP7702AuthorizationTupleHash,
+  decodeSafe4337CallData,
+  parseERC4337UserOperationInput,
+  bindERC4337UserOperation,
+  buildERC4337UserOperationIntent,
+  verifyERC4337ExecutionEvidence,
+} from "./erc4337.js";
+export type {
+  ERC4337Version,
+  ERC4337UserOperationInput,
+  ERC4337AuthorizationIntentInput,
+  ERC4337OperationBinding,
+  ERC4337ExecutionEvidence,
+  ERC4337EIP7702DelegationEvidence,
+} from "./erc4337.js";
+export * from "./rwa-binding.js";
+export {
+  verifyRwaReceiptBundle,
+  inspectRwaReceiptBundle,
+} from "./rwa-receipt.js";
+export * from "./insight-rwa.js";
+export * from "./insight-decision-input.js";
 export {
   INSIGHT_POLYMARKET_GUARD_DECISION_SCHEMA,
   INSIGHT_POLYMARKET_GUARD_DOMAIN,
@@ -38,15 +143,51 @@ export {
   INSIGHT_POLYMARKET_GUARD_TYPES,
   insightPolymarketGuardCommitment,
   verifyInsightPolymarketGuardDecision,
-} from './insight-polymarket-guard.js'
+} from "./insight-polymarket-guard.js";
 export type {
   InsightPolymarketGuardDecision,
   InsightPolymarketGuardVerification,
   InsightPolymarketGuardVerificationOptions,
-} from './insight-polymarket-guard.js'
-export * from './insight-rwa-call.js'
-export * from './insight-rwa-v2.js'
-export { matchContextCommitment, matchUniqueContextCommitment } from './context-commitment.js'
+} from "./insight-polymarket-guard.js";
+export {
+  INSIGHT_POLYMARKET_MARKET_ASSESSMENT_ATTESTATION_SCHEMA,
+  INSIGHT_POLYMARKET_MARKET_ASSESSMENT_DOMAIN,
+  INSIGHT_POLYMARKET_MARKET_ASSESSMENT_NAMESPACE,
+  INSIGHT_POLYMARKET_MARKET_ASSESSMENT_SCHEMA,
+  INSIGHT_POLYMARKET_MARKET_ASSESSMENT_TYPES,
+  insightPolymarketMarketAssessmentCommitment,
+  verifyInsightPolymarketMarketAssessmentAttestation,
+  verifyInsightPolymarketMarketAssessment,
+} from "./insight-polymarket-market-assessment.js";
+export type {
+  InsightPolymarketMarketAssessment,
+  InsightPolymarketMarketAssessmentAttestationVerification,
+  InsightPolymarketMarketAssessmentVerification,
+  InsightPolymarketMarketAssessmentVerificationOptions,
+} from "./insight-polymarket-market-assessment.js";
+export {
+  INSIGHT_POLYMARKET_BLS_EVIDENCE_NAMESPACE,
+  INSIGHT_POLYMARKET_BLS_EVIDENCE_SCHEMA,
+  insightPolymarketBlsEvidenceCommitment,
+  verifyInsightPolymarketBlsEvidence,
+} from "./insight-polymarket-bls-evidence.js";
+export type {
+  InsightPolymarketBlsEvidenceVerification,
+  InsightPolymarketBlsSeriesEvidence,
+} from "./insight-polymarket-bls-evidence.js";
+export {
+  INSIGHT_POLYMARKET_BLS_PERCENT_CHANGE_NAMESPACE,
+  INSIGHT_POLYMARKET_BLS_PERCENT_CHANGE_SCHEMA,
+  insightPolymarketBlsPercentChangeEvidenceCommitment,
+  verifyInsightPolymarketBlsPercentChangeEvidence,
+} from "./insight-polymarket-bls-percent-change-evidence.js";
+export type { InsightPolymarketBlsPercentChangeVerification } from "./insight-polymarket-bls-percent-change-evidence.js";
+export * from "./insight-rwa-call.js";
+export * from "./insight-rwa-v2.js";
+export {
+  matchContextCommitment,
+  matchUniqueContextCommitment,
+} from "./context-commitment.js";
 export {
   BASE_LENDING_GUARD_INTENT_ASSET_PREFIX,
   INSIGHT_BASE_LENDING_GUARD_NAMESPACE,
@@ -57,8 +198,11 @@ export {
   verifyBaseLendingGuardAuthorizationBinding,
   verifyBaseLendingGuardReceiptBundle,
   verifyInsightBaseLendingGuardDecision,
-} from './insight-base-lending-guard.js'
-export type { InsightBaseLendingGuardDecision, InsightBaseLendingGuardVerification } from './insight-base-lending-guard.js'
+} from "./insight-base-lending-guard.js";
+export type {
+  InsightBaseLendingGuardDecision,
+  InsightBaseLendingGuardVerification,
+} from "./insight-base-lending-guard.js";
 export {
   AGENT_SWAP_GUARD_CHAIN_IDS,
   AGENT_SWAP_GUARD_NAMESPACE,
@@ -79,7 +223,7 @@ export {
   verifyBaseAgentSwapGuardReceiptBundle,
   verifyInsightAgentSwapGuardDecision,
   verifyInsightBaseAgentSwapGuardDecision,
-} from './insight-base-agent-swap-guard.js'
+} from "./insight-base-agent-swap-guard.js";
 export type {
   AgentSwapGuardBoundIntents,
   AgentSwapGuardChainId,
@@ -91,7 +235,7 @@ export type {
   InsightBaseAgentSwapGuardChainId,
   InsightBaseAgentSwapGuardDecision,
   InsightBaseAgentSwapGuardVerification,
-} from './insight-base-agent-swap-guard.js'
+} from "./insight-base-agent-swap-guard.js";
 export {
   detectInsightAgentSwapGuardSettlementContradictions,
   INSIGHT_BASE_AGENT_SWAP_GUARD_SETTLEMENT_ATTESTER_LABEL,
@@ -103,7 +247,7 @@ export {
   detectInsightBaseAgentSwapGuardSettlementContradictions,
   verifyBaseAgentSwapGuardSettlementForDecision,
   verifyInsightBaseAgentSwapGuardSettlement,
-} from './insight-base-agent-swap-guard-settlement.js'
+} from "./insight-base-agent-swap-guard-settlement.js";
 export type {
   InsightAgentSwapGuardSettlement,
   InsightAgentSwapGuardSettlementContradiction,
@@ -117,12 +261,12 @@ export type {
   InsightBaseAgentSwapGuardSettlementOptions,
   InsightBaseAgentSwapGuardSettlementSetReport,
   InsightBaseAgentSwapGuardSettlementVerification,
-} from './insight-base-agent-swap-guard-settlement.js'
+} from "./insight-base-agent-swap-guard-settlement.js";
 export {
   createSettlementRereadReader,
   independentlyVerifySettlement,
   verifySettlementWithIndependentReread,
-} from './settlement-independent-reread.js'
+} from "./settlement-independent-reread.js";
 export type {
   IndependentRereadCheck,
   IndependentRereadMismatch,
@@ -134,7 +278,7 @@ export type {
   SettlementRereadReceipt,
   SettlementRereadTransaction,
   SettlementVerificationWithIndependentReread,
-} from './settlement-independent-reread.js'
+} from "./settlement-independent-reread.js";
 export {
   INSIGHT_MONAD_LENDING_GUARD_NAMESPACE,
   INSIGHT_MONAD_LENDING_GUARD_SCHEMA,
@@ -145,8 +289,11 @@ export {
   verifyMonadLendingGuardAuthorizationBinding,
   verifyMonadLendingGuardReceiptBundle,
   verifyInsightMonadLendingGuardDecision,
-} from './insight-monad-lending-guard.js'
-export type { InsightMonadLendingGuardDecision, InsightMonadLendingGuardVerification } from './insight-monad-lending-guard.js'
+} from "./insight-monad-lending-guard.js";
+export type {
+  InsightMonadLendingGuardDecision,
+  InsightMonadLendingGuardVerification,
+} from "./insight-monad-lending-guard.js";
 export {
   HYPEREVM_CHAIN_ID,
   HYPERLEND_CORE_POOL,
@@ -159,12 +306,12 @@ export {
   verifyHyperEvmLendingGuardAuthorizationBinding,
   verifyHyperEvmLendingGuardReceiptBundle,
   verifyInsightHyperEvmLendingGuardDecision,
-} from './insight-hyperevm-lending-guard.js'
+} from "./insight-hyperevm-lending-guard.js";
 export type {
   HyperEvmLendingGuardVerificationOptions,
   InsightHyperEvmLendingGuardDecision,
   InsightHyperEvmLendingGuardVerification,
-} from './insight-hyperevm-lending-guard.js'
+} from "./insight-hyperevm-lending-guard.js";
 export {
   EULER_V2_HYPEREVM_EVC,
   INSIGHT_MULTICHAIN_EVM_LENDING_GUARD_NAMESPACE,
@@ -177,11 +324,11 @@ export {
   verifyMultichainEvmLendingGuardAuthorizationBinding,
   verifyMultichainEvmLendingGuardReceiptBundle,
   verifyInsightMultichainEvmLendingGuardDecision,
-} from './insight-multichain-evm-lending-guard.js'
+} from "./insight-multichain-evm-lending-guard.js";
 export type {
   InsightMultichainEvmLendingGuardDecision,
   InsightMultichainEvmLendingGuardVerification,
-} from './insight-multichain-evm-lending-guard.js'
+} from "./insight-multichain-evm-lending-guard.js";
 export {
   INSIGHT_SOLANA_LENDING_GUARD_NAMESPACE,
   INSIGHT_SOLANA_LENDING_GUARD_SCHEMA,
@@ -190,12 +337,12 @@ export {
   solanaLendingGuardIntentAsset,
   verifyInsightSolanaLendingGuardDecision,
   verifySolanaLendingGuardAuthorizationBinding,
-} from './insight-solana-lending-guard.js'
+} from "./insight-solana-lending-guard.js";
 export type {
   InsightSolanaLendingGuardDecision,
   InsightSolanaLendingGuardVerification,
   SolanaLendingGuardVerificationOptions,
-} from './insight-solana-lending-guard.js'
+} from "./insight-solana-lending-guard.js";
 export {
   INSIGHT_SOLANA_SWAP_GUARD_NAMESPACE,
   INSIGHT_SOLANA_SWAP_GUARD_SCHEMA,
@@ -210,7 +357,7 @@ export {
   verifyInsightSolanaSwapGuardSettlement,
   verifySolanaSwapGuardAuthorizationBinding,
   verifySolanaSwapGuardSettlementForDecision,
-} from './insight-solana-swap-guard.js'
+} from "./insight-solana-swap-guard.js";
 export type {
   InsightSolanaSwapGuardDecision,
   InsightSolanaSwapGuardSettlement,
@@ -220,7 +367,7 @@ export type {
   InsightSolanaSwapGuardSettlementVerification,
   InsightSolanaSwapGuardVerification,
   InsightSolanaSwapGuardVerificationOptions,
-} from './insight-solana-swap-guard.js'
+} from "./insight-solana-swap-guard.js";
 export {
   INSIGHT_SOLANA_JUPITER_SWAP_GUARD_NAMESPACE,
   INSIGHT_SOLANA_JUPITER_SWAP_GUARD_SCHEMA,
@@ -229,11 +376,11 @@ export {
   solanaJupiterSwapGuardCommitment,
   verifyInsightSolanaJupiterSwapGuardResult,
   verifySolanaJupiterSwapAuthorizationBinding,
-} from './insight-solana-jupiter-swap-guard.js'
+} from "./insight-solana-jupiter-swap-guard.js";
 export type {
   InsightSolanaJupiterSwapGuardResult,
   InsightSolanaJupiterSwapGuardVerification,
-} from './insight-solana-jupiter-swap-guard.js'
+} from "./insight-solana-jupiter-swap-guard.js";
 export {
   HYPERLIQUID_MAX_PERP_BUILDER_FEE_TENTHS_BPS,
   HYPERLIQUID_PERP_ASSET_INDEX_MAX,
@@ -249,7 +396,7 @@ export {
   hyperliquidPerpGuardCommitment,
   verifyHyperliquidPerpGuardAuthorizationBinding,
   verifyInsightHyperliquidPerpGuardDecision,
-} from './insight-hyperliquid-perp-guard.js'
+} from "./insight-hyperliquid-perp-guard.js";
 export type {
   HyperliquidPerpGuardIntentInput,
   HyperliquidPerpIocSubmission,
@@ -258,7 +405,7 @@ export type {
   InsightHyperliquidPerpGuardDecision,
   InsightHyperliquidPerpGuardVerification,
   InsightHyperliquidPerpGuardVerificationOptions,
-} from './insight-hyperliquid-perp-guard.js'
+} from "./insight-hyperliquid-perp-guard.js";
 export {
   ERC8004_IDENTITY_COMMITMENT_NAMESPACE,
   ERC8004_IDENTITY_REGISTRY_ABI,
@@ -292,7 +439,7 @@ export {
   verifyERC8004TrustDecisionBundle,
   verifyAndEvaluateERC8004Reputation,
   verifyAndEvaluateERC8004Validations,
-} from './erc8004.js'
+} from "./erc8004.js";
 export type {
   ERC8004AgentReference,
   ERC8004FeedbackInput,
@@ -312,27 +459,78 @@ export type {
   ERC8004ValidationRequestInput,
   ERC8004ValidationResponseInput,
   ERC8004ValidationSnapshot,
-} from './erc8004.js'
+} from "./erc8004.js";
 export {
   matchWeb3AgentKitCallEnvelope,
   web3AgentKitContextCommitments,
   WEB3_AGENT_KIT_CALL_ENVELOPE_NAMESPACE,
   WEB3_AGENT_KIT_POLICY_DECISION_NAMESPACE,
-} from './web3-agent-kit.js'
+} from "./web3-agent-kit.js";
 export {
   HEADLESS_MARKET_STATE_NAMESPACE,
   canonicalHeadlessMarketStateReceiptBytes,
   headlessMarketStateCommitment,
   verifyHeadlessMarketStateReceipt,
   verifyHeadlessMarketStateReceiptPair,
-} from './headless-market-state.js'
-export type { PriorSealClientOptions } from './client.js'
-export type * from './types.js'
-export { buildCoverageBoundIntent, withCoverageBoundIntent } from './coverage-binding.js'
-export type { CoverageRequirement } from './coverage-binding.js'
-export { verifyCoverageReport, coveragePolicyId, coverageReportDigest } from './insight-coverage.js'
-export type { CoverageTrust, CoveragePolicy, SignedCoverageReport } from './insight-coverage.js'
-export { buildReviewManifest, verifyReviewManifestLocally, verifyReviewManifestWithChain, createInsightSwapRiskChainReader, parseTrustProfile } from './verifier.js'
-export type { ReviewManifest, ReviewAttachment, ReviewAttachmentInput, ReviewArtifactResult, ReviewResult, ReviewManifestChainResult, InsightSwapRiskChainReader, InsightSwapRiskChainReplay, TrustProfile } from './verifier.js'
-export { createActionEvidencePassport, parseActionEvidencePassport, summarizeActionEvidencePassport, verifyActionEvidencePassport } from './verifier.js'
-export type { ActionEvidencePassport, ActionEvidencePassportSummary, ActionEvidencePassportVerification, ServicePaymentAttachment } from './verifier.js'
+} from "./headless-market-state.js";
+export type { PriorSealClientOptions } from "./client.js";
+export type * from "./types.js";
+export {
+  buildCoverageBoundIntent,
+  withCoverageBoundIntent,
+} from "./coverage-binding.js";
+export type { CoverageRequirement } from "./coverage-binding.js";
+export {
+  verifyCoverageReport,
+  coveragePolicyId,
+  coverageReportDigest,
+} from "./insight-coverage.js";
+export type {
+  CoverageTrust,
+  CoveragePolicy,
+  SignedCoverageReport,
+} from "./insight-coverage.js";
+export {
+  buildReviewManifest,
+  verifyReviewManifestLocally,
+  verifyReviewManifestWithChain,
+  createInsightSwapRiskChainReader,
+  parseTrustProfile,
+} from "./verifier.js";
+export type {
+  ReviewManifest,
+  ReviewAttachment,
+  ReviewAttachmentInput,
+  ReviewArtifactResult,
+  ReviewResult,
+  ReviewManifestChainResult,
+  InsightSwapRiskChainReader,
+  InsightSwapRiskChainReplay,
+  TrustProfile,
+} from "./verifier.js";
+export {
+  createActionEvidencePassport,
+  parseActionEvidencePassport,
+  summarizeActionEvidencePassport,
+  verifyActionEvidencePassport,
+} from "./verifier.js";
+export type {
+  ActionEvidencePassport,
+  ActionEvidencePassportSummary,
+  ActionEvidencePassportVerification,
+  ServicePaymentAttachment,
+} from "./verifier.js";
+export {
+  INSIGHT_POLYMARKET_SOURCE_EVIDENCE_ATTESTATION_SCHEMA,
+  INSIGHT_POLYMARKET_SOURCE_EVIDENCE_DOMAIN,
+  INSIGHT_POLYMARKET_SOURCE_EVIDENCE_NAMESPACE,
+  INSIGHT_POLYMARKET_SOURCE_EVIDENCE_SCHEMA,
+  INSIGHT_POLYMARKET_SOURCE_EVIDENCE_TYPES,
+  insightPolymarketSourceEvidenceCommitment,
+  verifyInsightPolymarketSourceEvidenceAttestation,
+  verifyInsightPolymarketSourceEvidence,
+} from "./insight-polymarket-market-evidence.js";
+export type {
+  InsightPolymarketSourceEvidenceAttestationOptions,
+  InsightPolymarketSourceEvidenceAttestationVerification,
+} from "./insight-polymarket-market-evidence.js";

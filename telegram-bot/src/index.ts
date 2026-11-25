@@ -1,4 +1,7 @@
 import { verifyInsightPolymarketGuardDecision } from '../../sdk/src/insight-polymarket-guard.js'
+import {
+  collectMarketEvidence,
+} from './source-evidence.js'
 import { TelegramBotState } from './telegram-state.js'
 import type { KeyRegistry } from 'verify-insight-receipt'
 
@@ -18,11 +21,12 @@ type Env = {
 type TelegramMessage = { chat: { id: number }; text?: string }
 type TelegramUpdate = { update_id: number; message?: TelegramMessage }
 type GuardVerdict = 'ALLOW' | 'CAUTION' | 'BLOCK'
+type BotCommand = 'start' | 'help' | 'check' | 'evidence'
 
 const MAX_BODY_BYTES = 32 * 1024
 const MAX_RESPONSE_BYTES = 512 * 1024
 const PROTOCOL_ID = 'polymarket-prediction-mainnet'
-const COMMAND_PATTERN = /^\/(start|help|check)(?:@[a-z0-9_]+)?(?:\s+([\s\S]*))?$/i
+const COMMAND_PATTERN = /^\/(start|help|check|evidence)(?:@[a-z0-9_]+)?(?:\s+([\s\S]*))?$/i
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -89,11 +93,11 @@ function parseUpdate(value: unknown): TelegramUpdate | null {
   }
 }
 
-function commandOf(text: string): { command: 'start' | 'help' | 'check'; args: string } | null {
+function commandOf(text: string): { command: BotCommand; args: string } | null {
   const match = COMMAND_PATTERN.exec(text.trim())
   if (!match) return null
   const command = match[1]?.toLowerCase()
-  if (command !== 'start' && command !== 'help' && command !== 'check') return null
+  if (command !== 'start' && command !== 'help' && command !== 'check' && command !== 'evidence') return null
   return { command, args: match[2]?.trim() ?? '' }
 }
 
@@ -263,17 +267,40 @@ export default {
     const validCheck = command.command === 'check' && Boolean(requestedSlug && requestedSide && !extraArgs.length && requestedSlug.length <= 200 &&
       !/[\u0000-\u0020\u007f]/.test(requestedSlug) && /^[a-z0-9][a-z0-9_-]*$/i.test(requestedSlug) &&
       ['up', 'down'].includes(requestedSide.toLowerCase()))
+    const evidenceArgs = command.command === 'evidence' ? command.args.split(/\s+/).filter(Boolean) : []
+    const [requestedMarketId, ...extraEvidenceArgs] = evidenceArgs
+    const validEvidence = command.command === 'evidence' && Boolean(requestedMarketId && !extraEvidenceArgs.length &&
+      requestedMarketId.length <= 100 && /^[a-z0-9][a-z0-9_-]*$/i.test(requestedMarketId))
     const object = env.STATE.getByName(String(message.chat.id))
-    const reservation = await object.reserveUpdate(update.update_id, Math.floor(Date.now() / 1000), validCheck ? 'check' : 'other')
+    const reservation = await object.reserveUpdate(update.update_id, Math.floor(Date.now() / 1000), validCheck || validEvidence ? 'check' : 'other')
     if (reservation === 'duplicate') return new Response('ok')
     let reply: string | null = null
     if (reservation === 'rate_limited') {
-      reply = 'Free beta limit reached: up to 3 checks per hour and 10 per day per chat.'
+      reply = 'Free beta limit reached: up to 3 read-only requests per hour and 10 per day per chat.'
     } else if (command.command === 'start' || command.command === 'help') {
-      reply = 'Use /check <market-slug> <up|down> for a read-only assessment. The bot verifies Insight’s short-lived signature with PriorSeal before returning a summary.'
+      reply = 'Use /check <market-slug> <up|down> for a read-only market-integrity check, or /evidence <market-id> for signed source data. PriorSeal verifies Insight’s signature. Neither command predicts outcomes or authorizes trades.'
     } else {
-      if (!validCheck || !requestedSlug || !requestedSide) {
+      if (command.command === 'check' && (!validCheck || !requestedSlug || !requestedSide)) {
         reply = 'Usage: /check <market-slug> <up|down>'
+      } else if (command.command === 'evidence' && (!validEvidence || !requestedMarketId)) {
+        reply = 'Usage: /evidence <market-id>'
+      } else if (command.command === 'evidence' && requestedMarketId) {
+        try {
+          const record = await collectMarketEvidence(env, requestedMarketId)
+          await object.storeSourceEvidence(
+            update.update_id,
+            record.marketId,
+            record.collectedAt,
+            record.evidenceHash,
+            record.payloadJson,
+            Math.floor(Date.now() / 1000),
+          )
+          reply = `${record.summary}\nEvidence record: ${update.update_id} (stored privately for up to 30 days)`
+        } catch (error) {
+          const reason = error instanceof Error ? error.message.slice(0, 80) : 'UNKNOWN'
+          console.error(JSON.stringify({ event: 'polymarket_evidence_failed', code: reason }))
+          reply = 'Could not return trusted source evidence right now. Please try again later.'
+        }
       } else {
         try {
           reply = await checkMarket(env, requestedSlug, requestedSide.toLowerCase() === 'up' ? 'buy_up' : 'buy_down')
