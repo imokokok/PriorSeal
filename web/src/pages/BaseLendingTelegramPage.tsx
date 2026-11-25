@@ -41,6 +41,7 @@ type Assessment = {
   intent: Intent | null
 }
 type ReceiptOutcome = { txHash: string; receiptId: string; decisionHash: string }
+type GuardVerificationOptions = NonNullable<Parameters<typeof verifyInsightBaseLendingGuardDecision>[1]>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -74,12 +75,12 @@ function assessmentData(value: unknown): unknown {
   return isRecord(envelope.assessment) ? envelope.assessment : envelope
 }
 
-async function insightKeys(): Promise<NonNullable<Parameters<typeof verifyInsightBaseLendingGuardDecision>[1]['keyRegistry']>> {
+async function insightKeys(): Promise<NonNullable<GuardVerificationOptions['keyRegistry']>> {
   const response = await fetch(INSIGHT_KEYS_URL, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10_000) })
   if (!response.ok) throw new Error('Could not load Insight trusted keys.')
   const value = await jsonResponse(response)
   if (!isRecord(value)) throw new Error('Insight trusted key registry is malformed.')
-  return value as NonNullable<Parameters<typeof verifyInsightBaseLendingGuardDecision>[1]['keyRegistry']>
+  return value as NonNullable<GuardVerificationOptions['keyRegistry']>
 }
 
 function telegramWebApp() {
@@ -106,6 +107,15 @@ export function BaseLendingTelegramPage() {
   const webApp = telegramWebApp()
   const morphoRequired = protocolId === 'morpho-blue-base'
   const verdict = assessment?.decision.guard.verdict
+  const projectedMetrics = assessment && isRecord(assessment.decision.guard.projected)
+    ? assessment.decision.guard.projected
+    : null
+  const displayedLtv = typeof projectedMetrics?.ltv === 'number' && Number.isFinite(projectedMetrics.ltv)
+    ? `${(projectedMetrics.ltv * 100).toFixed(2)}%`
+    : 'n/a'
+  const displayedLiquidationBuffer = typeof projectedMetrics?.liquidationBufferPct === 'number' && Number.isFinite(projectedMetrics.liquidationBufferPct)
+    ? `${projectedMetrics.liquidationBufferPct.toFixed(2)}%`
+    : 'n/a'
   const transaction = useMemo(() => {
     if (!transactionJson.trim()) return null
     try { return { value: parseTransaction(JSON.parse(transactionJson) as unknown), error: '' } }
@@ -161,9 +171,11 @@ export function BaseLendingTelegramPage() {
       const keys = await insightKeys()
       const verified = await verifyInsightBaseLendingGuardDecision(decision, { keyRegistry: keys })
       if (!verified.valid) throw new Error(`Insight decision is not trusted: ${verified.reason}`)
+      const decisionMarket = isRecord(decision.guard.market) ? decision.guard.market : null
       if (decision.guard.protocolId !== protocolId || decision.guard.action !== action ||
-          decision.guard.market.collateralSymbol.toLowerCase() !== collateralSymbol.trim().toLowerCase() ||
-          decision.guard.market.loanSymbol.toLowerCase() !== loanSymbol.trim().toLowerCase() ||
+          !decisionMarket || typeof decisionMarket.collateralSymbol !== 'string' || typeof decisionMarket.loanSymbol !== 'string' ||
+          decisionMarket.collateralSymbol.toLowerCase() !== collateralSymbol.trim().toLowerCase() ||
+          decisionMarket.loanSymbol.toLowerCase() !== loanSymbol.trim().toLowerCase() ||
           decision.transaction.from.toLowerCase() !== transaction.value.from.toLowerCase() ||
           decision.transaction.to.toLowerCase() !== transaction.value.to.toLowerCase() ||
           decision.transaction.data.toLowerCase() !== transaction.value.data.toLowerCase() ||
@@ -331,7 +343,7 @@ export function BaseLendingTelegramPage() {
 
     {assessment && <section className="panel lending-result">
       <span className="exact-index">02 / DECISION</span><div className="lending-result-title"><h2>{assessment.decision.guard.protocolId.replaceAll('-', ' ')}</h2><Status value={verdict ?? 'UNKNOWN'} /></div>
-      <dl className="data-grid"><div><dt>Action</dt><dd>{assessment.decision.guard.action}</dd></div><div><dt>Projected LTV</dt><dd>{(assessment.decision.guard.projected.ltv * 100).toFixed(2)}%</dd></div><div><dt>Liquidation buffer</dt><dd>{assessment.decision.guard.projected.liquidationBufferPct.toFixed(2)}%</dd></div><div><dt>Decision hash</dt><dd><CodeValue value={assessment.decision.decisionHash} /></dd></div></dl>
+      <dl className="data-grid"><div><dt>Action</dt><dd>{assessment.decision.guard.action}</dd></div><div><dt>Projected LTV</dt><dd>{displayedLtv}</dd></div><div><dt>Liquidation buffer</dt><dd>{displayedLiquidationBuffer}</dd></div><div><dt>Decision hash</dt><dd><CodeValue value={assessment.decision.decisionHash} /></dd></div></dl>
       <p className="lending-caveat">This is a risk assessment, not a liquidation guarantee, and does not authorize the call by itself.</p>
       {verdict === 'ALLOW' && assessment.intent && <><details className="lending-call-review"><summary>Review the exact call and signed commitment</summary><pre>{JSON.stringify(assessment.intent, null, 2)}</pre><pre>{JSON.stringify(assessment.decision.transaction, null, 2)}</pre></details><button className="button primary" type="button" disabled={busy || Boolean(authorizationId)} onClick={() => void authorize()}>{busy ? 'Waiting for wallet…' : authorizationId ? 'Authorization accepted' : 'Review and authorize in wallet →'}</button></>}
       {verdict !== 'ALLOW' && <p className="lending-blocked">No PriorSeal intent was created for this verdict, so this flow cannot authorize the call.</p>}
