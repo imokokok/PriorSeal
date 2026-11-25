@@ -239,6 +239,67 @@ test("fetches reviewed evidence, verifies Insight signature, and returns a Prior
   });
 });
 
+test("Telegram summaries retain bounded public-source identity without exposing credentials or conclusions", async () => {
+  const sourceEvidence = {
+    ...evidence,
+    market: {
+      ...evidence.market,
+      resolutionSource:
+        "https://www.sec.gov/Archives/edgar/data/320193/example.htm",
+    },
+    observations: [
+      {
+        id: "sec-filings",
+        provider: "sec.submissions",
+        evidence: {
+          schema: "insight.polymarket-sec-submissions.v1",
+          source: "us-sec-edgar-data-api",
+          sourceUrl: "https://data.sec.gov/submissions/CIK0000320193.json",
+          cik: "0000320193",
+          companyName: "Example Corp",
+          filings: [
+            {
+              form: "8-K",
+              filingDate: "2026-11-20",
+              accessionNumber: "0000320193-26-000001",
+              primaryDocument: "a.htm",
+            },
+          ],
+          retrievedAt: new Date((now - 30) * 1000).toISOString(),
+          disclosure:
+            "Captured from SEC EDGAR over HTTPS. This record does not interpret market rules and does not authorize execution.",
+        },
+      },
+    ],
+    reviewWarnings: [
+      "Public record is source metadata only; human review required.",
+    ],
+    requiresHumanReview: true,
+  };
+  const response = await signedResponse(sourceEvidence);
+  const { fetcher } = mockFetcher(response);
+  const record = await collectMarketEvidence(
+    {
+      INSIGHT_API_KEY: "test-api-key",
+      INSIGHT_BASE_URL: "https://www.oracleinsight.xyz",
+      INSIGHT_KEY_REGISTRY_URL:
+        "https://www.oracleinsight.xyz/.well-known/oracle-keys.json",
+    },
+    evidence.market.id,
+    fetcher,
+  );
+  assert.match(record.summary, /SEC CIK 0000320193 \| 1 recent filing records/);
+  assert.match(record.summary, /human review required/);
+  assert.doesNotMatch(
+    record.summary,
+    /api_key|UserID|test-fred-key|test-bea-user/,
+  );
+  assert.match(
+    record.summary,
+    /No forecast, recommendation, or transaction authority/,
+  );
+});
+
 test("fails closed on modified evidence and rejects non-Insight upstream origins", async () => {
   const response = await signedResponse();
   response.data.evidence.market.question = "Modified question";

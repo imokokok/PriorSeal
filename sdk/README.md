@@ -311,7 +311,9 @@ use `verifyInsightPolymarketSourceEvidence()` and
 `insightPolymarketSourceEvidenceCommitment()`. The verifier checks the market
 metadata snapshot, stable reviewed rules digest, integrity-check fields, BLS
 source records, NWS station measurements, calculation consistency and source
-quality warnings. Its schema explicitly records
+quality warnings. It also verifies bounded SEC EDGAR, BEA NIPA, FRED and openFDA
+records against their fixed source schemas, identifiers and official domains.
+Its schema explicitly records
 `outcomeEvaluation: "not_performed"`; it rejects attached outcome conclusions.
 New source providers require their own schema verifier.
 
@@ -669,4 +671,4 @@ const result = await verifyHeadlessMarketStateReceiptPair({
 
 The default accepts only `live` receipt mode. Opting into `demo` is explicit and suitable only for fixtures. `live` is not evidence that the request was authenticated or paid. For execution gates, require `OPEN` and set `requiredFeedState: 'live'` where live feed coverage is necessary; only `OPEN` and `CLOSED` can be eligible under policy, while `UNKNOWN`, `HALTED`, unrecognized statuses, and a signed failed feed always reject. Omitting `requiredFeedState` permits historical signed receipts without `coverage` to verify, but their coverage remains unknown. The verifier accepts the identified v5 signed field sets with or without `coverage`, plus a signed override `reason`; new field layouts still need explicit support. It makes no network requests and reports structured rejection for malformed pair inputs, signature, commitment, key, time-window, venue, mode, status, coverage, distinctness, and receipt-order failures. The execution-time receipt must have been issued at or after `authorityTime`. Its digest is returned as `executionEvidenceCommitment`; it is not claimed to have existed in the earlier authorization.
 
-AviationWeather evidence is available through `verifyInsightPolymarketAviationWeatherMetarEvidence()`. It checks the fixed AviationWeather Data API host and METAR endpoint, exact station/window query, bounded raw report schema, and station/time tokens. It does not parse temperatures or evaluate outcomes. Partial source windows require human review.
+AviationWeather evidence is available through `verifyInsightPolymarketAviationWeatherMetarEvidence()`. It checks the fixed AviationWeather Data API host and METAR endpoint, exact station/window query, bounded raw report schema, and station/time tokens. It does not parse temperatures or evaluate outcomes. Partial source windows require human review. Public-source providers are verified by `verifyInsightPolymarketPublicSourceEvidence()`; the complete workflow and resource bounds are described in [the integration guide](../docs/integrations/polymarket-evidence.md).

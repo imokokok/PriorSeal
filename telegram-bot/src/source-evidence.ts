@@ -118,6 +118,30 @@ function sourceObservationSummary(value: unknown): string[] {
           typeof detail.observedAt === "string" ? detail.observedAt : "";
         return `Source ${safeField(item.id, 64)}: ${safeField(valueText, 48)} | ${safeField(detail.property, 48)}${observedAt ? ` | ${safeField(observedAt, 32)}` : ""}`;
       }
+      if (item.provider === "sec.submissions") {
+        const filings = Array.isArray(detail.filings)
+          ? detail.filings.length
+          : 0;
+        return `Source ${safeField(item.id, 64)}: SEC CIK ${safeField(detail.cik, 10)} | ${filings} recent filing records`;
+      }
+      if (item.provider === "bea.nipa") {
+        const records = Array.isArray(detail.records)
+          ? detail.records.length
+          : 0;
+        return `Source ${safeField(item.id, 64)}: BEA ${safeField(detail.tableName, 24)} ${safeField(detail.frequency, 2)} ${safeField(detail.year, 4)} | ${records} rows${detail.partial === true ? " | partial" : ""}`;
+      }
+      if (item.provider === "fred.series") {
+        const observations = Array.isArray(detail.observations)
+          ? detail.observations.length
+          : 0;
+        return `Source ${safeField(item.id, 64)}: FRED ${safeField(detail.seriesId, 32)} | ${observations} observations | Terms: ${safeField(detail.termsUrl, 100)}`;
+      }
+      if (item.provider === "openfda.application") {
+        const submissions = Array.isArray(detail.submissions)
+          ? detail.submissions.length
+          : 0;
+        return `Source ${safeField(item.id, 64)}: FDA ${safeField(detail.applicationNumber, 16)} | ${submissions} submission records`;
+      }
       const observation = isRecord(detail.observation)
         ? detail.observation
         : {};

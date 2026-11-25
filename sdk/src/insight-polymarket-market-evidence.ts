@@ -26,6 +26,7 @@ export const INSIGHT_POLYMARKET_SOURCE_EVIDENCE_TYPES = {
   ],
 } as const;
 const MAX_VALIDITY_SECONDS = 300;
+const MAX_FRED_WINDOW_MS = 3_660 * 24 * 60 * 60 * 1_000;
 const ADDRESS = /^0x[\da-f]{40}$/i;
 const SIGNATURE = /^0x[\da-f]{130}$/i;
 const HASH = /^0x[\da-f]{64}$/i;
@@ -71,7 +72,11 @@ type Evidence = {
       | "bls.series"
       | "bls.percent-change"
       | "nws.latest-observation"
-      | "aviationweather.metar";
+      | "aviationweather.metar"
+      | "sec.submissions"
+      | "bea.nipa"
+      | "fred.series"
+      | "openfda.application";
     evidence: Record<string, unknown>;
   }>;
   reviewWarnings: string[];
@@ -147,7 +152,10 @@ function canonical(value: unknown, depth = 0): string {
   }
   throw new TypeError("Polymarket evidence is not canonical JSON");
 }
-function makeWarnings(observations: Evidence["observations"]): string[] | null {
+function makeWarnings(
+  observations: Evidence["observations"],
+  resolutionSource: string,
+): string[] | null {
   const warnings: string[] = [];
   for (const item of observations) {
     if (item.provider === "bls.series") {
@@ -210,7 +218,7 @@ function makeWarnings(observations: Evidence["observations"]): string[] | null {
           `NWS quality-control flags are present for ${String(item.evidence.property)}; review their source meaning.`,
         );
       }
-    } else {
+    } else if (item.provider === "aviationweather.metar") {
       if (
         !verifyInsightPolymarketAviationWeatherMetarEvidence(item.evidence)
           .valid
@@ -219,6 +227,22 @@ function makeWarnings(observations: Evidence["observations"]): string[] | null {
       warnings.push(
         "METAR snapshot may cover an incomplete source window; human review required.",
       );
+    } else {
+      const result = verifyInsightPolymarketPublicSourceEvidence(
+        item.provider,
+        item.evidence,
+      );
+      if (
+        !result.valid ||
+        !publicSourceMatchesResolutionDomain(item.provider, resolutionSource)
+      )
+        return null;
+      if (item.provider === "bea.nipa" && item.evidence.partial === true)
+        warnings.push("BEA table snapshot is partial; human review required.");
+      else
+        warnings.push(
+          "Public record is source metadata only; human review required.",
+        );
     }
   }
   return [...new Set(warnings)];
@@ -334,7 +358,11 @@ function parse(value: unknown): Evidence | null {
       (item.provider !== "bls.series" &&
         item.provider !== "bls.percent-change" &&
         item.provider !== "nws.latest-observation" &&
-        item.provider !== "aviationweather.metar") ||
+        item.provider !== "aviationweather.metar" &&
+        item.provider !== "sec.submissions" &&
+        item.provider !== "bea.nipa" &&
+        item.provider !== "fred.series" &&
+        item.provider !== "openfda.application") ||
       !record(item.evidence)
     )
       return null;
@@ -349,7 +377,7 @@ function parse(value: unknown): Evidence | null {
     seen.add(item.id);
     observations.push(item as unknown as Evidence["observations"][number]);
   }
-  const warnings = makeWarnings(observations);
+  const warnings = makeWarnings(observations, root.market.resolutionSource);
   if (
     !warnings ||
     root.requiresHumanReview !== warnings.length > 0 ||
@@ -545,6 +573,284 @@ export function verifyInsightPolymarketAviationWeatherMetarEvidence(
     return invalid;
   }
   return { valid: true as const, reason: "OK" as const };
+}
+
+const invalidPublicEvidence = {
+  valid: false as const,
+  reason: "MALFORMED" as const,
+};
+
+function validPublicDisclosure(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 2000 &&
+    value.includes("does not interpret market rules") &&
+    value.includes("does not authorize execution")
+  );
+}
+
+function validIsoSourceDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return (
+    Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+  );
+}
+
+function validCompactSourceDate(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\d{8}$/.test(value) &&
+    validIsoSourceDate(
+      `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`,
+    )
+  );
+}
+
+function publicSourceMatchesResolutionDomain(
+  provider: Evidence["observations"][number]["provider"],
+  value: string,
+): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || url.hash)
+      return false;
+    const host = url.hostname.toLowerCase();
+    const matches = (domain: string) =>
+      host === domain || host.endsWith(`.${domain}`);
+    if (provider === "sec.submissions") return matches("sec.gov");
+    if (provider === "bea.nipa") return matches("bea.gov");
+    if (provider === "fred.series") return matches("stlouisfed.org");
+    if (provider === "openfda.application") return matches("fda.gov");
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** Validate bounded public-source metadata without deriving a market outcome. */
+export function verifyInsightPolymarketPublicSourceEvidence(
+  provider:
+    | "sec.submissions"
+    | "bea.nipa"
+    | "fred.series"
+    | "openfda.application",
+  value: unknown,
+) {
+  if (
+    !record(value) ||
+    typeof value.retrievedAt !== "string" ||
+    !Number.isFinite(Date.parse(value.retrievedAt)) ||
+    !validPublicDisclosure(value.disclosure)
+  )
+    return invalidPublicEvidence;
+  if (provider === "sec.submissions") {
+    if (
+      !exactKeys(value, [
+        "schema",
+        "source",
+        "sourceUrl",
+        "cik",
+        "companyName",
+        "filings",
+        "retrievedAt",
+        "disclosure",
+      ]) ||
+      value.schema !== "insight.polymarket-sec-submissions.v1" ||
+      value.source !== "us-sec-edgar-data-api" ||
+      typeof value.cik !== "string" ||
+      !/^\d{10}$/.test(value.cik) ||
+      (value.companyName !== null &&
+        (typeof value.companyName !== "string" ||
+          value.companyName.length > 200)) ||
+      !Array.isArray(value.filings) ||
+      value.filings.length < 1 ||
+      value.filings.length > 5 ||
+      !value.filings.every(
+        (filing) =>
+          record(filing) &&
+          exactKeys(filing, [
+            "form",
+            "filingDate",
+            "accessionNumber",
+            "primaryDocument",
+          ]) &&
+          typeof filing.form === "string" &&
+          filing.form.length <= 24 &&
+          validIsoSourceDate(filing.filingDate) &&
+          typeof filing.accessionNumber === "string" &&
+          /^\d{10}-\d{2}-\d{6}$/.test(filing.accessionNumber) &&
+          typeof filing.primaryDocument === "string" &&
+          filing.primaryDocument.length <= 180,
+      )
+    )
+      return invalidPublicEvidence;
+    if (
+      !validExactHttpsUrl(
+        value.sourceUrl,
+        "data.sec.gov",
+        `/submissions/CIK${value.cik}.json`,
+      )
+    )
+      return invalidPublicEvidence;
+  } else if (provider === "bea.nipa") {
+    if (
+      !exactKeys(value, [
+        "schema",
+        "source",
+        "sourceUrl",
+        "dataset",
+        "tableName",
+        "frequency",
+        "year",
+        "records",
+        "partial",
+        "retrievedAt",
+        "disclosure",
+      ]) ||
+      value.schema !== "insight.polymarket-bea-nipa.v1" ||
+      value.source !== "us-bureau-of-economic-analysis-api" ||
+      value.sourceUrl !== "https://apps.bea.gov/api/data/" ||
+      value.dataset !== "NIPA" ||
+      typeof value.tableName !== "string" ||
+      !/^T\d{5,6}$/.test(value.tableName) ||
+      !["A", "Q", "M"].includes(String(value.frequency)) ||
+      typeof value.year !== "string" ||
+      !/^(19|20|21)\d{2}$/.test(value.year) ||
+      typeof value.partial !== "boolean" ||
+      !Array.isArray(value.records) ||
+      value.records.length < 1 ||
+      value.records.length > 20 ||
+      !value.records.every(
+        (row) =>
+          record(row) &&
+          exactKeys(row, [
+            "tableName",
+            "lineNumber",
+            "lineDescription",
+            "timePeriod",
+            "dataValue",
+            "unit",
+            "noteRef",
+          ]) &&
+          row.tableName === value.tableName &&
+          typeof row.lineNumber === "string" &&
+          row.lineNumber.length <= 16 &&
+          typeof row.lineDescription === "string" &&
+          row.lineDescription.length <= 180 &&
+          typeof row.timePeriod === "string" &&
+          row.timePeriod.length <= 32 &&
+          typeof row.dataValue === "string" &&
+          row.dataValue.length <= 64 &&
+          (row.unit === null ||
+            (typeof row.unit === "string" && row.unit.length <= 80)) &&
+          (row.noteRef === null ||
+            (typeof row.noteRef === "string" && row.noteRef.length <= 80)),
+      )
+    )
+      return invalidPublicEvidence;
+  } else if (provider === "fred.series") {
+    if (
+      !exactKeys(value, [
+        "schema",
+        "source",
+        "sourceUrl",
+        "termsUrl",
+        "seriesId",
+        "observationStart",
+        "observationEnd",
+        "observations",
+        "retrievedAt",
+        "disclosure",
+      ]) ||
+      value.schema !== "insight.polymarket-fred-series.v1" ||
+      value.source !== "federal-reserve-bank-of-st-louis-fred-api" ||
+      value.sourceUrl !==
+        "https://api.stlouisfed.org/fred/series/observations" ||
+      value.termsUrl !==
+        "https://fred.stlouisfed.org/docs/api/terms_of_use.html" ||
+      typeof value.seriesId !== "string" ||
+      !/^[A-Za-z0-9_]{1,32}$/.test(value.seriesId) ||
+      !validIsoSourceDate(value.observationStart) ||
+      !validIsoSourceDate(value.observationEnd) ||
+      Date.parse(value.observationStart) > Date.parse(value.observationEnd) ||
+      Date.parse(value.observationEnd) - Date.parse(value.observationStart) >
+        MAX_FRED_WINDOW_MS ||
+      !Array.isArray(value.observations) ||
+      value.observations.length > 25 ||
+      !value.observations.every(
+        (row) =>
+          record(row) &&
+          exactKeys(row, ["date", "value"]) &&
+          validIsoSourceDate(row.date) &&
+          typeof row.value === "string" &&
+          (row.value === "." || /^-?\d+(?:\.\d+)?$/.test(row.value)),
+      )
+    )
+      return invalidPublicEvidence;
+  } else {
+    if (
+      !exactKeys(value, [
+        "schema",
+        "source",
+        "sourceUrl",
+        "applicationNumber",
+        "sponsorName",
+        "submissions",
+        "retrievedAt",
+        "disclosure",
+      ]) ||
+      value.schema !== "insight.polymarket-openfda-application.v1" ||
+      value.source !== "us-fda-openfda-drugs-at-fda-api" ||
+      value.sourceUrl !== "https://api.fda.gov/drug/drugsfda.json" ||
+      typeof value.applicationNumber !== "string" ||
+      !/^(NDA|BLA|ANDA)\d{1,6}$/.test(value.applicationNumber) ||
+      (value.sponsorName !== null &&
+        (typeof value.sponsorName !== "string" ||
+          value.sponsorName.length > 200)) ||
+      !Array.isArray(value.submissions) ||
+      value.submissions.length > 20 ||
+      !value.submissions.every(
+        (submission) =>
+          record(submission) &&
+          exactKeys(submission, [
+            "submissionType",
+            "submissionStatus",
+            "submissionStatusDate",
+          ]) &&
+          typeof submission.submissionType === "string" &&
+          submission.submissionType.length <= 40 &&
+          typeof submission.submissionStatus === "string" &&
+          submission.submissionStatus.length <= 80 &&
+          validCompactSourceDate(submission.submissionStatusDate),
+      )
+    )
+      return invalidPublicEvidence;
+  }
+  return { valid: true as const, reason: "OK" as const };
+}
+
+function validExactHttpsUrl(
+  value: unknown,
+  hostname: string,
+  pathname: string,
+): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === hostname &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      url.pathname === pathname
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isHttps(value: string): boolean {
