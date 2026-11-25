@@ -16,6 +16,7 @@ const built = await build({
   outfile: verifierPath,
   bundle: true,
   write: false,
+  preserveSymlinks: true,
   platform: 'node',
   format: 'esm',
   target: 'node22',

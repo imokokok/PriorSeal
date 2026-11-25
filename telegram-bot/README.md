@@ -1,8 +1,8 @@
 # PriorSeal Polymarket Telegram bot
 
-An opt-in, read-only free-beta interface to Insight's Polymarket guard. It only handles `/start`, `/help`, and `/check <market-slug> <up|down>` commands. It does not send unsolicited messages, forecast event outcomes, connect wallets, submit trades, or hold user funds. The user must choose the side being assessed; the result is guard metadata, not a trading recommendation.
+An opt-in, read-only free-beta interface to Insight's Polymarket services. It handles `/start`, `/help`, `/check <market-slug> <up|down>`, and `/evidence <market-id>`. `/check` verifies the existing short-horizon market-integrity guard. `/evidence` collects only sources configured in Insight's reviewed market binding and verifies the signed source record with PriorSeal before showing a summary and commitment. It does not send unsolicited messages, forecast event outcomes, connect wallets, submit trades, or hold user funds. `/check`'s selected side is an input label for an integrity check, not a trading recommendation.
 
-Each successful check requests one short-lived Insight EIP-712 attestation and verifies the signature and signer epoch against Insight's published key registry using PriorSeal's verifier. A failed, expired, or untrusted attestation is never presented as a valid assessment. The free beta is capped at three checks per rolling hour and ten per rolling day per chat. Insight API-key usage may incur the account's normal metering or credit consumption.
+Each successful `/check` verifies the short-lived guard attestation. Each `/evidence` request verifies Insight's EIP-712 signature, signer epoch, expiry and exact record hash with PriorSeal's verifier; it then stores the signed response and commitment in that chat's Durable Object and emits the commitment digest and record ID in the Telegram reply. Storage is capped at 100 records per chat, prunes expired/old records, and retains entries for up to 30 days. Missing, expired, modified, oversized or untrusted evidence is never presented as verified. Both commands share the existing limit of three requests per rolling hour and ten per rolling day per chat. This is a private bot evidence record, not a PriorSeal receipt or a public transparency anchor. Insight API-key usage may incur the account's normal metering or credit consumption.
 
 ## Configure
 
@@ -33,6 +33,6 @@ The worker must be deployed before Telegram's webhook is configured. With no cus
 
 ## Data handling
 
-The Durable Object stores Telegram update IDs and check timestamps per chat for duplicate suppression and rolling limits. It does not persist message text, usernames, wallet information, or market assessment bodies. Logs include a short failure code only; never add API keys, bot tokens, webhook secrets, or request payloads to logs.
+The Durable Object stores Telegram update IDs, request timestamps, and signed source-evidence records per chat for duplicate suppression, rolling limits, and evidence retention. It does not persist message text, usernames, or wallet information. Logs include a short failure code only; never add API keys, bot tokens, webhook secrets, or request payloads to logs.
 
 This beta uses the Insight API key on the server side. Keep its allowance limited and monitor Insight usage. The bot does not proxy arbitrary URLs or expose an API-key field to Telegram users.

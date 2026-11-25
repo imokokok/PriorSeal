@@ -29,23 +29,26 @@ The snippets below show integration points and require your own `intent`, transa
 This flow uses the hosted API and your application's wallet provider. The application constructs `intent` and submits the transaction before it supplies `txHash` for Match. Acceptance records the deployment's configured Witness evidence; use the returned receipt for Review.
 
 ```ts
-import { createPriorSealClient } from 'priorseal-sdk'
+import { createPriorSealClient } from "priorseal-sdk";
 
-const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.xyz' })
-const capabilities = await priorseal.capabilities()
-const flow = await priorseal.authorizeWithWallet({
-  intent,
-  audience: capabilities.audience,
-  principal: { type: 'user', id: 'user:42' },
-  delegate: { agentId: 'agent:treasury', executor: intent.sender },
-}, window.ethereum)
+const priorseal = createPriorSealClient({ baseUrl: "https://priorseal.xyz" });
+const capabilities = await priorseal.capabilities();
+const flow = await priorseal.authorizeWithWallet(
+  {
+    intent,
+    audience: capabilities.audience,
+    principal: { type: "user", id: "user:42" },
+    delegate: { agentId: "agent:treasury", executor: intent.sender },
+  },
+  window.ethereum,
+);
 
 const evidence = await priorseal.observeExecutionUntilFinal({
   authorizationId: flow.accepted.authorization.authorizationId,
   chainId: Number(intent.chainId),
   txHash,
   confirmations: 12,
-})
+});
 ```
 
 ### Headless or single-agent runtime
@@ -57,31 +60,31 @@ your submission callback once, and observes the resulting hash. It never owns
 either signing key and does not retry an uncertain submission.
 
 ```ts
-import { createPriorSealClient } from 'priorseal-sdk'
+import { createPriorSealClient } from "priorseal-sdk";
 
-const priorseal = createPriorSealClient({ baseUrl: 'https://priorseal.xyz' })
+const priorseal = createPriorSealClient({ baseUrl: "https://priorseal.xyz" });
 
 const result = await priorseal.runAgentAction({
   authorization: {
     intent, // Exact transaction fields prepared by your agent.
-    principal: { type: 'organization', id: 'treasury:main' },
-    delegate: { agentId: 'agent:treasury', executor: intent.sender },
+    principal: { type: "organization", id: "treasury:main" },
+    delegate: { agentId: "agent:treasury", executor: intent.sender },
     audience: (await priorseal.capabilities()).audience,
   },
   signer: {
     account: principalAuthority.address,
     // This boundary belongs to the principal, not the agent executor.
-    signTypedData: typedData => principalAuthority.signTypedData(typedData),
+    signTypedData: (typedData) => principalAuthority.signTypedData(typedData),
   },
   submit: async ({ authorization }) => {
     // Your executor must recheck the accepted exact authorization before it
     // signs and broadcasts. Return the one transaction hash it submitted.
-    return { txHash: await executor.submitOnce(authorization) }
+    return { txHash: await executor.submitOnce(authorization) };
   },
   confirmations: 12,
-})
+});
 
-await yourEvidenceStore.save(result.execution.receipt)
+await yourEvidenceStore.save(result.execution.receipt);
 ```
 
 Do not use the signer callback as a hidden unrestricted wallet. It receives an
@@ -101,29 +104,29 @@ and payee. The wrapper performs at most one signed retry and refuses POST
 requests.
 
 ```ts
-import { createPriorSealClient, createX402AgentFetch } from 'priorseal-sdk'
+import { createPriorSealClient, createX402AgentFetch } from "priorseal-sdk";
 
 const paidFetch = createX402AgentFetch({
   signer: async ({ challenge, allowedRequirements }) => {
     // Your x402-capable payer verifies the selected requirement and returns
     // its base64 x402 v2 PAYMENT-SIGNATURE value. Keep its key outside the SDK.
-    return servicePayer.signX402Payment({ challenge, allowedRequirements })
+    return servicePayer.signX402Payment({ challenge, allowedRequirements });
   },
   policy: {
-    allowedOrigins: ['https://priorseal.xyz'],
-    allowPath: pathname => /^\/v1\/receipts\/[^/]+\/bundle$/.test(pathname),
-    maxAmountAtomic: '10000', // 0.01 USDC at six decimals
-    allowedNetworks: ['eip155:8453'],
-    allowedAssets: ['0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'],
-    allowedPayTos: ['0xYourReviewedPriorSealPayee'],
+    allowedOrigins: ["https://priorseal.xyz"],
+    allowPath: (pathname) => /^\/v1\/receipts\/[^/]+\/bundle$/.test(pathname),
+    maxAmountAtomic: "10000", // 0.01 USDC at six decimals
+    allowedNetworks: ["eip155:8453"],
+    allowedAssets: ["0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"],
+    allowedPayTos: ["0xYourReviewedPriorSealPayee"],
   },
-})
+});
 
 const paidPriorseal = createPriorSealClient({
-  baseUrl: 'https://priorseal.xyz',
+  baseUrl: "https://priorseal.xyz",
   fetch: paidFetch,
-})
-const bundle = await paidPriorseal.getVerificationBundle(receiptId)
+});
+const bundle = await paidPriorseal.getVerificationBundle(receiptId);
 ```
 
 The shown address is a placeholder: use a separately verified deployment
@@ -142,16 +145,18 @@ authorize an onchain action.
 
 ```ts
 const priorseal = createPriorSealClient({
-  baseUrl: 'https://priorseal.example',
-  headers: { 'x-priorseal-agent-key': process.env.PRIORSEAL_AGENT_SERVICE_KEY! },
-})
+  baseUrl: "https://priorseal.example",
+  headers: {
+    "x-priorseal-agent-key": process.env.PRIORSEAL_AGENT_SERVICE_KEY!,
+  },
+});
 
-const capabilities = await priorseal.capabilities()
+const capabilities = await priorseal.capabilities();
 // Pin the reviewed route/price policy before making metered calls. The server
 // provides exact decimal USD strings; do not calculate prices with floats.
-console.log(capabilities.payments?.agentCredits?.routes)
-console.log((await priorseal.agentAccount()).account.remainingCredits)
-console.log((await priorseal.agentUsage(25)).items)
+console.log(capabilities.payments?.agentCredits?.routes);
+console.log((await priorseal.agentAccount()).account.remainingCredits);
+console.log((await priorseal.agentUsage(25)).items);
 ```
 
 Store this credential separately from both the principal authorization signer
@@ -170,11 +175,11 @@ exactly once and its transaction hash is bound into the signature, so a retried
 claim can never be claimed by a different wallet.
 
 ```ts
-import { selfServeTopup } from 'priorseal-sdk'
+import { selfServeTopup } from "priorseal-sdk";
 
 const result = await selfServeTopup({
   client: priorseal,
-  amountUsdc: '1.50',
+  amountUsdc: "1.50",
   payer: {
     // Send exactly 1.50 USDC to request.payTo on request.chainId; resolve with
     // the funded transaction hash. The SDK never constructs the transfer.
@@ -182,9 +187,9 @@ const result = await selfServeTopup({
     // Sign with the same wallet that sent the transfer.
     signMessage: (message) => wallet.signMessage(message),
   },
-})
+});
 // result.credential is shown once; store it in a secret manager immediately.
-console.log(result.accountId, result.credits, result.credential)
+console.log(result.accountId, result.credits, result.credential);
 ```
 
 A credential obtained this way is still only a credit-spending key: it does not
@@ -197,16 +202,16 @@ For Solana mainnet-beta, construct an intent from the fully compiled message and
 Supply `receipt` from your export and `keyRegistry` from a separately confirmed issuer configuration. The verifier does not establish key provenance for you.
 
 ```ts
-import { verifyReceiptLocally } from 'priorseal-sdk/verifier'
+import { verifyReceiptLocally } from "priorseal-sdk/verifier";
 
 const result = await verifyReceiptLocally(receipt, {
   trustedKeys: keyRegistry,
-  expectedAudience: 'your-deployment-audience',
-})
+  expectedAudience: "your-deployment-audience",
+});
 
-if (!result.valid) console.error(result.code)
+if (!result.valid) console.error(result.code);
 if (result.requiredExternalChecks.length) {
-  console.log('Additional chain-state checks:', result.requiredExternalChecks)
+  console.log("Additional chain-state checks:", result.requiredExternalChecks);
 }
 ```
 
@@ -234,17 +239,21 @@ import {
   insightPolymarketGuardCommitment,
   matchUniqueContextCommitment,
   verifyInsightPolymarketGuardDecision,
-} from 'priorseal-sdk'
+} from "priorseal-sdk";
 
-const response = await fetch(attestationUrl, { headers: { Authorization: `Bearer ${apiKey}` } }).then(r => r.json())
+const response = await fetch(attestationUrl, {
+  headers: { Authorization: `Bearer ${apiKey}` },
+}).then((r) => r.json());
 const verification = await verifyInsightPolymarketGuardDecision(response, {
   keyRegistry: insightKeyRegistry,
-})
-if (!verification.valid) throw new Error(`Polymarket evidence rejected: ${verification.reason}`)
+});
+if (!verification.valid)
+  throw new Error(`Polymarket evidence rejected: ${verification.reason}`);
 
-const commitment = insightPolymarketGuardCommitment(response.data)
-const binding = matchUniqueContextCommitment(intent, commitment)
-if (!binding.matched) throw new Error('Intent does not bind this exact assessment')
+const commitment = insightPolymarketGuardCommitment(response.data);
+const binding = matchUniqueContextCommitment(intent, commitment);
+if (!binding.matched)
+  throw new Error("Intent does not bind this exact assessment");
 ```
 
 The commitment binds the complete signed screening result. The attestation is
@@ -253,17 +262,100 @@ order, or a transaction. PriorSeal verifies and records evidence; it does not
 place or sign Polymarket orders or trade for a user. A valid Insight signature
 does not itself authorize execution.
 
-| Family | Adapter module | What it verifies / binds |
-| --- | --- | --- |
-| Lending | `insight-base-lending-guard` | Base lending EIP-712 decision, bound intent, receipt bundle |
-| Lending | `insight-monad-lending-guard` | Monad lending decision, bound intent, receipt bundle |
-| Lending | `insight-multichain-evm-lending-guard` | Multichain EVM lending decision, bound intent, receipt bundle |
-| Lending | `insight-solana-lending-guard` | Solana lending decision, bound intent |
-| Swap | `insight-base-agent-swap-guard` (0.14.0; multichain since the 2026-11-05 close-out) | Insight Agent Swap Guard EIP-712 decision plus two ordered exact-call intents, across the three reviewed EVM chains — Base 8453, BNB 56, Monad 143 — over Insight's six reviewed profiles (Base 3 / BNB 2 / Monad 1); unsupported chains and profile/chain mismatches fail closed |
-| Swap | `insight-base-agent-swap-guard-settlement` (0.15.0) | Offline settlement verification, decision↔settlement cross-binding, double-settlement contradiction detection over the same three EVM chains |
-| Swap | `insight-solana-swap-guard` (0.15.0) | Orca Whirlpool Ed25519 decision and settlement over the exact attested message bytes |
-| Perp | `insight-hyperliquid-perp-guard` (0.15.0) | Exact unsigned IOC envelope binding and EIP-712 decision; builder-fee envelopes fail closed |
-| Prediction market | `insight-polymarket-guard` | Read-only Polymarket screening attestation verification and assessment context commitment |
+For Insight's separate read-only market-integrity screen, use
+`verifyInsightPolymarketMarketAssessmentAttestation()` with the current
+Insight key registry, then bind the canonical object with
+`insightPolymarketMarketAssessmentCommitment()`. The signed envelope binds the
+market ID, requested contract side, integrity status, and complete assessment
+hash for at most 60 seconds. The signature proves which trusted Insight key
+issued the screen; it does not prove that Gamma/CLOB metadata is true or predict
+the event. Keep using the v1 adapter for the reviewed Up/Down price-contract
+integrity Guard.
+
+```ts
+import {
+  insightPolymarketMarketAssessmentCommitment,
+  matchUniqueContextCommitment,
+  verifyInsightPolymarketMarketAssessmentAttestation,
+} from "priorseal-sdk";
+
+const response = await fetch(assessmentUrl, {
+  headers: { Authorization: `Bearer ${apiKey}` },
+}).then((r) => r.json());
+const verification = await verifyInsightPolymarketMarketAssessmentAttestation(
+  response,
+  {
+    keyRegistry: insightKeyRegistry,
+  },
+);
+if (!verification.valid)
+  throw new Error(`Market assessment rejected: ${verification.reason}`);
+const commitment = insightPolymarketMarketAssessmentCommitment(
+  response.data.assessment,
+);
+if (!matchUniqueContextCommitment(intent, commitment).matched)
+  throw new Error("Intent does not bind this assessment");
+```
+
+For exact BLS macro observations retrieved by Insight, bind the evidence record
+separately with `insightPolymarketBlsEvidenceCommitment()` and store the
+returned commitment in the PriorSeal intent. This checks the evidence schema
+and source URL and hashes the exact record, including its vintage period and
+footnotes. The record includes the BLS-required retrieval timestamp and
+disclaimer. In production Insight requires a server-side registered BLS API v2
+key; never pass that key to this SDK or a browser client. The commitment does
+not authenticate the BLS response or interpret a market's resolution rules.
+
+For source evidence collected by Insight's read-only Polymarket evidence route,
+use `verifyInsightPolymarketSourceEvidence()` and
+`insightPolymarketSourceEvidenceCommitment()`. The verifier checks the market
+metadata snapshot, stable reviewed rules digest, integrity-check fields, BLS
+source records, calculation consistency and footnote warnings. Its schema
+explicitly records `outcomeEvaluation: "not_performed"`; it rejects attached
+outcome conclusions. New source providers require their own schema verifier.
+
+Insight now returns a signed `{ evidence, attestation }` envelope. Verify it
+before trusting or displaying the record, using a caller-pinned Insight key
+registry:
+
+```ts
+const verification = await verifyInsightPolymarketSourceEvidenceAttestation(
+  response,
+  { keyRegistry: pinnedInsightKeyRegistry },
+);
+if (!verification.valid) throw new Error(`Insight evidence rejected: ${verification.reason}`);
+
+const commitment = insightPolymarketSourceEvidenceCommitment(response);
+// Store this digest with the separately retained evidence or a relevant
+// PriorSeal intent. A commitment alone does not create a receipt or prove truth.
+```
+
+The signature binds the exact evidence bytes, market ID and five-minute
+validity window. The SDK checks the trusted key's role, validity interval and
+revocation status. A valid signature identifies the Insight signer; it does
+not independently authenticate Polymarket/BLS or establish event settlement.
+
+For BLS v2 calculated percent changes, use
+`verifyInsightPolymarketBlsPercentChangeEvidence()` and
+`insightPolymarketBlsPercentChangeEvidenceCommitment()`. The SDK validates the
+same-month prior-year observation and exact one-decimal calculation before
+binding the record; it does not authenticate BLS's transport response.
+
+| Family           | Adapter module                                                                      | What it verifies / binds                                                                                                                                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lending          | `insight-base-lending-guard`                                                        | Base lending EIP-712 decision, bound intent, receipt bundle                                                                                                                                                                                                                       |
+| Lending          | `insight-monad-lending-guard`                                                       | Monad lending decision, bound intent, receipt bundle                                                                                                                                                                                                                              |
+| Lending          | `insight-multichain-evm-lending-guard`                                              | Multichain EVM lending decision, bound intent, receipt bundle                                                                                                                                                                                                                     |
+| Lending          | `insight-solana-lending-guard`                                                      | Solana lending decision, bound intent                                                                                                                                                                                                                                             |
+| Swap             | `insight-base-agent-swap-guard` (0.14.0; multichain since the 2026-11-05 close-out) | Insight Agent Swap Guard EIP-712 decision plus two ordered exact-call intents, across the three reviewed EVM chains — Base 8453, BNB 56, Monad 143 — over Insight's six reviewed profiles (Base 3 / BNB 2 / Monad 1); unsupported chains and profile/chain mismatches fail closed |
+| Swap             | `insight-base-agent-swap-guard-settlement` (0.15.0)                                 | Offline settlement verification, decision↔settlement cross-binding, double-settlement contradiction detection over the same three EVM chains                                                                                                                                      |
+| Swap             | `insight-solana-swap-guard` (0.15.0)                                                | Orca Whirlpool Ed25519 decision and settlement over the exact attested message bytes                                                                                                                                                                                              |
+| Perp             | `insight-hyperliquid-perp-guard` (0.15.0)                                           | Exact unsigned IOC envelope binding and EIP-712 decision; builder-fee envelopes fail closed                                                                                                                                                                                       |
+| Market integrity | `insight-polymarket-guard`                                                          | Read-only Polymarket market-screen integrity attestation verification and context commitment                                                                                                                                                                                      |
+| Market integrity | `insight-polymarket-market-assessment`                                              | EIP-712 attestation verification for a requested contract-side data-integrity screen                                                                                                                                                                                              |
+| Market evidence  | `insight-polymarket-bls-evidence`                                                   | Schema-checked commitment to an exact BLS series observation                                                                                                                                                                                                                      |
+| Market evidence  | `insight-polymarket-source-evidence`                                                | Reviewed market metadata, stable rules digest, exact BLS source records, and integrity checks; no outcome calculation                                                                                                                                                             |
+| Market evidence  | `insight-polymarket-bls-percent-change-evidence`                                    | BLS v2 percent change, both raw observations, and exact recomputation                                                                                                                                                                                                             |
 
 0.15.0 added the Solana Swap Guard adapter, the Hyperliquid Perp Guard adapter, the Base Agent Swap Guard settlement closure, and `priorseal.agent-proposal.v1` (`agent-proposal`). The last one is a caller-retained Agent rationale record with a canonical SHA-256 context commitment — a disclosure/evidence binding, **not a guard** and not a reputation, identity, trading-safety, or investment claim. The 0.14.0 Base Agent Swap Guard adapter and the four lending adapters predate 0.15.0; the settlement closure extends the Base swap adapter rather than being a separate guard family. Since the 2026-11-05 close-out the swap adapter and its settlement closure cover all three reviewed EVM chains (Base 8453 / BNB 56 / Monad 143). See the [SDK changelog](CHANGELOG.md) for the release-by-release list.
 
@@ -280,21 +372,29 @@ This is **opt-in and off by default**: with no options, or no RPC source, it ret
 Read `await priorseal.capabilities()` before preparing a workflow. Check its audience, execution profile, chosen chain's `chainReadiness`, and `workflowReady`. Capabilities report configuration and storage; they do not probe live RPC/TSA availability or replace request-specific policy checks.
 
 ```ts
-const capabilities = await priorseal.capabilities()
-const flow = await priorseal.authorizeWithWallet({ ...request, audience: capabilities.audience }, wallet, {
-  onCheckpoint: async checkpoint => {
-    await yourPrivateStore.save(JSON.stringify(checkpoint))
+const capabilities = await priorseal.capabilities();
+const flow = await priorseal.authorizeWithWallet(
+  { ...request, audience: capabilities.audience },
+  wallet,
+  {
+    onCheckpoint: async (checkpoint) => {
+      await yourPrivateStore.save(JSON.stringify(checkpoint));
+    },
   },
-})
+);
 
 // After a lost acceptance response or process restart:
-const checkpoint = JSON.parse(await yourPrivateStore.load())
-const recovered = await priorseal.authorizeWithWallet(checkpoint.request, wallet, {
-  checkpoint,
-  onCheckpoint: value => yourPrivateStore.save(JSON.stringify(value)),
-})
+const checkpoint = JSON.parse(await yourPrivateStore.load());
+const recovered = await priorseal.authorizeWithWallet(
+  checkpoint.request,
+  wallet,
+  {
+    checkpoint,
+    onCheckpoint: (value) => yourPrivateStore.save(JSON.stringify(value)),
+  },
+);
 if (!recovered.authorizationWindow.active) {
-  console.log(recovered.nextAction) // History recovery never renews permission.
+  console.log(recovered.nextAction); // History recovery never renews permission.
 }
 ```
 
@@ -313,21 +413,25 @@ import {
   buildReviewManifest,
   parseTrustProfile,
   verifyReviewManifestLocally,
-} from 'priorseal-sdk/verifier'
+} from "priorseal-sdk/verifier";
 
 const manifest = await buildReviewManifest({
   bundle: await priorseal.getVerificationBundle(receiptId),
   attachments, // [{ id, role, profile, rawJson }]; retain the original JSON bytes.
   expectedTxHash: txHash,
-})
-const profile = parseTrustProfile(independentlyObtainedProfile)
+});
+const profile = parseTrustProfile(independentlyObtainedProfile);
 // Parsing validates shape, not provenance. Confirm the trust source independently.
 const review = await verifyReviewManifestLocally(manifest, {
-  trustedKeys: { schema: 'priorseal.keys.v1', issuer: profile.issuer, keys: profile.keys },
+  trustedKeys: {
+    schema: "priorseal.keys.v1",
+    issuer: profile.issuer,
+    keys: profile.keys,
+  },
   expectedAudience: profile.audience,
   insightKeyRegistry: profile.insightKeyRegistry,
   insightProtocolTrust: profile.insightProtocolTrust,
-})
+});
 ```
 
 Trust profiles use `schema: 'priorseal.trust-profile.v1'`, issuer, audience, keys, source and `confirmedAt` in Unix seconds. Zero means unconfirmed. Optional Insight registries must also come from an independently established source. The browser asks for confirmation separately; a profile's self-declared timestamp does not confer trust.
@@ -339,61 +443,77 @@ The strict Insight V3 swap workflow also exports `insight.decision-input.source`
 For an independent read-only replay, pass the same manifest and independently obtained trust configuration to `verifyReviewManifestWithChain()`, plus a viem public client connected to an RPC independent from the report producer:
 
 ```ts
-import { createPublicClient, http } from 'viem'
-import { baseSepolia } from 'viem/chains'
+import { createPublicClient, http } from "viem";
+import { baseSepolia } from "viem/chains";
 import {
   createInsightSwapRiskChainReader,
   verifyReviewManifestWithChain,
-} from 'priorseal-sdk/verifier'
+} from "priorseal-sdk/verifier";
 
-const replay = await verifyReviewManifestWithChain(manifest, {
-  trustedKeys: { schema: 'priorseal.keys.v1', issuer: profile.issuer, keys: profile.keys },
-  expectedAudience: profile.audience,
-  insightKeyRegistry: profile.insightKeyRegistry,
-  insightProtocolTrust: profile.insightProtocolTrust,
-  insightDecisionInputPolicy,
-  insightSwapRiskPolicy,
-}, createInsightSwapRiskChainReader(createPublicClient({
-  chain: baseSepolia,
-  transport: http(independentRpcUrl),
-})))
+const replay = await verifyReviewManifestWithChain(
+  manifest,
+  {
+    trustedKeys: {
+      schema: "priorseal.keys.v1",
+      issuer: profile.issuer,
+      keys: profile.keys,
+    },
+    expectedAudience: profile.audience,
+    insightKeyRegistry: profile.insightKeyRegistry,
+    insightProtocolTrust: profile.insightProtocolTrust,
+    insightDecisionInputPolicy,
+    insightSwapRiskPolicy,
+  },
+  createInsightSwapRiskChainReader(
+    createPublicClient({
+      chain: baseSepolia,
+      transport: http(independentRpcUrl),
+    }),
+  ),
+);
 
-if (!replay.valid) throw new Error(`Review incomplete: ${replay.code}`)
+if (!replay.valid) throw new Error(`Review incomplete: ${replay.code}`);
 ```
 
 The chain method first performs the complete local review, confirms the RPC chain ID, then fetches the report's exact block, compares its hash and timestamp, checks router bytecode, reads both token decimals and reruns the exact call with `eth_call` at that block. It recomputes the output amount, oracle reference, USD trade amount and slippage from the signed pre-trade evidence and compares all values with the advisory report. A changed block, different router code, unavailable historical state or mismatched calculation fails closed. It never broadcasts or signs. A successful replay means this RPC returned matching state and simulation results; RPC responses are observations, not consensus proofs, and the report remains unsigned advisory evidence. If there is no risk report, this method reports `OK_NO_SWAP_RISK_REPORT` and does not claim a chain replay.
 
 ```ts
 const insightDecisionInputPolicy = {
-  policyId: 'treasury-uniswap-v3',
-  version: '1',
+  policyId: "treasury-uniswap-v3",
+  version: "1",
   assetIds: {
-    WETH: 'eip155:1/erc20:0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-    USDC: 'eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    WETH: "eip155:1/erc20:0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    USDC: "eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   },
   maxReferenceDeviationBps: 50,
   maxSlippageBps: 50,
   maxQuoteAgeSeconds: 30,
-}
+};
 const insightSwapRiskPolicy = {
-  policyId: 'treasury-uniswap-v3-mainnet',
-  version: '1',
-  deployments: [{
-    chainId: 1,
-    routerAddress: approvedV3RouterAddress,
-    routerCodeHash: reviewedRouterCodeHash,
-  }],
+  policyId: "treasury-uniswap-v3-mainnet",
+  version: "1",
+  deployments: [
+    {
+      chainId: 1,
+      routerAddress: approvedV3RouterAddress,
+      routerCodeHash: reviewedRouterCodeHash,
+    },
+  ],
   maxBlockAgeSeconds: 30,
   maxTradeAmountDeviationBps: 100,
-}
+};
 const review = await verifyReviewManifestLocally(manifest, {
-  trustedKeys: { schema: 'priorseal.keys.v1', issuer: profile.issuer, keys: profile.keys },
+  trustedKeys: {
+    schema: "priorseal.keys.v1",
+    issuer: profile.issuer,
+    keys: profile.keys,
+  },
   expectedAudience: profile.audience,
   insightKeyRegistry: profile.insightKeyRegistry,
   insightProtocolTrust: profile.insightProtocolTrust,
   insightDecisionInputPolicy,
   insightSwapRiskPolicy,
-})
+});
 // For the strict workflow, require these relations before treating the pair as complete:
 // insightDecisionInputPair, insightDecisionInputAuthorizationBinding,
 // insightTransactionRiskBinding, insightPair and transaction.
@@ -407,7 +527,7 @@ Minimal protocol-trust shape (placeholders must be replaced with independently r
 
 ```ts
 const insightProtocolTrust = {
-  schema: 'insight.protocol-trust.v1',
+  schema: "insight.protocol-trust.v1",
   registrySnapshot: {
     rawJson: exactRegistryText, // Preserve the downloaded bytes; do not parse/re-serialize.
     sha256: independentlyConfirmedFullSha256,
@@ -417,7 +537,9 @@ const insightProtocolTrust = {
     { releaseId: selectedReleaseId, rawJson: exactReleaseResponse },
     // Include every predecessor down to a policy-admitted floor, including that floor.
   ],
-  executionProfiles: [{ profileId: signedProfileId, rawJson: exactProfileResponse }],
+  executionProfiles: [
+    { profileId: signedProfileId, rawJson: exactProfileResponse },
+  ],
   consumerPolicy: {
     allowedSchemaVersions: [5],
     allowedProfileIds: [signedProfileId],
@@ -425,7 +547,7 @@ const insightProtocolTrust = {
     policyId: independentlySelectedPolicyId,
     policyRawJson: exactPolicyResponse,
   },
-}
+};
 ```
 
 The optional `policyId` and `policyRawJson` must be supplied together; the immutable policy's hash and pins must agree with the explicit consumer pins. A caller-owned policy can instead omit both and independently choose its schema/profile/release pins. Importing or hashing a document does not establish that its source or policy is appropriate for the reviewer.
@@ -447,27 +569,39 @@ The opt-in [RWA exact-call binding and combined receipt verification](https://gi
 Use intent v2 when an integration already constructs the exact transaction and another system owns its business semantics:
 
 ```ts
-import { buildExactCallIntent, matchUniqueContextCommitment } from 'priorseal-sdk'
+import {
+  buildExactCallIntent,
+  matchUniqueContextCommitment,
+} from "priorseal-sdk";
 
 const intent = buildExactCallIntent({
-  transaction: { chainId: 8453, from: executor, to: router, data, value: 0n, nonce: 17n },
-  intentId: 'swap-42',
-  asset: 'eip155:8453/erc20:0x…',
+  transaction: {
+    chainId: 8453,
+    from: executor,
+    to: router,
+    data,
+    value: 0n,
+    nonce: 17n,
+  },
+  intentId: "swap-42",
+  asset: "eip155:8453/erc20:0x…",
   amount: 1000000n,
   validUntil,
   constraints: { minConfirmations: 12 },
-  contextCommitments: [{
-    namespace: 'example.quote-approval.v1',
-    algorithm: 'keccak256',
-    digest: quoteApprovalDigest,
-  }],
-})
+  contextCommitments: [
+    {
+      namespace: "example.quote-approval.v1",
+      algorithm: "keccak256",
+      digest: quoteApprovalDigest,
+    },
+  ],
+});
 
 const assessmentReference = matchUniqueContextCommitment(intent, {
-  namespace: 'example.quote-approval.v1',
-  algorithm: 'keccak256',
+  namespace: "example.quote-approval.v1",
+  algorithm: "keccak256",
   digest: quoteApprovalDigest,
-})
+});
 ```
 
 The profile binds chain, executor, nonce, target, calldata, native value, time, finality and any namespaced external context digests. It intentionally ignores transfer-log recipient/asset/amount matching and transfer-count ambiguity; an external system remains responsible for interpreting its own transaction semantics and any associated commitments.
@@ -498,7 +632,7 @@ import {
   verifyERC8004AuthorizationTrustDecision,
   hashERC8004Payload,
   hashERC8004ContentBytes,
-} from 'priorseal-sdk'
+} from "priorseal-sdk";
 ```
 
 The identity reference contains chain ID, registry address, and token ID. Registry addresses and reviewer/validator addresses must be independently selected by the integrating application. Reputation and validation evaluators return `INDETERMINATE` until the SDK re-reads the snapshot at its pinned block; a policy calculation over detached JSON is never presented as verified chain state. The SDK does not fetch registration URIs. Feedback and validation write helpers require an explicit viem `WalletClient`, preflight the relevant role and registry link, and return the transaction hash for the caller to track.
@@ -510,7 +644,7 @@ The [read-only inspector](../examples/erc8004-agent-accountability-v1/README.md)
 The SDK includes an offline verifier for Headless Oracle v5 market-state receipts. For a short validity window, use two receipts with different evidence roles: bind the authority-time receipt digest into the signed intent, then independently verify and retain a distinct execution-time receipt in the final evidence bundle.
 
 ```ts
-import { verifyHeadlessMarketStateReceiptPair } from 'priorseal-sdk'
+import { verifyHeadlessMarketStateReceiptPair } from "priorseal-sdk";
 
 const result = await verifyHeadlessMarketStateReceiptPair({
   intent,
@@ -519,8 +653,12 @@ const result = await verifyHeadlessMarketStateReceiptPair({
   key: pinnedHeadlessIssuerKey,
   authorityTime,
   executionTime,
-  policy: { expectedMic: 'XNYS', allowedStatuses: ['OPEN'], requiredFeedState: 'live' },
-})
+  policy: {
+    expectedMic: "XNYS",
+    allowedStatuses: ["OPEN"],
+    requiredFeedState: "live",
+  },
+});
 ```
 
 The default accepts only `live` receipt mode. Opting into `demo` is explicit and suitable only for fixtures. `live` is not evidence that the request was authenticated or paid. For execution gates, require `OPEN` and set `requiredFeedState: 'live'` where live feed coverage is necessary; only `OPEN` and `CLOSED` can be eligible under policy, while `UNKNOWN`, `HALTED`, unrecognized statuses, and a signed failed feed always reject. Omitting `requiredFeedState` permits historical signed receipts without `coverage` to verify, but their coverage remains unknown. The verifier accepts the identified v5 signed field sets with or without `coverage`, plus a signed override `reason`; new field layouts still need explicit support. It makes no network requests and reports structured rejection for malformed pair inputs, signature, commitment, key, time-window, venue, mode, status, coverage, distinctness, and receipt-order failures. The execution-time receipt must have been issued at or after `authorityTime`. Its digest is returned as `executionEvidenceCommitment`; it is not claimed to have existed in the earlier authorization.
