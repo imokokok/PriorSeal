@@ -528,6 +528,7 @@ export {
   INSIGHT_POLYMARKET_SOURCE_EVIDENCE_TYPES,
   insightPolymarketSourceEvidenceCommitment,
   verifyInsightPolymarketNwsObservationEvidence,
+  verifyInsightPolymarketAviationWeatherMetarEvidence,
   verifyInsightPolymarketSourceEvidenceAttestation,
   verifyInsightPolymarketSourceEvidence,
 } from "./insight-polymarket-market-evidence.js";

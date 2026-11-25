@@ -7,7 +7,9 @@ import {
   INSIGHT_POLYMARKET_SOURCE_EVIDENCE_DOMAIN,
   INSIGHT_POLYMARKET_SOURCE_EVIDENCE_TYPES,
   insightPolymarketSourceEvidenceCommitment,
-} from "../../sdk/src/insight-polymarket-market-evidence.js";
+  verifyInsightPolymarketAviationWeatherMetarEvidence,
+  verifyInsightPolymarketSourceEvidence,
+} from "../../sdk/dist/index.js";
 import { collectMarketEvidence } from "../src/source-evidence.ts";
 
 const signer = privateKeyToAccount(`0x${"47".repeat(32)}` as `0x${string}`);
@@ -120,8 +122,8 @@ function canonical(value: unknown): string {
   return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonical(entry)}`).join(",")}}`;
 }
 
-async function signedResponse() {
-  const evidenceHash = keccak256(toBytes(canonical(evidence)));
+async function signedResponse(sourceEvidence = evidence) {
+  const evidenceHash = keccak256(toBytes(canonical(sourceEvidence)));
   const issuedAt = now;
   const validUntil = now + 300;
   const typedData = {
@@ -130,7 +132,7 @@ async function signedResponse() {
     primaryType: "PolymarketSourceEvidence" as const,
     message: {
       evidenceHash,
-      marketId: evidence.market.id,
+      marketId: sourceEvidence.market.id,
       issuedAt: BigInt(issuedAt),
       validUntil: BigInt(validUntil),
       schemaVersion: 1n,
@@ -139,7 +141,7 @@ async function signedResponse() {
   return {
     success: true,
     data: {
-      evidence,
+      evidence: sourceEvidence,
       attestation: {
         schema: "insight.polymarket-source-evidence-attestation.v1",
         decisionHash: evidenceHash,
@@ -153,7 +155,7 @@ async function signedResponse() {
           signature: await signer.signTypedData(typedData),
           data: {
             evidenceHash,
-            marketId: evidence.market.id,
+            marketId: sourceEvidence.market.id,
             issuedAt,
             validUntil,
             schemaVersion: 1,
@@ -281,5 +283,67 @@ test("fails closed on modified evidence and rejects non-Insight upstream origins
       fetcher,
     ),
     /BOT_UPSTREAM_URL_INVALID/,
+  );
+});
+
+test("summarizes AviationWeather evidence in the verified Telegram record", async () => {
+  const sourceEvidence = {
+    ...evidence,
+    market: {
+      ...evidence.market,
+      id: "dallas-weather-market",
+      resolutionSource:
+        "https://aviationweather.gov/api/data/metar?ids=KDAL&format=raw&date=2026-11-27T09:00:00Z&hours=30",
+    },
+    observations: [
+      {
+        id: "dallas-metar-window",
+        provider: "aviationweather.metar",
+        evidence: {
+          schema: "insight.polymarket-aviationweather-metar.v1",
+          source: "us-aviation-weather-center-data-api",
+          sourceUrl:
+            "https://aviationweather.gov/api/data/metar?ids=KDAL&format=raw&date=2026-11-27T09%3A00%3A00Z&hours=30",
+          stationId: "KDAL",
+          date: "2026-11-27T09:00:00.000Z",
+          hours: 30,
+          reports: ["METAR KDAL 260053Z 14008KT 10SM CLR 12/02 A3011 RMK AO2"],
+          retrievedAt: "2026-11-26T01:20:00.000Z",
+          disclosure:
+            "Timestamped raw snapshot. It may be partial while the source window is in progress, may be corrected or delayed, does not parse temperatures, does not compare observations to thresholds, does not determine event outcomes, and does not authorize execution.",
+        },
+      },
+    ],
+    reviewWarnings: [
+      "METAR snapshot may cover an incomplete source window; human review required.",
+    ],
+    requiresHumanReview: true,
+  };
+  assert.deepEqual(
+    verifyInsightPolymarketAviationWeatherMetarEvidence(
+      sourceEvidence.observations[0].evidence,
+    ),
+    { valid: true, reason: "OK" },
+  );
+  const response = await signedResponse(sourceEvidence);
+  const { fetcher } = mockFetcher(response);
+  const record = await collectMarketEvidence(
+    {
+      INSIGHT_API_KEY: "test-api-key",
+      INSIGHT_BASE_URL: "https://www.oracleinsight.xyz",
+      INSIGHT_KEY_REGISTRY_URL:
+        "https://www.oracleinsight.xyz/.well-known/oracle-keys.json",
+    },
+    sourceEvidence.market.id,
+    fetcher,
+  );
+  assert.match(record.summary, /KDAL \| 1 raw METAR reports/);
+  assert.match(
+    record.summary,
+    /METAR snapshot may cover an incomplete source window/,
+  );
+  assert.match(
+    record.summary,
+    /Outcome evaluation and settlement: not performed/,
   );
 });

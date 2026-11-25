@@ -1,7 +1,7 @@
 import {
   insightPolymarketSourceEvidenceCommitment,
   verifyInsightPolymarketSourceEvidenceAttestation,
-} from "../../sdk/src/insight-polymarket-market-evidence.js";
+} from "../../sdk/dist/index.js";
 import type { KeyRegistry } from "verify-insight-receipt";
 
 const MAX_RESPONSE_BYTES = 512 * 1024;
@@ -99,6 +99,12 @@ function sourceObservationSummary(value: unknown): string[] {
     .slice(0, 6)
     .map((item) => {
       const detail = isRecord(item.evidence) ? item.evidence : {};
+      if (item.provider === "aviationweather.metar") {
+        const reports = Array.isArray(detail.reports)
+          ? detail.reports.length
+          : 0;
+        return `Source ${safeField(item.id, 64)}: ${safeField(detail.stationId, 4)} | ${reports} raw METAR reports | ${safeField(detail.retrievedAt, 32)}`;
+      }
       if (item.provider === "nws.latest-observation") {
         const measurement = isRecord(detail.measurement)
           ? detail.measurement

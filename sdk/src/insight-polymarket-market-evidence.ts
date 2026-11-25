@@ -67,7 +67,11 @@ type Evidence = {
   };
   observations: Array<{
     id: string;
-    provider: "bls.series" | "bls.percent-change" | "nws.latest-observation";
+    provider:
+      | "bls.series"
+      | "bls.percent-change"
+      | "nws.latest-observation"
+      | "aviationweather.metar";
     evidence: Record<string, unknown>;
   }>;
   reviewWarnings: string[];
@@ -194,7 +198,7 @@ function makeWarnings(observations: Evidence["observations"]): string[] | null {
             );
         }
       }
-    } else {
+    } else if (item.provider === "nws.latest-observation") {
       const result = verifyInsightPolymarketNwsObservationEvidence(
         item.evidence,
       );
@@ -206,6 +210,15 @@ function makeWarnings(observations: Evidence["observations"]): string[] | null {
           `NWS quality-control flags are present for ${String(item.evidence.property)}; review their source meaning.`,
         );
       }
+    } else {
+      if (
+        !verifyInsightPolymarketAviationWeatherMetarEvidence(item.evidence)
+          .valid
+      )
+        return null;
+      warnings.push(
+        "METAR snapshot may cover an incomplete source window; human review required.",
+      );
     }
   }
   return [...new Set(warnings)];
@@ -320,8 +333,17 @@ function parse(value: unknown): Evidence | null {
       seen.has(item.id) ||
       (item.provider !== "bls.series" &&
         item.provider !== "bls.percent-change" &&
-        item.provider !== "nws.latest-observation") ||
+        item.provider !== "nws.latest-observation" &&
+        item.provider !== "aviationweather.metar") ||
       !record(item.evidence)
+    )
+      return null;
+    if (
+      item.provider === "aviationweather.metar" &&
+      !verifyInsightPolymarketAviationWeatherMetarEvidence(
+        item.evidence,
+        root.market.resolutionSource,
+      ).valid
     )
       return null;
     seen.add(item.id);
@@ -426,6 +448,99 @@ export function verifyInsightPolymarketNwsObservationEvidence(value: unknown) {
         !observation.pathname.startsWith(`${stationPath}/observations/`))
     )
       return invalid;
+  } catch {
+    return invalid;
+  }
+  return { valid: true as const, reason: "OK" as const };
+}
+
+/** Validate a bounded raw AviationWeather snapshot without parsing a result or outcome. */
+export function verifyInsightPolymarketAviationWeatherMetarEvidence(
+  value: unknown,
+  resolutionSource?: unknown,
+) {
+  const invalid = { valid: false as const, reason: "MALFORMED" as const };
+  if (
+    !record(value) ||
+    !exactKeys(value, [
+      "schema",
+      "source",
+      "sourceUrl",
+      "stationId",
+      "date",
+      "hours",
+      "reports",
+      "retrievedAt",
+      "disclosure",
+    ]) ||
+    value.schema !== "insight.polymarket-aviationweather-metar.v1" ||
+    value.source !== "us-aviation-weather-center-data-api" ||
+    typeof value.stationId !== "string" ||
+    !/^[A-Z0-9]{4}$/.test(value.stationId) ||
+    typeof value.sourceUrl !== "string" ||
+    typeof value.date !== "string" ||
+    !Number.isFinite(Date.parse(value.date)) ||
+    !Number.isInteger(value.hours) ||
+    (value.hours as number) < 1 ||
+    (value.hours as number) > 48 ||
+    typeof value.retrievedAt !== "string" ||
+    !Number.isFinite(Date.parse(value.retrievedAt)) ||
+    !Array.isArray(value.reports) ||
+    value.reports.length < 1 ||
+    value.reports.length > 100 ||
+    !value.reports.every(
+      (report) =>
+        typeof report === "string" &&
+        new TextEncoder().encode(report).byteLength <= 600 &&
+        (report.startsWith(`METAR ${value.stationId} `) ||
+          report.startsWith(`SPECI ${value.stationId} `)) &&
+        /\b\d{6}Z\b/.test(report),
+    ) ||
+    typeof value.disclosure !== "string" ||
+    value.disclosure.length > 2000 ||
+    !value.disclosure.includes("does not parse temperatures") ||
+    !value.disclosure.includes("does not determine event outcomes")
+  )
+    return invalid;
+  try {
+    const source = new URL(value.sourceUrl);
+    const expectedDate = Date.parse(value.date);
+    const keys = [...source.searchParams.keys()];
+    if (
+      source.protocol !== "https:" ||
+      source.hostname !== "aviationweather.gov" ||
+      source.username ||
+      source.password ||
+      source.hash ||
+      source.pathname !== "/api/data/metar" ||
+      keys.length !== 4 ||
+      new Set(keys).size !== 4 ||
+      source.searchParams.get("ids") !== value.stationId ||
+      source.searchParams.get("format") !== "raw" ||
+      Date.parse(source.searchParams.get("date") ?? "") !== expectedDate ||
+      source.searchParams.get("hours") !== String(value.hours)
+    )
+      return invalid;
+    if (resolutionSource !== undefined) {
+      if (typeof resolutionSource !== "string") return invalid;
+      const declared = new URL(resolutionSource);
+      const declaredKeys = [...declared.searchParams.keys()];
+      if (
+        declared.protocol !== "https:" ||
+        declared.hostname !== "aviationweather.gov" ||
+        declared.username ||
+        declared.password ||
+        declared.hash ||
+        declared.pathname !== "/api/data/metar" ||
+        declaredKeys.length !== 4 ||
+        new Set(declaredKeys).size !== 4 ||
+        declared.searchParams.get("ids") !== value.stationId ||
+        declared.searchParams.get("format") !== "raw" ||
+        Date.parse(declared.searchParams.get("date") ?? "") !== expectedDate ||
+        declared.searchParams.get("hours") !== String(value.hours)
+      )
+        return invalid;
+    }
   } catch {
     return invalid;
   }

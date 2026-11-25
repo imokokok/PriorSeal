@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   insightPolymarketSourceEvidenceCommitment,
   verifyInsightPolymarketNwsObservationEvidence,
+  verifyInsightPolymarketAviationWeatherMetarEvidence,
   verifyInsightPolymarketSourceEvidence,
 } from "../../sdk/dist/index.js";
 
@@ -76,6 +77,93 @@ test("validates and commits one exact NWS source observation", () => {
   assert.equal(
     verifyInsightPolymarketSourceEvidence(evidence, commitment.digest).valid,
     true,
+  );
+});
+
+const aviationWeatherEvidence = {
+  schema: "insight.polymarket-aviationweather-metar.v1",
+  source: "us-aviation-weather-center-data-api",
+  sourceUrl:
+    "https://aviationweather.gov/api/data/metar?ids=KDAL&format=raw&date=2026-11-27T09%3A00%3A00Z&hours=30",
+  stationId: "KDAL",
+  date: "2026-11-27T09:00:00.000Z",
+  hours: 30,
+  reports: ["METAR KDAL 260053Z 14008KT 10SM CLR 12/02 A3011 RMK AO2"],
+  retrievedAt: "2026-11-26T01:20:00.000Z",
+  disclosure:
+    "Timestamped raw snapshot. It may be partial while the source window is in progress, may be corrected or delayed, does not parse temperatures, does not compare observations to thresholds, does not determine event outcomes, and does not authorize execution.",
+};
+
+test("validates a fixed AviationWeather query and commits its raw METAR snapshot", () => {
+  assert.deepEqual(
+    verifyInsightPolymarketAviationWeatherMetarEvidence(
+      aviationWeatherEvidence,
+    ),
+    { valid: true, reason: "OK" },
+  );
+  const aviationRecord = {
+    ...evidence,
+    market: {
+      ...evidence.market,
+      resolutionSource:
+        "https://aviationweather.gov/api/data/metar?ids=KDAL&format=raw&date=2026-11-27T09:00:00Z&hours=30",
+    },
+    observations: [
+      {
+        id: "dallas-metar-window",
+        provider: "aviationweather.metar",
+        evidence: aviationWeatherEvidence,
+      },
+    ],
+    reviewWarnings: [
+      "METAR snapshot may cover an incomplete source window; human review required.",
+    ],
+    requiresHumanReview: true,
+  };
+  const commitment = insightPolymarketSourceEvidenceCommitment(aviationRecord);
+  assert.equal(
+    verifyInsightPolymarketSourceEvidence(aviationRecord, commitment.digest)
+      .valid,
+    true,
+  );
+  const wrongMarketSource = {
+    ...aviationRecord,
+    market: {
+      ...aviationRecord.market,
+      resolutionSource:
+        "https://aviationweather.gov/api/data/metar?ids=KDFW&format=raw&date=2026-11-27T09:00:00Z&hours=30",
+    },
+  };
+  assert.equal(
+    verifyInsightPolymarketSourceEvidence(wrongMarketSource).valid,
+    false,
+  );
+});
+
+test("rejects untrusted AviationWeather hosts and malformed METAR rows", () => {
+  assert.equal(
+    verifyInsightPolymarketAviationWeatherMetarEvidence({
+      ...aviationWeatherEvidence,
+      sourceUrl: aviationWeatherEvidence.sourceUrl.replace(
+        "aviationweather.gov",
+        "example.com",
+      ),
+    }).valid,
+    false,
+  );
+  assert.equal(
+    verifyInsightPolymarketAviationWeatherMetarEvidence({
+      ...aviationWeatherEvidence,
+      reports: ["METAR KDFW 260053Z 14008KT"],
+    }).valid,
+    false,
+  );
+  assert.equal(
+    verifyInsightPolymarketAviationWeatherMetarEvidence({
+      ...aviationWeatherEvidence,
+      reports: ["METAR KDALX 260053Z 14008KT"],
+    }).valid,
+    false,
   );
 });
 
