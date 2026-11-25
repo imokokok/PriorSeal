@@ -7,9 +7,11 @@ PriorSeal can verify and preserve signed source observations associated with a r
 - **BLS:** exact public series observations and registered v2 12-month percent changes, including source periods, footnotes, retrieval time, and a calculation consistency check.
 - **US National Weather Service:** one latest station measurement from a fixed official API endpoint, including the exact field, unit, station, observation timestamp, source record URL, quality-control flags, and retrieval time.
 
+- **AviationWeather METAR:** a bounded snapshot of raw reports from the exact market-declared METAR query URL, including station, query window and retrieval time. Raw reports are not parsed into temperatures or compared with market bands.
+
 Each adapter captures a declared source record; it does not establish that the source controls settlement for a market. BLS series/period selection and NWS station/field selection must be part of a server-side market binding reviewed against the current Gamma rules digest. Insight fails closed when no such binding exists or when the market rules change.
 
-The NWS API contains recent station observations only, may delay readings during quality-control processing, and includes stations whose providers vary. Null readings fail closed. Its captured value must not be treated as a market outcome. [NWS API documentation](https://www.weather.gov/documentation/services-web-api)
+The NWS API contains recent station observations only, may delay readings during quality-control processing, and includes stations whose providers vary. Null readings fail closed. Its captured value must not be treated as a market outcome. AviationWeather snapshots can be partial until the source query window ends and always carry a human-review warning. Both weather adapters preserve source payloads without determining market results. [NWS API documentation](https://www.weather.gov/documentation/services-web-api)
 
 ## Verify before use
 
