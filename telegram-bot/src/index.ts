@@ -151,6 +151,41 @@ async function sendTelegramMessage(
   } catch { return false }
 }
 
+async function sendTelegramScenarioArtifact(
+  env: Env,
+  chatId: number,
+  caption: string,
+  fileName: string,
+  artifact: Record<string, unknown>,
+): Promise<boolean> {
+  if (!env.TELEGRAM_BOT_TOKEN || chatId <= 0) return false
+  let content: string
+  try {
+    content = JSON.stringify(artifact, null, 2)
+  } catch {
+    return false
+  }
+  if (new TextEncoder().encode(content).byteLength > MAX_RESPONSE_BYTES) return false
+  try {
+    const form = new FormData()
+    form.set('chat_id', String(chatId))
+    form.set('caption', caption.slice(0, 1_024))
+    form.set('document', new Blob([content], { type: 'application/json' }), fileName)
+    const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
+      method: 'POST',
+      body: form,
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!response.ok) return false
+    const responseText = await readBoundedStream(response.body, 8 * 1024)
+    if (responseText === null) return false
+    const result: unknown = JSON.parse(responseText)
+    return isRecord(result) && result.ok === true
+  } catch {
+    return false
+  }
+}
+
 async function fetchJson(url: string, init: RequestInit, maxBytes = MAX_RESPONSE_BYTES): Promise<unknown> {
   const response = await fetch(url, { ...init, signal: AbortSignal.timeout(15_000) })
   if (!response.ok) throw new Error(`UPSTREAM_HTTP_${response.status}`)
@@ -330,6 +365,7 @@ export default {
     if (reservation === 'duplicate') return new Response('ok')
     let reply: string | null = null
     let replyMarkup: Record<string, unknown> | undefined
+    let scenarioArtifact: { fileName: string; value: Record<string, unknown> } | undefined
     if (reservation === 'rate_limited') {
       reply = 'Request limit reached: up to 3 guard/source requests per hour and 10 per day per chat.'
     } else if (command.command === 'start' || command.command === 'help') {
@@ -340,7 +376,7 @@ export default {
         '/lending — open the Base lending Mini App',
         '/perp <JSON> — Hyperliquid IOC assessment and PriorSeal intent verification',
         '/swap <JSON> — reviewed DEX swap guard and PriorSeal intent verification',
-        'Send Perp and Swap JSON only in private chat; the bot returns a summary and does not upload the signed decision or exact calldata.',
+        'Send Perp and Swap JSON only in private chat; verified assessments return a JSON artifact with the signed decision and PriorSeal intent. No transaction is signed or submitted.',
         'Perp and swap guard calls use the configured Insight API quota/credits. PriorSeal independently verifies signed decisions. Guard commands never sign or submit trades.',
       ].join('\n')
     } else if (command.command === 'lending') {
@@ -355,6 +391,7 @@ export default {
         try {
           const result = await assessHyperliquidCommand(env, perpPayload)
           reply = result.summary
+          scenarioArtifact = { fileName: `priorseal-hyperliquid-perp-${update.update_id}.json`, value: result.artifact }
         } catch (error) {
           const reason = scenarioErrorCode(error)
           console.error(JSON.stringify({ event: 'hyperliquid_perp_assessment_failed', code: reason }))
@@ -368,6 +405,7 @@ export default {
         try {
           const result = await assessSwapCommand(env, swapPayload)
           reply = result.summary
+          scenarioArtifact = { fileName: `priorseal-dex-swap-${update.update_id}.json`, value: result.artifact }
         } catch (error) {
           const reason = scenarioErrorCode(error)
           console.error(JSON.stringify({ event: 'agent_swap_assessment_failed', code: reason }))
@@ -407,7 +445,10 @@ export default {
       }
     }
 
-    const delivered = await sendTelegramMessage(env, message.chat.id, reply, replyMarkup)
+    const delivered = scenarioArtifact
+      ? await sendTelegramScenarioArtifact(env, message.chat.id, reply ?? '', scenarioArtifact.fileName, scenarioArtifact.value) ||
+        await sendTelegramMessage(env, message.chat.id, reply ?? 'Assessment complete; the JSON artifact could not be sent.', replyMarkup)
+      : await sendTelegramMessage(env, message.chat.id, reply, replyMarkup)
     if (!delivered) {
       await object.releaseUpdate(update.update_id)
       return new Response('telegram delivery failed', { status: 502 })
