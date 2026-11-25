@@ -16,6 +16,7 @@ From the repository root, use the pinned Node.js version (`nvm use`). Use the ro
    npx wrangler secret put TELEGRAM_WEBHOOK_SECRET --config telegram-bot/wrangler.jsonc
    npx wrangler secret put WEBHOOK_SETUP_SECRET --config telegram-bot/wrangler.jsonc
    npx wrangler secret put INSIGHT_API_KEY --config telegram-bot/wrangler.jsonc
+   npx wrangler secret put ALLOWED_CHAT_IDS --config telegram-bot/wrangler.jsonc
    ```
 
    Enter secret values only at Wrangler's prompt. Do not put them in source, the config, shell command arguments, or logs.
@@ -32,8 +33,16 @@ From the repository root, use the pinned Node.js version (`nvm use`). Use the ro
 
 The worker must be deployed before Telegram's webhook is configured. With no custom route, Wrangler uses the account's configured `workers.dev` subdomain and prints the deployed URL. If `workers.dev` is unavailable, add a dedicated route in this worker's own config; this does not change PriorSeal's production Worker. Configure Telegram's webhook to the deployed URL plus `/telegram/webhook`, with `secret_token` set to the same secret stored as `TELEGRAM_WEBHOOK_SECRET`. The first deployment creates the SQLite-backed Durable Object class migration declared in `wrangler.jsonc`.
 
+## Base lending Mini App
+
+The shared bot exposes Base lending from `/lending`. The Worker config opens `https://priorseal.xyz/app/lending` and accepts Mini App API calls only from `https://priorseal.xyz`; update `LENDING_MINI_APP_URL` and `LENDING_MINI_APP_ORIGIN` together if the web app moves. Set the public web build variable `VITE_LENDING_BOT_API_URL` to the deployed Telegram Worker origin. This endpoint URL is public; keep the Insight API key in the Worker secret store.
+
+Set `ALLOWED_CHAT_IDS` to comma-separated private Telegram user/chat IDs allowed to make lending assessments. The Mini App's signed Telegram `initData` is verified by the Worker before it uses the Insight key. Each user is limited to three lending assessments per rolling hour and ten per rolling day. The same bot command router keeps `/check` for Polymarket and `/lending` for this separate flow.
+
+The user pastes one exact unsigned direct Base transaction. The app does not construct protocol calldata, bundle token approvals, or use an API key in the browser. Insight assesses and signs the decision; PriorSeal's SDK builds an intent only for a verified `ALLOW`. The wallet separately authorizes and submits the exact transaction, and the app then reconciles the original hash and verifies both evidence roots. An uncertain wallet result requires hash reconciliation; the app will not submit a second time.
+
 ## Data handling
 
-The Durable Object stores Telegram update IDs, request timestamps, and signed source-evidence records per chat for duplicate suppression, rolling limits, and evidence retention. It does not persist message text, usernames, or wallet information. Logs include a short failure code only; never add API keys, bot tokens, webhook secrets, or request payloads to logs.
+The Durable Object stores Telegram update IDs, request timestamps, and signed source-evidence records per chat for duplicate suppression, rolling limits, and evidence retention, plus lending assessment timestamps per Telegram user. It does not persist message text, usernames, wallet information, or lending transaction/assessment bodies. Logs include a short failure code only; never add API keys, bot tokens, webhook secrets, or request payloads to logs.
 
 This beta uses the Insight API key on the server side. Keep its allowance limited and monitor Insight usage. The bot does not proxy arbitrary URLs or expose an API-key field to Telegram users.

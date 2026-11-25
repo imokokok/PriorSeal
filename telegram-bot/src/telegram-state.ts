@@ -36,6 +36,8 @@ export class TelegramBotState extends DurableObject<Env> {
         )
       `)
       ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS source_evidence_expires_at ON source_evidence(expires_at)')
+      ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS lending_assessments (id INTEGER PRIMARY KEY AUTOINCREMENT, requested_at INTEGER NOT NULL)')
+      ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS lending_assessments_requested_at ON lending_assessments(requested_at)')
     })
   }
 
@@ -98,5 +100,20 @@ export class TelegramBotState extends DurableObject<Env> {
       'DELETE FROM source_evidence WHERE update_id IN (SELECT update_id FROM source_evidence ORDER BY recorded_at DESC LIMIT -1 OFFSET ?)',
       MAX_SOURCE_EVIDENCE_RECORDS,
     )
+  }
+
+  reserveLendingAssessment(now: number): boolean {
+    const sql = this.ctx.storage.sql
+    sql.exec('DELETE FROM lending_assessments WHERE requested_at < ?', now - 86_400)
+    const hourly = sql.exec<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM lending_assessments WHERE requested_at > ?', now - 3_600,
+    ).toArray()[0]?.total ?? 0
+    const daily = sql.exec<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM lending_assessments WHERE requested_at > ?', now - 86_400,
+    ).toArray()[0]?.total ?? 0
+    if (hourly >= 3 || daily >= 10) return false
+    sql.exec('INSERT INTO lending_assessments(requested_at) VALUES (?)', now)
+    return true
+  }
   }
 }
