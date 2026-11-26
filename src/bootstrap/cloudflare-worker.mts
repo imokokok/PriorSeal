@@ -97,12 +97,13 @@ function unavailable(error: unknown) {
 
 export default {
   async fetch(request: Request, environment: Env, context: ExecutionContext): Promise<Response> {
+    const telegramMiniAppPath = new URL(request.url).pathname;
+    if (TELEGRAM_MINI_APP_PATHS.has(telegramMiniAppPath) && !httpsRedirect(request)) {
+      return withSecurityHeaders(await environment.ASSETS.fetch(request), telegramMiniAppPath);
+    }
     const redirect = httpsRedirect(request);
     if (redirect) return redirect;
     const pathname = new URL(request.url).pathname;
-    if (TELEGRAM_MINI_APP_PATHS.has(pathname)) {
-      return withSecurityHeaders(await environment.ASSETS.fetch(request), pathname);
-    }
     if (pathname === '/demo-api/base-sepolia/transaction') {
       return withSecurityHeaders(await handleBaseSepoliaDemoStatusRequest(request));
     }
