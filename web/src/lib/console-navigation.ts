@@ -16,7 +16,7 @@ export const consoleNavigation: ConsoleNavigationItem[] = [
   { index: '01', key: 'overview', label: 'Overview', to: '/app', group: 'Workspace' },
   { index: '02', key: 'quickstart', label: 'Quickstart', to: '/app/quickstart', group: 'Workspace' },
   { index: '03', key: 'treasury-pilot', label: 'Base USDC pilot', to: '/app/treasury-pilot', group: 'Workspace' },
-  { index: '04', key: 'base-lending', label: 'Base lending', to: '/app/lending', group: 'Execute' },
+  { index: '04', key: 'base-lending', label: 'Base lending assessment', to: '/app/lending', group: 'Assess' },
   { index: '05', key: 'new-action', label: 'New action', to: '/app/actions/new', activePrefixes: ['/app/actions', '/app/intents'], pageKey: (pathname) => pathname === '/app/actions/new' ? 'new-action' : 'intent', group: 'Execute', visible: hasPublishedAuthorization },
   { index: '06', key: 'observe', label: 'Observe execution', to: '/app/observe', group: 'Execute' },
   { index: '07', key: 'evidence', label: 'Evidence library', to: '/app/evidence', activePrefixes: ['/app/evidence', '/app/audit', '/app/receipts'], pageKey: (pathname) => pathname.startsWith('/app/evidence/') || pathname.startsWith('/app/receipts/') ? 'receipts' : 'audit', group: 'Evidence' },

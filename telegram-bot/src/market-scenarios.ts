@@ -1,13 +1,11 @@
 import { z } from 'zod'
 import {
-  buildAgentSwapGuardBoundIntents,
-  agentSwapGuardIntentAsset,
   verifyInsightAgentSwapGuardDecision,
 } from '../../sdk/src/insight-base-agent-swap-guard.js'
 import {
-  buildHyperliquidPerpGuardBoundIntent,
   verifyInsightHyperliquidPerpGuardDecision,
 } from '../../sdk/src/insight-hyperliquid-perp-guard.js'
+import { createReadOnlyScenarioArtifact } from './read-only-scenario-artifact.js'
 import { assertSwapDecisionMatchesRequest } from './swap-request-binding.js'
 import type { KeyRegistry } from 'verify-insight-receipt'
 
@@ -19,7 +17,6 @@ type ScenarioEnv = {
 
 const ADDRESS = /^0x[\da-f]{40}$/i
 const CLOID = /^0x[\da-f]{32}$/i
-const HEX = /^0x(?:[\da-f]{2})*$/i
 const POSITIVE_DECIMAL = /^(?:0\.(?:0*[1-9][0-9]*)|[1-9][0-9]*(?:\.[0-9]+)?)$/
 const MAX_RESPONSE_BYTES = 512 * 1024
 
@@ -90,7 +87,6 @@ const SwapGuardSchema = z.object({
 
 const SwapRequestSchema = z.object({
   guard: SwapGuardSchema,
-  approvalNonce: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1),
 }).strict()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -162,18 +158,6 @@ export function parseScenarioPayload(raw: string): unknown {
   try { return JSON.parse(raw) as unknown } catch { throw new Error('PAYLOAD_INVALID_JSON') }
 }
 
-function amountToEightDecimals(value: string): string {
-  const [whole = '0', fraction = ''] = value.split('.')
-  if (fraction.length > 8) throw new Error('ORDER_SIZE_PRECISION_UNSUPPORTED')
-  const raw = `${whole}${fraction.padEnd(8, '0')}`.replace(/^0+(?=\d)/, '')
-  if (!/^[1-9]\d*$/.test(raw)) throw new Error('ORDER_SIZE_INVALID')
-  return raw
-}
-
-function intentId(prefix: string, suffix: string): string {
-  return `${prefix}-${suffix.replace(/^0x/i, '').toLowerCase()}`
-}
-
 function jsonFileResult(summary: string, artifact: Record<string, unknown>) {
   return { summary, artifact }
 }
@@ -228,28 +212,16 @@ export async function assessHyperliquidCommand(env: ScenarioEnv, payload: unknow
 
   const guard = isRecord(decision.guard) ? decision.guard : null
   const model = guard && isRecord(guard.projected) ? guard.projected : null
-  const order = input.order.action.orders[0]!
   const evaluated = guard && typeof guard.verdict === 'string' ? guard.verdict : 'UNKNOWN'
-  let intent: unknown = null
-  if (evaluated === 'ALLOW') {
-    intent = await buildHyperliquidPerpGuardBoundIntent({
-      intentId: intentId('hyperliquid-perp', order.c),
-      account: input.account,
-      amount: amountToEightDecimals(order.s),
-      nonce: Date.now(),
-      validUntil: Math.floor(input.order.expiresAfter / 1_000),
-    }, decision, { keyRegistry: registry })
-  }
   const safeNumber = (value: unknown, digits = 2) => typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : 'n/a'
   const summary = [
     `Hyperliquid ${input.guard.assetSymbol} ${input.guard.action.replace('open_', '').toUpperCase()}: ${evaluated}`,
     `Declared size / margin: $${input.guard.sizeUsd.toFixed(2)} / $${input.guard.marginValueUsd.toFixed(2)}`,
     `Effective leverage: ${safeNumber(model?.effectiveLeverage)}x | liquidation buffer: ${safeNumber(model?.liquidationBufferPct)}%`,
-    `PriorSeal intent: ${intent ? 'prepared and bound to the exact IOC order' : 'not created because verdict is not ALLOW'}`,
     `Insight decision: ${verification.decisionHash} (valid until ${verification.validUntil ? new Date(verification.validUntil * 1_000).toISOString() : 'n/a'})`,
-    'No exchange signature, authorization, or order submission was made. The bot only returned this assessment summary.',
+    'Read-only assessment. No authorization, wallet signature, or order submission is available in this Telegram flow.',
   ].join('\n')
-  return jsonFileResult(summary, { scenario: 'hyperliquid-perp', insightDecision: decision, priorSealIntent: intent, transactionAuthority: 'none' })
+  return jsonFileResult(summary, createReadOnlyScenarioArtifact('hyperliquid-perp', decision))
 }
 
 async function callInsightSwapTool(env: ScenarioEnv, args: z.infer<typeof SwapGuardSchema>): Promise<Record<string, unknown>> {
@@ -283,39 +255,14 @@ export async function assessSwapCommand(env: ScenarioEnv, payload: unknown): Pro
   assertSwapDecisionMatchesRequest(decision, input)
   const guard = isRecord(decision.guard) ? decision.guard : null
   const verdict = guard && typeof guard.verdict === 'string' ? guard.verdict : 'UNKNOWN'
-  let intents: unknown = null
-  if (verdict === 'ALLOW') {
-    if (!guard || !isRecord(guard.binding) || !isRecord(guard.transactionsToSign) || !isRecord(guard.transactionsToSign.approval) || !isRecord(guard.transactionsToSign.swap) || typeof guard.binding.chainId !== 'number' || typeof guard.binding.recipient !== 'string' || typeof guard.binding.approval !== 'object' || !guard.binding.approval || typeof guard.binding.approval.amountRaw !== 'string' || typeof guard.binding.approval.token !== 'string' || !isRecord(decision.attestation) || !isRecord(decision.attestation.data) || typeof decision.attestation.data.validUntil !== 'number') {
-      throw new Error('INSIGHT_SWAP_BINDING_MISSING')
-    }
-    const validUntil = Math.min(decision.attestation.data.validUntil, now + 120)
-    const chainId = guard.binding.chainId
-    const sender = guard.binding.recipient
-    const asset = agentSwapGuardIntentAsset(guard.binding.approval.token, chainId)
-    const amount = guard.binding.approval.amountRaw
-    const approvalTx = guard.transactionsToSign.approval
-    const swapTx = guard.transactionsToSign.swap
-    if (typeof approvalTx.to !== 'string' || typeof approvalTx.value !== 'string' || typeof approvalTx.data !== 'string' || typeof swapTx.to !== 'string' || typeof swapTx.value !== 'string' || typeof swapTx.data !== 'string' || !HEX.test(approvalTx.data) || !HEX.test(swapTx.data)) throw new Error('INSIGHT_SWAP_CALLS_MALFORMED')
-    intents = await buildAgentSwapGuardBoundIntents({
-      approval: {
-        intentId: intentId('swap-approval', decision.decisionHash as string), asset, amount, validUntil,
-        transaction: { chainId, from: sender, to: approvalTx.to, data: approvalTx.data as `0x${string}`, value: approvalTx.value, nonce: input.approvalNonce },
-      },
-      swap: {
-        intentId: intentId('swap-execution', decision.decisionHash as string), asset, amount, validUntil,
-        transaction: { chainId, from: sender, to: swapTx.to, data: swapTx.data as `0x${string}`, value: swapTx.value, nonce: input.approvalNonce + 1 },
-      },
-    }, decision, { keyRegistry: registry })
-  }
   const scope = guard && isRecord(guard.scope) ? guard.scope : null
   const market = guard && isRecord(guard.market) ? guard.market : null
   const exactInput = market && isRecord(market.exactInput) ? market.exactInput : null
   const summary = [
     `DEX swap ${String(scope?.profileId ?? input.guard.profileId)}: ${verdict}`,
     `Chain ID: ${String(scope?.chainId ?? 'n/a')} | Amount in: ${String(exactInput?.amountInRaw ?? 'not quoted')}`,
-    `PriorSeal intents: ${intents ? 'separate approval and swap calls bound to the exact signed decision' : 'not created because verdict is not ALLOW'}`,
     `Insight decision: ${String(decision.decisionHash ?? 'n/a')} (verified through trusted key registry)`,
-    'No wallet signature or transaction submission was made. The bot only returned this assessment summary.',
+    'Read-only assessment. No authorization, wallet signature, or transaction submission is available in this Telegram flow.',
   ].join('\n')
-  return jsonFileResult(summary, { scenario: 'dex-swap', insightDecision: decision, priorSealIntents: intents, transactionAuthority: 'none' })
+  return jsonFileResult(summary, createReadOnlyScenarioArtifact('dex-swap', decision))
 }

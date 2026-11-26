@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { createReadOnlyScenarioArtifact } from '../src/read-only-scenario-artifact.ts'
 import { assertSwapDecisionMatchesRequest } from '../src/swap-request-binding.ts'
 
 const request = {
@@ -77,4 +78,17 @@ test('swap request binding respects profile token decimals for reversed inputs',
   reverseDecision.guard.market.exactInput.amountInRaw = '1'
   reverseDecision.guard.oracleChecks.source.decisionPriceUsd = 1
   assert.doesNotThrow(() => assertSwapDecisionMatchesRequest(reverseDecision, reverseRequest))
+})
+
+test('read-only scenario artifacts contain only the signed assessment and no executable intent', () => {
+  const decision = { decisionHash: '0xabc', guard: { verdict: 'ALLOW' } }
+  for (const scenario of ['hyperliquid-perp', 'dex-swap'] as const) {
+    const artifact = createReadOnlyScenarioArtifact(scenario, decision)
+    assert.deepEqual(Object.keys(artifact).sort(), ['insightDecision', 'scenario', 'transactionAuthority'])
+    assert.equal(artifact.scenario, scenario)
+    assert.equal(artifact.insightDecision, decision)
+    assert.equal(artifact.transactionAuthority, 'none')
+    assert.equal('priorSealIntent' in artifact, false)
+    assert.equal('priorSealIntents' in artifact, false)
+  }
 })

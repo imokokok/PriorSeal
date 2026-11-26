@@ -173,7 +173,7 @@ async function sendTelegramScenarioArtifact(
     form.set('caption', caption.slice(0, 1_024))
     form.set('document', new Blob([content], { type: 'application/json' }), fileName)
     form.set('reply_markup', JSON.stringify({
-      inline_keyboard: [[{ text: 'Continue in PriorSeal', web_app: { url: 'https://priorseal.xyz/app/telegram-scenarios' } }]],
+      inline_keyboard: [[{ text: 'Review assessment in PriorSeal', web_app: { url: 'https://priorseal.xyz/app/telegram-scenarios' } }]],
     }))
     const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
       method: 'POST',
@@ -340,7 +340,7 @@ export default {
       return new Response('ok')
     }
     if ((command.command === 'lending' || command.command === 'perp' || command.command === 'swap') && message.chat.id <= 0) {
-      await sendTelegramMessage(env, message.chat.id, 'Open lending, Perp, and Swap flows in a private chat so wallet, order, and transaction details are not exposed in a group.')
+      await sendTelegramMessage(env, message.chat.id, 'Open lending, Perp, and Swap assessments in a private chat so your assessment inputs are not exposed in a group.')
       return new Response('ok')
     }
 
@@ -381,15 +381,15 @@ export default {
         '/check <market-slug> <up|down> — Polymarket assessment',
         '/evidence <market-id> — signed Polymarket source evidence',
         '/lending — open the Base lending Mini App',
-        '/perp <JSON> — Hyperliquid IOC assessment and PriorSeal intent verification',
-        '/swap <JSON> — reviewed DEX swap guard and PriorSeal intent verification',
-        'Open Lending, Perp, and Swap only in private chat; Perp and Swap verified assessments return a JSON artifact with the signed decision and PriorSeal intent. No trade is signed or submitted by the bot.',
-        'Perp and swap guard calls use the configured Insight API quota/credits. PriorSeal independently verifies signed decisions. Guard commands never sign or submit trades.',
+        '/perp <JSON> — read-only Hyperliquid IOC risk assessment',
+        '/swap <JSON> — read-only reviewed DEX swap risk assessment',
+        'Open Lending, Perp, and Swap only in private chat; artifacts contain signed assessments only. This bot flow has no wallet authorization or transaction/order submission.',
+        'Guard commands use the configured Insight API quota/credits. PriorSeal independently verifies signed decisions and evidence.',
       ].join('\n')
     } else if (command.command === 'lending') {
       replyMarkup = lendingMiniAppKeyboard(env)
       reply = replyMarkup
-        ? 'Open the Base lending Mini App. It checks one exact unsigned call; your wallet remains the signer and submits only after your confirmation.'
+        ? 'Open the Base lending Mini App for a read-only risk assessment of one exact unsigned call. It does not request wallet authorization or submit transactions.'
         : 'The Base lending Mini App is not configured yet. Please try again later.'
     } else if (command.command === 'perp') {
       if (!validPerp) {
@@ -407,7 +407,7 @@ export default {
       }
     } else if (command.command === 'swap') {
       if (!validSwap) {
-        reply = 'Usage: /swap {JSON with reviewed guard parameters and approvalNonce}. See docs/integrations/telegram-four-scenes.md.'
+        reply = 'Usage: /swap {JSON with reviewed guard parameters}. See docs/integrations/telegram-four-scenes.md.'
       } else {
         try {
           const result = await assessSwapCommand(env, swapPayload)
