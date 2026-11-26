@@ -30,6 +30,7 @@ class HypercorePaymentError extends Error {
     this.code = code;
     this.name = "HypercorePaymentError";
   }
+  code;
 }
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);

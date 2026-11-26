@@ -104,6 +104,7 @@ class DurableStore {
   constructor(storage) {
     this.storage = storage;
   }
+  storage;
   transactionStorage = null;
   get(key) {
     return (this.transactionStorage ?? this.storage).get(key);
@@ -132,6 +133,8 @@ class HypercorePaymentGate {
     this.env = env;
     this.store = new DurableStore(state.storage);
   }
+  state;
+  env;
   store;
   async fetch(request) {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);

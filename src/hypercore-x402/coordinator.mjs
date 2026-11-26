@@ -24,6 +24,9 @@ class HypercorePaymentCoordinator {
     this.exchange = exchange;
     this.now = now;
   }
+  store;
+  exchange;
+  now;
   async createQuote(input) {
     const timestamp = this.now();
     const amount = parseHypercoreUsdAmount(input.amount);
