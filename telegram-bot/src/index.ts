@@ -116,6 +116,19 @@ function scenarioErrorCode(error: unknown): string {
   return /^[A-Z0-9_]{1,80}$/.test(message) ? message : 'SCENARIO_REQUEST_INVALID'
 }
 
+function hasValidationIssueAtPath(error: unknown, path: string): boolean {
+  if (!isRecord(error) || !Array.isArray(error.issues)) return false
+  return error.issues.some((issue) => isRecord(issue) && Array.isArray(issue.path) && issue.path.includes(path))
+}
+
+function isSupportedPriceContractSlug(slug: string): boolean {
+  const match = /^([a-z0-9]+)-updown-(\d+)m-(\d{10,})$/.exec(slug.trim().toLowerCase())
+  if (!match) return false
+  const windowSeconds = Number(match[2]) * 60
+  const windowStartSeconds = Number(match[3])
+  return Number.isSafeInteger(windowSeconds) && windowSeconds >= 60 && Number.isSafeInteger(windowStartSeconds)
+}
+
 function lendingMiniAppKeyboard(env: Env): Record<string, unknown> | undefined {
   if (!env.LENDING_MINI_APP_URL || !env.LENDING_MINI_APP_ORIGIN) return undefined
   try {
@@ -348,7 +361,7 @@ export default {
     const [requestedSlug, requestedSide, ...extraArgs] = checkArgs
     const validCheck = command.command === 'check' && Boolean(requestedSlug && requestedSide && !extraArgs.length && requestedSlug.length <= 200 &&
       !/[\u0000-\u0020\u007f]/.test(requestedSlug) && /^[a-z0-9][a-z0-9_-]*$/i.test(requestedSlug) &&
-      ['up', 'down'].includes(requestedSide.toLowerCase()))
+      isSupportedPriceContractSlug(requestedSlug) && ['up', 'down'].includes(requestedSide.toLowerCase()))
     const evidenceArgs = command.command === 'evidence' ? command.args.split(/\s+/).filter(Boolean) : []
     const [requestedMarketId, ...extraEvidenceArgs] = evidenceArgs
     const validEvidence = command.command === 'evidence' && Boolean(requestedMarketId && !extraEvidenceArgs.length &&
@@ -402,7 +415,9 @@ export default {
         } catch (error) {
           const reason = scenarioErrorCode(error)
           console.error(JSON.stringify({ event: 'hyperliquid_perp_assessment_failed', code: reason }))
-          reply = 'Could not return a trusted Hyperliquid perp assessment right now. Please try again later.'
+          reply = hasValidationIssueAtPath(error, 'expiresAfter')
+            ? 'Invalid order.expiresAfter: use a fresh Unix timestamp in milliseconds, 5–120 seconds ahead. Generate it immediately before sending with Date.now() + 60_000; a timestamp can expire while the message is in transit.'
+            : 'Could not return a trusted Hyperliquid perp assessment right now. Please try again later.'
         }
       }
     } else if (command.command === 'swap') {
@@ -416,12 +431,17 @@ export default {
         } catch (error) {
           const reason = scenarioErrorCode(error)
           console.error(JSON.stringify({ event: 'agent_swap_assessment_failed', code: reason }))
-          reply = 'Could not return a trusted DEX swap assessment right now. Please try again later.'
+          reply = reason === 'SWAP_DEADLINE_MUST_BE_WITHIN_120_SECONDS' || hasValidationIssueAtPath(error, 'deadlineUnixSeconds')
+            ? 'Invalid guard.deadlineUnixSeconds: use a fresh Unix timestamp in seconds, no more than 120 seconds ahead. Generate it immediately before sending with Math.floor(Date.now() / 1000) + 60.'
+            : 'Could not return a trusted DEX swap assessment right now. Please try again later.'
         }
       }
     } else {
       if (command.command === 'check' && (!validCheck || !requestedSlug || !requestedSide)) {
-        reply = 'Usage: /check <market-slug> <up|down>'
+        const hasSupportedShape = Boolean(requestedSlug && isSupportedPriceContractSlug(requestedSlug))
+        if (!requestedSlug) reply = 'Usage: /check <active-market-slug> <up|down>'
+        else if (hasSupportedShape) reply = 'Usage: /check <active-market-slug> <up|down>; the side must be up or down and no extra text may follow.'
+        else reply = 'This /check currently supports short-term price contracts only, with a slug like btc-updown-5m-<10-digit Unix timestamp>. Use the slug of a currently active market; event slugs such as what-price-will-bitcoin-hit-before-2027 are not supported.'
       } else if (command.command === 'evidence' && (!validEvidence || !requestedMarketId)) {
         reply = 'Usage: /evidence <market-id>'
       } else if (command.command === 'evidence' && requestedMarketId) {
