@@ -1,6 +1,4 @@
 import {
-  baseLendingGuardIntentAsset,
-  buildBaseLendingGuardBoundIntent,
   verifyInsightBaseLendingGuardDecision,
 } from '../../sdk/src/insight-base-lending-guard.js'
 import type { InsightBaseLendingGuardDecision } from '../../sdk/src/insight-base-lending-guard.js'
@@ -35,14 +33,11 @@ export type BaseLendingAssessmentInput = {
     nonce: string | number
     value?: string | number
   }
-  intentId: string
-  validUntil: number
 }
 
 export type BaseLendingAssessment = {
   decision: InsightBaseLendingGuardDecision
   verification: { valid: true; reason: string; decisionHash: string; validUntil: number }
-  priorSealIntent: Awaited<ReturnType<typeof buildBaseLendingGuardBoundIntent>> | null
 }
 
 export type TelegramMiniAppIdentity = { userId: number; authDate: number }
@@ -59,6 +54,11 @@ export type BaseLendingWorkerEnv = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  const allowedKeys = new Set(allowed)
+  return Object.keys(value).every((key) => allowedKeys.has(key))
 }
 
 function uint(value: unknown): boolean {
@@ -121,7 +121,10 @@ export async function verifyTelegramMiniAppInitData(
 }
 
 function validateInput(value: unknown): BaseLendingAssessmentInput {
-  if (!isRecord(value) || !isRecord(value.guard) || !isRecord(value.transaction)) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['guard', 'transaction']) ||
+      !isRecord(value.guard) || !isRecord(value.transaction) ||
+      !hasOnlyKeys(value.guard, ['protocolId', 'action', 'collateralSymbol', 'loanSymbol', 'collateralValueUsd', 'debtValueUsd', 'marketId']) ||
+      !hasOnlyKeys(value.transaction, ['chainId', 'from', 'to', 'data', 'nonce', 'value'])) {
     throw new TypeError('LENDING_INPUT_INVALID')
   }
   const guard = value.guard
@@ -140,11 +143,6 @@ function validateInput(value: unknown): BaseLendingAssessmentInput {
       typeof transaction.data !== 'string' || !HEX_CALLDATA.test(transaction.data) ||
       !uint(transaction.nonce) || !uint(transaction.value ?? 0) || String(transaction.value ?? 0) !== '0') {
     throw new TypeError('LENDING_TRANSACTION_INVALID')
-  }
-  if (typeof value.intentId !== 'string' || !/^[A-Za-z0-9_-]{8,96}$/.test(value.intentId) ||
-      !Number.isSafeInteger(value.validUntil) || (value.validUntil as number) <= Math.floor(Date.now() / 1000) ||
-      (value.validUntil as number) > Math.floor(Date.now() / 1000) + 300) {
-    throw new TypeError('LENDING_INTENT_BOUNDS_INVALID')
   }
   return value as unknown as BaseLendingAssessmentInput
 }
@@ -247,16 +245,6 @@ export async function assessAndBindBaseLendingAction(
   }
   const typedDecision = decision as unknown as InsightBaseLendingGuardDecision
   assertLendingDecisionMatchesRequest(typedDecision, input)
-  const priorSealIntent = typedDecision.guard.verdict === 'ALLOW'
-    ? await buildBaseLendingGuardBoundIntent({
-        transaction: typedDecision.transaction,
-        intentId: input.intentId,
-        asset: baseLendingGuardIntentAsset(typedDecision.guard.protocolId),
-        amount: typedDecision.action.amount,
-        validUntil: input.validUntil,
-      }, typedDecision, { keyRegistry: trustedKeys })
-    : null
-
   return {
     decision: typedDecision,
     verification: {
@@ -265,13 +253,12 @@ export async function assessAndBindBaseLendingAction(
       decisionHash: verification.decisionHash,
       validUntil: verification.validUntil,
     },
-    priorSealIntent,
   }
 }
 
 /** A bounded Telegram summary that keeps the lending verdict and action proof distinct. */
 export function formatBaseLendingAssessment(result: BaseLendingAssessment): string {
-  const { decision, verification, priorSealIntent } = result
+  const { decision, verification } = result
   const guard = decision.guard
   const projected = isRecord(guard.projected) ? guard.projected : {}
   const ltv = typeof projected.ltv === 'number' && Number.isFinite(projected.ltv)
@@ -290,9 +277,9 @@ export function formatBaseLendingAssessment(result: BaseLendingAssessment): stri
     `Insight: ${displayVerdict} | LTV: ${ltv} | Liquidation buffer: ${buffer}`,
     `Decision: ${verification.decisionHash.slice(0, 10)}… | Expires: ${new Date(verification.validUntil * 1000).toISOString()}`,
     `Assessed: ${evaluatedAt}`,
-    `PriorSeal exact-call intent: ${priorSealIntent ? 'ready for user wallet authorization' : 'not available for this verdict'}`,
-    'Insight assessment is not transaction authorization or a liquidation guarantee.',
-    'No wallet key was requested; no transaction was signed or submitted.',
+    `Exact-call binding: ${decision.action.amount} units | ${decision.transaction.to}`,
+    'Read-only risk assessment; no authorization, signing, or transaction submission is available in this Telegram flow.',
+    'This assessment is not a liquidation guarantee.',
   ].join('\n')
 }
 
@@ -350,7 +337,8 @@ export async function handleBaseLendingAssessmentRequest(
   if (request.method !== 'POST') return Response.json({ success: false, message: 'Method not allowed.' }, { status: 405, headers })
   try {
     const body = await boundedRequestJson(request)
-    if (!isRecord(body) || typeof body.initData !== 'string' || !('input' in body)) throw new Error('REQUEST_INVALID')
+    if (!isRecord(body) || !hasOnlyKeys(body, ['initData', 'input']) ||
+        typeof body.initData !== 'string' || !('input' in body)) throw new Error('REQUEST_INVALID')
     if (!env.TELEGRAM_BOT_TOKEN) throw new Error('BOT_CONFIGURATION_INCOMPLETE')
     const identity = await verifyTelegramMiniAppInitData(body.initData, env.TELEGRAM_BOT_TOKEN)
     const allowedChats = env.ALLOWED_CHAT_IDS?.split(',').map((value) => value.trim()).filter(Boolean) ?? []
