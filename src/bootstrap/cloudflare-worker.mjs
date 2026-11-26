@@ -80,10 +80,13 @@ var stdin_default = {
     const redirect = httpsRedirect(request);
     if (redirect) return redirect;
     const pathname = new URL(request.url).pathname;
+    if (TELEGRAM_MINI_APP_PATHS.has(pathname)) {
+      return withSecurityHeaders(await environment.ASSETS.fetch(request), pathname);
+    }
     if (pathname === "/demo-api/base-sepolia/transaction") {
       return withSecurityHeaders(await handleBaseSepoliaDemoStatusRequest(request));
     }
-    if (!isWorkerRoute(pathname)) return withSecurityHeaders(await environment.ASSETS.fetch(request), pathname);
+    if (!isWorkerRoute(pathname)) return withSecurityHeaders(await environment.ASSETS.fetch(request));
     try {
       const response = await withRuntime(environment, context, createPriorSealRuntime, async (runtime) => {
         const handler = httpServerHandler(runtime.server);
