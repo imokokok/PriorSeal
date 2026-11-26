@@ -23,9 +23,20 @@ const SECURITY_HEADERS = Object.freeze({
   'x-permitted-cross-domain-policies': 'none',
 });
 
-function withSecurityHeaders(response: Response) {
+const TELEGRAM_MINI_APP_PATHS = new Set(['/app/lending', '/app/lending/']);
+const TELEGRAM_MINI_APP_SECURITY_HEADERS = Object.freeze({
+  'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org; form-action 'self'",
+});
+
+function withSecurityHeaders(response: Response, pathname?: string) {
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
+  if (pathname && TELEGRAM_MINI_APP_PATHS.has(pathname)) {
+    for (const [name, value] of Object.entries(TELEGRAM_MINI_APP_SECURITY_HEADERS)) headers.set(name, value);
+    // X-Frame-Options cannot express the Telegram-only allowlist. CSP frame-ancestors
+    // above remains restrictive while allowing the Telegram Web Mini App host.
+    headers.delete('x-frame-options');
+  }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -92,7 +103,7 @@ export default {
     if (pathname === '/demo-api/base-sepolia/transaction') {
       return withSecurityHeaders(await handleBaseSepoliaDemoStatusRequest(request));
     }
-    if (!isWorkerRoute(pathname)) return withSecurityHeaders(await environment.ASSETS.fetch(request));
+    if (!isWorkerRoute(pathname)) return withSecurityHeaders(await environment.ASSETS.fetch(request), pathname);
     try {
       const response = await withRuntime(environment, context, createPriorSealRuntime, async (runtime) => {
         // The Node adapter's declared server and request shapes are narrower than
