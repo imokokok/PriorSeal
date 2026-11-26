@@ -8,6 +8,7 @@ import {
   buildHyperliquidPerpGuardBoundIntent,
   verifyInsightHyperliquidPerpGuardDecision,
 } from '../../sdk/src/insight-hyperliquid-perp-guard.js'
+import { assertSwapDecisionMatchesRequest } from './swap-request-binding.js'
 import type { KeyRegistry } from 'verify-insight-receipt'
 
 type ScenarioEnv = {
@@ -205,26 +206,6 @@ export function assertPerpDecisionMatchesRequest(
       venue.observedAssetIndex !== requestedOrder.a || !sameJson(decisionOrder, input.order)) {
     throw new Error('INSIGHT_DECISION_REQUEST_MISMATCH')
   }
-}
-
-/** Compare the attested swap profile, user, and risk policy with the submitted request. */
-export function assertSwapDecisionMatchesRequest(
-  decision: Record<string, unknown>,
-  input: z.infer<typeof SwapRequestSchema>,
-): void {
-  const guard = isRecord(decision.guard) ? decision.guard : null
-  const scope = guard && isRecord(guard.scope) ? guard.scope : null
-  const binding = guard && isRecord(guard.binding) ? guard.binding : null
-  const policy = guard && isRecord(guard.policy) ? guard.policy : null
-  if (!guard || !scope || !policy ||
-      scope.profileId !== input.guard.profileId ||
-      !sameJson(policy, input.guard.policy)) {
-    throw new Error('INSIGHT_DECISION_REQUEST_MISMATCH')
-  }
-  if (binding && (typeof binding.recipient !== 'string' || binding.recipient.toLowerCase() !== input.guard.recipient.toLowerCase())) {
-    throw new Error('INSIGHT_DECISION_REQUEST_MISMATCH')
-  }
-  if (guard.verdict === 'ALLOW' && !binding) throw new Error('INSIGHT_DECISION_REQUEST_MISMATCH')
 }
 
 export async function assessHyperliquidCommand(env: ScenarioEnv, payload: unknown): Promise<{ summary: string; artifact: Record<string, unknown> }> {
