@@ -21,8 +21,8 @@
     },
     {
       "path": "verify.mjs",
-      "bytes": 200250,
-      "sha256": "d16a3710443342e16add77a94fd506bc9c569cfde8407f40fd5fb156ce9734ad"
+      "bytes": 212527,
+      "sha256": "056aa376e18da3b5e93b24aa0f6aa82b54425e0de78895f132b778c782542f33"
     },
     {
       "path": "fixture/generated/cases.json",

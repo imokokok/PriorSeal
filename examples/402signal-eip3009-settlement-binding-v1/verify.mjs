@@ -125,28 +125,14 @@ var init_formatAbiItem2 = __esm({
   }
 });
 
-// node_modules/viem/_esm/utils/data/isHex.js
-function isHex(value, { strict = true } = {}) {
-  if (!value)
-    return false;
-  if (typeof value !== "string")
-    return false;
-  return strict ? /^0x[0-9a-fA-F]*$/.test(value) : value.startsWith("0x");
-}
-var init_isHex = __esm({
-  "node_modules/viem/_esm/utils/data/isHex.js"() {
-  }
-});
-
 // node_modules/viem/_esm/utils/data/size.js
 function size(value) {
-  if (isHex(value, { strict: false }))
+  if (typeof value === "string" && value.startsWith("0x"))
     return Math.ceil((value.length - 2) / 2);
   return value.length;
 }
 var init_size = __esm({
   "node_modules/viem/_esm/utils/data/size.js"() {
-    init_isHex();
   }
 });
 
@@ -154,7 +140,7 @@ var init_size = __esm({
 var version;
 var init_version = __esm({
   "node_modules/viem/_esm/errors/version.js"() {
-    version = "2.56.3";
+    version = "2.58.1";
   }
 });
 
@@ -417,7 +403,7 @@ var init_abi = __esm({
         super([
           `Type "${type}" is not a valid encoding type.`,
           "Please provide a valid ABI type."
-        ].join("\n"), { docsPath: docsPath2, name: "InvalidAbiEncodingType" });
+        ].join("\n"), { docsPath: docsPath2, name: "InvalidAbiEncodingTypeError" });
       }
     };
     InvalidAbiDecodingTypeError = class extends BaseError {
@@ -425,7 +411,7 @@ var init_abi = __esm({
         super([
           `Type "${type}" is not a valid decoding type.`,
           "Please provide a valid ABI type."
-        ].join("\n"), { docsPath: docsPath2, name: "InvalidAbiDecodingType" });
+        ].join("\n"), { docsPath: docsPath2, name: "InvalidAbiDecodingTypeError" });
       }
     };
     InvalidArrayError = class extends BaseError {
@@ -443,6 +429,21 @@ var init_abi = __esm({
         ].join("\n"), { name: "InvalidDefinitionTypeError" });
       }
     };
+  }
+});
+
+// node_modules/viem/_esm/utils/data/isHex.js
+function isHex(value, { even = false, strict = true } = {}) {
+  if (!value)
+    return false;
+  if (typeof value !== "string")
+    return false;
+  if (even && value.length % 2 !== 0)
+    return false;
+  return strict ? /^0x[0-9a-fA-F]*$/.test(value) : value.startsWith("0x");
+}
+var init_isHex = __esm({
+  "node_modules/viem/_esm/utils/data/isHex.js"() {
   }
 });
 
@@ -473,7 +474,7 @@ function pad(hexOrBytes, { dir, size: size2 = 32 } = {}) {
 function padHex(hex_, { dir, size: size2 = 32 } = {}) {
   if (size2 === null)
     return hex_;
-  const hex2 = hex_.replace("0x", "");
+  const hex2 = hex_.startsWith("0x") ? hex_.slice(2) : hex_.replace("0x", "");
   if (hex2.length > size2 * 2)
     throw new SizeExceedsPaddingSizeError({
       size: Math.ceil(hex2.length / 2),
@@ -492,6 +493,11 @@ function padBytes(bytes, { dir, size: size2 = 32 } = {}) {
       type: "bytes"
     });
   const paddedBytes = new Uint8Array(size2);
+  if (Number.isSafeInteger(size2)) {
+    if (bytes.length > 0)
+      paddedBytes.set(bytes, dir === "right" ? 0 : size2 - bytes.length);
+    return paddedBytes;
+  }
   for (let i = 0; i < size2; i++) {
     const padEnd = dir === "right";
     paddedBytes[padEnd ? i : size2 - i - 1] = bytes[padEnd ? i : bytes.length - i - 1];
@@ -531,21 +537,32 @@ var init_encoding = __esm({
 
 // node_modules/viem/_esm/utils/data/trim.js
 function trim(hexOrBytes, { dir = "left" } = {}) {
-  let data = typeof hexOrBytes === "string" ? hexOrBytes.replace("0x", "") : hexOrBytes;
-  let sliceLength = 0;
-  for (let i = 0; i < data.length - 1; i++) {
-    if (data[dir === "left" ? i : data.length - i - 1].toString() === "0")
-      sliceLength++;
-    else
-      break;
-  }
-  data = dir === "left" ? data.slice(sliceLength) : data.slice(0, data.length - sliceLength);
   if (typeof hexOrBytes === "string") {
-    if (data.length === 1 && dir === "right")
-      data = `${data}0`;
-    return `0x${data.length % 2 === 1 ? `0${data}` : data}`;
+    let data2 = hexOrBytes.startsWith("0x") ? hexOrBytes.slice(2) : hexOrBytes.replace("0x", "");
+    let count2 = 0;
+    if (dir === "left") {
+      while (count2 < data2.length - 1 && data2.charCodeAt(count2) === 48)
+        count2++;
+      data2 = data2.slice(count2);
+    } else {
+      while (count2 < data2.length - 2 && data2.charCodeAt(data2.length - count2 - 1) === 48 && data2.charCodeAt(data2.length - count2 - 2) === 48)
+        count2 += 2;
+      data2 = data2.slice(0, data2.length - count2);
+    }
+    if (data2.length === 1 && dir === "right")
+      data2 = `${data2}0`;
+    return `0x${data2.length % 2 === 1 ? `0${data2}` : data2}`;
   }
-  return data;
+  const data = hexOrBytes;
+  let count = 0;
+  if (dir === "left") {
+    while (count < data.length - 1 && data[count] === 0)
+      count++;
+    return data.slice(count);
+  }
+  while (count < data.length - 1 && data[data.length - count - 1] === 0)
+    count++;
+  return data.slice(0, data.length - count);
 }
 var init_trim = __esm({
   "node_modules/viem/_esm/utils/data/trim.js"() {
@@ -571,17 +588,25 @@ function hexToBigInt(hex2, opts = {}) {
   const max = (1n << BigInt(size2) * 8n - 1n) - 1n;
   if (value <= max)
     return value;
+  if (typeof hex2 === "string" && hex2.startsWith("0x"))
+    return BigInt.asIntN(size2 * 8, value);
   return value - BigInt(`0x${"f".padStart(size2 * 2, "f")}`) - 1n;
 }
 function hexToNumber(hex2, opts = {}) {
+  const { signed, size: size2 } = opts;
+  if (!signed && !size2 && typeof hex2 === "string" && hex2.startsWith("0x")) {
+    const number2 = Number(hex2);
+    if (Number.isSafeInteger(number2))
+      return number2;
+  }
   const value = hexToBigInt(hex2, opts);
   const number = Number(value);
   if (!Number.isSafeInteger(number))
     throw new IntegerOutOfRangeError({
       max: `${Number.MAX_SAFE_INTEGER}`,
       min: `${Number.MIN_SAFE_INTEGER}`,
-      signed: opts.signed,
-      size: opts.size,
+      signed,
+      size: size2,
       value: `${value}n`
     });
   return number;
@@ -614,9 +639,12 @@ function boolToHex(value, opts = {}) {
 }
 function bytesToHex(value, opts = {}) {
   let string = "";
-  for (let i = 0; i < value.length; i++) {
-    string += hexes[value[i]];
-  }
+  if (nativeToHex && value instanceof Uint8Array && value.length > 0)
+    string = nativeToHex.call(value);
+  else
+    for (let i = 0; i < value.length; i++) {
+      string += hexes[value[i]];
+    }
   const hex2 = `0x${string}`;
   if (typeof opts.size === "number") {
     assertSize(hex2, { size: opts.size });
@@ -626,6 +654,13 @@ function bytesToHex(value, opts = {}) {
 }
 function numberToHex(value_, opts = {}) {
   const { signed, size: size2 } = opts;
+  if (!signed && (typeof value_ === "bigint" ? value_ >= 0n : Number.isSafeInteger(value_) && value_ >= 0)) {
+    const hex3 = value_.toString(16);
+    if (!size2)
+      return `0x${hex3}`;
+    if (Number.isSafeInteger(size2) && size2 > 0 && hex3.length <= size2 * 2)
+      return `0x${hex3.padStart(size2 * 2, "0")}`;
+  }
   const value = BigInt(value_);
   let maxValue;
   if (size2) {
@@ -653,17 +688,17 @@ function numberToHex(value_, opts = {}) {
   return hex2;
 }
 function stringToHex(value_, opts = {}) {
-  const value = encoder.encode(value_);
-  return bytesToHex(value, opts);
+  return bytesToHex(stringToBytes(value_), opts);
 }
-var hexes, encoder;
+var hexes, nativeToHex;
 var init_toHex = __esm({
   "node_modules/viem/_esm/utils/encoding/toHex.js"() {
     init_encoding();
     init_pad();
     init_fromHex();
+    init_toBytes();
     hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_v, i) => i.toString(16).padStart(2, "0"));
-    encoder = /* @__PURE__ */ new TextEncoder();
+    nativeToHex = /* @__PURE__ */ (() => Uint8Array.prototype.toHex)();
   }
 });
 
@@ -673,6 +708,11 @@ function toBytes(value, opts = {}) {
     return numberToBytes(value, opts);
   if (typeof value === "boolean")
     return boolToBytes(value, opts);
+  if (!opts.size && typeof value === "string" && value.startsWith("0x")) {
+    const bytes = decodeHex(value);
+    if (bytes)
+      return bytes;
+  }
   if (isHex(value))
     return hexToBytes(value, opts);
   return stringToBytes(value, opts);
@@ -686,6 +726,30 @@ function boolToBytes(value, opts = {}) {
   }
   return bytes;
 }
+function decodeHex(hex2, size2) {
+  const odd = hex2.length & 1;
+  const length = hex2.length - 1 >> 1;
+  const bytes = new Uint8Array(size2 || length);
+  let i = 0;
+  let j = 2;
+  if (odd) {
+    const code = hex2.charCodeAt(j++);
+    const nibble = code < 128 ? nibbles[code] : -1;
+    if (nibble < 0)
+      return void 0;
+    bytes[i++] = nibble;
+  }
+  for (; i < length; i++) {
+    const a = hex2.charCodeAt(j++);
+    const b = hex2.charCodeAt(j++);
+    const high = a < 128 ? nibbles[a] : -1;
+    const low = b < 128 ? nibbles[b] : -1;
+    if ((high | low) < 0)
+      return void 0;
+    bytes[i] = high << 4 | low;
+  }
+  return bytes;
+}
 function charCodeToBase16(char) {
   if (char >= charCodeMap.zero && char <= charCodeMap.nine)
     return char - charCodeMap.zero;
@@ -695,15 +759,22 @@ function charCodeToBase16(char) {
     return char - (charCodeMap.a - 10);
   return void 0;
 }
-function hexToBytes(hex_, opts = {}) {
-  let hex2 = hex_;
-  if (opts.size) {
-    assertSize(hex2, { size: opts.size });
-    hex2 = pad(hex2, { dir: "right", size: opts.size });
+function hexToBytes(hex2, opts = {}) {
+  const size2 = opts.size;
+  if (typeof hex2 === "string" && hex2.length >= 2 && (!size2 || Number.isSafeInteger(size2) && size2 > 0)) {
+    if (size2)
+      assertSize(hex2, { size: size2 });
+    const bytes2 = decodeHex(hex2, size2);
+    if (bytes2)
+      return bytes2;
   }
   let hexString = hex2.slice(2);
   if (hexString.length % 2)
     hexString = `0${hexString}`;
+  if (opts.size) {
+    assertSize(hex2, { size: opts.size });
+    hexString = hexString.padEnd(opts.size * 2, "0");
+  }
   const length = hexString.length / 2;
   const bytes = new Uint8Array(length);
   for (let index = 0, j = 0; index < length; index++) {
@@ -721,14 +792,28 @@ function numberToBytes(value, opts) {
   return hexToBytes(hex2);
 }
 function stringToBytes(value, opts = {}) {
-  const bytes = encoder2.encode(value);
+  const bytes = (() => {
+    if (typeof value === "string" && value.length <= 64) {
+      const bytes2 = new Uint8Array(value.length);
+      let i = 0;
+      for (; i < value.length; i++) {
+        const code = value.charCodeAt(i);
+        if (code > 127)
+          break;
+        bytes2[i] = code;
+      }
+      if (i === value.length)
+        return bytes2;
+    }
+    return encoder.encode(value);
+  })();
   if (typeof opts.size === "number") {
     assertSize(bytes, { size: opts.size });
     return pad(bytes, { dir: "right", size: opts.size });
   }
   return bytes;
 }
-var encoder2, charCodeMap;
+var encoder, nibbles, charCodeMap;
 var init_toBytes = __esm({
   "node_modules/viem/_esm/utils/encoding/toBytes.js"() {
     init_base();
@@ -736,7 +821,15 @@ var init_toBytes = __esm({
     init_pad();
     init_fromHex();
     init_toHex();
-    encoder2 = /* @__PURE__ */ new TextEncoder();
+    encoder = /* @__PURE__ */ new TextEncoder();
+    nibbles = /* @__PURE__ */ (() => {
+      const table = new Int8Array(128).fill(-1);
+      for (let i = 0; i < 10; i++)
+        table[48 + i] = i;
+      for (let i = 0; i < 6; i++)
+        table[65 + i] = table[97 + i] = 10 + i;
+      return table;
+    })();
     charCodeMap = {
       zero: 48,
       nine: 57,
@@ -829,11 +922,11 @@ function clean(...arrays) {
 function createView(arr) {
   return new DataView(arr.buffer, arr.byteOffset, arr.byteLength);
 }
-function rotr(word, shift) {
-  return word << 32 - shift | word >>> shift;
+function rotr(word2, shift) {
+  return word2 << 32 - shift | word2 >>> shift;
 }
-function byteSwap(word) {
-  return word << 24 & 4278190080 | word << 8 & 16711680 | word >>> 8 & 65280 | word >>> 24 & 255;
+function byteSwap(word2) {
+  return word2 << 24 & 4278190080 | word2 << 8 & 16711680 | word2 >>> 8 & 65280 | word2 >>> 24 & 255;
 }
 function byteSwap32(arr) {
   for (let i = 0; i < arr.length; i++) {
@@ -1100,124 +1193,6 @@ var init_keccak256 = __esm({
   }
 });
 
-// node_modules/viem/_esm/utils/hash/hashSignature.js
-function hashSignature(sig) {
-  return hash(sig);
-}
-var hash;
-var init_hashSignature = __esm({
-  "node_modules/viem/_esm/utils/hash/hashSignature.js"() {
-    init_toBytes();
-    init_keccak256();
-    hash = (value) => keccak256(toBytes(value));
-  }
-});
-
-// node_modules/viem/_esm/utils/hash/normalizeSignature.js
-function normalizeSignature(signature) {
-  let active = true;
-  let current = "";
-  let level = 0;
-  let result = "";
-  let valid = false;
-  for (let i = 0; i < signature.length; i++) {
-    const char = signature[i];
-    if (["(", ")", ","].includes(char))
-      active = true;
-    if (char === "(")
-      level++;
-    if (char === ")")
-      level--;
-    if (!active)
-      continue;
-    if (level === 0) {
-      if (char === " " && ["event", "function", ""].includes(result))
-        result = "";
-      else {
-        result += char;
-        if (char === ")") {
-          valid = true;
-          break;
-        }
-      }
-      continue;
-    }
-    if (char === " ") {
-      if (signature[i - 1] !== "," && current !== "," && current !== ",(") {
-        current = "";
-        active = false;
-      }
-      continue;
-    }
-    result += char;
-    current += char;
-  }
-  if (!valid)
-    throw new BaseError("Unable to normalize signature.");
-  return result;
-}
-var init_normalizeSignature = __esm({
-  "node_modules/viem/_esm/utils/hash/normalizeSignature.js"() {
-    init_base();
-  }
-});
-
-// node_modules/viem/_esm/utils/hash/toSignature.js
-var toSignature;
-var init_toSignature = __esm({
-  "node_modules/viem/_esm/utils/hash/toSignature.js"() {
-    init_exports();
-    init_normalizeSignature();
-    toSignature = (def) => {
-      const def_ = (() => {
-        if (typeof def === "string")
-          return def;
-        return formatAbiItem(def);
-      })();
-      return normalizeSignature(def_);
-    };
-  }
-});
-
-// node_modules/viem/_esm/utils/hash/toSignatureHash.js
-function toSignatureHash(fn) {
-  return hashSignature(toSignature(fn));
-}
-var init_toSignatureHash = __esm({
-  "node_modules/viem/_esm/utils/hash/toSignatureHash.js"() {
-    init_hashSignature();
-    init_toSignature();
-  }
-});
-
-// node_modules/viem/_esm/utils/hash/toEventSelector.js
-var toEventSelector;
-var init_toEventSelector = __esm({
-  "node_modules/viem/_esm/utils/hash/toEventSelector.js"() {
-    init_toSignatureHash();
-    toEventSelector = toSignatureHash;
-  }
-});
-
-// node_modules/viem/_esm/errors/address.js
-var InvalidAddressError;
-var init_address = __esm({
-  "node_modules/viem/_esm/errors/address.js"() {
-    init_base();
-    InvalidAddressError = class extends BaseError {
-      constructor({ address }) {
-        super(`Address "${address}" is invalid.`, {
-          metaMessages: [
-            "- Address must be a hex value of 20 bytes (40 hex characters).",
-            "- Address must match its checksum counterpart."
-          ],
-          name: "InvalidAddressError"
-        });
-      }
-    };
-  }
-});
-
 // node_modules/viem/_esm/utils/lru.js
 var LruMap;
 var init_lru = __esm({
@@ -1256,11 +1231,142 @@ var init_lru = __esm({
   }
 });
 
+// node_modules/viem/_esm/utils/hash/hashSignature.js
+function hashSignature(sig) {
+  return hash(sig);
+}
+var hash;
+var init_hashSignature = __esm({
+  "node_modules/viem/_esm/utils/hash/hashSignature.js"() {
+    init_toBytes();
+    init_keccak256();
+    hash = (value) => keccak256(toBytes(value));
+  }
+});
+
+// node_modules/viem/_esm/utils/hash/normalizeSignature.js
+function normalizeSignature(signature) {
+  let active = true;
+  let current = "";
+  let level = 0;
+  let result = "";
+  let valid = false;
+  for (let i = 0; i < signature.length; i++) {
+    const char = signature[i];
+    if (char === "(" || char === ")" || char === ",")
+      active = true;
+    if (char === "(")
+      level++;
+    if (char === ")")
+      level--;
+    if (!active)
+      continue;
+    if (level === 0) {
+      if (char === " " && (result === "event" || result === "function" || result === "error" || result === ""))
+        result = "";
+      else {
+        result += char;
+        if (char === ")") {
+          valid = true;
+          break;
+        }
+      }
+      continue;
+    }
+    if (char === " ") {
+      if (!current.endsWith(",") && !current.endsWith("(")) {
+        current = "";
+        active = false;
+      }
+      continue;
+    }
+    result += char;
+    current += char;
+  }
+  if (!valid)
+    throw new BaseError("Unable to normalize signature.");
+  return result;
+}
+var init_normalizeSignature = __esm({
+  "node_modules/viem/_esm/utils/hash/normalizeSignature.js"() {
+    init_base();
+  }
+});
+
+// node_modules/viem/_esm/utils/hash/toSignature.js
+var toSignature;
+var init_toSignature = __esm({
+  "node_modules/viem/_esm/utils/hash/toSignature.js"() {
+    init_exports();
+    init_normalizeSignature();
+    toSignature = (def) => {
+      const def_ = (() => {
+        if (typeof def === "string")
+          return def;
+        return formatAbiItem(def);
+      })();
+      return normalizeSignature(def_);
+    };
+  }
+});
+
+// node_modules/viem/_esm/utils/hash/toSignatureHash.js
+function toSignatureHash(fn) {
+  const definition = typeof fn === "string" ? fn : formatAbiItem(fn);
+  const cached = signatureHashCache.get(definition);
+  if (cached)
+    return cached;
+  const hash2 = hashSignature(toSignature(definition));
+  signatureHashCache.set(definition, hash2);
+  return hash2;
+}
+var signatureHashCache;
+var init_toSignatureHash = __esm({
+  "node_modules/viem/_esm/utils/hash/toSignatureHash.js"() {
+    init_exports();
+    init_lru();
+    init_hashSignature();
+    init_toSignature();
+    signatureHashCache = /* @__PURE__ */ new LruMap(8192);
+  }
+});
+
+// node_modules/viem/_esm/utils/hash/toEventSelector.js
+var toEventSelector;
+var init_toEventSelector = __esm({
+  "node_modules/viem/_esm/utils/hash/toEventSelector.js"() {
+    init_toSignatureHash();
+    toEventSelector = toSignatureHash;
+  }
+});
+
+// node_modules/viem/_esm/errors/address.js
+var InvalidAddressError;
+var init_address = __esm({
+  "node_modules/viem/_esm/errors/address.js"() {
+    init_base();
+    InvalidAddressError = class extends BaseError {
+      constructor({ address }) {
+        super(`Address "${address}" is invalid.`, {
+          metaMessages: [
+            "- Address must be a hex value of 20 bytes (40 hex characters).",
+            "- Address must match its checksum counterpart."
+          ],
+          name: "InvalidAddressError"
+        });
+      }
+    };
+  }
+});
+
 // node_modules/viem/_esm/utils/address/getAddress.js
 function checksumAddress(address_, chainId) {
-  if (checksumAddressCache.has(`${address_}.${chainId}`))
-    return checksumAddressCache.get(`${address_}.${chainId}`);
-  const hexAddress = chainId ? `${chainId}${address_.toLowerCase()}` : address_.substring(2).toLowerCase();
+  const lower2 = address_.toLowerCase();
+  const cacheKey = `${lower2}.${chainId}`;
+  const cached = checksumAddressCache.get(cacheKey);
+  if (cached)
+    return cached;
+  const hexAddress = chainId ? `${chainId}${lower2}` : lower2.substring(2);
   const hash2 = keccak256(stringToBytes(hexAddress), "bytes");
   const address = (chainId ? hexAddress.substring(`${chainId}0x`.length) : hexAddress).split("");
   for (let i = 0; i < 40; i += 2) {
@@ -1272,7 +1378,7 @@ function checksumAddress(address_, chainId) {
     }
   }
   const result = `0x${address.join("")}`;
-  checksumAddressCache.set(`${address_}.${chainId}`, result);
+  checksumAddressCache.set(cacheKey, result);
   return result;
 }
 function getAddress(address, chainId) {
@@ -1295,19 +1401,15 @@ var init_getAddress = __esm({
 // node_modules/viem/_esm/utils/address/isAddress.js
 function isAddress(address, options) {
   const { strict = true } = options ?? {};
-  const cacheKey = `${address}.${strict}`;
-  if (isAddressCache.has(cacheKey))
-    return isAddressCache.get(cacheKey);
-  const result = (() => {
-    if (!addressRegex.test(address))
-      return false;
-    if (address.toLowerCase() === address)
-      return true;
-    if (strict)
-      return checksumAddress(address) === address;
+  if (!addressRegex.test(address))
+    return false;
+  if (!strict || address.toLowerCase() === address)
     return true;
-  })();
-  isAddressCache.set(cacheKey, result);
+  let result = isAddressCache.get(address);
+  if (result === void 0) {
+    result = checksumAddress(address) === address;
+    isAddressCache.set(address, result);
+  }
   return result;
 }
 var addressRegex, isAddressCache;
@@ -1340,10 +1442,291 @@ function concatBytes2(values) {
   return result;
 }
 function concatHex(values) {
-  return `0x${values.reduce((acc, x) => acc + x.replace("0x", ""), "")}`;
+  let result = "";
+  for (const value of values)
+    result += value.startsWith("0x") ? value.slice(2) : value.replace("0x", "");
+  return `0x${result}`;
 }
 var init_concat = __esm({
   "node_modules/viem/_esm/utils/data/concat.js"() {
+  }
+});
+
+// node_modules/viem/_esm/utils/regex.js
+var bytesRegex, integerRegex;
+var init_regex2 = __esm({
+  "node_modules/viem/_esm/utils/regex.js"() {
+    bytesRegex = /^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/;
+    integerRegex = /^(u?int)(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/;
+  }
+});
+
+// node_modules/viem/_esm/utils/abi/encodeAbiParameters.js
+function encodeAbiParameters(params, values) {
+  if (params.length !== values.length)
+    throw new AbiEncodingLengthMismatchError({
+      expectedLength: params.length,
+      givenLength: values.length
+    });
+  const compiled = new Array(params.length);
+  const parts = new Array(params.length);
+  for (let i = 0; i < params.length; i++) {
+    compiled[i] = compile(params[i]);
+    parts[i] = encode(compiled[i], values[i]);
+  }
+  return ["0x", encodeParts(compiled, parts)].join("");
+}
+function compile(param) {
+  const compiled = {
+    child: void 0,
+    components: void 0,
+    dynamic: false,
+    kind: "other",
+    length: null,
+    max: 0n,
+    min: 0n,
+    param,
+    signed: false,
+    size: 0
+  };
+  if (typeof param !== "object" || param === null)
+    return compiled;
+  const { type } = param;
+  if (typeof type !== "string")
+    return compiled;
+  const arrayComponents = getArrayComponents(type);
+  if (arrayComponents) {
+    const [length, innerType] = arrayComponents;
+    const child = compile({ ...param, type: innerType });
+    compiled.kind = "array";
+    compiled.length = length;
+    compiled.child = child;
+    compiled.dynamic = length === null || child.dynamic;
+    return compiled;
+  }
+  if (type === "tuple") {
+    const { components } = param;
+    if (components === void 0 || components === null)
+      return compiled;
+    compiled.kind = "tuple";
+    compiled.components = Array.from({ length: components.length }, (_, i) => compile(components[i]));
+    compiled.dynamic = compiled.components.some(({ dynamic }) => dynamic);
+    return compiled;
+  }
+  if (type === "address")
+    compiled.kind = "address";
+  else if (type === "bool")
+    compiled.kind = "bool";
+  else if (type.startsWith("uint") || type.startsWith("int")) {
+    const signed = type.startsWith("int");
+    const [, , size2 = "256"] = integerRegex.exec(type) ?? [];
+    const key = signed ? `i${size2}` : size2;
+    let bounds = integerBounds.get(key);
+    if (!bounds) {
+      const max = 2n ** (BigInt(size2) - (signed ? 1n : 0n)) - 1n;
+      bounds = [signed ? -max - 1n : 0n, max];
+      integerBounds.set(key, bounds);
+    }
+    compiled.kind = "number";
+    compiled.signed = signed;
+    compiled.size = Number(size2);
+    compiled.min = bounds[0];
+    compiled.max = bounds[1];
+  } else if (type.startsWith("bytes")) {
+    compiled.kind = "bytes";
+    compiled.size = bytesRegex.test(type) ? Number(type.slice(5)) : -1;
+    compiled.dynamic = !type.split("bytes")[1];
+  } else if (type === "string") {
+    compiled.kind = "string";
+    compiled.dynamic = true;
+  }
+  return compiled;
+}
+function encode(compiled, value) {
+  const { kind, param } = compiled;
+  if (kind === "array")
+    return encodeArrayValue(compiled, value);
+  if (kind === "tuple")
+    return encodeTupleValue(compiled, value);
+  if (kind === "address") {
+    if (!isAddress(value))
+      throw new InvalidAddressError({ address: value });
+    return `000000000000000000000000${value.toLowerCase().slice(2)}`;
+  }
+  if (kind === "bool") {
+    if (typeof value !== "boolean")
+      throw new BaseError(`Invalid boolean value: "${value}" (type: ${typeof value}). Expected: \`true\` or \`false\`.`);
+    return value ? `${zeros.slice(1)}1` : zeros;
+  }
+  if (kind === "bytes") {
+    const { size: size2 } = compiled;
+    if (typeof value === "string" && value.length % 2 === 0 && value.startsWith("0x") && value.indexOf("0x", 2) === -1) {
+      const data = value.slice(2);
+      const length = data.length / 2;
+      if (size2 === 0)
+        return word(length) + data.padEnd(Math.ceil(length / 32) * 64, "0");
+      if (length === size2)
+        return data.padEnd(64, "0");
+    }
+    return encodeBytes(value, { param }).encoded.slice(2);
+  }
+  if (kind === "number") {
+    const { max, min, signed, size: size2 } = compiled;
+    if (value > max || value < min)
+      throw new IntegerOutOfRangeError({
+        max: max.toString(),
+        min: min.toString(),
+        signed,
+        size: size2 / 8,
+        value: value.toString()
+      });
+    if (typeof value !== "bigint" && !(typeof value === "number" && Number.isSafeInteger(value)))
+      return numberToHex(value, { size: 32, signed }).slice(2);
+    const hex2 = (value < 0 ? (1n << 256n) + BigInt(value) : value).toString(16);
+    return zeros.slice(hex2.length) + hex2;
+  }
+  if (kind === "string") {
+    const data = stringToHex(value).slice(2);
+    const remainder = data.length % 64;
+    return word(data.length / 2) + data + (remainder ? zeros.slice(remainder) : "");
+  }
+  const type = param.type;
+  getArrayComponents(type);
+  if (type === "tuple")
+    param.components.length;
+  throw new InvalidAbiEncodingTypeError(type, {
+    docsPath: "/docs/contract/encodeAbiParameters"
+  });
+}
+function encodeArrayValue(compiled, value) {
+  const { length } = compiled;
+  const child = compiled.child;
+  if (!Array.isArray(value))
+    throw new InvalidArrayError(value);
+  if (length !== null && value.length !== length)
+    throw new AbiEncodingArrayLengthMismatchError({
+      expectedLength: length,
+      givenLength: value.length,
+      type: `${child.param.type}[${length}]`
+    });
+  const dynamicChild = value.length === 0 ? isDynamicType(child.param) : child.dynamic;
+  let data = "";
+  if (dynamicChild) {
+    let head = "";
+    let offset = value.length * 32;
+    for (let i = 0; i < value.length; i++) {
+      const part = encode(child, value[i]);
+      head += word(offset);
+      data += part;
+      offset += Math.ceil(part.length / 2);
+    }
+    data = head + data;
+  } else
+    for (let i = 0; i < value.length; i++)
+      data += encode(child, value[i]);
+  if (length === null)
+    return word(value.length) + data;
+  return data;
+}
+function encodeTupleValue(compiled, value) {
+  const components = compiled.components;
+  const isArray = Array.isArray(value);
+  const parts = new Array(components.length);
+  for (let i = 0; i < components.length; i++) {
+    const component = components[i];
+    parts[i] = encode(component, value[isArray ? i : component.param.name]);
+  }
+  if (compiled.dynamic)
+    return encodeParts(components, parts);
+  let data = "";
+  for (let i = 0; i < parts.length; i++)
+    data += parts[i];
+  return data;
+}
+function encodeParts(compiled, parts) {
+  let offset = 0;
+  for (let i = 0; i < parts.length; i++)
+    offset += compiled[i].dynamic ? 32 : Math.ceil(parts[i].length / 2);
+  let head = "";
+  let tail = "";
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (compiled[i].dynamic) {
+      head += word(offset);
+      tail += part;
+      offset += Math.ceil(part.length / 2);
+    } else
+      head += part;
+  }
+  return head + tail;
+}
+function word(value) {
+  const hex2 = value.toString(16);
+  return zeros.slice(hex2.length) + hex2;
+}
+function encodeBytes(value, { param }) {
+  const [, paramSize] = param.type.split("bytes");
+  const hex2 = value.length % 2 ? `0x0${value.slice(2)}` : value;
+  const bytesSize = size(hex2);
+  if (!paramSize) {
+    let value_ = hex2;
+    if (bytesSize % 32 !== 0)
+      value_ = padHex(value_, {
+        dir: "right",
+        size: Math.ceil(bytesSize / 32) * 32
+      });
+    return {
+      dynamic: true,
+      encoded: concatHex([
+        padHex(numberToHex(bytesSize, { size: 32 })),
+        value_
+      ])
+    };
+  }
+  if (bytesSize !== Number.parseInt(paramSize, 10))
+    throw new AbiEncodingBytesSizeMismatchError({
+      expectedSize: Number.parseInt(paramSize, 10),
+      value
+    });
+  return { dynamic: false, encoded: padHex(hex2, { dir: "right" }) };
+}
+function getArrayComponents(type) {
+  const matches = type.match(/^(.*)\[(\d+)?\]$/);
+  return matches ? (
+    // Return `null` if the array is dynamic.
+    [matches[2] ? Number(matches[2]) : null, matches[1]]
+  ) : void 0;
+}
+function isDynamicType(param) {
+  const { type } = param;
+  if (type === "string")
+    return true;
+  if (type === "bytes")
+    return true;
+  if (type.endsWith("[]"))
+    return true;
+  if (type === "tuple")
+    return param.components.some(isDynamicType);
+  const arrayComponents = getArrayComponents(type);
+  if (arrayComponents)
+    return isDynamicType({ ...param, type: arrayComponents[1] });
+  return false;
+}
+var zeros, integerBounds;
+var init_encodeAbiParameters = __esm({
+  "node_modules/viem/_esm/utils/abi/encodeAbiParameters.js"() {
+    init_abi();
+    init_address();
+    init_base();
+    init_encoding();
+    init_isAddress();
+    init_concat();
+    init_pad();
+    init_size();
+    init_toHex();
+    init_regex2();
+    zeros = "0".repeat(64);
+    integerBounds = /* @__PURE__ */ new Map();
   }
 });
 
@@ -1383,7 +1766,8 @@ function sliceBytes(value_, start, end, { strict } = {}) {
 }
 function sliceHex(value_, start, end, { strict } = {}) {
   assertStartOffset(value_, start);
-  const value = `0x${value_.replace("0x", "").slice((start ?? 0) * 2, (end ?? value_.length) * 2)}`;
+  const hex2 = value_.startsWith("0x") ? value_.slice(2) : value_.replace("0x", "");
+  const value = `0x${hex2.slice((start ?? 0) * 2, (end ?? value_.length) * 2)}`;
   if (strict)
     assertEndOffset(value, start, end);
   return value;
@@ -1393,259 +1777,6 @@ var init_slice = __esm({
     init_data();
     init_isHex();
     init_size();
-  }
-});
-
-// node_modules/viem/_esm/utils/regex.js
-var bytesRegex, integerRegex;
-var init_regex2 = __esm({
-  "node_modules/viem/_esm/utils/regex.js"() {
-    bytesRegex = /^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/;
-    integerRegex = /^(u?int)(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/;
-  }
-});
-
-// node_modules/viem/_esm/utils/abi/encodeAbiParameters.js
-function encodeAbiParameters(params, values) {
-  if (params.length !== values.length)
-    throw new AbiEncodingLengthMismatchError({
-      expectedLength: params.length,
-      givenLength: values.length
-    });
-  const preparedParams = prepareParams({
-    params,
-    values
-  });
-  return encodeParams(preparedParams);
-}
-function prepareParams({ params, values }) {
-  const preparedParams = [];
-  for (let i = 0; i < params.length; i++) {
-    preparedParams.push(prepareParam({ param: params[i], value: values[i] }));
-  }
-  return preparedParams;
-}
-function prepareParam({ param, value }) {
-  const arrayComponents = getArrayComponents(param.type);
-  if (arrayComponents) {
-    const [length, type] = arrayComponents;
-    return encodeArray(value, { length, param: { ...param, type } });
-  }
-  if (param.type === "tuple") {
-    return encodeTuple(value, {
-      param
-    });
-  }
-  if (param.type === "address") {
-    return encodeAddress(value);
-  }
-  if (param.type === "bool") {
-    return encodeBool(value);
-  }
-  if (param.type.startsWith("uint") || param.type.startsWith("int")) {
-    const signed = param.type.startsWith("int");
-    const [, , size2 = "256"] = integerRegex.exec(param.type) ?? [];
-    return encodeNumber(value, {
-      signed,
-      size: Number(size2)
-    });
-  }
-  if (param.type.startsWith("bytes")) {
-    return encodeBytes(value, { param });
-  }
-  if (param.type === "string") {
-    return encodeString(value);
-  }
-  throw new InvalidAbiEncodingTypeError(param.type, {
-    docsPath: "/docs/contract/encodeAbiParameters"
-  });
-}
-function encodeParams(preparedParams) {
-  let staticSize = 0;
-  for (let i = 0; i < preparedParams.length; i++) {
-    const { dynamic, encoded } = preparedParams[i];
-    if (dynamic)
-      staticSize += 32;
-    else
-      staticSize += size(encoded);
-  }
-  const staticParams = [];
-  const dynamicParams = [];
-  let dynamicSize = 0;
-  for (let i = 0; i < preparedParams.length; i++) {
-    const { dynamic, encoded } = preparedParams[i];
-    if (dynamic) {
-      staticParams.push(numberToHex(staticSize + dynamicSize, { size: 32 }));
-      dynamicParams.push(encoded);
-      dynamicSize += size(encoded);
-    } else {
-      staticParams.push(encoded);
-    }
-  }
-  return concatHex([...staticParams, ...dynamicParams]);
-}
-function encodeAddress(value) {
-  if (!isAddress(value))
-    throw new InvalidAddressError({ address: value });
-  return { dynamic: false, encoded: padHex(value.toLowerCase()) };
-}
-function encodeArray(value, { length, param }) {
-  const dynamic = length === null;
-  if (!Array.isArray(value))
-    throw new InvalidArrayError(value);
-  if (!dynamic && value.length !== length)
-    throw new AbiEncodingArrayLengthMismatchError({
-      expectedLength: length,
-      givenLength: value.length,
-      type: `${param.type}[${length}]`
-    });
-  let dynamicChild = value.length === 0 && isDynamicType(param);
-  const preparedParams = [];
-  for (let i = 0; i < value.length; i++) {
-    const preparedParam = prepareParam({ param, value: value[i] });
-    if (preparedParam.dynamic)
-      dynamicChild = true;
-    preparedParams.push(preparedParam);
-  }
-  if (dynamic || dynamicChild) {
-    const data = encodeParams(preparedParams);
-    if (dynamic) {
-      const length2 = numberToHex(preparedParams.length, { size: 32 });
-      return {
-        dynamic: true,
-        encoded: concatHex([length2, data])
-      };
-    }
-    if (dynamicChild)
-      return { dynamic: true, encoded: data };
-  }
-  return {
-    dynamic: false,
-    encoded: concatHex(preparedParams.map(({ encoded }) => encoded))
-  };
-}
-function encodeBytes(value, { param }) {
-  const [, paramSize] = param.type.split("bytes");
-  const bytesSize = size(value);
-  if (!paramSize) {
-    let value_ = value;
-    if (bytesSize % 32 !== 0)
-      value_ = padHex(value_, {
-        dir: "right",
-        size: Math.ceil((value.length - 2) / 2 / 32) * 32
-      });
-    return {
-      dynamic: true,
-      encoded: concatHex([
-        padHex(numberToHex(bytesSize, { size: 32 })),
-        value_
-      ])
-    };
-  }
-  if (bytesSize !== Number.parseInt(paramSize, 10))
-    throw new AbiEncodingBytesSizeMismatchError({
-      expectedSize: Number.parseInt(paramSize, 10),
-      value
-    });
-  return { dynamic: false, encoded: padHex(value, { dir: "right" }) };
-}
-function encodeBool(value) {
-  if (typeof value !== "boolean")
-    throw new BaseError(`Invalid boolean value: "${value}" (type: ${typeof value}). Expected: \`true\` or \`false\`.`);
-  return { dynamic: false, encoded: padHex(boolToHex(value)) };
-}
-function encodeNumber(value, { signed, size: size2 = 256 }) {
-  if (typeof size2 === "number") {
-    const max = 2n ** (BigInt(size2) - (signed ? 1n : 0n)) - 1n;
-    const min = signed ? -max - 1n : 0n;
-    if (value > max || value < min)
-      throw new IntegerOutOfRangeError({
-        max: max.toString(),
-        min: min.toString(),
-        signed,
-        size: size2 / 8,
-        value: value.toString()
-      });
-  }
-  return {
-    dynamic: false,
-    encoded: numberToHex(value, {
-      size: 32,
-      signed
-    })
-  };
-}
-function encodeString(value) {
-  const hexValue = stringToHex(value);
-  const partsLength = Math.ceil(size(hexValue) / 32);
-  const parts = [];
-  for (let i = 0; i < partsLength; i++) {
-    parts.push(padHex(slice(hexValue, i * 32, (i + 1) * 32), {
-      dir: "right"
-    }));
-  }
-  return {
-    dynamic: true,
-    encoded: concatHex([
-      padHex(numberToHex(size(hexValue), { size: 32 })),
-      ...parts
-    ])
-  };
-}
-function encodeTuple(value, { param }) {
-  let dynamic = false;
-  const preparedParams = [];
-  for (let i = 0; i < param.components.length; i++) {
-    const param_ = param.components[i];
-    const index = Array.isArray(value) ? i : param_.name;
-    const preparedParam = prepareParam({
-      param: param_,
-      value: value[index]
-    });
-    preparedParams.push(preparedParam);
-    if (preparedParam.dynamic)
-      dynamic = true;
-  }
-  return {
-    dynamic,
-    encoded: dynamic ? encodeParams(preparedParams) : concatHex(preparedParams.map(({ encoded }) => encoded))
-  };
-}
-function getArrayComponents(type) {
-  const matches = type.match(/^(.*)\[(\d+)?\]$/);
-  return matches ? (
-    // Return `null` if the array is dynamic.
-    [matches[2] ? Number(matches[2]) : null, matches[1]]
-  ) : void 0;
-}
-function isDynamicType(param) {
-  const { type } = param;
-  if (type === "string")
-    return true;
-  if (type === "bytes")
-    return true;
-  if (type.endsWith("[]"))
-    return true;
-  if (type === "tuple")
-    return param.components.some(isDynamicType);
-  const arrayComponents = getArrayComponents(type);
-  if (arrayComponents)
-    return isDynamicType({ ...param, type: arrayComponents[1] });
-  return false;
-}
-var init_encodeAbiParameters = __esm({
-  "node_modules/viem/_esm/utils/abi/encodeAbiParameters.js"() {
-    init_abi();
-    init_address();
-    init_base();
-    init_encoding();
-    init_isAddress();
-    init_concat();
-    init_pad();
-    init_size();
-    init_slice();
-    init_toHex();
-    init_regex2();
   }
 });
 
@@ -1688,8 +1819,8 @@ var init_cursor = __esm({
 function createCursor(bytes, { recursiveReadLimit = 8192 } = {}) {
   const cursor = Object.create(staticCursor);
   cursor.bytes = bytes;
-  cursor.dataView = new DataView(bytes.buffer ?? bytes, bytes.byteOffset, bytes.byteLength);
-  cursor.positionReadCount = /* @__PURE__ */ new Map();
+  cursor._dataView = void 0;
+  cursor.positionReads = void 0;
   cursor.recursiveReadLimit = recursiveReadLimit;
   return cursor;
 }
@@ -1699,9 +1830,14 @@ var init_cursor2 = __esm({
     init_cursor();
     staticCursor = {
       bytes: new Uint8Array(),
-      dataView: new DataView(new ArrayBuffer(0)),
+      // Created on first use: most cursors (e.g. ABI decoding) only read bytes.
+      get dataView() {
+        const cursor = this;
+        cursor._dataView ??= new DataView(this.bytes.buffer ?? this.bytes, this.bytes.byteOffset, this.bytes.byteLength);
+        return cursor._dataView;
+      },
       position: 0,
-      positionReadCount: /* @__PURE__ */ new Map(),
+      positionReads: void 0,
       recursiveReadCount: 0,
       recursiveReadLimit: Number.POSITIVE_INFINITY,
       assertReadLimit() {
@@ -1724,9 +1860,6 @@ var init_cursor2 = __esm({
         const position = this.position - offset;
         this.assertPosition(position);
         this.position = position;
-      },
-      getReadCount(position) {
-        return this.positionReadCount.get(position || this.position) || 0;
       },
       incrementPosition(offset) {
         if (offset < 0)
@@ -1850,22 +1983,25 @@ var init_cursor2 = __esm({
       _touch() {
         if (this.recursiveReadLimit === Number.POSITIVE_INFINITY)
           return;
-        const count = this.getReadCount();
-        this.positionReadCount.set(this.position, count + 1);
-        if (count > 0)
+        const index = this.position >>> 3;
+        let reads = this.positionReads;
+        if (!reads || index >= reads.length) {
+          const next = new Uint8Array(Math.max(index + 1, (reads?.length ?? 8) * 2));
+          if (reads)
+            next.set(reads);
+          reads = this.positionReads = next;
+        }
+        const mask = 1 << (this.position & 7);
+        if (reads[index] & mask)
           this.recursiveReadCount++;
+        else
+          reads[index] |= mask;
       }
     };
   }
 });
 
 // node_modules/viem/_esm/utils/encoding/fromBytes.js
-function bytesToBigInt(bytes, opts = {}) {
-  if (typeof opts.size !== "undefined")
-    assertSize(bytes, { size: opts.size });
-  const hex2 = bytesToHex(bytes);
-  return hexToBigInt(hex2, opts);
-}
 function bytesToBool(bytes_, opts = {}) {
   let bytes = bytes_;
   if (typeof opts.size !== "undefined") {
@@ -1879,16 +2015,19 @@ function bytesToBool(bytes_, opts = {}) {
 function bytesToNumber(bytes, opts = {}) {
   if (typeof opts.size !== "undefined")
     assertSize(bytes, { size: opts.size });
+  if (!opts.signed && bytes.length > 0) {
+    let i = 0;
+    while (i < bytes.length && bytes[i] === 0)
+      i++;
+    if (bytes.length - i <= 6) {
+      let value = 0;
+      for (; i < bytes.length; i++)
+        value = value * 256 + bytes[i];
+      return value;
+    }
+  }
   const hex2 = bytesToHex(bytes);
   return hexToNumber(hex2, opts);
-}
-function bytesToString(bytes_, opts = {}) {
-  let bytes = bytes_;
-  if (typeof opts.size !== "undefined") {
-    assertSize(bytes, { size: opts.size });
-    bytes = trim(bytes, { dir: "right" });
-  }
-  return new TextDecoder().decode(bytes);
 }
 var init_fromBytes = __esm({
   "node_modules/viem/_esm/utils/encoding/fromBytes.js"() {
@@ -1911,201 +2050,274 @@ function decodeAbiParameters(params, data) {
       params,
       size: size(data)
     });
+  const budget = { limit: bytes.length * 32, used: 0 };
   let consumed = 0;
   const values = [];
   for (let i = 0; i < params.length; ++i) {
-    const param = params[i];
-    if (consumed < bytes.length)
-      cursor.setPosition(consumed);
-    const [data2, consumed_] = decodeParameter(cursor, param, {
-      staticPosition: 0
-    });
-    consumed += consumed_;
-    values.push(data2);
+    const param = compile2(params[i]);
+    cursor.position = consumed;
+    values.push(decodeParameter(cursor, param, budget, 0));
+    consumed += lastSize;
   }
   return values;
 }
-function decodeParameter(cursor, param, { staticPosition }) {
-  const arrayComponents = getArrayComponents(param.type);
+function compile2(param) {
+  const compiled = {
+    dynamic: false,
+    kind: "invalid",
+    param,
+    child: void 0,
+    length: null,
+    components: void 0,
+    unnamed: false,
+    size: 0,
+    signed: false
+  };
+  if (typeof param !== "object" || param === null)
+    return compiled;
+  const { type } = param;
+  if (typeof type !== "string")
+    return compiled;
+  const arrayComponents = getArrayComponents(type);
   if (arrayComponents) {
-    const [length, type] = arrayComponents;
-    return decodeArray(cursor, { ...param, type }, { length, staticPosition });
+    const [length, innerType] = arrayComponents;
+    compiled.kind = "array";
+    compiled.length = length;
+    compiled.child = compile2({ ...param, type: innerType });
+    compiled.dynamic = length === null || compiled.child.dynamic;
+    return compiled;
   }
-  if (param.type === "tuple")
-    return decodeTuple(cursor, param, { staticPosition });
-  if (param.type === "address")
-    return decodeAddress(cursor);
-  if (param.type === "bool")
-    return decodeBool(cursor);
-  if (param.type.startsWith("bytes"))
-    return decodeBytes(cursor, param, { staticPosition });
-  if (param.type.startsWith("uint") || param.type.startsWith("int"))
-    return decodeNumber(cursor, param);
-  if (param.type === "string")
-    return decodeString(cursor, { staticPosition });
-  throw new InvalidAbiDecodingTypeError(param.type, {
+  if (type === "tuple") {
+    compiled.kind = "tuple";
+    const { components } = param;
+    if (!Array.isArray(components) || !components.every((component) => typeof component === "object"))
+      return compiled;
+    compiled.components = components.map(compile2);
+    compiled.unnamed = components.length === 0 || components.some(({ name }) => !name);
+    compiled.dynamic = compiled.components.some(({ dynamic }) => dynamic);
+    return compiled;
+  }
+  if (type === "address")
+    compiled.kind = "address";
+  else if (type === "bool")
+    compiled.kind = "bool";
+  else if (type.startsWith("bytes")) {
+    const [_, size2] = type.split("bytes");
+    if (size2) {
+      compiled.kind = "fixedBytes";
+      compiled.size = Number.parseInt(size2, 10);
+    } else {
+      compiled.kind = "bytes";
+      compiled.dynamic = type === "bytes";
+    }
+  } else if (type.startsWith("uint") || type.startsWith("int")) {
+    compiled.kind = "number";
+    compiled.signed = type.startsWith("int");
+    compiled.size = Number.parseInt(type.split("int")[1] || "256", 10);
+  } else if (type === "string") {
+    compiled.kind = "string";
+    compiled.dynamic = true;
+  }
+  return compiled;
+}
+function decodeParameter(cursor, param, budget, staticPosition) {
+  lastSize = 32;
+  switch (param.kind) {
+    case "address":
+      return decodeAddress(cursor);
+    case "array":
+      return decodeArray(cursor, param, budget, staticPosition);
+    case "bool":
+      return decodeBool(cursor);
+    case "bytes":
+      return decodeBytes(cursor, budget, staticPosition);
+    case "fixedBytes":
+      return bytesToHex(cursor.readBytes(param.size, 32));
+    case "number":
+      return decodeNumber(cursor, param);
+    case "string":
+      return decodeString(cursor, budget, staticPosition);
+    case "tuple":
+      return decodeTuple(cursor, param, budget, staticPosition);
+  }
+  const type = param.param.type;
+  getArrayComponents(type);
+  throw new InvalidAbiDecodingTypeError(type, {
     docsPath: "/docs/contract/decodeAbiParameters"
   });
 }
+function readNumber(cursor) {
+  return wordToNumber(cursor.readBytes(32));
+}
+function wordToNumber(word2, signed) {
+  let high = 0;
+  for (let i = 0; i < 25; i++)
+    high |= word2[i];
+  if (high === 0 && word2[25] < 32)
+    return (word2[25] << 16 | word2[26] << 8 | word2[27]) * 4294967296 + ((word2[28] << 24 | word2[29] << 16 | word2[30] << 8 | word2[31]) >>> 0);
+  return bytesToNumber(word2, { signed });
+}
 function decodeAddress(cursor) {
   const value = cursor.readBytes(32);
-  return [checksumAddress(bytesToHex(sliceBytes(value, -20))), 32];
+  return checksumAddress(bytesToHex(value.subarray(12)));
 }
-function decodeArray(cursor, param, { length, staticPosition }) {
-  if (length === null) {
-    const offset = bytesToNumber(cursor.readBytes(sizeOfOffset));
+function decodeArray(cursor, param, budget, staticPosition) {
+  const child = param.child;
+  if (param.length === null) {
+    const offset = readNumber(cursor);
     const start = staticPosition + offset;
-    const startOfData = start + sizeOfLength;
+    const startOfData = start + 32;
     cursor.setPosition(start);
-    const length2 = bytesToNumber(cursor.readBytes(sizeOfLength));
-    const dynamicChild = hasDynamicChild(param);
+    const length = readNumber(cursor);
     let consumed2 = 0;
     const value2 = [];
-    for (let i = 0; i < length2; ++i) {
-      cursor.setPosition(startOfData + (dynamicChild ? i * 32 : consumed2));
-      const [data, consumed_] = decodeParameter(cursor, param, {
-        staticPosition: startOfData
-      });
-      consumed2 += consumed_;
-      value2.push(data);
-      if (consumed_ === 0) {
+    for (let i = 0; i < length; ++i) {
+      cursor.setPosition(startOfData + (child.dynamic ? i * 32 : consumed2));
+      value2.push(decodeParameter(cursor, child, budget, startOfData));
+      consumed2 += lastSize;
+      if (lastSize === 0) {
         cursor.assertReadLimit();
         cursor._touch();
       }
     }
     cursor.setPosition(staticPosition + 32);
-    return [value2, 32];
+    lastSize = 32;
+    return value2;
   }
-  if (hasDynamicChild(param)) {
-    const offset = bytesToNumber(cursor.readBytes(sizeOfOffset));
+  if (child.dynamic) {
+    const offset = readNumber(cursor);
     const start = staticPosition + offset;
     const value2 = [];
-    for (let i = 0; i < length; ++i) {
+    for (let i = 0; i < param.length; ++i) {
       cursor.setPosition(start + i * 32);
-      const [data] = decodeParameter(cursor, param, {
-        staticPosition: start
-      });
-      value2.push(data);
+      value2.push(decodeParameter(cursor, child, budget, start));
     }
     cursor.setPosition(staticPosition + 32);
-    return [value2, 32];
+    lastSize = 32;
+    return value2;
   }
   let consumed = 0;
   const value = [];
-  for (let i = 0; i < length; ++i) {
-    const [data, consumed_] = decodeParameter(cursor, param, {
-      staticPosition: staticPosition + consumed
-    });
-    consumed += consumed_;
-    value.push(data);
-    if (consumed_ === 0) {
+  for (let i = 0; i < param.length; ++i) {
+    value.push(decodeParameter(cursor, child, budget, staticPosition + consumed));
+    consumed += lastSize;
+    if (lastSize === 0) {
       cursor.assertReadLimit();
       cursor._touch();
     }
   }
-  return [value, consumed];
+  lastSize = consumed;
+  return value;
 }
 function decodeBool(cursor) {
-  return [bytesToBool(cursor.readBytes(32), { size: 32 }), 32];
-}
-function decodeBytes(cursor, param, { staticPosition }) {
-  const [_, size2] = param.type.split("bytes");
-  if (!size2) {
-    const offset = bytesToNumber(cursor.readBytes(32));
-    cursor.setPosition(staticPosition + offset);
-    const length = bytesToNumber(cursor.readBytes(32));
-    if (length === 0) {
-      cursor.setPosition(staticPosition + 32);
-      return ["0x", 32];
-    }
-    const data = cursor.readBytes(length);
-    cursor.setPosition(staticPosition + 32);
-    return [bytesToHex(data), 32];
-  }
-  const value = bytesToHex(cursor.readBytes(Number.parseInt(size2, 10), 32));
-  return [value, 32];
-}
-function decodeNumber(cursor, param) {
-  const signed = param.type.startsWith("int");
-  const size2 = Number.parseInt(param.type.split("int")[1] || "256", 10);
   const value = cursor.readBytes(32);
-  return [
-    size2 > 48 ? bytesToBigInt(value, { signed }) : bytesToNumber(value, { signed }),
-    32
-  ];
+  let high = 0;
+  for (let i = 0; i < 31; i++)
+    high |= value[i];
+  if (high === 0 && value[31] <= 1)
+    return value[31] === 1;
+  return bytesToBool(value, { size: 32 });
 }
-function decodeTuple(cursor, param, { staticPosition }) {
-  const hasUnnamedChild = param.components.length === 0 || param.components.some(({ name }) => !name);
-  const value = hasUnnamedChild ? [] : {};
-  let consumed = 0;
-  if (hasDynamicChild(param)) {
-    const offset = bytesToNumber(cursor.readBytes(sizeOfOffset));
-    const start = staticPosition + offset;
-    for (let i = 0; i < param.components.length; ++i) {
-      const component = param.components[i];
-      cursor.setPosition(start + consumed);
-      const [data, consumed_] = decodeParameter(cursor, component, {
-        staticPosition: start
-      });
-      consumed += consumed_;
-      value[hasUnnamedChild ? i : component?.name] = data;
-    }
-    cursor.setPosition(staticPosition + 32);
-    return [value, 32];
-  }
-  for (let i = 0; i < param.components.length; ++i) {
-    const component = param.components[i];
-    const [data, consumed_] = decodeParameter(cursor, component, {
-      staticPosition
-    });
-    value[hasUnnamedChild ? i : component?.name] = data;
-    consumed += consumed_;
-  }
-  return [value, consumed];
-}
-function decodeString(cursor, { staticPosition }) {
-  const offset = bytesToNumber(cursor.readBytes(32));
-  const start = staticPosition + offset;
-  cursor.setPosition(start);
-  const length = bytesToNumber(cursor.readBytes(32));
+function decodeBytes(cursor, budget, staticPosition) {
+  const offset = readNumber(cursor);
+  cursor.setPosition(staticPosition + offset);
+  const length = readNumber(cursor);
   if (length === 0) {
     cursor.setPosition(staticPosition + 32);
-    return ["", 32];
+    return "0x";
+  }
+  const data = cursor.readBytes(length);
+  budget.used += length;
+  if (budget.used > budget.limit)
+    throw new AbiDecodingSizeLimitExceededError({ limit: budget.limit });
+  cursor.setPosition(staticPosition + 32);
+  return bytesToHex(data);
+}
+function decodeNumber(cursor, param) {
+  const { signed, size: size2 } = param;
+  const position = cursor.position;
+  const value = cursor.readBytes(32);
+  if (!(size2 > 48))
+    return wordToNumber(value, signed);
+  const view = cursor.dataView;
+  const result = view.getBigUint64(position) << 192n | view.getBigUint64(position + 8) << 128n | view.getBigUint64(position + 16) << 64n | view.getBigUint64(position + 24);
+  if (signed && value[0] >= 128)
+    return result - (1n << 256n);
+  return result;
+}
+function decodeTuple(cursor, param, budget, staticPosition) {
+  const { components, unnamed } = param;
+  if (!components) {
+    readComponents(param.param);
+    throw new InvalidAbiDecodingTypeError(param.param.type, {
+      docsPath: "/docs/contract/decodeAbiParameters"
+    });
+  }
+  const value = unnamed ? [] : {};
+  let consumed = 0;
+  if (param.dynamic) {
+    const offset = readNumber(cursor);
+    const start = staticPosition + offset;
+    for (let i = 0; i < components.length; ++i) {
+      const component = components[i];
+      cursor.setPosition(start + consumed);
+      const data = decodeParameter(cursor, component, budget, start);
+      consumed += lastSize;
+      value[unnamed ? i : component.param.name] = data;
+    }
+    cursor.setPosition(staticPosition + 32);
+    lastSize = 32;
+    return value;
+  }
+  for (let i = 0; i < components.length; ++i) {
+    const component = components[i];
+    const data = decodeParameter(cursor, component, budget, staticPosition);
+    value[unnamed ? i : component.param.name] = data;
+    consumed += lastSize;
+  }
+  lastSize = consumed;
+  return value;
+}
+function readComponents(param) {
+  return param.components.length === 0 || param.components.some(({ name }) => !name);
+}
+function decodeString(cursor, budget, staticPosition) {
+  const offset = readNumber(cursor);
+  const start = staticPosition + offset;
+  cursor.setPosition(start);
+  const length = readNumber(cursor);
+  if (length === 0) {
+    cursor.setPosition(staticPosition + 32);
+    return "";
   }
   const data = cursor.readBytes(length, 32);
-  const value = bytesToString(data);
+  budget.used += length;
+  if (budget.used > budget.limit)
+    throw new AbiDecodingSizeLimitExceededError({ limit: budget.limit });
+  const value = (decoder ??= new TextDecoder("utf-8", {
+    ignoreBOM: true
+  })).decode(data);
   cursor.setPosition(staticPosition + 32);
-  return [value, 32];
+  return value;
 }
-function hasDynamicChild(param) {
-  const { type } = param;
-  if (type === "string")
-    return true;
-  if (type === "bytes")
-    return true;
-  if (type.endsWith("[]"))
-    return true;
-  if (type === "tuple")
-    return param.components?.some(hasDynamicChild);
-  const arrayComponents = getArrayComponents(param.type);
-  if (arrayComponents && hasDynamicChild({ ...param, type: arrayComponents[1] }))
-    return true;
-  return false;
-}
-var sizeOfLength, sizeOfOffset;
+var lastSize, decoder, AbiDecodingSizeLimitExceededError;
 var init_decodeAbiParameters = __esm({
   "node_modules/viem/_esm/utils/abi/decodeAbiParameters.js"() {
     init_abi();
+    init_base();
     init_getAddress();
     init_cursor2();
     init_size();
-    init_slice();
     init_fromBytes();
     init_toBytes();
     init_toHex();
     init_encodeAbiParameters();
-    sizeOfLength = 32;
-    sizeOfOffset = 32;
+    lastSize = 0;
+    AbiDecodingSizeLimitExceededError = class extends BaseError {
+      constructor({ limit }) {
+        super(`Decoded \`bytes\` and \`string\` values exceed the size limit of ${limit} bytes.`, { name: "AbiDecodingSizeLimitExceededError" });
+      }
+    };
   }
 });
 
@@ -4665,12 +4877,25 @@ import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // node_modules/viem/_esm/accounts/utils/publicKeyToAddress.js
+init_base();
 init_getAddress();
 init_keccak256();
 function publicKeyToAddress(publicKey) {
+  if (publicKey.length !== 132 || !publicKey.startsWith("0x04"))
+    throw new InvalidPublicKeyError({ publicKey });
   const address = keccak256(`0x${publicKey.substring(4)}`).substring(26);
   return checksumAddress(`0x${address}`);
 }
+var InvalidPublicKeyError = class extends BaseError {
+  constructor({ publicKey }) {
+    super(`Public key "${publicKey}" is invalid.`, {
+      metaMessages: [
+        "- Public key must be uncompressed: 65 bytes with a `0x04` prefix."
+      ],
+      name: "publicKeyToAddress.InvalidPublicKeyError"
+    });
+  }
+};
 
 // node_modules/viem/_esm/utils/signature/recoverPublicKey.js
 init_isHex();
@@ -4683,8 +4908,11 @@ async function recoverPublicKey({ hash: hash2, signature }) {
   const signature_ = (() => {
     if (typeof signature === "object" && "r" in signature && "s" in signature) {
       const { r, s, v, yParity } = signature;
-      const yParityOrV2 = Number(yParity ?? v);
-      const recoveryBit2 = toRecoveryBit(yParityOrV2);
+      const recoveryBit2 = (() => {
+        if (yParity === void 0 && v !== void 0 && v >= 35n)
+          return v % 2n === 0n ? 1 : 0;
+        return toRecoveryBit(Number(yParity ?? v));
+      })();
       return new secp256k12.Signature(hexToBigInt(r), hexToBigInt(s)).addRecoveryBit(recoveryBit2);
     }
     const signatureHex = isHex(signature) ? signature : toHex(signature);
@@ -4714,28 +4942,68 @@ async function recoverAddress({ hash: hash2, signature }) {
 
 // node_modules/viem/_esm/utils/abi/decodeEventLog.js
 init_abi();
+init_base();
 init_cursor();
+init_getAddress();
 init_size();
 init_toEventSelector();
+init_regex2();
 init_decodeAbiParameters();
 init_formatAbiItem2();
 var docsPath = "/docs/contract/decodeEventLog";
 function decodeEventLog(parameters) {
-  const { abi, data, strict: strict_, topics } = parameters;
+  const { abi, data, eventName, strict: strict_, topics } = parameters;
   const strict = strict_ ?? true;
-  const [signature, ...argTopics] = topics;
-  if (!signature)
-    throw new AbiEventSignatureEmptyTopicsError({ docsPath });
-  const abiItem = abi.find((x) => x.type === "event" && signature === toEventSelector(formatAbiItem2(x)));
-  if (!(abiItem && "name" in abiItem) || abiItem.type !== "event")
+  const events = abi.filter((item) => item.type === "event" && "name" in item);
+  const signature = topics[0];
+  const bySelector = signature ? events.find((item) => !item.anonymous && signature === toEventSelector(formatAbiItem2(item))) : void 0;
+  const candidates = bySelector ? [bySelector] : anonymousCandidates(events, topics.length, eventName);
+  if (candidates.length > 1)
+    throw new AbiEventAmbiguityError(candidates.map((item) => item.name));
+  const abiItem = candidates[0];
+  if (!abiItem) {
+    if (!signature)
+      throw new AbiEventSignatureEmptyTopicsError({ docsPath });
     throw new AbiEventSignatureNotFoundError(signature, { docsPath });
-  const { name, inputs: inputs2 } = abiItem;
+  }
+  return decodeMatchedEventLog({
+    argTopics: abiItem.anonymous ? topics : topics.slice(1),
+    data,
+    plan: toEventPlan(abiItem),
+    strict
+  });
+}
+function toEventPlan(abiItem) {
+  const { inputs: inputs2 } = abiItem;
   const isUnnamed = inputs2?.some((x) => !("name" in x && x.name));
+  return {
+    abiItem,
+    indexedInputs: inputs2.map((x, i) => [x, i]).filter(([x]) => "indexed" in x && x.indexed).map(([x, i]) => [x, i, topicKind(x)]),
+    isUnnamed,
+    nonIndexedInputs: inputs2.filter((x) => !("indexed" in x && x.indexed)),
+    selector: void 0
+  };
+}
+function anonymousCandidates(events, topicCount, eventName) {
+  const requested = (() => {
+    if (eventName)
+      return events.filter((item) => item.name === eventName);
+    if (events.every((item) => item.anonymous))
+      return events;
+    return [];
+  })();
+  return requested.filter((item) => item.anonymous && indexedCount(item) === topicCount);
+}
+function indexedCount(item) {
+  return item.inputs?.filter((input) => input.indexed).length ?? 0;
+}
+function decodeMatchedEventLog({ argTopics, data, plan, strict }) {
+  const { abiItem, indexedInputs, isUnnamed, nonIndexedInputs } = plan;
+  const { name, inputs: inputs2 } = abiItem;
   const args = isUnnamed ? [] : {};
-  const indexedInputs = inputs2.map((x, i) => [x, i]).filter(([x]) => "indexed" in x && x.indexed);
   const missingIndexedInputs = [];
   for (let i = 0; i < indexedInputs.length; i++) {
-    const [param, argIndex] = indexedInputs[i];
+    const [param, argIndex, kind] = indexedInputs[i];
     const topic = argTopics[i];
     if (!topic) {
       if (strict)
@@ -4746,12 +5014,8 @@ function decodeEventLog(parameters) {
       missingIndexedInputs.push([param, argIndex]);
       continue;
     }
-    args[isUnnamed ? argIndex : param.name || argIndex] = decodeTopic({
-      param,
-      value: topic
-    });
+    args[isUnnamed ? argIndex : param.name || argIndex] = decodeTopic(param, kind, topic);
   }
-  const nonIndexedInputs = inputs2.filter((x) => !("indexed" in x && x.indexed));
   const inputsToDecode = strict ? nonIndexedInputs : [...missingIndexedInputs.map(([param]) => param), ...nonIndexedInputs];
   if (inputsToDecode.length > 0) {
     if (data && data !== "0x") {
@@ -4798,12 +5062,49 @@ function decodeEventLog(parameters) {
     args: Object.values(args).length > 0 ? args : void 0
   };
 }
-function decodeTopic({ param, value }) {
+function topicKind(param) {
+  const { type } = param;
+  if (typeof type !== "string")
+    return "decode";
+  if (type === "string" || type === "bytes" || type === "tuple" || type.match(/^(.*)\[(\d+)?\]$/))
+    return "hashed";
+  if (type === "address")
+    return "address";
+  if (bytesRegex.test(type))
+    return "bytes";
+  const integer = integerRegex.exec(type);
+  if (integer?.[1] === "uint" && Number(integer[2] ?? 256) > 48)
+    return "uint";
+  return "decode";
+}
+var topicRegex = /^0x[0-9a-fA-F]{64}$/;
+function decodeTopic(param, kind, value) {
+  if (kind !== "decode" && kind !== "hashed" && topicRegex.test(value)) {
+    if (kind === "address")
+      return checksumAddress(`0x${value.slice(26).toLowerCase()}`);
+    if (kind === "uint")
+      return BigInt(value);
+    return value.slice(0, 2 + Number(param.type.slice(5)) * 2).toLowerCase();
+  }
   if (param.type === "string" || param.type === "bytes" || param.type === "tuple" || param.type.match(/^(.*)\[(\d+)?\]$/))
     return value;
   const decodedArg = decodeAbiParameters([param], value) || [];
   return decodedArg[0];
 }
+var AbiEventAmbiguityError = class extends BaseError {
+  constructor(eventNames) {
+    const distinct = new Set(eventNames).size === eventNames.length;
+    super("Ambiguous anonymous event log.", {
+      docsPath,
+      metaMessages: [
+        `Matched ${eventNames.map((name) => `\`${name}\``).join(", ")}.`,
+        "These events take the same number of indexed topics.",
+        distinct ? "Pass `eventName` to choose one." : "Pass an `abi` that holds only the event to decode."
+      ],
+      name: "AbiEventAmbiguityError"
+    });
+  }
+};
 
 // node_modules/viem/_esm/utils/signature/hashTypedData.js
 init_encodeAbiParameters();
@@ -4821,7 +5122,8 @@ init_base();
 var InvalidDomainError = class extends BaseError {
   constructor({ domain }) {
     super(`Invalid domain "${stringify(domain)}".`, {
-      metaMessages: ["Must be a valid EIP-712 domain."]
+      metaMessages: ["Must be a valid EIP-712 domain."],
+      name: "InvalidDomainError"
     });
   }
 };
@@ -4829,23 +5131,26 @@ var InvalidPrimaryTypeError = class extends BaseError {
   constructor({ primaryType, types }) {
     super(`Invalid primary type \`${primaryType}\` must be one of \`${JSON.stringify(Object.keys(types))}\`.`, {
       docsPath: "/api/glossary/Errors#typeddatainvalidprimarytypeerror",
-      metaMessages: ["Check that the primary type is a key in `types`."]
+      metaMessages: ["Check that the primary type is a key in `types`."],
+      name: "InvalidPrimaryTypeError"
     });
   }
 };
 var InvalidStructTypeError = class extends BaseError {
   constructor({ type }) {
     super(`Struct type "${type}" is invalid.`, {
-      metaMessages: ["Struct type must not be a Solidity type."],
+      metaMessages: [
+        'Struct type must contain only letters, digits, "_", "$" and ":", and must not be a Solidity type.'
+      ],
       name: "InvalidStructTypeError"
     });
   }
 };
 var InvalidTypedDataTypeError = class extends BaseError {
   constructor({ type }) {
-    const canonicalType = type.replace(/^(u?int)/, "$&256");
+    const isAlias = /^u?int(\[[0-9]*\])*$/.test(type);
     super(`Type "${type}" is not a valid EIP-712 type.`, {
-      metaMessages: [`Use "${canonicalType}" instead.`],
+      metaMessages: isAlias ? [`Use "${type.replace(/^(u?int)/, "$&256")}" instead.`] : void 0,
       name: "InvalidTypedDataTypeError"
     });
   }
@@ -4862,9 +5167,6 @@ function validateTypedData(parameters) {
     for (const param of struct) {
       const { name, type } = param;
       const value = data[name];
-      const baseType = type.replace(/(\[[0-9]*\])+$/, "");
-      if (baseType === "int" || baseType === "uint")
-        throw new InvalidTypedDataTypeError({ type });
       const integerMatch = type.match(integerRegex);
       if (integerMatch && (typeof value === "number" || typeof value === "bigint")) {
         const [_type, base, size_] = integerMatch;
@@ -4884,13 +5186,34 @@ function validateTypedData(parameters) {
             givenSize: size(value)
           });
       }
-      const struct2 = types[type];
-      if (struct2) {
-        validateReference(type);
-        validateData(struct2, value);
-      }
+      if (Object.hasOwn(types, type))
+        validateData(types[type], value);
+      if (type.endsWith("]"))
+        validateArray(type, value);
     }
   };
+  const validateArray = (type, value) => {
+    if (!Array.isArray(value))
+      return;
+    const inner = type.slice(0, type.lastIndexOf("["));
+    const length = type.slice(type.lastIndexOf("[") + 1, -1);
+    if (length && value.length !== Number.parseInt(length, 10))
+      throw new AbiEncodingArrayLengthMismatchError({
+        expectedLength: Number.parseInt(length, 10),
+        givenLength: value.length,
+        type
+      });
+    for (const item of value)
+      if (inner.endsWith("]"))
+        validateArray(inner, item);
+      else if (Object.hasOwn(types, inner) && item)
+        validateData(types[inner], item);
+  };
+  for (const type of Object.keys(types))
+    validateReference(type);
+  for (const struct of Object.values(types))
+    for (const field of struct ?? [])
+      validateField2(field.type, types);
   if (types.EIP712Domain && domain) {
     if (typeof domain !== "object")
       throw new InvalidDomainError({ domain });
@@ -4905,21 +5228,28 @@ function validateTypedData(parameters) {
 }
 function getTypesForEIP712Domain({ domain }) {
   return [
-    typeof domain?.name === "string" && { name: "name", type: "string" },
-    domain?.version && { name: "version", type: "string" },
-    (typeof domain?.chainId === "number" || typeof domain?.chainId === "bigint") && {
-      name: "chainId",
-      type: "uint256"
-    },
-    domain?.verifyingContract && {
+    domain?.name != null && { name: "name", type: "string" },
+    domain?.version != null && { name: "version", type: "string" },
+    domain?.chainId != null && { name: "chainId", type: "uint256" },
+    domain?.verifyingContract != null && {
       name: "verifyingContract",
       type: "address"
     },
-    domain?.salt && { name: "salt", type: "bytes32" }
+    domain?.salt != null && { name: "salt", type: "bytes32" }
   ].filter(Boolean);
 }
+function validateField2(type, types) {
+  const baseType = type.replace(/(\[[0-9]*\])+$/, "");
+  if (baseType === "int" || baseType === "uint")
+    throw new InvalidTypedDataTypeError({ type });
+  if (!Object.hasOwn(types, baseType) && !isSolidityType(baseType))
+    throw new InvalidTypedDataTypeError({ type });
+}
+function isSolidityType(type) {
+  return type === "address" || type === "bool" || type === "string" || bytesRegex.test(type) || integerRegex.test(type);
+}
 function validateReference(type) {
-  if (type === "address" || type === "bool" || type === "string" || type.startsWith("bytes") || type.startsWith("uint") || type.startsWith("int"))
+  if (!/^[A-Za-z0-9_$:]+$/.test(type) || type === "address" || type === "bool" || type === "string" || /^(u?int|bytes)[0-9]*$/.test(type))
     throw new InvalidStructTypeError({ type });
 }
 
@@ -4961,15 +5291,23 @@ function hashStruct({ data, primaryType, types }) {
   const encoded = encodeData({
     data,
     primaryType,
+    typeHashes: /* @__PURE__ */ new Map(),
     types
   });
   return keccak256(encoded);
 }
-function encodeData({ data, primaryType, types }) {
+function encodeData({ data, primaryType, typeHashes, types }) {
   const encodedTypes = [{ type: "bytes32" }];
-  const encodedValues = [hashType({ primaryType, types })];
+  const encodedValues = [
+    typeHashes.get(primaryType) ?? (() => {
+      const hash2 = hashType({ primaryType, types });
+      typeHashes.set(primaryType, hash2);
+      return hash2;
+    })()
+  ];
   for (const field of types[primaryType]) {
     const [type, value] = encodeField({
+      typeHashes,
       types,
       name: field.name,
       type: field.type,
@@ -4995,8 +5333,7 @@ function encodeType({ primaryType, types }) {
   return result;
 }
 function findTypeDependencies({ primaryType: primaryType_, types }, results2 = /* @__PURE__ */ new Set()) {
-  const match = primaryType_.match(/^\w*/u);
-  const primaryType = match?.[0];
+  const primaryType = primaryType_.replace(/(\[[0-9]*\])+$/, "");
   if (results2.has(primaryType) || types[primaryType] === void 0) {
     return results2;
   }
@@ -5006,11 +5343,11 @@ function findTypeDependencies({ primaryType: primaryType_, types }, results2 = /
   }
   return results2;
 }
-function encodeField({ types, name, type, value }) {
+function encodeField({ typeHashes, types, name, type, value }) {
   if (types[type] !== void 0) {
     return [
       { type: "bytes32" },
-      keccak256(encodeData({ data: value, primaryType: type, types }))
+      keccak256(encodeData({ data: value, primaryType: type, typeHashes, types }))
     ];
   }
   if (type === "bytes")
@@ -5022,6 +5359,7 @@ function encodeField({ types, name, type, value }) {
     const typeValuePairs = value.map((item) => encodeField({
       name,
       type: parsedType,
+      typeHashes,
       types,
       value: item
     }));
