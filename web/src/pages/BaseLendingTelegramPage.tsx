@@ -7,7 +7,7 @@ import { AppShell, CodeValue, Field, Notice, PageHeader, Status } from '../compo
 import './base-lending-telegram.css'
 
 const INSIGHT_KEYS_URL = 'https://www.oracleinsight.xyz/.well-known/oracle-keys.json'
-const BOT_API_URL = (import.meta.env.VITE_LENDING_BOT_API_URL ?? '').replace(/\/$/, '')
+const BOT_API_URL = (import.meta.env.VITE_LENDING_BOT_API_URL?.trim() || 'https://priorseal-polymarket-telegram-bot.priorseal.workers.dev').replace(/\/$/, '')
 const PROTOCOLS = [
   ['aave-v3-base', 'Aave V3 · Base'],
   ['morpho-blue-base', 'Morpho Blue · Base'],
