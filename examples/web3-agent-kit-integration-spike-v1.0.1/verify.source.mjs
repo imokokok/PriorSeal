@@ -67,6 +67,7 @@ class FixtureError extends Error {
     super(detail ?? code);
     this.code = code;
   }
+  code;
 }
 function demand(condition, code, detail) {
   if (!condition) throw new FixtureError(code, detail);
