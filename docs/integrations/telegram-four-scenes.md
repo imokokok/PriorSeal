@@ -11,6 +11,21 @@ The PriorSeal Telegram Worker provides one allowlisted bot for four entry points
 
 All four flows use the same Telegram bot, chat allowlist, webhook, and per-chat guard/evidence rate limit. Lending, perpetual, and swap flows must be opened from a private chat. The bot does not accept free-form messages, hold a wallet key, or send unsolicited notifications.
 
+## Coverage boundary and non-proxy rule
+
+The four entry points do not all have the same execution scope:
+
+| Scenario | Available now | Not covered by this Telegram integration |
+| --- | --- | --- |
+| Polymarket | Read-only market checks and signed-source evidence | Creating, submitting, modifying, or cancelling CLOB orders |
+| Base lending | Exact-call assessment, one-shot authorization, user-wallet submission, and receipt verification for the reviewed supply/borrow calls on four Base protocols | Repayment, collateral withdrawal, arbitrary protocols/chains, or protocol calls assembled by the bot |
+| Hyperliquid perpetuals | One assessed BTC/ETH IOC open-long/open-short order, explicitly authorized and signed with the connected wallet | Closing/reducing an existing position, stop/trigger orders, resting orders, or other assets |
+| DEX swap | Exact-input swaps over the six listed reviewed profiles, with separate wallet approval and swap prompts | Arbitrary tokens, routes, pools, multihop swaps, or token allowances broader than the reviewed exact call |
+
+The transaction boundary is a hard invariant: the Telegram Worker and Insight API may assess, attest, bind, and verify evidence. They must not receive, sign, forward, relay, or submit a user's trade or transaction; they must not retain exchange credentials or wallet secrets. Where a transaction is supported, the Mini App asks the connected wallet to sign and submit directly to the target chain or official venue after showing the exact action. A user must confirm each wallet prompt. An assessment or PriorSeal authorization alone never submits an action.
+
+Do not describe an uncovered action as ready or route it through a server-side executor to make it appear supported. Adding a new action requires a matching Insight risk decision, exact action binding, expiry and replay controls, user-side signing, and receipt/settlement verification before exposing it in the bot.
+
 ## Hyperliquid perpetual assessment
 
 Command (send only in a private bot chat):
