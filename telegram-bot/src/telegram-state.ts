@@ -1,7 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
+import { decideUpdateReservation } from './update-reservation.js'
 
 type CheckCommand = 'check' | 'other'
-type Reservation = 'reserved' | 'duplicate' | 'rate_limited'
+type Reservation = 'reserved' | 'duplicate' | 'in_progress' | 'rate_limited'
 const EVIDENCE_RETENTION_SECONDS = 30 * 86_400
 const MAX_SOURCE_EVIDENCE_RECORDS = 100
 export const MAX_SCENARIO_REQUESTS_PER_HOUR = 60
@@ -42,6 +43,10 @@ export class TelegramBotState extends DurableObject<Env> {
       ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS lending_assessments_requested_at ON lending_assessments(requested_at)')
       ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS swap_settlements (id INTEGER PRIMARY KEY AUTOINCREMENT, requested_at INTEGER NOT NULL)')
       ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS swap_settlements_requested_at ON swap_settlements(requested_at)')
+      const nextExpiry = ctx.storage.sql.exec<{ expires_at: number }>(
+        'SELECT MIN(expires_at) AS expires_at FROM source_evidence',
+      ).toArray()[0]?.expires_at
+      if (typeof nextExpiry === 'number') await ctx.storage.setAlarm(nextExpiry * 1000)
     })
   }
 
@@ -49,10 +54,17 @@ export class TelegramBotState extends DurableObject<Env> {
     const sql = this.ctx.storage.sql
     sql.exec('DELETE FROM updates WHERE created_at < ?', now - 86_400)
     sql.exec('DELETE FROM checks WHERE requested_at < ?', now - 86_400)
-    const existing = sql.exec<{ update_id: number }>(
-      'SELECT update_id FROM updates WHERE update_id = ? LIMIT 1', updateId,
+    const existing = sql.exec<{ update_id: number; created_at: number; completed: number }>(
+      'SELECT update_id, created_at, completed FROM updates WHERE update_id = ? LIMIT 1', updateId,
     ).toArray()
-    if (existing.length) return 'duplicate'
+    const prior = existing[0]
+    const decision = decideUpdateReservation(prior ? { createdAt: prior.created_at, completed: prior.completed } : null, now)
+    if (decision === 'duplicate') return 'duplicate'
+    if (decision === 'in_progress') return 'in_progress'
+    if (prior) {
+      sql.exec('DELETE FROM checks WHERE update_id = ?', updateId)
+      sql.exec('DELETE FROM updates WHERE update_id = ? AND completed = 0', updateId)
+    }
 
     if (command === 'check') {
       const hourly = sql.exec<{ total: number }>(
@@ -81,14 +93,14 @@ export class TelegramBotState extends DurableObject<Env> {
     this.ctx.storage.sql.exec('DELETE FROM updates WHERE update_id = ? AND completed = 0', updateId)
   }
 
-  storeSourceEvidence(
+  async storeSourceEvidence(
     updateId: number,
     marketId: string,
     collectedAt: string,
     evidenceHash: string,
     payloadJson: string,
     now: number,
-  ): void {
+  ): Promise<void> {
     if (!Number.isSafeInteger(updateId) || updateId < 0 || !marketId || marketId.length > 100 ||
         !Number.isFinite(Date.parse(collectedAt)) || !/^0x[\da-f]{64}$/i.test(evidenceHash) ||
         new TextEncoder().encode(payloadJson).byteLength > 64 * 1024 || !Number.isSafeInteger(now) || now < 0) {
@@ -104,6 +116,51 @@ export class TelegramBotState extends DurableObject<Env> {
       'DELETE FROM source_evidence WHERE update_id IN (SELECT update_id FROM source_evidence ORDER BY recorded_at DESC LIMIT -1 OFFSET ?)',
       MAX_SOURCE_EVIDENCE_RECORDS,
     )
+    await this.scheduleEvidenceExpiry()
+  }
+
+  async getSourceEvidence(updateId: number, now: number): Promise<{
+    marketId: string
+    collectedAt: string
+    evidenceHash: string
+    payloadJson: string
+  } | null> {
+    if (!Number.isSafeInteger(updateId) || updateId < 0 || !Number.isSafeInteger(now) || now < 0) {
+      throw new TypeError('Invalid source evidence record lookup')
+    }
+    const sql = this.ctx.storage.sql
+    const row = sql.exec<{
+      market_id: string; collected_at: string; evidence_hash: string; payload_json: string; expires_at: number
+    }>(
+      'SELECT market_id, collected_at, evidence_hash, payload_json, expires_at FROM source_evidence WHERE update_id = ? LIMIT 1',
+      updateId,
+    ).toArray()[0]
+    if (!row) return null
+    if (row.expires_at <= now) {
+      sql.exec('DELETE FROM source_evidence WHERE update_id = ?', updateId)
+      await this.scheduleEvidenceExpiry()
+      return null
+    }
+    return {
+      marketId: row.market_id,
+      collectedAt: row.collected_at,
+      evidenceHash: row.evidence_hash,
+      payloadJson: row.payload_json,
+    }
+  }
+
+  async alarm(): Promise<void> {
+    const now = Math.floor(Date.now() / 1000)
+    this.ctx.storage.sql.exec('DELETE FROM source_evidence WHERE expires_at <= ?', now)
+    await this.scheduleEvidenceExpiry()
+  }
+
+  private async scheduleEvidenceExpiry(): Promise<void> {
+    const nextExpiry = this.ctx.storage.sql.exec<{ expires_at: number }>(
+      'SELECT MIN(expires_at) AS expires_at FROM source_evidence',
+    ).toArray()[0]?.expires_at
+    if (typeof nextExpiry === 'number') await this.ctx.storage.setAlarm(nextExpiry * 1000)
+    else await this.ctx.storage.deleteAlarm()
   }
 
   reserveLendingAssessment(now: number): boolean {

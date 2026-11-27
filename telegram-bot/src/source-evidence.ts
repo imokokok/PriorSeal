@@ -22,6 +22,8 @@ export type VerifiedSourceEvidence = {
   payloadJson: string;
 };
 
+export type StoredSourceEvidence = Pick<VerifiedSourceEvidence, "marketId" | "collectedAt" | "evidenceHash" | "payloadJson">;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -280,4 +282,24 @@ export async function collectMarketEvidence(
     evidenceHash: commitment.digest,
     payloadJson,
   };
+}
+
+/** Recheck the stored envelope and commitment before returning an archived record. */
+export function readStoredMarketEvidence(record: StoredSourceEvidence): unknown {
+  if (!record || typeof record.marketId !== "string" || !record.marketId ||
+      typeof record.collectedAt !== "string" || !Number.isFinite(Date.parse(record.collectedAt)) ||
+      !/^0x[\da-f]{64}$/i.test(record.evidenceHash) || typeof record.payloadJson !== "string" ||
+      new TextEncoder().encode(record.payloadJson).byteLength > MAX_STORED_EVIDENCE_BYTES) {
+    throw new Error("STORED_EVIDENCE_INVALID");
+  }
+  let payload: unknown;
+  try { payload = JSON.parse(record.payloadJson) as unknown } catch { throw new Error("STORED_EVIDENCE_INVALID") }
+  const evidence = evidenceFromResponse(payload);
+  if (!evidence || !isRecord(evidence.market) || evidence.market.id !== record.marketId ||
+      evidence.collectedAt !== record.collectedAt) throw new Error("STORED_EVIDENCE_MISMATCH");
+  const commitment = insightPolymarketSourceEvidenceCommitment(payload);
+  if (commitment.digest.toLowerCase() !== record.evidenceHash.toLowerCase()) {
+    throw new Error("STORED_EVIDENCE_COMMITMENT_MISMATCH");
+  }
+  return payload;
 }

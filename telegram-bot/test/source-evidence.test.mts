@@ -10,7 +10,7 @@ import {
   verifyInsightPolymarketAviationWeatherMetarEvidence,
   verifyInsightPolymarketSourceEvidence,
 } from "../../sdk/dist/index.js";
-import { collectMarketEvidence } from "../src/source-evidence.ts";
+import { collectMarketEvidence, readStoredMarketEvidence } from "../src/source-evidence.ts";
 
 const signer = privateKeyToAccount(`0x${"47".repeat(32)}` as `0x${string}`);
 const now = Math.floor(Date.now() / 1000);
@@ -237,6 +237,20 @@ test("fetches reviewed evidence, verifies Insight signature, and returns a Prior
   assert.deepEqual(JSON.parse(String(evidenceCall.init.body)), {
     marketId: "market-1",
   });
+});
+
+test("restores the original signed evidence only when its stored commitment and metadata match", async () => {
+  const response = await signedResponse();
+  const commitment = insightPolymarketSourceEvidenceCommitment(response);
+  const stored = {
+    marketId: evidence.market.id,
+    collectedAt: evidence.collectedAt,
+    evidenceHash: commitment.digest,
+    payloadJson: JSON.stringify(response),
+  };
+  assert.deepEqual(readStoredMarketEvidence(stored), response);
+  assert.throws(() => readStoredMarketEvidence({ ...stored, evidenceHash: `0x${"00".repeat(32)}` }), /STORED_EVIDENCE_COMMITMENT_MISMATCH/);
+  assert.throws(() => readStoredMarketEvidence({ ...stored, marketId: "another-market" }), /STORED_EVIDENCE_MISMATCH/);
 });
 
 test("Telegram summaries retain bounded public-source identity without exposing credentials or conclusions", async () => {

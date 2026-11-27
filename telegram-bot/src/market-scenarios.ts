@@ -48,7 +48,6 @@ const PerpOrderSchema = z.object({
 }).strict()
 
 const PerpRequestSchema = z.object({
-  account: z.string().regex(ADDRESS),
   guard: PerpGuardSchema,
   order: PerpOrderSchema,
 }).strict().superRefine((request, context) => {
