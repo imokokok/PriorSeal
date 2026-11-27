@@ -11,6 +11,7 @@ import {
   parseScenarioPayload,
 } from './market-scenarios.js'
 import { upstreamAssessmentFailure, upstreamHttpError } from './upstream-errors.ts'
+import { hasAtLeastRemainingMs, priceContractEndTimeMs } from './assessment-window.js'
 import {
   MAX_SCENARIO_REQUESTS_PER_DAY,
   MAX_SCENARIO_REQUESTS_PER_HOUR,
@@ -128,11 +129,7 @@ function hasValidationIssueAtPath(error: unknown, path: string): boolean {
 }
 
 function isSupportedPriceContractSlug(slug: string): boolean {
-  const match = /^([a-z0-9]+)-updown-(\d+)m-(\d{10,})$/.exec(slug.trim().toLowerCase())
-  if (!match) return false
-  const windowSeconds = Number(match[2]) * 60
-  const windowStartSeconds = Number(match[3])
-  return Number.isSafeInteger(windowSeconds) && windowSeconds >= 60 && Number.isSafeInteger(windowStartSeconds)
+  return priceContractEndTimeMs(slug) !== undefined
 }
 
 function lendingMiniAppKeyboard(env: Env): Record<string, unknown> | undefined {
@@ -451,7 +448,7 @@ export default {
           const reason = scenarioErrorCode(error)
           console.error(JSON.stringify({ event: 'hyperliquid_perp_assessment_failed', code: reason }))
           reply = hasValidationIssueAtPath(error, 'expiresAfter')
-            ? 'Invalid order.expiresAfter: use a fresh Unix timestamp in milliseconds, 5–120 seconds ahead. Generate it immediately before sending with Date.now() + 60_000; a timestamp can expire while the message is in transit.'
+            ? 'Invalid order.expiresAfter: use a fresh Unix timestamp in milliseconds, 90–120 seconds ahead. Generate it immediately before sending with Date.now() + 110_000; a timestamp can expire while the message is in transit.'
             : upstreamAssessmentFailure(error, 'Could not return a trusted Hyperliquid perp assessment right now. Please try again later.')
         }
       }
@@ -466,8 +463,8 @@ export default {
         } catch (error) {
           const reason = scenarioErrorCode(error)
           console.error(JSON.stringify({ event: 'agent_swap_assessment_failed', code: reason }))
-          reply = reason === 'SWAP_DEADLINE_MUST_BE_WITHIN_120_SECONDS' || hasValidationIssueAtPath(error, 'deadlineUnixSeconds')
-            ? 'Invalid guard.deadlineUnixSeconds: use a fresh Unix timestamp in seconds, no more than 120 seconds ahead. Generate it immediately before sending with Math.floor(Date.now() / 1000) + 60.'
+          reply = reason === 'SWAP_DEADLINE_MUST_BE_WITHIN_90_TO_120_SECONDS' || hasValidationIssueAtPath(error, 'deadlineUnixSeconds')
+            ? 'Invalid guard.deadlineUnixSeconds: use a fresh Unix timestamp in seconds, 90–120 seconds ahead. Generate it immediately before sending with Math.floor(Date.now() / 1000) + 110.'
             : upstreamAssessmentFailure(error, 'Could not return a trusted DEX swap assessment right now. Please try again later.')
         }
       }
@@ -477,6 +474,9 @@ export default {
         if (!requestedSlug) reply = 'Usage: /check <active-market-slug> <up|down>'
         else if (hasSupportedShape) reply = 'Usage: /check <active-market-slug> <up|down>; the side must be up or down and no extra text may follow.'
         else reply = 'This /check currently supports short-term price contracts only, with a slug like btc-updown-5m-<10-digit Unix timestamp>. Use the slug of a currently active market; event slugs such as what-price-will-bitcoin-hit-before-2027 are not supported.'
+      } else if (command.command === 'check' && requestedSlug && priceContractEndTimeMs(requestedSlug) !== undefined &&
+        !hasAtLeastRemainingMs(priceContractEndTimeMs(requestedSlug) as number)) {
+        reply = 'This market closes in under 90 seconds. No assessment was requested; use the next active market window.'
       } else if (command.command === 'evidence' && (!validEvidence || !requestedMarketId)) {
         reply = 'Usage: /evidence <market-id>'
       } else if (command.command === 'evidence-record' && !validEvidenceRecord) {
