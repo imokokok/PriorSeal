@@ -1,6 +1,7 @@
 import { verifyInsightPolymarketGuardDecision } from '../../sdk/src/insight-polymarket-guard.js'
 import {
   collectMarketEvidence,
+  readStoredMarketEvidence,
 } from './source-evidence.js'
 import { handleBaseLendingAssessmentRequest } from './base-lending.js'
 import { handleTelegramSwapSettlementRequest } from './base-swap-settlement.js'
@@ -35,12 +36,12 @@ type Env = {
 type TelegramMessage = { chat: { id: number }; text?: string }
 type TelegramUpdate = { update_id: number; message?: TelegramMessage }
 type GuardVerdict = 'ALLOW' | 'CAUTION' | 'BLOCK'
-type BotCommand = 'start' | 'help' | 'check' | 'evidence' | 'lending' | 'perp' | 'swap'
+type BotCommand = 'start' | 'help' | 'check' | 'evidence' | 'evidence-record' | 'lending' | 'perp' | 'swap'
 
 const MAX_BODY_BYTES = 32 * 1024
 const MAX_RESPONSE_BYTES = 512 * 1024
 const PROTOCOL_ID = 'polymarket-prediction-mainnet'
-const COMMAND_PATTERN = /^\/(start|help|check|evidence|lending|perp|swap)(?:@[a-z0-9_]+)?(?:\s+([\s\S]*))?$/i
+const COMMAND_PATTERN = /^\/(start|help|check|evidence-record|evidence|lending|perp|swap)(?:@[a-z0-9_]+)?(?:\s+([\s\S]*))?$/i
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -111,7 +112,7 @@ function commandOf(text: string): { command: BotCommand; args: string } | null {
   const match = COMMAND_PATTERN.exec(text.trim())
   if (!match) return null
   const command = match[1]?.toLowerCase()
-  if (command !== 'start' && command !== 'help' && command !== 'check' && command !== 'evidence' &&
+  if (command !== 'start' && command !== 'help' && command !== 'check' && command !== 'evidence' && command !== 'evidence-record' &&
       command !== 'lending' && command !== 'perp' && command !== 'swap') return null
   return { command, args: match[2]?.trim() ?? '' }
 }
@@ -206,6 +207,27 @@ async function sendTelegramScenarioArtifact(
   } catch {
     return false
   }
+}
+
+async function sendTelegramEvidenceRecord(env: Env, chatId: number, caption: string, recordId: number, payload: unknown): Promise<boolean> {
+  if (!env.TELEGRAM_BOT_TOKEN) return false
+  let content: string
+  try { content = JSON.stringify(payload) } catch { return false }
+  if (new TextEncoder().encode(content).byteLength > 64 * 1024) return false
+  try {
+    const form = new FormData()
+    form.set('chat_id', String(chatId))
+    form.set('caption', caption.slice(0, 1_024))
+    form.set('document', new Blob([content], { type: 'application/json' }), `priorseal-polymarket-evidence-${recordId}.json`)
+    const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
+      method: 'POST', body: form, signal: AbortSignal.timeout(10_000),
+    })
+    if (!response.ok) return false
+    const resultText = await readBoundedStream(response.body, 8 * 1024)
+    if (resultText === null) return false
+    const result: unknown = JSON.parse(resultText)
+    return isRecord(result) && result.ok === true
+  } catch { return false }
 }
 
 async function fetchJson(url: string, init: RequestInit, maxBytes = MAX_RESPONSE_BYTES): Promise<unknown> {
@@ -371,6 +393,10 @@ export default {
     const [requestedMarketId, ...extraEvidenceArgs] = evidenceArgs
     const validEvidence = command.command === 'evidence' && Boolean(requestedMarketId && !extraEvidenceArgs.length &&
       requestedMarketId.length <= 100 && /^[a-z0-9][a-z0-9_-]*$/i.test(requestedMarketId))
+    const evidenceRecordArgs = command.command === 'evidence-record' ? command.args.split(/\s+/).filter(Boolean) : []
+    const [requestedEvidenceRecordId, ...extraEvidenceRecordArgs] = evidenceRecordArgs
+    const validEvidenceRecord = command.command === 'evidence-record' && Boolean(requestedEvidenceRecordId && !extraEvidenceRecordArgs.length &&
+      /^\d{1,16}$/.test(requestedEvidenceRecordId) && Number.isSafeInteger(Number(requestedEvidenceRecordId)))
     let perpPayload: unknown = null
     let swapPayload: unknown = null
     if (command.command === 'perp') {
@@ -388,9 +414,11 @@ export default {
       validCheck || validEvidence || validPerp || validSwap ? 'check' : 'other',
     )
     if (reservation === 'duplicate') return new Response('ok')
+    if (reservation === 'in_progress') return new Response('update is still being processed', { status: 503 })
     let reply: string | null = null
     let replyMarkup: Record<string, unknown> | undefined
     let scenarioArtifact: { fileName: string; value: Record<string, unknown> } | undefined
+    let evidenceDocument: { recordId: number; value: unknown } | undefined
     if (reservation === 'rate_limited') {
       reply = `Request limit reached: up to ${MAX_SCENARIO_REQUESTS_PER_HOUR} scenario/source assessment requests per rolling hour and ${MAX_SCENARIO_REQUESTS_PER_DAY} per rolling day per chat.`
     } else if (command.command === 'start' || command.command === 'help') {
@@ -398,6 +426,7 @@ export default {
         'One bot for four scenarios:',
         '/check <market-slug> <up|down> — Polymarket assessment',
         '/evidence <market-id> — signed Polymarket source evidence',
+        '/evidence-record <record-id> — retrieve the original signed evidence JSON in this chat',
         '/lending — open the Base lending Mini App',
         '/perp <JSON> — read-only Hyperliquid IOC risk assessment',
         '/swap <JSON> — read-only reviewed DEX swap risk assessment',
@@ -412,7 +441,7 @@ export default {
         : 'The Base lending Mini App is not configured yet. Please try again later.'
     } else if (command.command === 'perp') {
       if (!validPerp) {
-        reply = 'Usage: /perp {JSON with account, guard, and exact unsigned IOC order envelope}. See docs/integrations/telegram-four-scenes.md.'
+        reply = 'Usage: /perp {JSON with guard and exact unsigned IOC order envelope}. See docs/integrations/telegram-four-scenes.md.'
       } else {
         try {
           const result = await assessHyperliquidCommand(env, perpPayload)
@@ -450,6 +479,24 @@ export default {
         else reply = 'This /check currently supports short-term price contracts only, with a slug like btc-updown-5m-<10-digit Unix timestamp>. Use the slug of a currently active market; event slugs such as what-price-will-bitcoin-hit-before-2027 are not supported.'
       } else if (command.command === 'evidence' && (!validEvidence || !requestedMarketId)) {
         reply = 'Usage: /evidence <market-id>'
+      } else if (command.command === 'evidence-record' && !validEvidenceRecord) {
+        reply = 'Usage: /evidence-record <record-id>'
+      } else if (command.command === 'evidence-record' && requestedEvidenceRecordId) {
+        try {
+          const recordId = Number(requestedEvidenceRecordId)
+          const stored = await object.getSourceEvidence(recordId, Math.floor(Date.now() / 1000))
+          if (!stored) {
+            reply = 'That evidence record is unavailable in this chat or its 30-day retention period has ended.'
+          } else {
+            const payload = readStoredMarketEvidence(stored)
+            reply = `Original signed source evidence record ${recordId}. Collected ${stored.collectedAt}. The signature is archived as issued and may have expired; this is not a fresh assessment.`
+            evidenceDocument = { recordId, value: payload }
+          }
+        } catch (error) {
+          const reason = error instanceof Error ? error.message.slice(0, 80) : 'UNKNOWN'
+          console.error(JSON.stringify({ event: 'polymarket_evidence_record_read_failed', code: reason }))
+          reply = 'Could not read that stored evidence record safely.'
+        }
       } else if (command.command === 'evidence' && requestedMarketId) {
         try {
           const record = await collectMarketEvidence(env, requestedMarketId)
@@ -461,7 +508,7 @@ export default {
             record.payloadJson,
             Math.floor(Date.now() / 1000),
           )
-          reply = `${record.summary}\nEvidence record: ${update.update_id} (stored privately for up to 30 days)`
+          reply = `${record.summary}\nEvidence record: ${update.update_id} (stored in this chat for up to 30 days)`
         } catch (error) {
           const reason = error instanceof Error ? error.message.slice(0, 80) : 'UNKNOWN'
           console.error(JSON.stringify({ event: 'polymarket_evidence_failed', code: reason }))
@@ -478,10 +525,13 @@ export default {
       }
     }
 
-    const delivered = scenarioArtifact
-      ? await sendTelegramScenarioArtifact(env, message.chat.id, reply ?? '', scenarioArtifact.fileName, scenarioArtifact.value) ||
-        await sendTelegramMessage(env, message.chat.id, reply ?? 'Assessment complete; the JSON artifact could not be sent.', replyMarkup)
-      : await sendTelegramMessage(env, message.chat.id, reply, replyMarkup)
+    const delivered = evidenceDocument
+      ? await sendTelegramEvidenceRecord(env, message.chat.id, reply ?? '', evidenceDocument.recordId, evidenceDocument.value) ||
+        await sendTelegramMessage(env, message.chat.id, 'The evidence record was found, but Telegram could not deliver its JSON document. Please retry /evidence-record.', replyMarkup)
+      : scenarioArtifact
+        ? await sendTelegramScenarioArtifact(env, message.chat.id, reply ?? '', scenarioArtifact.fileName, scenarioArtifact.value) ||
+          await sendTelegramMessage(env, message.chat.id, reply ?? 'Assessment complete; the JSON artifact could not be sent.', replyMarkup)
+        : await sendTelegramMessage(env, message.chat.id, reply, replyMarkup)
     if (!delivered) {
       await object.releaseUpdate(update.update_id)
       return new Response('telegram delivery failed', { status: 502 })

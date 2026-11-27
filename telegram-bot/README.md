@@ -24,6 +24,7 @@ From the repository root, use the pinned Node.js version (`nvm use`). Use the ro
 3. Generate the worker binding types, inspect the deployment preview, then deploy:
 
    ```sh
+   npm run sdk:build
    npx wrangler types telegram-bot/worker-configuration.d.ts --config telegram-bot/wrangler.jsonc
    npx wrangler deploy --config telegram-bot/wrangler.jsonc --dry-run
    npx wrangler deploy --config telegram-bot/wrangler.jsonc
@@ -43,11 +44,13 @@ The user pastes one exact unsigned direct Base call. The app does not construct 
 
 ## Perpetual and DEX swap commands
 
-`/perp <JSON>` accepts `account`, `guard`, and one exact unsigned IOC request envelope as assessment input. The guard includes protocol ID `hyperliquid-perps-mainnet`, action `open_long`/`open_short`, reviewed asset `BTC`/`ETH`, `USDC`, notional, and declared margin. The order includes asset index, side, limit price, size, `Ioc` time in force, client order ID, and `expiresAfter` as a Unix timestamp in **milliseconds**, 5–120 seconds ahead. Generate it immediately before sending (for example, `Date.now() + 60_000`); don't reuse a timestamp from an earlier message. Insight assesses this request; PriorSeal verifies its signed decision and binding. The JSON artifact contains only the decision, with no PriorSeal intent. Nothing in the Telegram flow submits an exchange order.
+`/perp <JSON>` accepts `guard` and one exact unsigned IOC request envelope as assessment input. The guard includes protocol ID `hyperliquid-perps-mainnet`, action `open_long`/`open_short`, reviewed asset `BTC`/`ETH`, `USDC`, notional, and declared margin. The order includes asset index, side, limit price, size, `Ioc` time in force, client order ID, and `expiresAfter` as a Unix timestamp in **milliseconds**, 5–120 seconds ahead. Generate it immediately before sending (for example, `Date.now() + 60_000`); don't reuse a timestamp from an earlier message. Insight assesses this request; PriorSeal verifies its signed decision and binding. The assessment does not bind to an account, so no account field is accepted. The JSON artifact contains only the decision, with no PriorSeal intent. Nothing in the Telegram flow submits an exchange order.
 
 `/swap <JSON>` accepts only `guard`. The guard specifies a supported profile, direction, amount, recipient, source/destination decision prices, `deadlineUnixSeconds` as a Unix timestamp in **seconds** (current time to 120 seconds ahead), and policy thresholds. Generate the deadline immediately before sending (for example, `Math.floor(Date.now() / 1000) + 60`); a 13-digit millisecond value or an old timestamp is invalid. The command invokes Insight's `prepare_agent_swap_guard` assessment, so it can consume API credits. PriorSeal verifies the signed decision and exact request binding. The JSON artifact contains only the signed assessment; it does not include PriorSeal approval/swap intents. The Worker has a separate authenticated `/telegram/swap/settle` endpoint for optional post-trade verification. It accepts an already-submitted transaction hash and the signed assessment, asks Insight for signed settlement evidence, and does not receive or forward raw transactions, sign, broadcast, submit, or relay a user transaction. The endpoint cannot initiate a swap. See `docs/integrations/telegram-four-scenes.md` for full payload shapes and supported profiles.
 
 `/check <market-slug> <up|down>` currently supports only short-term price contracts whose slug matches the `asset-updown-window-timestamp` shape (for example, `btc-updown-5m-<10-digit Unix timestamp>`). Use a currently active Polymarket market slug. Event markets such as `what-price-will-bitcoin-hit-before-2027` are outside this assessment's supported market type.
+
+`/evidence <market-id>` stores the original verified, signed evidence JSON for up to 30 days (maximum 100 records per chat). Its reply includes a record ID. Use `/evidence-record <record-id>` in the same chat to retrieve the original JSON document. The bot checks its stored evidence commitment before sending it. The archived signature is the original attestation and may have expired; retrieval does not create a fresh assessment. Expired records are deleted by a Durable Object alarm and are also rejected on lookup.
 
 ## Data handling
 

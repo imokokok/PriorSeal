@@ -18,7 +18,7 @@ PriorSeal's separate authorization and execution-verification products remain ou
 ## Polymarket
 
 - `/check <market-slug> <up|down>` returns a signed, read-only market integrity assessment.
-- `/evidence <market-id>` collects reviewed source records and stores the evidence record privately for the configured retention window.
+- `/evidence <market-id>` collects reviewed source records and stores the original signed evidence JSON for 30 days (up to 100 records per chat). Use `/evidence-record <record-id>` in the same chat to retrieve it. Stored commitments are checked before delivery; the original signature may have expired, and retrieval is not a fresh assessment. Expired records are removed by a Durable Object alarm and rejected on lookup.
 - This bot does not create or manage CLOB orders.
 
 ## Base lending
@@ -29,12 +29,12 @@ The Worker verifies Telegram Mini App identity and allowlist, calls Insight usin
 
 ## Hyperliquid perpetuals
 
-`/perp <JSON>` accepts the account, guard inputs, and one exact unsigned IOC request for BTC or ETH. The order object is used as assessment input only. A future expiry between 5 and 120 seconds is required so the signed assessment remains tightly scoped.
+`/perp <JSON>` accepts guard inputs and one exact unsigned IOC request for BTC or ETH. The assessment does not bind to an account, so the bot does not accept an account field. The order object is used as assessment input only. A future expiry between 5 and 120 seconds is required so the signed assessment remains tightly scoped.
 
 Example shape (replace the placeholder with a Unix millisecond timestamp):
 
 ```text
-/perp {"account":"0x1111111111111111111111111111111111111111","guard":{"protocolId":"hyperliquid-perps-mainnet","action":"open_long","assetSymbol":"BTC","marginAssetSymbol":"USDC","sizeUsd":950,"marginValueUsd":500},"order":{"action":{"type":"order","grouping":"na","orders":[{"a":0,"b":true,"p":"95000","s":"0.01","r":false,"t":{"limit":{"tif":"Ioc"}},"c":"0x0123456789abcdef0123456789abcdef"}]},"expiresAfter":<unix_ms_5_to_120_seconds_in_future>}}
+/perp {"guard":{"protocolId":"hyperliquid-perps-mainnet","action":"open_long","assetSymbol":"BTC","marginAssetSymbol":"USDC","sizeUsd":950,"marginValueUsd":500},"order":{"action":{"type":"order","grouping":"na","orders":[{"a":0,"b":true,"p":"95000","s":"0.01","r":false,"t":{"limit":{"tif":"Ioc"}},"c":"0x0123456789abcdef0123456789abcdef"}]},"expiresAfter":<unix_ms_5_to_120_seconds_in_future>}}
 ```
 
 The Worker verifies Insight's signed result and the exact request binding, then returns the signed assessment as JSON. The artifact contains no PriorSeal intent. Opening it only verifies and displays the decision; no wallet connection, authorization, signature, or order submission is performed.
