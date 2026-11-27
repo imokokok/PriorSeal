@@ -9,7 +9,11 @@ import {
   assessSwapCommand,
   parseScenarioPayload,
 } from './market-scenarios.js'
-import { TelegramBotState } from './telegram-state.js'
+import {
+  MAX_SCENARIO_REQUESTS_PER_DAY,
+  MAX_SCENARIO_REQUESTS_PER_HOUR,
+  TelegramBotState,
+} from './telegram-state.js'
 import type { KeyRegistry } from 'verify-insight-receipt'
 
 export { TelegramBotState } from './telegram-state.js'
@@ -387,7 +391,7 @@ export default {
     let replyMarkup: Record<string, unknown> | undefined
     let scenarioArtifact: { fileName: string; value: Record<string, unknown> } | undefined
     if (reservation === 'rate_limited') {
-      reply = 'Request limit reached: up to 3 guard/source requests per hour and 10 per day per chat.'
+      reply = `Request limit reached: up to ${MAX_SCENARIO_REQUESTS_PER_HOUR} scenario/source assessment requests per rolling hour and ${MAX_SCENARIO_REQUESTS_PER_DAY} per rolling day per chat.`
     } else if (command.command === 'start' || command.command === 'help') {
       reply = [
         'One bot for four scenarios:',
@@ -396,6 +400,7 @@ export default {
         '/lending — open the Base lending Mini App',
         '/perp <JSON> — read-only Hyperliquid IOC risk assessment',
         '/swap <JSON> — read-only reviewed DEX swap risk assessment',
+        'Guard/source assessments: up to 60 requests per rolling hour and 500 per rolling day per chat; lending has a separate user-based limit.',
         'Open Lending, Perp, and Swap only in private chat; artifacts contain signed assessments only. This bot flow has no wallet authorization or transaction/order submission.',
         'Guard commands use the configured Insight API quota/credits. PriorSeal independently verifies signed decisions and evidence.',
       ].join('\n')
