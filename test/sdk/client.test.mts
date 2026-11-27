@@ -255,8 +255,9 @@ test('SDK waits until the retry is due without repeatedly fetching the same job'
   const nextAttemptAt = Date.now() + 100;
   const pollTimes: number[] = [];
   const client = createPriorSealClient({ fetch: async () => {
-    pollTimes.push(Date.now());
-    return response({ jobId: 'job-retry', state: Date.now() >= nextAttemptAt ? 'COMPLETED' : 'RETRY_WAIT', nextAttemptAt, input: {}, observation: null, result: null, error: null });
+    const polledAt = Date.now();
+    pollTimes.push(polledAt);
+    return response({ jobId: 'job-retry', state: polledAt >= nextAttemptAt ? 'COMPLETED' : 'RETRY_WAIT', nextAttemptAt, input: {}, observation: null, result: null, error: null });
   } });
   const job = await client.waitForObservationJob('job-retry', { pollIntervalMs: 10, timeoutMs: 1000 });
   assert.equal(job.state, 'COMPLETED');
