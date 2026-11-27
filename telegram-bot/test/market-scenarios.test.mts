@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createReadOnlyScenarioArtifact } from '../src/read-only-scenario-artifact.ts'
+import { withPerpAssessmentExpiry, withSwapAssessmentDeadline } from '../src/assessment-deadlines.ts'
 import { assertSwapDecisionMatchesRequest } from '../src/swap-request-binding.ts'
 
 const request = {
@@ -35,6 +36,24 @@ function decision() {
 
 test('swap request binding accepts a decision that matches amount, direction, prices, and deadline', () => {
   assert.doesNotThrow(() => assertSwapDecisionMatchesRequest(decision(), request))
+})
+
+test('perp assessment generates its own expiry and replaces stale caller expiry', () => {
+  const payload = {
+    guard: { protocolId: 'hyperliquid-perps-mainnet', action: 'open_long', assetSymbol: 'BTC', marginAssetSymbol: 'USDC', sizeUsd: 950, marginValueUsd: 500 },
+    order: { action: { type: 'order', grouping: 'na', orders: [{ a: 0, b: true, p: '95000', s: '0.01', r: false, t: { limit: { tif: 'Ioc' } }, c: '0x0123456789abcdef0123456789abcdef' }] } },
+  }
+  const now = 1_800_000_000_000
+  assert.equal(withPerpAssessmentExpiry(payload, now).order.expiresAfter, now + 110_000)
+  assert.equal(withPerpAssessmentExpiry({ ...payload, order: { ...payload.order, expiresAfter: 1 } }, now).order.expiresAfter, now + 110_000)
+})
+
+test('swap assessment generates its own deadline and replaces stale caller deadline', () => {
+  const now = 1_800_000_000_000
+  const prepared = withSwapAssessmentDeadline(request, now)
+  assert.equal(prepared.guard.deadlineUnixSeconds, Math.floor(now / 1_000) + 110)
+  const stale = withSwapAssessmentDeadline({ guard: { ...request.guard, deadlineUnixSeconds: 1 } }, now)
+  assert.equal(stale.guard.deadlineUnixSeconds, Math.floor(now / 1_000) + 110)
 })
 
 test('swap request binding rejects a different signed amount', () => {

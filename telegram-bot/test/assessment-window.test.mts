@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { hasAtLeastRemainingMs, isWithinAssessmentDeadlineWindow, priceContractEndTimeMs } from '../src/assessment-window.ts'
+import { currentBtcPriceContractSlug, hasAtLeastRemainingMs, isWithinAssessmentDeadlineWindow, priceContractEndTimeMs } from '../src/assessment-window.ts'
 
 const nowMs = 1_800_000_000_000
 
@@ -26,4 +26,10 @@ test('Unix-second deadlines use the same 90–120 second window after conversion
   assert.equal(isWithinAssessmentDeadlineWindow((nowSeconds + 90) * 1_000, nowMs), true)
   assert.equal(isWithinAssessmentDeadlineWindow((nowSeconds + 89) * 1_000, nowMs), false)
   assert.equal(isWithinAssessmentDeadlineWindow((nowSeconds + 121) * 1_000, nowMs), false)
+})
+
+test('current BTC market slug is derived from the message receive time', () => {
+  assert.equal(currentBtcPriceContractSlug(nowMs), 'btc-updown-5m-1800000000')
+  assert.equal(currentBtcPriceContractSlug(nowMs + 299_999), 'btc-updown-5m-1800000000')
+  assert.equal(currentBtcPriceContractSlug(nowMs + 300_000), 'btc-updown-5m-1800000300')
 })

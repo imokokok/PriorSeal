@@ -8,6 +8,7 @@ import {
 import { createReadOnlyScenarioArtifact } from './read-only-scenario-artifact.js'
 import { assertSwapDecisionMatchesRequest } from './swap-request-binding.js'
 import { isWithinAssessmentDeadlineWindow } from './assessment-window.js'
+import { withPerpAssessmentExpiry, withSwapAssessmentDeadline } from './assessment-deadlines.ts'
 import { upstreamHttpError } from './upstream-errors.ts'
 import type { KeyRegistry } from 'verify-insight-receipt'
 
@@ -45,7 +46,7 @@ const PerpOrderSchema = z.object({
       c: z.string().regex(CLOID),
     }).strict()).length(1),
   }).strict(),
-  expiresAfter: z.number().int().positive(),
+  expiresAfter: z.number().int().positive().optional(),
 }).strict()
 
 const PerpRequestSchema = z.object({
@@ -56,10 +57,6 @@ const PerpRequestSchema = z.object({
   if (!order) return
   const expectedBuy = request.guard.action === 'open_long'
   if (order.b !== expectedBuy) context.addIssue({ code: 'custom', path: ['order', 'action', 'orders', 0, 'b'], message: 'order side must match guard action' })
-  if (request.guard.assetSymbol !== 'BTC' && request.guard.assetSymbol !== 'ETH') return
-  if (!isWithinAssessmentDeadlineWindow(request.order.expiresAfter)) {
-    context.addIssue({ code: 'custom', path: ['order', 'expiresAfter'], message: 'expiry must be 90 to 120 seconds in the future' })
-  }
 })
 
 const SwapGuardSchema = z.object({
@@ -74,7 +71,7 @@ const SwapGuardSchema = z.object({
   direction: z.enum(['token0-to-token1', 'token1-to-token0']).optional(),
   amountIn: z.string().regex(POSITIVE_DECIMAL).max(128),
   recipient: z.string().regex(ADDRESS),
-  deadlineUnixSeconds: z.number().int().positive(),
+  deadlineUnixSeconds: z.number().int().positive().optional(),
   sourceDecisionPriceUsd: z.number().finite().positive().max(1_000_000_000),
   destinationDecisionPriceUsd: z.number().finite().positive().max(1_000_000_000),
   policy: z.object({
@@ -159,6 +156,16 @@ export function parseScenarioPayload(raw: string): unknown {
   try { return JSON.parse(raw) as unknown } catch { throw new Error('PAYLOAD_INVALID_JSON') }
 }
 
+export function preparePerpAssessmentRequest(payload: unknown, nowMs = Date.now()) {
+  const parsed = PerpRequestSchema.parse(payload)
+  return withPerpAssessmentExpiry(parsed, nowMs)
+}
+
+export function prepareSwapAssessmentRequest(payload: unknown, nowMs = Date.now()) {
+  const parsed = SwapRequestSchema.parse(payload)
+  return withSwapAssessmentDeadline(parsed, nowMs)
+}
+
 function jsonFileResult(summary: string, artifact: Record<string, unknown>) {
   return { summary, artifact }
 }
@@ -194,7 +201,7 @@ export function assertPerpDecisionMatchesRequest(
 }
 
 export async function assessHyperliquidCommand(env: ScenarioEnv, payload: unknown): Promise<{ summary: string; artifact: Record<string, unknown> }> {
-  const input = PerpRequestSchema.parse(payload)
+  const input = preparePerpAssessmentRequest(payload)
   const { apiKey, base } = configured(env)
   const response = await fetch(new URL('/api/v1/safety/hyperliquid-perp-guard', base), {
     method: 'POST',
@@ -246,8 +253,8 @@ async function callInsightSwapTool(env: ScenarioEnv, args: z.infer<typeof SwapGu
 }
 
 export async function assessSwapCommand(env: ScenarioEnv, payload: unknown): Promise<{ summary: string; artifact: Record<string, unknown> }> {
-  const input = SwapRequestSchema.parse(payload)
-  if (!isWithinAssessmentDeadlineWindow(input.guard.deadlineUnixSeconds * 1_000)) throw new Error('SWAP_DEADLINE_MUST_BE_WITHIN_90_TO_120_SECONDS')
+  const input = prepareSwapAssessmentRequest(payload)
+  if (!isWithinAssessmentDeadlineWindow(input.guard.deadlineUnixSeconds * 1_000)) throw new Error('BOT_GENERATED_SWAP_DEADLINE_INVALID')
   const decision = await callInsightSwapTool(env, input.guard)
   const registry = await getKeyRegistry(env)
   const verification = await verifyInsightAgentSwapGuardDecision(decision, { keyRegistry: registry })
