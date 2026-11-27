@@ -4,6 +4,8 @@ type CheckCommand = 'check' | 'other'
 type Reservation = 'reserved' | 'duplicate' | 'rate_limited'
 const EVIDENCE_RETENTION_SECONDS = 30 * 86_400
 const MAX_SOURCE_EVIDENCE_RECORDS = 100
+export const MAX_SCENARIO_REQUESTS_PER_HOUR = 60
+export const MAX_SCENARIO_REQUESTS_PER_DAY = 500
 
 /** Per-chat durable update deduplication and rolling usage limits. */
 export class TelegramBotState extends DurableObject<Env> {
@@ -59,7 +61,7 @@ export class TelegramBotState extends DurableObject<Env> {
       const daily = sql.exec<{ total: number }>(
         'SELECT COUNT(*) AS total FROM checks WHERE requested_at > ?', now - 86_400,
       ).toArray()[0]?.total ?? 0
-      if (hourly >= 3 || daily >= 10) {
+      if (hourly >= MAX_SCENARIO_REQUESTS_PER_HOUR || daily >= MAX_SCENARIO_REQUESTS_PER_DAY) {
         sql.exec('INSERT INTO updates(update_id, created_at, completed) VALUES (?, ?, 0)', updateId, now)
         return 'rate_limited'
       }
@@ -113,7 +115,7 @@ export class TelegramBotState extends DurableObject<Env> {
     const daily = sql.exec<{ total: number }>(
       'SELECT COUNT(*) AS total FROM lending_assessments WHERE requested_at > ?', now - 86_400,
     ).toArray()[0]?.total ?? 0
-    if (hourly >= 3 || daily >= 10) return false
+    if (hourly >= MAX_SCENARIO_REQUESTS_PER_HOUR || daily >= MAX_SCENARIO_REQUESTS_PER_DAY) return false
     sql.exec('INSERT INTO lending_assessments(requested_at) VALUES (?)', now)
     return true
   }
