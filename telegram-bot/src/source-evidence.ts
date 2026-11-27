@@ -3,6 +3,7 @@ import {
   verifyInsightPolymarketSourceEvidenceAttestation,
 } from "../../sdk/dist/index.js";
 import type { KeyRegistry } from "verify-insight-receipt";
+import { upstreamHttpError } from "./upstream-errors.ts";
 
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const MAX_STORED_EVIDENCE_BYTES = 64 * 1024;
@@ -72,7 +73,10 @@ async function fetchJson(
     ...init,
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!response.ok) throw new Error(`UPSTREAM_HTTP_${response.status}`);
+  if (!response.ok) {
+    const service = url.includes("/.well-known/oracle-keys.json") ? "KEY_REGISTRY" : "INSIGHT";
+    throw upstreamHttpError(response, service);
+  }
   const contentLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES)
     throw new Error("UPSTREAM_TOO_LARGE");

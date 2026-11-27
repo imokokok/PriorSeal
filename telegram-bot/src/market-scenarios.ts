@@ -7,6 +7,7 @@ import {
 } from '../../sdk/src/insight-hyperliquid-perp-guard.js'
 import { createReadOnlyScenarioArtifact } from './read-only-scenario-artifact.js'
 import { assertSwapDecisionMatchesRequest } from './swap-request-binding.js'
+import { upstreamHttpError } from './upstream-errors.ts'
 import type { KeyRegistry } from 'verify-insight-receipt'
 
 type ScenarioEnv = {
@@ -131,7 +132,7 @@ async function getKeyRegistry(env: ScenarioEnv): Promise<KeyRegistry> {
   const { apiKey, registry } = configured(env)
   void apiKey
   const response = await fetch(registry, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10_000) })
-  if (!response.ok) throw new Error(`KEY_REGISTRY_HTTP_${response.status}`)
+  if (!response.ok) throw upstreamHttpError(response, 'KEY_REGISTRY')
   const text = await responseText(response, 64 * 1024)
   const value: unknown = JSON.parse(text)
   if (!isRecord(value)) throw new Error('KEY_REGISTRY_INVALID')
@@ -201,7 +202,7 @@ export async function assessHyperliquidCommand(env: ScenarioEnv, payload: unknow
     body: JSON.stringify({ guard: input.guard, order: input.order }),
     signal: AbortSignal.timeout(60_000),
   })
-  if (!response.ok) throw new Error(`INSIGHT_HTTP_${response.status}`)
+  if (!response.ok) throw upstreamHttpError(response)
   const body: unknown = JSON.parse(await responseText(response, MAX_RESPONSE_BYTES))
   const decision = unwrapDecision(body)
   if (!decision) throw new Error('INSIGHT_DECISION_MISSING')
@@ -232,7 +233,7 @@ async function callInsightSwapTool(env: ScenarioEnv, args: z.infer<typeof SwapGu
     body: JSON.stringify({ jsonrpc: '2.0', id: 'priorseal-telegram-swap', method: 'tools/call', params: { name: 'prepare_agent_swap_guard', arguments: args } }),
     signal: AbortSignal.timeout(60_000),
   })
-  if (!response.ok) throw new Error(`INSIGHT_MCP_HTTP_${response.status}`)
+  if (!response.ok) throw upstreamHttpError(response, 'INSIGHT_MCP')
   const text = await responseText(response, MAX_RESPONSE_BYTES)
   let rpc: unknown
   try { rpc = JSON.parse(text) as unknown } catch { throw new Error('INSIGHT_MCP_INVALID_JSON') }
