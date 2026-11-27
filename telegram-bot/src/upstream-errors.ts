@@ -1,5 +1,15 @@
 export type UpstreamErrorService = 'INSIGHT' | 'INSIGHT_MCP' | 'KEY_REGISTRY'
 
+export class UpstreamTransportError extends Error {
+  readonly service: UpstreamErrorService
+
+  constructor(service: UpstreamErrorService) {
+    super(`${service}_FETCH_FAILED`)
+    this.name = 'UpstreamTransportError'
+    this.service = service
+  }
+}
+
 export class UpstreamHttpError extends Error {
   readonly service: UpstreamErrorService
   readonly status: number
@@ -40,8 +50,23 @@ export function upstreamHttpError(
   return new UpstreamHttpError(service, response.status, retryAfterSeconds(response))
 }
 
+export function upstreamTransportError(service: UpstreamErrorService): UpstreamTransportError {
+  return new UpstreamTransportError(service)
+}
+
 export function upstreamAssessmentFailure(error: unknown, fallback: string): string {
+  if (error instanceof UpstreamTransportError) {
+    return error.service === 'KEY_REGISTRY'
+      ? 'Could not reach the trusted key registry. No assessment was accepted; please retry later.'
+      : 'Could not reach Insight assessment service. No assessment was produced; please retry later.'
+  }
   if (!(error instanceof UpstreamHttpError)) return fallback
+
+  if (error.service === 'KEY_REGISTRY') {
+    if (error.status === 404) return 'The trusted key registry endpoint was not found. Ask the bot operator to verify its configured URL.'
+    if (error.status === 408 || error.status >= 500) return 'The trusted key registry is temporarily unavailable. No assessment was accepted; please retry later.'
+    return 'The trusted key registry rejected the verification request. No assessment was accepted.'
+  }
 
   if (error.status === 402) {
     return 'Insight did not issue an assessment because this API key needs available credits or payment access. Ask the bot operator to check the Insight API key plan and balance.'
@@ -58,7 +83,10 @@ export function upstreamAssessmentFailure(error: unknown, fallback: string): str
   if (error.status === 400 || error.status === 422) {
     return 'Insight rejected the assessment inputs. Refresh time-limited fields, check the supported market or scenario format, and retry. No assessment was produced.'
   }
-  if (error.status >= 500) {
+  if (error.status === 404) {
+    return 'Insight assessment endpoint was not found. Ask the bot operator to verify the API route and production release.'
+  }
+  if (error.status === 408 || error.status >= 500) {
     return 'Insight assessment service is temporarily unavailable. No assessment was produced; please retry later.'
   }
   return fallback

@@ -19,3 +19,9 @@ export function priceContractEndTimeMs(slug: string): number | undefined {
   const endTimeMs = (windowStartSeconds + windowSeconds) * 1_000
   return Number.isSafeInteger(endTimeMs) ? endTimeMs : undefined
 }
+
+export function currentBtcPriceContractSlug(nowMs = Date.now()): string {
+  const windowSeconds = 5 * 60
+  const startSeconds = Math.floor(nowMs / 1_000 / windowSeconds) * windowSeconds
+  return `btc-updown-5m-${startSeconds}`
+}
