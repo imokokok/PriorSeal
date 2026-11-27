@@ -13,7 +13,7 @@ One allowlisted Telegram bot gives read-only assessment and evidence entry point
 
 The Telegram Worker and Mini Apps may collect assessment inputs, call Insight, verify signed decisions, and display or retain read-only evidence. They must not create wallet authorization, connect to a wallet, sign, broadcast, place, modify, cancel, forward, or relay a user's transaction or order. They must not retain wallet secrets or exchange credentials. A verdict of `ALLOW` is an assessment result only; it is not permission to execute. Any action the user chooses to take happens independently outside this Telegram integration.
 
-PriorSeal's separate authorization and execution-verification products remain available outside these Telegram scenario flows. This bot does not initiate them. Existing prior assessment artifacts that contain executable intents are not accepted by the read-only Mini App; request a fresh assessment.
+PriorSeal's separate authorization and execution-verification products remain outside these assessment flows. The Telegram integration never signs, submits, broadcasts, or relays a user's transaction or order. Existing prior assessment artifacts that contain executable intents are not accepted by the read-only Mini App; request a fresh assessment.
 
 ## Polymarket
 
@@ -56,7 +56,7 @@ The request specifies profile, direction, amount, recipient, a deadline no more 
 /swap {"guard":{"profileId":"base-aerodrome-slipstream-weth-usdc-cl100","direction":"token0-to-token1","amountIn":"0.1","recipient":"0x1111111111111111111111111111111111111111","deadlineUnixSeconds":<unix_seconds_within_120_seconds>,"sourceDecisionPriceUsd":3500,"destinationDecisionPriceUsd":1,"policy":{"maxSlippageBps":50,"maxPriceImpactBps":30,"maxTwapDeviationBps":50,"maxReferenceDeviationBps":100,"maxQuoteAgeSeconds":60}}}
 ```
 
-The Worker calls Insight's reviewed `prepare_agent_swap_guard` assessment, verifies the signed decision and the exact request binding, then returns the signed assessment only. It does not build PriorSeal approval/swap intents, ask for wallet authorization, submit calls, or request trade settlement.
+The Worker calls Insight's reviewed `prepare_agent_swap_guard` assessment, verifies the signed decision and exact request binding, then returns the signed assessment only. It does not build PriorSeal approval/swap intents, ask for wallet authorization, or submit or relay calls. The Worker also exposes an authenticated `/telegram/swap/settle` endpoint for optional post-trade verification: it accepts an already-submitted swap transaction hash, the signed assessment, and an optional approval transaction hash, then asks Insight for signed settlement evidence. It accepts no raw transaction for forwarding and never signs, broadcasts, submits, or relays a transaction. This endpoint verifies activity the user submitted independently; it does not initiate a swap.
 
 ## Operations and data handling
 
