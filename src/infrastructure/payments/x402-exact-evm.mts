@@ -144,6 +144,35 @@ const BAZAAR_SERVICE = Object.freeze({
   iconUrl: '/priorseal-mark.svg',
 });
 
+/**
+ * Trust extension embedded in every 402 quote. A first-time caller's quote is
+ * the only surface that answers "why should I trust this" before paying, and
+ * every PriorSeal paid resource returns self-describing signed evidence, so
+ * the extension carries the verification path the caller needs to continue:
+ * each paid response is an Ed25519-signed statement (schema priorseal.*.v1)
+ * carrying issuer, keyId, algorithm, and a keyRegistry block whose published
+ * URL and hash let anyone verify the signature independently.
+ *
+ * Deliberately NOT copied into /.well-known/x402.json manifest entries (the
+ * manifest endpoint keeps extensions to `bazaar` only) so the discovery shape
+ * indexed by facilitators stays byte-stable.
+ */
+const X402_TRUST_EXTENSION = Object.freeze({
+  info: Object.freeze({
+    verification: Object.freeze({
+      algorithm: 'Ed25519',
+      keyRegistrySchema: 'priorseal.keys.v1',
+      summary:
+        'Paid responses are signed Ed25519 evidence statements (schema priorseal.*.v1). Each statement carries issuer, keyId, algorithm, and a keyRegistry block {schema, url, hash}: fetch the published key registry from url, verify the signature with the issuer key, and check the registry hash. Statements are point-in-time with explicit expiresAt.',
+    }),
+    boundaries: Object.freeze([
+      'Read-only evidence: PriorSeal never submits transactions, holds custody of keys, or enforces outcomes.',
+      'Reports are decision-input only; apply independent RPC and security review before relying on them.',
+    ]),
+    discoveryManifest: 'https://priorseal.xyz/.well-known/x402.json',
+  }),
+});
+
 type FacilitatorKind = { x402Version: number; scheme: string; network: string; extra?: unknown };
 type FacilitatorCapability = { kinds: FacilitatorKind[]; signers?: Record<string, string[]> };
 type ParsedFacilitatorSupport = { networks: Set<string>; solanaFeePayers: ReadonlyMap<string, string> };
@@ -295,7 +324,9 @@ export function createX402PaymentService(config: X402Config) {
       if (requirements.length === 0) throw new Error('Configured facilitator does not support exact payments on any locally configured network');
       // Bazaar receives a self-validating description of the exact paid HTTP
       // resource. Receipt IDs are path parameters, not service metadata.
-      const extensions = { bazaar: bazaarDiscovery(route, resourceUrl) };
+      // `trust` carries the signature-verification path for first-time callers;
+      // the manifest endpoint strips it back to `bazaar` only.
+      const extensions = { bazaar: bazaarDiscovery(route, resourceUrl), trust: X402_TRUST_EXTENSION };
       const paymentRequired = (error: string) => ({ x402Version: 2, error, resource, accepts: requirements, extensions });
       const response = paymentRequired(malformed ? 'Invalid PAYMENT-SIGNATURE header' : 'Payment required');
       const header = encodeBase64Json(response);

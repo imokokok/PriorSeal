@@ -54,6 +54,20 @@ const BAZAAR_SERVICE = Object.freeze({
   tags: ["agent-evidence", "authorization", "execution", "verification", "x402"],
   iconUrl: "/priorseal-mark.svg"
 });
+const X402_TRUST_EXTENSION = Object.freeze({
+  info: Object.freeze({
+    verification: Object.freeze({
+      algorithm: "Ed25519",
+      keyRegistrySchema: "priorseal.keys.v1",
+      summary: "Paid responses are signed Ed25519 evidence statements (schema priorseal.*.v1). Each statement carries issuer, keyId, algorithm, and a keyRegistry block {schema, url, hash}: fetch the published key registry from url, verify the signature with the issuer key, and check the registry hash. Statements are point-in-time with explicit expiresAt."
+    }),
+    boundaries: Object.freeze([
+      "Read-only evidence: PriorSeal never submits transactions, holds custody of keys, or enforces outcomes.",
+      "Reports are decision-input only; apply independent RPC and security review before relying on them."
+    ]),
+    discoveryManifest: "https://priorseal.xyz/.well-known/x402.json"
+  })
+});
 const capabilityCache = /* @__PURE__ */ new Map();
 function parseX402Config(environment) {
   const raw = {
@@ -167,7 +181,7 @@ function createX402PaymentService(config) {
         if (!hypercoreClient) throw error;
       }
       if (requirements.length === 0) throw new Error("Configured facilitator does not support exact payments on any locally configured network");
-      const extensions = { bazaar: bazaarDiscovery(route, resourceUrl) };
+      const extensions = { bazaar: bazaarDiscovery(route, resourceUrl), trust: X402_TRUST_EXTENSION };
       const paymentRequired = (error) => ({ x402Version: 2, error, resource, accepts: requirements, extensions });
       const response = paymentRequired(malformed ? "Invalid PAYMENT-SIGNATURE header" : "Payment required");
       const header = encodeBase64Json(response);

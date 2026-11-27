@@ -442,7 +442,9 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
             tags: resource.tags,
             iconUrl: resource.iconUrl,
             accepts: response.accepts,
-            extensions: response.extensions,
+            // Keep the discovery shape byte-stable for facilitator indexers:
+            // the `trust` extension exists only on live 402 quotes, not here.
+            extensions: { bazaar: (response.extensions as Record<string, unknown>)?.bazaar },
           });
         }
         return respond(200, { x402Version: 2, resources: entries }, { 'cache-control': 'public, max-age=300' });

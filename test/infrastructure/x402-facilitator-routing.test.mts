@@ -258,3 +258,36 @@ test('BNB requirements use 18-decimal amounts and route to the override facilita
   assert.equal(settled.success, true);
   assert.deepEqual(requested, ['https://aeon.facilitator.test/settle'], 'BNB settlement must route to the override facilitator');
 });
+
+test('every 402 quote carries the trust extension and the manifest stays bazaar-only', async (t) => {
+  const config = parseX402Config({
+    ...base,
+    PRIORSEAL_X402_NETWORKS: 'eip155:56',
+    PRIORSEAL_X402_FACILITATOR_URLS: 'eip155:56=https://bnb.facilitator.test',
+  })!;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    if (url.toString() === 'https://bnb.facilitator.test/supported') return Response.json({ kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:56' }] });
+    throw new TypeError(`Unexpected facilitator request: ${url.toString()}`);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const service = createX402PaymentService(config);
+  const required = await service.prepare(config.routes[0], 'https://api.example.test/v1/receipts/probe/bundle', undefined);
+  assert.equal(required.kind, 'required');
+  if (required.kind !== 'required') return;
+  const extensions = (required.response as { extensions: Record<string, { info?: Record<string, unknown> }> }).extensions;
+  const trust = extensions.trust?.info as {
+    verification: { algorithm: string; keyRegistrySchema: string; summary: string };
+    boundaries: string[];
+    discoveryManifest: string;
+  } | undefined;
+  assert.ok(trust, 'a 402 quote must carry the trust extension');
+  assert.equal(trust.verification.algorithm, 'Ed25519');
+  assert.equal(trust.verification.keyRegistrySchema, 'priorseal.keys.v1');
+  assert.ok(trust.verification.summary.includes('keyRegistry'), 'verification summary must point at the published key registry');
+  assert.ok(Array.isArray(trust.boundaries) && trust.boundaries.length >= 2, 'boundaries must state read-only and decision-input-only limits');
+  assert.equal(trust.discoveryManifest, 'https://priorseal.xyz/.well-known/x402.json');
+  assert.ok(extensions.bazaar, 'the bazaar extension must remain alongside trust');
+});
