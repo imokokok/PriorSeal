@@ -3,6 +3,7 @@ import {
 } from '../../sdk/src/insight-base-lending-guard.js'
 import type { InsightBaseLendingGuardDecision } from '../../sdk/src/insight-base-lending-guard.js'
 import type { TelegramBotState } from './telegram-state.js'
+import { UpstreamHttpError, upstreamAssessmentFailure, upstreamHttpError } from './upstream-errors.ts'
 
 const INSIGHT_ORIGIN = 'https://www.oracleinsight.xyz'
 const MAX_RESPONSE_BYTES = 256 * 1024
@@ -230,8 +231,8 @@ export async function assessAndBindBaseLendingAction(
       signal: AbortSignal.timeout(15_000),
     }),
   ])
-  if (!decisionResponse.ok) throw new Error(`INSIGHT_HTTP_${decisionResponse.status}`)
-  if (!registryResponse.ok) throw new Error(`KEY_REGISTRY_HTTP_${registryResponse.status}`)
+  if (!decisionResponse.ok) throw upstreamHttpError(decisionResponse)
+  if (!registryResponse.ok) throw upstreamHttpError(registryResponse, 'KEY_REGISTRY')
   const [rawDecision, rawRegistry] = await Promise.all([readJson(decisionResponse), readJson(registryResponse)])
   if (!isRecord(rawRegistry)) throw new Error('KEY_REGISTRY_INVALID')
   const decision = responseData(rawDecision)
@@ -354,9 +355,22 @@ export async function handleBaseLendingAssessmentRequest(
     return Response.json({ success: true, data: { assessment } }, { status: 200, headers })
   } catch (caught) {
     const code = caught instanceof Error ? caught.message.slice(0, 96) : 'LENDING_ASSESSMENT_FAILED'
+    const upstream = caught instanceof UpstreamHttpError ? caught : undefined
     const status = code === 'TELEGRAM_USER_NOT_ALLOWED' ? 403 :
       code === 'REQUEST_TOO_LARGE' ? 413 : code === 'BOT_CONFIGURATION_INCOMPLETE' ? 503 :
+      upstream?.status === 402 || upstream?.status === 429 ? upstream.status :
       code.startsWith('INSIGHT_HTTP_') || code.startsWith('KEY_REGISTRY_HTTP_') ? 502 : 400
-    return Response.json({ success: false, message: code }, { status, headers })
+    const responseHeaders = new Headers(headers)
+    if (upstream?.status === 429 && upstream.retryAfterSeconds) {
+      responseHeaders.set('Retry-After', String(upstream.retryAfterSeconds))
+    }
+    return Response.json({
+      success: false,
+      code,
+      message: upstreamAssessmentFailure(caught, 'Base lending assessment could not be completed. No assessment was produced.'),
+      ...(upstream?.status === 429 && upstream.retryAfterSeconds
+        ? { retryAfterSeconds: upstream.retryAfterSeconds }
+        : {}),
+    }, { status, headers: responseHeaders })
   }
 }

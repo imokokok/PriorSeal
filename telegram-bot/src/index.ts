@@ -9,6 +9,7 @@ import {
   assessSwapCommand,
   parseScenarioPayload,
 } from './market-scenarios.js'
+import { upstreamAssessmentFailure, upstreamHttpError } from './upstream-errors.ts'
 import {
   MAX_SCENARIO_REQUESTS_PER_DAY,
   MAX_SCENARIO_REQUESTS_PER_HOUR,
@@ -209,7 +210,7 @@ async function sendTelegramScenarioArtifact(
 
 async function fetchJson(url: string, init: RequestInit, maxBytes = MAX_RESPONSE_BYTES): Promise<unknown> {
   const response = await fetch(url, { ...init, signal: AbortSignal.timeout(15_000) })
-  if (!response.ok) throw new Error(`UPSTREAM_HTTP_${response.status}`)
+  if (!response.ok) throw upstreamHttpError(response, url.includes('/.well-known/oracle-keys.json') ? 'KEY_REGISTRY' : 'INSIGHT')
   const contentLength = Number(response.headers.get('content-length'))
   if (Number.isFinite(contentLength) && contentLength > maxBytes) throw new Error('UPSTREAM_TOO_LARGE')
   const text = await readBoundedStream(response.body, maxBytes)
@@ -422,7 +423,7 @@ export default {
           console.error(JSON.stringify({ event: 'hyperliquid_perp_assessment_failed', code: reason }))
           reply = hasValidationIssueAtPath(error, 'expiresAfter')
             ? 'Invalid order.expiresAfter: use a fresh Unix timestamp in milliseconds, 5–120 seconds ahead. Generate it immediately before sending with Date.now() + 60_000; a timestamp can expire while the message is in transit.'
-            : 'Could not return a trusted Hyperliquid perp assessment right now. Please try again later.'
+            : upstreamAssessmentFailure(error, 'Could not return a trusted Hyperliquid perp assessment right now. Please try again later.')
         }
       }
     } else if (command.command === 'swap') {
@@ -438,7 +439,7 @@ export default {
           console.error(JSON.stringify({ event: 'agent_swap_assessment_failed', code: reason }))
           reply = reason === 'SWAP_DEADLINE_MUST_BE_WITHIN_120_SECONDS' || hasValidationIssueAtPath(error, 'deadlineUnixSeconds')
             ? 'Invalid guard.deadlineUnixSeconds: use a fresh Unix timestamp in seconds, no more than 120 seconds ahead. Generate it immediately before sending with Math.floor(Date.now() / 1000) + 60.'
-            : 'Could not return a trusted DEX swap assessment right now. Please try again later.'
+            : upstreamAssessmentFailure(error, 'Could not return a trusted DEX swap assessment right now. Please try again later.')
         }
       }
     } else {
@@ -464,7 +465,7 @@ export default {
         } catch (error) {
           const reason = error instanceof Error ? error.message.slice(0, 80) : 'UNKNOWN'
           console.error(JSON.stringify({ event: 'polymarket_evidence_failed', code: reason }))
-          reply = 'Could not return trusted source evidence right now. Please try again later.'
+          reply = upstreamAssessmentFailure(error, 'Could not return trusted source evidence right now. Please try again later.')
         }
       } else {
         try {
@@ -472,7 +473,7 @@ export default {
         } catch (error) {
           const reason = error instanceof Error ? error.message.slice(0, 80) : 'UNKNOWN'
           console.error(JSON.stringify({ event: 'polymarket_check_failed', code: reason }))
-          reply = 'Could not return a trusted assessment right now. Please try again later.'
+          reply = upstreamAssessmentFailure(error, 'Could not return a trusted assessment right now. Please try again later.')
         }
       }
     }
