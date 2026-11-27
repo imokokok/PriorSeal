@@ -55,6 +55,9 @@ export function upstreamAssessmentFailure(error: unknown, fallback: string): str
   if (error.status === 401 || error.status === 403) {
     return 'Insight rejected the bot API credentials. Ask the bot operator to verify the configured API key. No assessment was produced.'
   }
+  if (error.status === 400 || error.status === 422) {
+    return 'Insight rejected the assessment inputs. Refresh time-limited fields, check the supported market or scenario format, and retry. No assessment was produced.'
+  }
   if (error.status >= 500) {
     return 'Insight assessment service is temporarily unavailable. No assessment was produced; please retry later.'
   }

@@ -7,6 +7,7 @@ import {
 } from '../../sdk/src/insight-hyperliquid-perp-guard.js'
 import { createReadOnlyScenarioArtifact } from './read-only-scenario-artifact.js'
 import { assertSwapDecisionMatchesRequest } from './swap-request-binding.js'
+import { isWithinAssessmentDeadlineWindow } from './assessment-window.js'
 import { upstreamHttpError } from './upstream-errors.ts'
 import type { KeyRegistry } from 'verify-insight-receipt'
 
@@ -56,8 +57,8 @@ const PerpRequestSchema = z.object({
   const expectedBuy = request.guard.action === 'open_long'
   if (order.b !== expectedBuy) context.addIssue({ code: 'custom', path: ['order', 'action', 'orders', 0, 'b'], message: 'order side must match guard action' })
   if (request.guard.assetSymbol !== 'BTC' && request.guard.assetSymbol !== 'ETH') return
-  if (request.order.expiresAfter <= Date.now() + 5_000 || request.order.expiresAfter > Date.now() + 120_000) {
-    context.addIssue({ code: 'custom', path: ['order', 'expiresAfter'], message: 'expiry must be 5 to 120 seconds in the future' })
+  if (!isWithinAssessmentDeadlineWindow(request.order.expiresAfter)) {
+    context.addIssue({ code: 'custom', path: ['order', 'expiresAfter'], message: 'expiry must be 90 to 120 seconds in the future' })
   }
 })
 
@@ -246,8 +247,7 @@ async function callInsightSwapTool(env: ScenarioEnv, args: z.infer<typeof SwapGu
 
 export async function assessSwapCommand(env: ScenarioEnv, payload: unknown): Promise<{ summary: string; artifact: Record<string, unknown> }> {
   const input = SwapRequestSchema.parse(payload)
-  const now = Math.floor(Date.now() / 1_000)
-  if (input.guard.deadlineUnixSeconds <= now || input.guard.deadlineUnixSeconds > now + 120) throw new Error('SWAP_DEADLINE_MUST_BE_WITHIN_120_SECONDS')
+  if (!isWithinAssessmentDeadlineWindow(input.guard.deadlineUnixSeconds * 1_000)) throw new Error('SWAP_DEADLINE_MUST_BE_WITHIN_90_TO_120_SECONDS')
   const decision = await callInsightSwapTool(env, input.guard)
   const registry = await getKeyRegistry(env)
   const verification = await verifyInsightAgentSwapGuardDecision(decision, { keyRegistry: registry })
