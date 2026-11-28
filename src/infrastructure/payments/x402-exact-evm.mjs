@@ -68,6 +68,7 @@ const X402_TRUST_EXTENSION = Object.freeze({
     discoveryManifest: "https://priorseal.xyz/.well-known/x402.json"
   })
 });
+const X402_AGENT_RETRY_MANUAL = "Save the signed payment and the exact request before sending. Never sign a new payment for an unknown outcome.";
 const capabilityCache = /* @__PURE__ */ new Map();
 function parseX402Config(environment) {
   const raw = {
@@ -183,7 +184,7 @@ function createX402PaymentService(config) {
       }
       if (requirements.length === 0) throw new Error("Configured facilitator does not support exact payments on any locally configured network");
       const extensions = { bazaar: bazaarDiscovery(route, resourceUrl), trust: X402_TRUST_EXTENSION };
-      const paymentRequired = (error) => ({ x402Version: 2, error, resource, accepts: requirements, extensions });
+      const paymentRequired = (error) => ({ x402Version: 2, error, resource, accepts: requirements, extensions, guidance: X402_AGENT_RETRY_MANUAL });
       const response = paymentRequired(malformed ? "Invalid PAYMENT-SIGNATURE header" : "Payment required");
       const header = encodeBase64Json(response);
       if (malformed) return { kind: "invalid", status: 400, response, header };

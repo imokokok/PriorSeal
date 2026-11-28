@@ -371,9 +371,11 @@ test('x402 Monad mainnet is advertised, verified, and settled through the HTTP l
   const challenge = unpaid.json() as unknown as {
     resource: { serviceName: string; tags: string[]; iconUrl: string };
     accepts: { network: string; amount: string; asset: string; extra: { name: string; version: string } }[];
+    guidance: string;
     extensions: { bazaar: { info: { input: { type: string; method: string; pathParams?: { receiptId: string } }; output: { type: string; format: string; example: Record<string, unknown> } }; schema: { $schema: string; properties: { input: { required: string[] } } }; routeTemplate?: string } };
   };
   assert.deepEqual(challenge.accepts.map(requirement => requirement.network), ['eip155:143']);
+  assert.equal(challenge.guidance, 'Save the signed payment and the exact request before sending. Never sign a new payment for an unknown outcome.');
   assert.deepEqual(challenge.resource, {
     url: 'https://api.example.test/v1/capabilities',
     description: 'Read deployment capabilities',

@@ -173,6 +173,15 @@ const X402_TRUST_EXTENSION = Object.freeze({
   }),
 });
 
+/**
+ * Agent retry manual attached to every challenge body. Agent wallets
+ * double-pay when a response is lost and the request is re-signed; stating
+ * the retry semantics in the 402 itself is the cheapest available fix. The
+ * PAYMENT-REQUIRED header remains the authoritative challenge.
+ */
+const X402_AGENT_RETRY_MANUAL =
+  'Save the signed payment and the exact request before sending. Never sign a new payment for an unknown outcome.';
+
 type FacilitatorKind = { x402Version: number; scheme: string; network: string; extra?: unknown };
 type FacilitatorCapability = { kinds: FacilitatorKind[]; signers?: Record<string, string[]> };
 type ParsedFacilitatorSupport = { networks: Set<string>; solanaFeePayers: ReadonlyMap<string, string> };
@@ -332,7 +341,10 @@ export function createX402PaymentService(config: X402Config) {
       // `trust` carries the signature-verification path for first-time callers;
       // the manifest endpoint strips it back to `bazaar` only.
       const extensions = { bazaar: bazaarDiscovery(route, resourceUrl), trust: X402_TRUST_EXTENSION };
-      const paymentRequired = (error: string) => ({ x402Version: 2, error, resource, accepts: requirements, extensions });
+      // Agent retry manual on every challenge: agent wallets double-pay when
+      // a response is lost and the request is re-signed. Purely additive to
+      // the x402 v2 body — the PAYMENT-REQUIRED header stays authoritative.
+      const paymentRequired = (error: string) => ({ x402Version: 2, error, resource, accepts: requirements, extensions, guidance: X402_AGENT_RETRY_MANUAL });
       const response = paymentRequired(malformed ? 'Invalid PAYMENT-SIGNATURE header' : 'Payment required');
       const header = encodeBase64Json(response);
       if (malformed) return { kind: 'invalid', status: 400, response, header };
