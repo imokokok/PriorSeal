@@ -291,7 +291,7 @@ export class TelegramBotState extends DurableObject<Env> {
   }
 
   releaseSponsoredTrialBudget(updateId: number, now: number): void {
-    const month = new Date(now * 1000).toISOString().slice(0, 7)
+    if (!Number.isSafeInteger(now) || now < 0) throw new TypeError('Invalid sponsored trial release time')
     this.ctx.storage.sql.exec('DELETE FROM sponsored_trial_budget WHERE update_id = ? AND completed = 0', updateId)
   }
 }
