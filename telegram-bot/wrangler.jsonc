@@ -16,8 +16,6 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TelegramBotState"] }],
   "vars": {
     "INSIGHT_BASE_URL": "https://www.oracleinsight.xyz",
-    "INSIGHT_KEY_REGISTRY_URL": "https://www.oracleinsight.xyz/.well-known/oracle-keys.json",
-    "LENDING_MINI_APP_ORIGIN": "https://priorseal.xyz",
-    "LENDING_MINI_APP_URL": "https://priorseal.xyz/app/lending"
+    "INSIGHT_KEY_REGISTRY_URL": "https://www.oracleinsight.xyz/.well-known/oracle-keys.json"
   }
 }
