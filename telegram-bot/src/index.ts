@@ -3,7 +3,15 @@ import {
   readStoredMarketEvidence,
 } from './source-evidence.js'
 import { upstreamAssessmentFailure, upstreamHttpError, upstreamTransportError } from './upstream-errors.ts'
-import { hasAtLeastRemainingMs, priceContractEndTimeMs } from './assessment-window.js'
+import {
+  COLD_START_MARKET_RESERVE_MS,
+  hasUsableMarketWindow,
+  exceedsOnePriceTick,
+  priceContractEndTimeMs,
+  quoteExpiryMs,
+  USER_REVIEW_WINDOW_MS,
+} from './assessment-window.js'
+import { fetchMarketReference, type MarketReference } from './market-data.js'
 import {
   MAX_SCENARIO_REQUESTS_PER_DAY,
   MAX_SCENARIO_REQUESTS_PER_HOUR,
@@ -227,15 +235,64 @@ function confirmationKeyboard(token: string, locale: 'en' | 'zh'): Record<string
   ]] }
 }
 
-function assessableBtcPriceContractSlug(nowMs = Date.now()): string {
+function assessableBtcPriceContractSlug(nowMs = Date.now(), reserveMs = COLD_START_MARKET_RESERVE_MS): string {
   const windowSeconds = 5 * 60
   const startSeconds = Math.floor(nowMs / 1_000 / windowSeconds) * windowSeconds
   const endMs = (startSeconds + windowSeconds) * 1_000
-  // Keep a broad, human-usable assessment window. A button click never embeds
-  // a timestamp; the bot chooses the market at click time and skips the
-  // closing window when fewer than four minutes remain.
-  const selectedStart = endMs - nowMs >= 4 * 60_000 ? startSeconds : startSeconds + windowSeconds
+  // Preserve two full minutes for the user's review, then the measured service
+  // reserve. A button click never embeds a timestamp.
+  const selectedStart = endMs - nowMs >= USER_REVIEW_WINDOW_MS + reserveMs ? startSeconds : startSeconds + windowSeconds
   return `btc-updown-5m-${selectedStart}`
+}
+
+function marketLatencyObject(env: Env): TelegramBotState {
+  return env.STATE.getByName('polymarket-latency-global-v1')
+}
+
+function localizedQuoteUnavailable(locale: 'en' | 'zh'): string {
+  return locale === 'zh'
+    ? '当前市场报价或评估服务余量无法验证，没有发起评估。请在下一市场窗口重试。'
+    : 'The current market quote or assessment service reserve could not be verified. No assessment was started; please retry in the next market window.'
+}
+
+async function issueAssessmentQuote(
+  env: Env,
+  state: TelegramBotState,
+  telegramUserId: number,
+  slug: string,
+  side: 'up' | 'down',
+  cost: number,
+  linked: boolean,
+  available: number,
+  locale: 'en' | 'zh',
+): Promise<{ text: string; keyboard: Record<string, unknown> } | null> {
+  const reserve = await marketLatencyObject(env).getPolymarketLatencyReserve(Math.floor(Date.now() / 1_000))
+  if (!reserve) return null
+  console.log(JSON.stringify({ event: 'polymarket_latency_reserve_applied', reserveMs: reserve.reserveMs, source: reserve.source }))
+  const reference = await fetchMarketReference(slug, side)
+  // Start the user's quote window only after the market reference has loaded.
+  // The market lookup is service latency, not time the user should have to spend.
+  const nowMs = Date.now()
+  const nowSeconds = Math.floor(nowMs / 1_000)
+  if (!hasUsableMarketWindow(priceContractEndTimeMs(slug) ?? Number.NaN, nowMs, reserve.reserveMs)) return null
+  const expiresAtMs = quoteExpiryMs(priceContractEndTimeMs(slug) ?? Number.NaN, nowMs, reserve.reserveMs)
+  const expiresAt = expiresAtMs === undefined ? nowSeconds : Math.floor(expiresAtMs / 1_000)
+  if (expiresAt <= nowSeconds) return null
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  await state.createAssessmentQuote(token, telegramUserId, slug, side, cost, reference.price, reference.tickSize, expiresAt, nowSeconds)
+  const price = reference.price.toFixed(3)
+  const ttl = expiresAt - nowSeconds
+  const expiryCopy = locale === 'zh'
+    ? `报价有效 ${ttl} 秒（最长 2 分钟）；市场参考价 ${price}，最小价格跳动 ${reference.tickSize}。`
+    : `Quote valid for ${ttl} seconds (up to 2 minutes); market reference midpoint ${price}, tick size ${reference.tickSize}.`
+  const quoteText = linked
+    ? locale === 'zh'
+      ? `评估报价\n市场：${slug}\n方向：${side.toUpperCase()}\n费用：${cost} Insight 积分\n当前可用余额：${available}\n${expiryCopy}\n\n确认后才会运行只读风险评估并扣费。确认会复核市场窗口、参考价格、账户余额和费用。`
+      : `Assessment quote\nMarket: ${slug}\nSide: ${side.toUpperCase()}\nPrice: ${cost} Insight credits\nAvailable balance: ${available}\n${expiryCopy}\n\nConfirm to run the read-only risk assessment and charge credits. The bot rechecks the market window, reference price, balance, and fee first.`
+    : locale === 'zh'
+      ? `免费试用报价\n市场：${slug}\n方向：${side.toUpperCase()}\n用户费用：0 积分（由试点额度赞助）\n${expiryCopy}\n\n每个 Telegram 账户限一次，试点每月总额上限 ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} 积分。确认后才会启动。`
+      : `Sponsored trial quote\nMarket: ${slug}\nSide: ${side.toUpperCase()}\nYour cost: 0 credits (covered by the pilot)\n${expiryCopy}\n\nOne per Telegram account; the pilot has a global monthly ceiling of ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} credits. Confirm to start.`
+  return { text: quoteText, keyboard: confirmationKeyboard(token, locale) }
 }
 
 async function sendTelegramEvidenceRecord(env: Env, chatId: number, caption: string, recordId: number, payload: unknown): Promise<boolean> {
@@ -475,6 +532,7 @@ async function checkMarket(
   action: 'buy_up' | 'buy_down',
   linked?: { telegramUserId: number; updateId: number },
   locale: 'en' | 'zh' = 'en',
+  reference?: MarketReference,
 ): Promise<string> {
   const apiKey = env.INSIGHT_API_KEY
   const base = env.INSIGHT_BASE_URL
@@ -506,6 +564,11 @@ async function checkMarket(
   const guard = guardFromResponse(unwrapped)
   if (!guard || guard.market === null || !isRecord(guard.market) || guard.market.marketSlug !== slug || guard.action !== action) {
     throw new Error('ATTESTED_RESULT_MISMATCH')
+  }
+  if (reference) {
+    const quotes = isRecord(guard.quotes) ? guard.quotes : null
+    const assessedPrice = quotes && typeof quotes.chosenSidePrice === 'number' ? quotes.chosenSidePrice : Number.NaN
+    if (exceedsOnePriceTick(reference.price, assessedPrice, reference.tickSize)) throw new Error('POLYMARKET_PRICE_MOVED')
   }
   const billingText = isRecord(response) && typeof response.chargedCredits === 'number'
     ? locale === 'zh' ? `\n本次扣除 Insight 积分：${response.chargedCredits}` : `\nInsight credits charged: ${response.chargedCredits}`
@@ -626,7 +689,11 @@ export default {
     const message = update.message ?? callback?.message
     if (!message) return new Response('ok')
     let command = commandOf(message.text ?? '')
-    let confirmedAssessment: { slug: string; side: 'up' | 'down'; cost: number } | null = null
+    let confirmedAssessment: {
+      slug: string; side: 'up' | 'down'; cost: number; referencePrice: number; tickSize: number; expiresAt: number
+    } | null = null
+    let confirmedReference: MarketReference | null = null
+    let confirmationReceivedAtMs: number | null = null
     const locale = localeOf(update)
     if (callback) {
       const callbackData = callback.data ?? ''
@@ -666,11 +733,12 @@ export default {
           return new Response('ok')
         }
         const state = env.STATE.getByName(String(message.chat.id))
-        confirmedAssessment = await state.consumeAssessmentConfirmation(token, message.chat.id, Math.floor(Date.now() / 1000))
+        confirmedAssessment = await state.consumeAssessmentQuote(token, message.chat.id, Math.floor(Date.now() / 1000))
         if (!confirmedAssessment) {
           await answerTelegramCallback(env, callback.id, locale === 'zh' ? '此确认已使用或已过期，请重新报价。' : 'This confirmation was used or expired. Please request a fresh quote.')
           return new Response('ok')
         }
+        confirmationReceivedAtMs = Date.now()
         await answerTelegramCallback(env, callback.id, locale === 'zh' ? '已确认，正在评估。' : 'Confirmed. Assessment is starting.')
         command = { command: 'check', args: `${confirmedAssessment.slug} ${confirmedAssessment.side}` }
       } else if (callbackData === 'market:btc:up' || callbackData === 'market:btc:down') {
@@ -754,22 +822,28 @@ export default {
             : `Your available balance is ${available} credits, below the ${cost}-credit assessment price. No assessment can run until you add credits in Insight.`
           replyMarkup = localizedMenu(locale)
         } else {
-          const token = Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) => byte.toString(16).padStart(2, '0')).join('')
-          await object.createAssessmentConfirmation(token, message.chat.id, requestedSlug, requestedSide.toLowerCase() as 'up' | 'down', cost, Math.floor(Date.now() / 1000))
           const available = account?.linked ? Math.max(0, (account.balance ?? 0) - (account.frozen ?? 0)) : 0
-          reply = account?.linked
-            ? locale === 'zh'
-              ? `评估报价\n市场：${requestedSlug}\n方向：${requestedSide.toUpperCase()}\n费用：${cost} Insight 积分\n当前可用余额：${available}\n\n确认后才会运行只读风险评估并扣费。确认意向保留 7 天；市场窗口或价格变化时会先显示新报价，不会自动评估。`
-              : `Assessment quote\nMarket: ${requestedSlug}\nSide: ${requestedSide.toUpperCase()}\nPrice: ${cost} Insight credits\nAvailable balance: ${available}\n\nConfirm to run the read-only risk assessment and charge credits. Your confirmation intent lasts 7 days; if the market window or price changes, the bot will show a new quote and will not assess automatically.`
-            : locale === 'zh'
-              ? `免费试用报价\n市场：${requestedSlug}\n方向：${requestedSide.toUpperCase()}\n用户费用：0 积分（由试点额度赞助）\n\n每个 Telegram 账户限一次，试点每月总额上限 ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} 积分。确认后才会启动。`
-              : `Sponsored trial quote\nMarket: ${requestedSlug}\nSide: ${requestedSide.toUpperCase()}\nYour cost: 0 credits (covered by the pilot)\n\nOne per Telegram account; the pilot has a global monthly ceiling of ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} credits. Confirm to start.`
-          replyMarkup = confirmationKeyboard(token, locale)
+          const reserve = await marketLatencyObject(env).getPolymarketLatencyReserve(Math.floor(Date.now() / 1_000))
+          const quoteSlug = /^(btc|bitcoin)$/i.test(requestedMarket ?? '')
+            ? assessableBtcPriceContractSlug(Date.now(), reserve?.reserveMs ?? COLD_START_MARKET_RESERVE_MS)
+            : requestedSlug
+          const quote = reserve
+            ? await issueAssessmentQuote(
+                env, object, message.chat.id, quoteSlug, requestedSide.toLowerCase() as 'up' | 'down', cost,
+                account?.linked === true, available, locale,
+              )
+            : null
+          if (!quote) {
+            reply = localizedQuoteUnavailable(locale)
+            replyMarkup = localizedMenu(locale)
+          } else {
+            reply = quote.text
+            replyMarkup = quote.keyboard
+          }
         }
       } catch {
-        reply = locale === 'zh'
-          ? '当前无法获取可信报价或账户余额，没有发起评估。请稍后重试。'
-          : 'A trusted quote or account balance is unavailable. No assessment was started; please retry later.'
+        reply = localizedQuoteUnavailable(locale)
+        replyMarkup = localizedMenu(locale)
       }
     } else if (command.command === 'start' || command.command === 'help' || command.command === 'menu' || command.command === 'cancel') {
       let linkedAccount: TelegramAccountStatus | null = null
@@ -862,9 +936,6 @@ export default {
         if (!requestedSlug) reply = 'Usage: /check btc <up|down>'
         else if (hasSupportedShape) reply = 'Usage: /check btc <up|down>; the side must be up or down and no extra text may follow.'
         else reply = 'This /check currently supports the active BTC 5-minute up/down market. Use /check btc up or /check btc down.'
-      } else if (command.command === 'check' && requestedSlug && priceContractEndTimeMs(requestedSlug) !== undefined &&
-        !confirmedAssessment && !hasAtLeastRemainingMs(priceContractEndTimeMs(requestedSlug) as number)) {
-        reply = 'This market closes in under 90 seconds. No assessment was requested; use the next active market window.'
       } else if (command.command === 'evidence' && (!validEvidence || !requestedMarketId)) {
         reply = 'Polymarket source evidence is paused in this pilot. It will reopen after per-user credits and evidence delivery are connected.'
       } else if (command.command === 'evidence-record' && !validEvidenceRecord) {
@@ -896,33 +967,46 @@ export default {
             reply = 'Insight account status is temporarily unavailable. No assessment was requested or charged; please retry.'
           }
         }
-        if (!reply && confirmedAssessment && requestedSlug && requestedSide && assessableBtcPriceContractSlug() !== requestedSlug) {
-          const currentSlug = assessableBtcPriceContractSlug()
-          const cost = linkedAccount?.assessmentCostCredits
-          if (typeof cost !== 'number' || !Number.isSafeInteger(cost) || cost <= 0) {
-            reply = locale === 'zh' ? '市场窗口已更新，但当前费用无法确认，因此没有发起评估。请稍后重试。' : 'The market window changed and the current price could not be verified. No assessment was started; please retry later.'
-          } else {
-            const token = Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) => byte.toString(16).padStart(2, '0')).join('')
-            await object.createAssessmentConfirmation(token, message.chat.id, currentSlug, requestedSide.toLowerCase() as 'up' | 'down', cost, Math.floor(Date.now() / 1000))
-            const available = linkedAccount?.linked ? Math.max(0, (linkedAccount.balance ?? 0) - (linkedAccount.frozen ?? 0)) : 0
-            reply = linkedAccount?.linked
-              ? (locale === 'zh'
-                ? `市场窗口已更新，旧报价已作废。新报价：${currentSlug} · ${requestedSide.toUpperCase()} · ${cost} 积分；可用余额 ${available}。确认后才会运行评估。`
-                : `The market window changed, so the old quote was discarded. New quote: ${currentSlug} · ${requestedSide.toUpperCase()} · ${cost} credits; available balance ${available}. Confirm to run the assessment.`)
-              : (locale === 'zh'
-                ? `市场窗口已更新，旧报价已作废。新报价：${currentSlug} · ${requestedSide.toUpperCase()} · 用户费用 0 积分（试点赞助，每月总上限 ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} 积分）。确认后启动。`
-                : `The market window changed, so the old quote was discarded. New quote: ${currentSlug} · ${requestedSide.toUpperCase()} · your cost is 0 credits (pilot-sponsored, global monthly ceiling ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP}). Confirm to start.`)
-            replyMarkup = confirmationKeyboard(token, locale)
-          }
-        }
-        if (!reply && linkedAccount?.linked && requestedSlug && requestedSide) {
-          const freshCost = linkedAccount.assessmentCostCredits
-          const available = Math.max(0, (linkedAccount.balance ?? 0) - (linkedAccount.frozen ?? 0))
-          if (!confirmedAssessment || typeof freshCost !== 'number' || freshCost !== confirmedAssessment.cost || available < freshCost ||
-              assessableBtcPriceContractSlug() !== requestedSlug) {
-            reply = locale === 'zh'
-              ? '报价、可用余额或市场窗口已变化，因此没有发起评估或扣费。请重新发送 /check btc up 或 /check btc down 获取新报价。'
-              : 'The quote, available balance, or market window changed, so no assessment was started or charged. Send /check btc up or /check btc down for a fresh quote.'
+        if (!reply && confirmedAssessment && requestedSlug && requestedSide) {
+          try {
+            const nowMs = Date.now()
+            const nowSeconds = Math.floor(nowMs / 1_000)
+            const reserve = await marketLatencyObject(env).getPolymarketLatencyReserve(nowSeconds)
+            if (!reserve) {
+              reply = localizedQuoteUnavailable(locale)
+            } else {
+              const currentSlug = assessableBtcPriceContractSlug(nowMs, reserve.reserveMs)
+              const marketStillUsable = currentSlug === requestedSlug &&
+                hasUsableMarketWindow(priceContractEndTimeMs(requestedSlug) ?? Number.NaN, nowMs, reserve.reserveMs)
+              const freshCost = linkedAccount?.assessmentCostCredits
+              const available = linkedAccount?.linked ? Math.max(0, (linkedAccount.balance ?? 0) - (linkedAccount.frozen ?? 0)) : 0
+              if (typeof freshCost !== 'number' || !Number.isSafeInteger(freshCost) || freshCost <= 0) {
+                reply = localizedQuoteUnavailable(locale)
+              } else if (!marketStillUsable || freshCost !== confirmedAssessment.cost ||
+                  (linkedAccount?.linked === true && available < freshCost)) {
+                const quote = await issueAssessmentQuote(
+                  env, object, message.chat.id, currentSlug, confirmedAssessment.side, freshCost,
+                  linkedAccount?.linked === true, available, locale,
+                )
+                reply = quote?.text ?? localizedQuoteUnavailable(locale)
+                if (quote) replyMarkup = quote.keyboard
+              } else {
+                const freshReference = await fetchMarketReference(requestedSlug, confirmedAssessment.side)
+                if (exceedsOnePriceTick(confirmedAssessment.referencePrice, freshReference.price,
+                    Math.min(confirmedAssessment.tickSize, freshReference.tickSize))) {
+                  const quote = await issueAssessmentQuote(
+                    env, object, message.chat.id, requestedSlug, confirmedAssessment.side, freshCost,
+                    linkedAccount?.linked === true, available, locale,
+                  )
+                  reply = quote?.text ?? localizedQuoteUnavailable(locale)
+                  if (quote) replyMarkup = quote.keyboard
+                } else {
+                  confirmedReference = freshReference
+                }
+              }
+            }
+          } catch {
+            reply = localizedQuoteUnavailable(locale)
           }
         }
         if (!reply && linkedAccount?.linked && requestedSlug && requestedSide && confirmedAssessment) {
@@ -934,7 +1018,8 @@ export default {
             reply = await checkMarket(env, requestedSlug, requestedSide.toLowerCase() === 'up' ? 'buy_up' : 'buy_down', {
               telegramUserId: message.chat.id,
               updateId: update.update_id,
-            }, locale)
+            }, locale, confirmedReference ?? undefined)
+            if ((priceContractEndTimeMs(requestedSlug) ?? 0) <= Date.now()) throw new Error('MARKET_CLOSED_DURING_ASSESSMENT')
             successfulPolymarketAssessment = true
           } catch (error) {
             const reason = error instanceof Error ? error.message : 'UNKNOWN'
@@ -951,13 +1036,30 @@ export default {
                 : 'Your Insight credit balance cannot cover this assessment. Use /account to check your balance and open Insight Billing to add credits. No assessment was delivered.')
               : reason === 'TELEGRAM_ACCOUNT_NOT_LINKED'
                   ? (locale === 'zh' ? '账户尚未完成绑定。使用 /link 并在 Insight 官方网站确认。' : 'Your account link is not available yet. Use /link and confirm it on the official Insight website.')
-              : polymarketAssessmentFailure(error, locale)
+              : reason === 'POLYMARKET_PRICE_MOVED' && confirmedAssessment
+                ? await (async () => {
+                    const cost = linkedAccount?.assessmentCostCredits
+                    if (typeof cost !== 'number' || !Number.isSafeInteger(cost) || cost <= 0) return localizedQuoteUnavailable(locale)
+                    try {
+                      const reserve = await marketLatencyObject(env).getPolymarketLatencyReserve(Math.floor(Date.now() / 1_000))
+                      const currentSlug = assessableBtcPriceContractSlug(Date.now(), reserve?.reserveMs ?? COLD_START_MARKET_RESERVE_MS)
+                      const available = linkedAccount?.linked ? Math.max(0, (linkedAccount.balance ?? 0) - (linkedAccount.frozen ?? 0)) : 0
+                      const quote = await issueAssessmentQuote(env, object, message.chat.id, currentSlug,
+                        confirmedAssessment.side, cost, linkedAccount?.linked === true, available, locale)
+                      if (quote) {
+                        replyMarkup = quote.keyboard
+                        return `${locale === 'zh' ? '评估期间参考价格变化，旧报价已作废。请审核新报价：\n\n' : 'The reference price moved during assessment, so the old quote was discarded. Review this new quote:\n\n'}${quote.text}`
+                      }
+                    } catch { /* fail closed and tell the user no current quote is available */ }
+                    return localizedQuoteUnavailable(locale)
+                  })()
+                : polymarketAssessmentFailure(error, locale)
           }
         } else if (!reply && linkedAccount && !linkedAccount.linked) {
           const cost = linkedAccount.assessmentCostCredits
           if (!confirmedAssessment || typeof cost !== 'number' || cost !== confirmedAssessment.cost ||
               env.ALLOWED_CHAT_IDS?.trim() === '*' || !env.TELEGRAM_INTEGRATION_SECRET ||
-              assessableBtcPriceContractSlug() !== requestedSlug) {
+              !confirmedReference) {
             reply = locale === 'zh'
               ? '当前试用条件无法确认或不在封闭试点范围内，没有运行评估。请绑定账户后使用自己的积分，或稍后重试。'
               : 'The sponsored trial cannot be verified or is outside the closed pilot, so no assessment ran. Link your account to use your credits, or retry later.'
@@ -982,7 +1084,8 @@ export default {
 
         if (!reply && reservedFreeTrial && requestedSlug && requestedSide) {
           try {
-            reply = await checkMarket(env, requestedSlug, requestedSide.toLowerCase() === 'up' ? 'buy_up' : 'buy_down', undefined, locale)
+            reply = await checkMarket(env, requestedSlug, requestedSide.toLowerCase() === 'up' ? 'buy_up' : 'buy_down', undefined, locale, confirmedReference ?? undefined)
+            if ((priceContractEndTimeMs(requestedSlug) ?? 0) <= Date.now()) throw new Error('MARKET_CLOSED_DURING_ASSESSMENT')
             successfulPolymarketAssessment = true
             reply += locale === 'zh'
               ? '\n赞助试用：未扣除你的积分。试用后请使用 /link 绑定 Insight 账户以继续。'
@@ -992,6 +1095,20 @@ export default {
             console.error(JSON.stringify({ event: 'polymarket_trial_assessment_failed', code: reason }))
             reply = polymarketAssessmentFailure(error, locale)
             if (reservedSponsoredBudget) env.STATE.getByName('sponsored-trial-global-v1').releaseSponsoredTrialBudget(update.update_id, Math.floor(Date.now() / 1000))
+            if (reason === 'POLYMARKET_PRICE_MOVED' && confirmedAssessment && linkedAccount) {
+              try {
+                const reserve = await marketLatencyObject(env).getPolymarketLatencyReserve(Math.floor(Date.now() / 1_000))
+                const currentSlug = assessableBtcPriceContractSlug(Date.now(), reserve?.reserveMs ?? COLD_START_MARKET_RESERVE_MS)
+                const freshCost = linkedAccount.assessmentCostCredits
+                if (typeof freshCost !== 'number' || !Number.isSafeInteger(freshCost) || freshCost <= 0) throw new Error('PRICE_UNAVAILABLE')
+                const quote = await issueAssessmentQuote(env, object, message.chat.id, currentSlug,
+                  confirmedAssessment.side, freshCost, false, 0, locale)
+                if (quote) {
+                  reply = `${locale === 'zh' ? '评估期间参考价格变化，旧报价已作废。请审核新报价：\n\n' : 'The reference price moved during assessment, so the old quote was discarded. Review this new quote:\n\n'}${quote.text}`
+                  replyMarkup = quote.keyboard
+                }
+              } catch { /* fail closed and keep the no-assessment response */ }
+            }
           }
         }
       }
@@ -1032,6 +1149,15 @@ export default {
       else object.releasePolymarketTrial(message.chat.id, update.update_id)
     }
     if (reservedSponsoredBudget && !successfulPolymarketAssessment) env.STATE.getByName('sponsored-trial-global-v1').releaseSponsoredTrialBudget(update.update_id, Math.floor(Date.now() / 1000))
+    if (successfulPolymarketAssessment && confirmationReceivedAtMs !== null) {
+      const durationMs = Date.now() - confirmationReceivedAtMs
+      try {
+        await marketLatencyObject(env).recordPolymarketLatency(durationMs, Math.floor(Date.now() / 1_000))
+        console.log(JSON.stringify({ event: 'polymarket_confirmation_to_delivery_ms', durationMs }))
+      } catch {
+        console.error(JSON.stringify({ event: 'polymarket_latency_sample_record_failed' }))
+      }
+    }
     await object.completeUpdate(update.update_id)
     return new Response('ok')
   },
