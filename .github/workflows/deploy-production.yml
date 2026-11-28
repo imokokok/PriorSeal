@@ -1,0 +1,102 @@
+name: Production deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: priorseal-production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy verified main to Cloudflare
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    environment: Production
+    timeout-minutes: 30
+    steps:
+      - name: Check out the exact successful CI commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Confirm this is still the current main commit
+        id: release-current
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          main_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ "$RELEASE_SHA" != "$main_sha" ]]; then
+            echo "::notice::Skipping superseded release $RELEASE_SHA; main is now $main_sha."
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install locked dependencies
+        if: steps.release-current.outputs.current == 'true'
+        run: npm ci
+
+      - name: Deploy and verify the exact Worker version
+        id: worker-deploy
+        if: steps.release-current.outputs.current == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "::error::Production Cloudflare credentials are not configured."
+            exit 1
+          fi
+          npm run worker:deploy
+
+      - name: Verify production with read-only smoke
+        id: read-only-smoke
+        if: steps.release-current.outputs.current == 'true'
+        env:
+          PRIORSEAL_BASE_URL: https://priorseal.xyz
+          PRIORSEAL_EXPECTED_VERSION: ${{ github.event.workflow_run.head_sha }}
+        run: npm run production:smoke -- --read-only
+
+      - name: Record release evidence
+        if: always()
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+          DEPLOY_RUN_ID: ${{ github.run_id }}
+          RELEASE_CURRENT: ${{ steps.release-current.outputs.current }}
+          DEPLOY_OUTCOME: ${{ steps.worker-deploy.outcome }}
+          SMOKE_OUTCOME: ${{ steps.read-only-smoke.outcome }}
+        run: |
+          {
+            echo "## PriorSeal production release"
+            echo
+            echo "- Commit: \`$RELEASE_SHA\`"
+            echo "- Successful CI run: [$CI_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID)"
+            echo "- Deploy run: [$DEPLOY_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$DEPLOY_RUN_ID)"
+            if [[ "$RELEASE_CURRENT" != "true" ]]; then
+              echo "- Release result: skipped because a newer main commit superseded this run"
+            elif [[ "$DEPLOY_OUTCOME" == "success" && "$SMOKE_OUTCOME" == "success" ]]; then
+              echo "- Post-deploy check: read-only GET smoke passed; no synthetic authorization rows written"
+            else
+              echo "- Release result: deploy=${DEPLOY_OUTCOME:-not-run}, read-only-smoke=${SMOKE_OUTCOME:-not-run}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
