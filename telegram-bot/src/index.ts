@@ -508,7 +508,7 @@ async function checkMarket(
     throw new Error('ATTESTED_RESULT_MISMATCH')
   }
   const billingText = isRecord(response) && typeof response.chargedCredits === 'number'
-    ? `\nInsight credits charged: ${response.chargedCredits}`
+    ? locale === 'zh' ? `\n本次扣除 Insight 积分：${response.chargedCredits}` : `\nInsight credits charged: ${response.chargedCredits}`
     : ''
   return `${buildSummary(slug, action, guard, locale)}${billingText}`
 }
@@ -785,7 +785,9 @@ export default {
         const cost = linkedAccount?.assessmentCostCredits
         const paymentCopy = linkedAccount?.linked
           ? (typeof cost === 'number' && cost > 0 ? (locale === 'zh' ? `每次成功评估 ${cost} Insight 积分。评估前会显示报价和可用余额，并要求你再次确认。` : `Each successful assessment costs ${cost} Insight credits. You will review the quote and available balance, then confirm before it runs.`) : (locale === 'zh' ? '暂时无法读取价格；价格恢复后才能评估。' : 'Pricing is temporarily unavailable; assessments stay disabled until it can be verified.'))
-          : (locale === 'zh' ? `可体验一次试点赞助评估；每个账户一次，试点每月上限 ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} 积分。` : `You can try one sponsored pilot assessment per Telegram account, within a global monthly ceiling of ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} credits.`)
+          : linkedAccount && !linkedAccount.linked
+            ? (locale === 'zh' ? `可体验一次试点赞助评估；每个账户一次，试点每月上限 ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} 积分。` : `You can try one sponsored pilot assessment per Telegram account, within a global monthly ceiling of ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} credits.`)
+            : (locale === 'zh' ? '暂时无法确认账户状态和评估价格，评估功能暂不可用；请稍后重试。' : 'Account status and assessment pricing are temporarily unavailable. Assessments stay disabled; please retry later.')
         reply = locale === 'zh'
           ? `欢迎使用 Insight × PriorSeal。选择下方场景，点击后获取报价；市场在你确认时选择，不需要时间戳或 JSON。\n${paymentCopy}\nBase 借贷、Hyperliquid 永续、DEX Swap 暂未开放，直到易用流程和只读评估接口准备完成。\n机器人不连接钱包、不索取签名、不创建授权、不下单、不提交或转发交易。`
           : `Welcome to Insight × PriorSeal. Choose a scenario below. You will see a quote before confirming; the market is selected at confirmation time, with no timestamps or JSON to prepare.\n${paymentCopy}\nBase lending, Hyperliquid perps, and DEX swap remain closed until their user-friendly flows and read-only assessment APIs are ready.\nThis bot never connects a wallet, asks for a signature, creates authorization, places orders, or submits or relays transactions.`
