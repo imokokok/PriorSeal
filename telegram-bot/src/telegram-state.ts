@@ -43,6 +43,12 @@ export class TelegramBotState extends DurableObject<Env> {
       ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS lending_assessments_requested_at ON lending_assessments(requested_at)')
       ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS swap_settlements (id INTEGER PRIMARY KEY AUTOINCREMENT, requested_at INTEGER NOT NULL)')
       ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS swap_settlements_requested_at ON swap_settlements(requested_at)')
+      ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS polymarket_trials (
+        telegram_user_id TEXT PRIMARY KEY,
+        update_id INTEGER NOT NULL,
+        requested_at INTEGER NOT NULL,
+        completed INTEGER NOT NULL DEFAULT 0
+      )`)
       const nextExpiry = ctx.storage.sql.exec<{ expires_at: number }>(
         'SELECT MIN(expires_at) AS expires_at FROM source_evidence',
       ).toArray()[0]?.expires_at
@@ -189,5 +195,34 @@ export class TelegramBotState extends DurableObject<Env> {
     if (hourly >= 3 || daily >= 10) return false
     sql.exec('INSERT INTO swap_settlements(requested_at) VALUES (?)', now)
     return true
+  }
+
+  reservePolymarketTrial(telegramUserId: number, updateId: number, now: number): 'reserved' | 'used' | 'in_progress' {
+    if (!Number.isSafeInteger(telegramUserId) || telegramUserId <= 0 || !Number.isSafeInteger(updateId) ||
+        updateId < 0 || !Number.isSafeInteger(now) || now < 0) throw new TypeError('Invalid Telegram trial reservation')
+    const userId = String(telegramUserId)
+    const sql = this.ctx.storage.sql
+    const existing = sql.exec<{ update_id: number; requested_at: number; completed: number }>(
+      'SELECT update_id, requested_at, completed FROM polymarket_trials WHERE telegram_user_id = ? LIMIT 1', userId,
+    ).toArray()[0]
+    if (existing?.completed === 1) return 'used'
+    if (existing && existing.requested_at > now - 120) return 'in_progress'
+    sql.exec('INSERT OR REPLACE INTO polymarket_trials(telegram_user_id, update_id, requested_at, completed) VALUES (?, ?, ?, 0)',
+      userId, updateId, now)
+    return 'reserved'
+  }
+
+  completePolymarketTrial(telegramUserId: number, updateId: number): void {
+    this.ctx.storage.sql.exec(
+      'UPDATE polymarket_trials SET completed = 1 WHERE telegram_user_id = ? AND update_id = ?',
+      String(telegramUserId), updateId,
+    )
+  }
+
+  releasePolymarketTrial(telegramUserId: number, updateId: number): void {
+    this.ctx.storage.sql.exec(
+      'DELETE FROM polymarket_trials WHERE telegram_user_id = ? AND update_id = ? AND completed = 0',
+      String(telegramUserId), updateId,
+    )
   }
 }
