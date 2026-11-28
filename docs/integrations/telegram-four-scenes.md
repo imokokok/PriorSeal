@@ -1,15 +1,15 @@
 # Telegram bot: four-scenario product and rollout
 
-This document is the four-scenario product blueprint. The current user pilot opens only the Polymarket assessment. Base lending, Hyperliquid perps, and DEX swap remain closed until their guided input forms, account-aware billing, read-only response contracts, and verification flows meet the release gates below. Old JSON commands and exact-call Mini Apps are disabled. Do not publish their old test instructions.
+This document describes the four-scene read-only Telegram product. The user-facing flows accept ordinary text values, show the credit price and available balance before confirmation, and retain a prepared confirmation for seven days. Current market data is fetched after confirmation. Old JSON commands and transaction-bound Mini Apps remain disabled. New scenario release is conditional on Insight and PriorSeal production deployments and the production secret/DB checks described below.
 
 The product does not create PriorSeal authorizations and does not connect to wallets, sign, place orders, submit transactions, or relay user transactions.
 
 | Scenario | User entry | Insight role | PriorSeal role | Current state |
 | --- | --- | --- | --- | --- |
 | Polymarket | `/start` → buttons; optional `/check btc <up|down>` | Assess market integrity and collect reviewed source evidence | Verify signed decisions and evidence | Active pilot; a side tap shows a quote and balance first; a separate confirmation starts the assessment |
-| Base lending | Shown as coming soon | Assess a user-declared what-if position or read-only public position | Verify signed assessment evidence | Closed; no calldata or raw transaction form |
-| Hyperliquid perps | Shown as coming soon | Assess a guided position-size and margin scenario | Verify signed assessment evidence | Closed; no order envelope, IOC expiry, or account authorization |
-| DEX swap | Shown as coming soon | Assess a quote, route, and user-selected risk limits | Verify signed assessment evidence | Closed until the assessment-only API returns no approval/swap calldata |
+| Base lending | `/lending <supply|borrow> <WETH|USDC> <WETH|USDC> <collateral USD> <debt USD>` | Assess one Aave V3 Base caller-declared what-if position | Verify signed assessment evidence | Assessment-only; linked Insight account required |
+| Hyperliquid perps | `/perp <long|short> <BTC|ETH> <notional USD> <margin USD>` | Assess a caller-declared BTC/ETH position with live venue/oracle context | Verify signed assessment evidence | Assessment-only; linked Insight account required |
+| DEX swap | `/swap <weth-usdc|usdc-usdt> <forward|reverse> <amount>` | Show a quote and reviewed-pool/TWAP evidence from Base Aerodrome | Verify signed assessment evidence | Assessment-only; always CAUTION pending user review; no recipient or calldata |
 
 ## Hard boundary
 
@@ -31,15 +31,15 @@ PriorSeal's separate authorization and execution-verification products remain ou
 
 ## Base lending
 
-The previous exact-call Mini App is disabled. It required transaction JSON and returned a decision bound to executable call data, which is not the user-facing assessment product. The future form should read a public address's position where supported and separately label hypothetical changes supplied by the user. If live position reading is unavailable, the form must say inputs are caller-declared. The assessment must return no calldata or transaction/order envelope.
+The previous exact-call Mini App is disabled. This scenario only accepts a caller-declared what-if position through `/lending <supply|borrow> <collateral WETH|USDC> <loan WETH|USDC> <post-action collateral USD> <post-action debt USD>`. V1 supports Aave V3 on Base. The bot does not read an address or a user's actual wallet position and labels values as caller-declared. It returns the signed guard result without calldata, a transaction envelope, or any wallet interaction.
 
 ## Hyperliquid perps
 
-The previous `/perp <JSON>` endpoint is disabled. The future experience is a guided form for asset, direction, size, and margin, followed by a review screen with enough time to inspect the result. Any short-lived exchange assessment fields are created inside server infrastructure and are not user inputs or user-facing artifacts. The assessment API must bind to the declared scenario and must not return an executable order envelope.
+The previous `/perp <JSON>` endpoint is disabled. V1 accepts `/perp <long|short> <BTC|ETH> <notional USD> <margin USD>`, then requires a separate confirmation that can be used for seven days. Current venue and oracle data are collected after confirmation. All position values are caller-declared. The signed report has no IOC expiry, order envelope, signature request, or exchange authorization.
 
 ## DEX swap
 
-The previous `/swap <JSON>` endpoint and settlement path are disabled. They depended on exact quote, recipient, slippage, and transaction data supplied as JSON and could return data bound to executable approval/swap calls. The future experience must use an assessment-only API with no executable calldata. A guided form will expose supported network, token pair, amount, quote age, slippage, price impact, and reference deviation in ordinary fields. It will not collect a recipient or build an approval/swap transaction.
+The previous `/swap <JSON>` endpoint and settlement path are disabled. V1 accepts `/swap <weth-usdc|usdc-usdt> <forward|reverse> <amount>` and uses only read-only on-chain quote/TWAP evidence from the two reviewed Base Aerodrome Slipstream pools below. It never collects a recipient or constructs approval/swap calldata. The result is always `CAUTION`: it presents the quote and reference deviation for user review and does not claim to assess a transaction-specific slippage limit or execution outcome. Other networks, pools, and tokens are unavailable.
 
 Reviewed profiles for future launch include:
 
@@ -54,10 +54,10 @@ Settlement verification of a user-performed trade is outside this Telegram produ
 
 ## Account, trial, billing, and release gates
 
-The controlled pilot now links Telegram accounts to authenticated Insight accounts and uses each linked user's existing credit wallet. A server-side integration secret protects the linking/status/assessment routes. The bot never receives or displays an Insight API key. The first sponsored sample is capped at one successful assessment per private Telegram account; linked assessments are idempotently charged only after a trusted result is produced. Upstream, timeout, and verification failures do not charge credits.
+All three scenarios require a linked authenticated Insight account and use its existing credit wallet. The account screen shows current price and available credits before confirmation. Prepared confirmations are private-chat-bound, single-use, and available for seven days. The market read and assessment are performed only after confirmation. Charges are idempotent and scene-labelled; failures, signature-verification failures, and undelivered report files invoke an idempotent compensation route. Signed reports declare a 30-day validity window; after it, their signature remains historical evidence of the snapshot, not a current assessment.
 
-Keep each scenario closed until its user form and API response contract avoid raw JSON and executable envelopes, the signed assessment is bound to those ordinary inputs, PriorSeal can verify it, account-aware quotas are enforced, and failure/no-charge/idempotency behavior is in place. A successful `ALLOW` remains a risk assessment, never transaction authorization.
+Each scene returns only a signed read-only report. A successful `ALLOW` remains a risk assessment, never transaction authorization. Production release additionally requires the Worker’s Ed25519 request-signing private key, the pinned Insight verification key, Supabase migration `telegram_readonly_scenarios`, and a smoke check that `/start`, account pricing, scenario confirmation, assessment signature verification, billing, and refund behavior are coherent. If any check is unavailable, that scene must fail closed and must not be described as live.
 
 ## Operations and data handling
 
-The active pilot uses webhook verification, the configured private beta allowlist, per-chat request limits, and a one-sample Durable Object gate. The other scenario endpoints return `410 Gone`; the old Mini Apps are replaced by a stage notice. Keep `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_INTEGRATION_SECRET`, `INSIGHT_API_KEY`, and the chat allowlist in Worker secrets. Configure the matching `TELEGRAM_INTEGRATION_SECRET` in Insight. The Mini Apps receive no Insight API key. Do not log request bodies, wallet keys, API keys, link tokens, or bot credentials.
+The Worker uses webhook verification, the configured private beta allowlist, and per-chat request limits. Keep `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_INTEGRATION_PRIVATE_KEY`, `INSIGHT_API_KEY`, and the chat allowlist in Worker secrets. Insight pins only the matching public verification key; no shared integration secret is needed in Vercel. Do not log request bodies, wallet keys, API keys, link tokens, or bot credentials; failure logs contain only bounded reason codes.

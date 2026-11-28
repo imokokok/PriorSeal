@@ -68,6 +68,11 @@ export class TelegramBotState extends DurableObject<Env> {
         consumed INTEGER NOT NULL DEFAULT 0
       )`)
       ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS assessment_quotes_expiry ON assessment_quotes(expires_at)')
+      ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS scenario_quotes (
+        token TEXT PRIMARY KEY, telegram_user_id TEXT NOT NULL, scenario TEXT NOT NULL,
+        request_json TEXT NOT NULL, quoted_cost INTEGER NOT NULL, expires_at INTEGER NOT NULL, consumed INTEGER NOT NULL DEFAULT 0
+      )`)
+      ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS scenario_quotes_expiry ON scenario_quotes(expires_at)')
       ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS polymarket_latency_samples (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         duration_ms INTEGER NOT NULL,
@@ -300,6 +305,36 @@ export class TelegramBotState extends DurableObject<Env> {
       slug: row.market_slug, side: row.side, cost: row.quoted_cost,
       referencePrice: row.reference_price, tickSize: row.tick_size, expiresAt: row.expires_at,
     }
+  }
+
+  createScenarioQuote(token: string, telegramUserId: number, scenario: string, requestJson: string, cost: number, expiresAt: number, now: number): void {
+    if (!/^[a-f0-9]{24}$/.test(token) || !Number.isSafeInteger(telegramUserId) || telegramUserId <= 0 ||
+        !['base_lending', 'hyperliquid_perps', 'dex_swap'].includes(scenario) || new TextEncoder().encode(requestJson).byteLength > 4096 ||
+        !Number.isSafeInteger(cost) || cost <= 0 || !Number.isSafeInteger(now) || !Number.isSafeInteger(expiresAt) ||
+        expiresAt <= now || expiresAt > now + 7 * 86_400) throw new TypeError('Invalid Telegram scenario quote')
+    const parsed: unknown = JSON.parse(requestJson)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new TypeError('Invalid Telegram scenario request')
+    const sql = this.ctx.storage.sql
+    sql.exec('DELETE FROM scenario_quotes WHERE expires_at <= ?', now)
+    sql.exec('INSERT INTO scenario_quotes(token, telegram_user_id, scenario, request_json, quoted_cost, expires_at) VALUES (?, ?, ?, ?, ?, ?)', token, String(telegramUserId), scenario, requestJson, cost, expiresAt)
+  }
+
+  consumeScenarioQuote(token: string, telegramUserId: number, now: number): { scenario: string; request: Record<string, unknown>; cost: number } | null {
+    const sql = this.ctx.storage.sql
+    const row = sql.exec<{ scenario: string; request_json: string; quoted_cost: number; expires_at: number; consumed: number }>(
+      'SELECT scenario, request_json, quoted_cost, expires_at, consumed FROM scenario_quotes WHERE token = ? AND telegram_user_id = ? LIMIT 1', token, String(telegramUserId),
+    ).toArray()[0]
+    if (!row || row.consumed !== 0 || row.expires_at <= now || !['base_lending', 'hyperliquid_perps', 'dex_swap'].includes(row.scenario)) return null
+    let request: unknown
+    try { request = JSON.parse(row.request_json) } catch { return null }
+    if (!request || typeof request !== 'object' || Array.isArray(request)) return null
+    sql.exec('UPDATE scenario_quotes SET consumed = 1 WHERE token = ? AND consumed = 0', token)
+    return { scenario: row.scenario, request: request as Record<string, unknown>, cost: row.quoted_cost }
+  }
+
+  clearScenarioQuotes(telegramUserId: number): void {
+    if (!Number.isSafeInteger(telegramUserId) || telegramUserId <= 0) throw new TypeError('Invalid Telegram user id')
+    this.ctx.storage.sql.exec('DELETE FROM scenario_quotes WHERE telegram_user_id = ?', String(telegramUserId))
   }
 
   recordPolymarketLatency(durationMs: number, now: number): void {

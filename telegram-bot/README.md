@@ -27,11 +27,11 @@ Use the pinned Node.js version (`nvm use`) and the root-installed Wrangler.
    npx wrangler secret put TELEGRAM_WEBHOOK_SECRET --config telegram-bot/wrangler.jsonc
    npx wrangler secret put WEBHOOK_SETUP_SECRET --config telegram-bot/wrangler.jsonc
    npx wrangler secret put INSIGHT_API_KEY --config telegram-bot/wrangler.jsonc
-   npx wrangler secret put TELEGRAM_INTEGRATION_SECRET --config telegram-bot/wrangler.jsonc
+   npx wrangler secret put TELEGRAM_INTEGRATION_PRIVATE_KEY --config telegram-bot/wrangler.jsonc
    npx wrangler secret put ALLOWED_CHAT_IDS --config telegram-bot/wrangler.jsonc
    ```
 
-   Configure the same high-entropy `TELEGRAM_INTEGRATION_SECRET` as a server-side secret in the Insight production Worker. It is not a Wrangler `vars` entry and is never sent to the browser or Telegram client. The Worker also needs `INSIGHT_BASE_URL` and `INSIGHT_KEY_REGISTRY_URL` from its config.
+   `TELEGRAM_INTEGRATION_PRIVATE_KEY` is an Ed25519 PKCS#8 PEM private key. Insight pins the matching public key in server code and verifies signed method, path, body, and timestamp headers. Keep the private key only in this Cloudflare Worker secret; do not configure a shared secret in Vercel. The Worker also needs `INSIGHT_BASE_URL` and `INSIGHT_KEY_REGISTRY_URL` from its config.
 
 3. Generate types and inspect the deployment preview before deploying the Worker:
 
@@ -44,7 +44,7 @@ Use the pinned Node.js version (`nvm use`) and the root-installed Wrangler.
 
 4. After deployment, send one `POST` request to the Worker URL plus `/admin/register-webhook` with `Authorization: Bearer <WEBHOOK_SETUP_SECRET>`. This registers the webhook and the visible Telegram command menu. Then delete `WEBHOOK_SETUP_SECRET`; the registration endpoint returns 404 when it is absent.
 
-The first deployment creates the SQLite-backed Durable Object migration declared in `wrangler.jsonc`. Keep the chat allowlist, bot token, webhook secret, integration secret, and Insight assessment key private.
+The first deployment creates the SQLite-backed Durable Object migration declared in `wrangler.jsonc`. Keep the chat allowlist, bot token, webhook secret, Ed25519 private key, and Insight assessment key private.
 
 ## Four-scene rollout
 
