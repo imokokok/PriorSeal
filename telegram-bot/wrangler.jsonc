@@ -13,6 +13,7 @@
   "durable_objects": {
     "bindings": [{ "name": "STATE", "class_name": "TelegramBotState" }]
   },
+  "services": [{ "binding": "INSIGHT_WEB", "service": "insight-web" }],
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TelegramBotState"] }],
   "vars": {
     "INSIGHT_BASE_URL": "https://www.oracleinsight.xyz",

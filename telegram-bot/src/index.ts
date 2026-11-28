@@ -13,6 +13,7 @@ import {
   USER_REVIEW_WINDOW_MS,
 } from './assessment-window.js'
 import { fetchMarketReference, type MarketReference } from './market-data.js'
+import { createInsightFetcher } from './insight-fetch.js'
 import {
   MAX_SCENARIO_REQUESTS_PER_DAY,
   MAX_SCENARIO_REQUESTS_PER_HOUR,
@@ -23,15 +24,12 @@ import type { KeyRegistry } from 'verify-insight-receipt'
 
 export { TelegramBotState } from './telegram-state.js'
 
-type Env = {
-  STATE: DurableObjectNamespace<TelegramBotState>
+type Env = Cloudflare.Env & {
   TELEGRAM_BOT_TOKEN?: string
   TELEGRAM_WEBHOOK_SECRET?: string
   WEBHOOK_SETUP_SECRET?: string
   INSIGHT_API_KEY?: string
   TELEGRAM_INTEGRATION_PRIVATE_KEY?: string
-  INSIGHT_BASE_URL?: string
-  INSIGHT_KEY_REGISTRY_URL?: string
   ALLOWED_CHAT_IDS?: string
   LENDING_MINI_APP_ORIGIN?: string
   LENDING_MINI_APP_URL?: string
@@ -344,12 +342,21 @@ async function sendTelegramEvidenceRecord(env: Env, chatId: number, caption: str
   } catch { return false }
 }
 
-async function fetchJson(url: string, init: RequestInit, maxBytes = MAX_RESPONSE_BYTES): Promise<unknown> {
+async function fetchJson(env: Env, url: string, init: RequestInit, maxBytes = MAX_RESPONSE_BYTES): Promise<unknown> {
   const service = url.includes('/.well-known/oracle-keys.json') ? 'KEY_REGISTRY' : 'INSIGHT'
   let response: Response
+  const startedAt = Date.now()
   try {
-    response = await fetch(url, { ...init, signal: AbortSignal.timeout(15_000) })
-  } catch {
+    response = await createInsightFetcher(env.INSIGHT_WEB)(url, { ...init, signal: AbortSignal.timeout(15_000) })
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'insight_upstream_fetch_failed',
+      service,
+      path: new URL(url).pathname,
+      transport: env.INSIGHT_WEB ? 'service_binding' : 'public_fetch',
+      elapsedMs: Date.now() - startedAt,
+      errorName: error instanceof Error ? error.name : 'UNKNOWN',
+    }))
     throw upstreamTransportError(service)
   }
   if (!response.ok) throw upstreamHttpError(response, service)
@@ -378,7 +385,7 @@ async function signedInsightJson(env: Env, url: string, init: RequestInit, maxBy
   headers.set('x-telegram-key-id', 'telegram-ed25519-v1')
   headers.set('x-telegram-timestamp', timestamp)
   headers.set('x-telegram-signature', encodeBase64(signature))
-  return fetchJson(url, { ...init, headers }, maxBytes)
+  return fetchJson(env, url, { ...init, headers }, maxBytes)
 }
 
 function decodeBase64(value: string): Uint8Array {
@@ -477,7 +484,7 @@ async function assessLinkedScenario(env: Env, telegramUserId: number, updateId: 
       method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({ telegramUserId: String(telegramUserId), updateId, request }),
     }),
-    fetchJson(registryUrl.toString(), { headers: { accept: 'application/json' } }),
+    fetchJson(env, registryUrl.toString(), { headers: { accept: 'application/json' } }),
   ])
   if (!isRecord(response) || response.success !== true || !isRecord(response.billing) || response.billing.chargeConfirmed !== true ||
       typeof response.billing.chargedCredits !== 'number' || !isRecord(response.data) || !isRecord(response.data.assessment) || !isRecord(response.data.attestation) || !isRecord(registry)) throw new Error('SCENARIO_RESPONSE_INVALID')
@@ -707,8 +714,8 @@ async function checkMarket(
   const [response, registryDocument] = await Promise.all([
     linked
       ? assessLinkedPolymarket(env, linked.telegramUserId, linked.updateId, slug, action)
-      : fetchJson(endpoint.toString(), { headers: { 'X-API-Key': apiKey, accept: 'application/json' } }),
-    fetchJson(registryUrl.toString(), { headers: { accept: 'application/json' } }),
+      : fetchJson(env, endpoint.toString(), { headers: { 'X-API-Key': apiKey, accept: 'application/json' } }),
+    fetchJson(env, registryUrl.toString(), { headers: { accept: 'application/json' } }),
   ])
   const decision = isRecord(response) && 'decision' in response ? response.decision : response
   if (!isRecord(registryDocument)) throw new Error('KEY_REGISTRY_INVALID')
