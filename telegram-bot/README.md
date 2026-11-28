@@ -42,6 +42,11 @@ Use the pinned Node.js version (`nvm use`) and the root-installed Wrangler.
    npx wrangler deploy --config telegram-bot/wrangler.jsonc
    ```
 
+   The Telegram Worker routes Insight API and key-registry requests through the
+   `INSIGHT_WEB` Service Binding to the `insight-web` Worker. Both Workers must
+   be deployed in the same Cloudflare account. Telegram and external provider
+   requests continue to use normal HTTPS fetch.
+
 4. After deployment, send one `POST` request to the Worker URL plus `/admin/register-webhook` with `Authorization: Bearer <WEBHOOK_SETUP_SECRET>`. This registers the webhook and the visible Telegram command menu. Then delete `WEBHOOK_SETUP_SECRET`; the registration endpoint returns 404 when it is absent.
 
 The first deployment creates the SQLite-backed Durable Object migration declared in `wrangler.jsonc`. Keep the chat allowlist, bot token, webhook secret, Ed25519 private key, and Insight assessment key private.

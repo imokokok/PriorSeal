@@ -4,6 +4,7 @@ import {
 } from "../../sdk/dist/index.js";
 import type { KeyRegistry } from "verify-insight-receipt";
 import { upstreamHttpError } from "./upstream-errors.ts";
+import { createInsightFetcher, type InsightServiceBinding } from "./insight-fetch.ts";
 
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const MAX_STORED_EVIDENCE_BYTES = 64 * 1024;
@@ -12,6 +13,7 @@ type SourceEvidenceEnv = {
   INSIGHT_API_KEY?: string;
   INSIGHT_BASE_URL?: string;
   INSIGHT_KEY_REGISTRY_URL?: string;
+  INSIGHT_WEB?: InsightServiceBinding;
 };
 type Fetcher = typeof fetch;
 export type VerifiedSourceEvidence = {
@@ -200,7 +202,7 @@ function buildEvidenceSummary(
 export async function collectMarketEvidence(
   env: SourceEvidenceEnv,
   marketId: string,
-  fetcher: Fetcher = fetch,
+  fetcher: Fetcher = createInsightFetcher(env.INSIGHT_WEB),
 ): Promise<VerifiedSourceEvidence> {
   const apiKey = env.INSIGHT_API_KEY;
   const base = env.INSIGHT_BASE_URL;
