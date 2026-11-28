@@ -1,31 +1,53 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { currentBtcPriceContractSlug, hasAtLeastRemainingMs, isWithinAssessmentDeadlineWindow, priceContractEndTimeMs } from '../src/assessment-window.ts'
+import {
+  COLD_START_MARKET_RESERVE_MS,
+  LATENCY_SAMPLE_MINIMUM,
+  currentBtcPriceContractSlug,
+  exceedsOnePriceTick,
+  hasUsableMarketWindow,
+  latencyReserveMs,
+  priceContractEndTimeMs,
+  quoteExpiryMs,
+  USER_REVIEW_WINDOW_MS,
+} from '../src/assessment-window.ts'
 
 const nowMs = 1_800_000_000_000
 
-test('assessment deadline accepts only 90–120 seconds ahead', () => {
-  assert.equal(isWithinAssessmentDeadlineWindow(nowMs + 90_000, nowMs), true)
-  assert.equal(isWithinAssessmentDeadlineWindow(nowMs + 120_000, nowMs), true)
-  assert.equal(isWithinAssessmentDeadlineWindow(nowMs + 89_999, nowMs), false)
-  assert.equal(isWithinAssessmentDeadlineWindow(nowMs + 120_001, nowMs), false)
-  assert.equal(isWithinAssessmentDeadlineWindow(Number.NaN, nowMs), false)
+test('market entry preserves a two-minute review window plus the service reserve', () => {
+  const deadlineMs = nowMs + 300_000
+  assert.equal(hasUsableMarketWindow(deadlineMs, nowMs, COLD_START_MARKET_RESERVE_MS), true)
+  assert.equal(hasUsableMarketWindow(deadlineMs, nowMs + 120_001, COLD_START_MARKET_RESERVE_MS), false)
+  assert.equal(hasUsableMarketWindow(deadlineMs, nowMs, 60_001), false)
+  assert.equal(hasUsableMarketWindow(deadlineMs, nowMs, Number.NaN), false)
 })
 
-test('price contract end time is parsed safely and requires enough time remaining', () => {
+test('quote TTL ends at the earlier of two minutes or market close minus reserve', () => {
+  const deadlineMs = nowMs + 300_000
+  assert.equal(quoteExpiryMs(deadlineMs, nowMs, 60_000), nowMs + USER_REVIEW_WINDOW_MS)
+  assert.equal(quoteExpiryMs(nowMs + 180_000, nowMs, 60_000), nowMs + USER_REVIEW_WINDOW_MS)
+  assert.equal(quoteExpiryMs(nowMs + 179_999, nowMs, 60_000), undefined)
+})
+
+test('latency reserve uses P99.9 margin and fails closed above the five-minute budget', () => {
+  assert.equal(LATENCY_SAMPLE_MINIMUM, 1_000)
+  assert.equal(latencyReserveMs(20_000), 30_000)
+  assert.equal(latencyReserveMs(40_000), 60_000)
+  assert.equal(latencyReserveMs(40_001), undefined)
+  assert.equal(latencyReserveMs(Number.NaN), undefined)
+})
+
+test('market price drift is bounded by its live tick size', () => {
+  assert.equal(exceedsOnePriceTick(0.5, 0.51, 0.01), false)
+  assert.equal(exceedsOnePriceTick(0.5, 0.52, 0.01), true)
+  assert.equal(exceedsOnePriceTick(0.5, 0.52, Number.NaN), true)
+})
+
+test('price contract end time is parsed safely', () => {
   const endMs = priceContractEndTimeMs('btc-updown-5m-1800000000')
   assert.equal(endMs, 1_800_000_300_000)
-  assert.equal(hasAtLeastRemainingMs(endMs!, nowMs), true)
-  assert.equal(hasAtLeastRemainingMs(endMs!, endMs! - 89_999), false)
   assert.equal(priceContractEndTimeMs('what-price-will-bitcoin-hit-before-2027'), undefined)
   assert.equal(priceContractEndTimeMs('btc-updown-0m-1800000000'), undefined)
-})
-
-test('Unix-second deadlines use the same 90–120 second window after conversion', () => {
-  const nowSeconds = Math.floor(nowMs / 1_000)
-  assert.equal(isWithinAssessmentDeadlineWindow((nowSeconds + 90) * 1_000, nowMs), true)
-  assert.equal(isWithinAssessmentDeadlineWindow((nowSeconds + 89) * 1_000, nowMs), false)
-  assert.equal(isWithinAssessmentDeadlineWindow((nowSeconds + 121) * 1_000, nowMs), false)
 })
 
 test('current BTC market slug is derived from the message receive time', () => {

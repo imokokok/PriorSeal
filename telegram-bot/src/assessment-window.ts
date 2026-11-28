@@ -1,13 +1,30 @@
-export const MIN_ASSESSMENT_WINDOW_MS = 90_000
-export const MAX_ASSESSMENT_WINDOW_MS = 120_000
+export const USER_REVIEW_WINDOW_MS = 120_000
+export const MAX_FIVE_MINUTE_MARKET_RESERVE_MS = 60_000
+export const COLD_START_MARKET_RESERVE_MS = MAX_FIVE_MINUTE_MARKET_RESERVE_MS
+export const LATENCY_SAMPLE_MINIMUM = 1_000
+export const LATENCY_RESERVE_MULTIPLIER = 1.5
 
-export function hasAtLeastRemainingMs(deadlineMs: number, nowMs = Date.now(), minimumMs = MIN_ASSESSMENT_WINDOW_MS): boolean {
-  return Number.isFinite(deadlineMs) && deadlineMs - nowMs >= minimumMs
+export function hasUsableMarketWindow(deadlineMs: number, nowMs: number, reserveMs: number): boolean {
+  return Number.isFinite(deadlineMs) && Number.isSafeInteger(nowMs) && Number.isSafeInteger(reserveMs) &&
+    reserveMs >= 0 && reserveMs <= MAX_FIVE_MINUTE_MARKET_RESERVE_MS &&
+    deadlineMs - nowMs >= USER_REVIEW_WINDOW_MS + reserveMs
 }
 
-export function isWithinAssessmentDeadlineWindow(deadlineMs: number, nowMs = Date.now()): boolean {
-  const remainingMs = deadlineMs - nowMs
-  return Number.isFinite(deadlineMs) && remainingMs >= MIN_ASSESSMENT_WINDOW_MS && remainingMs <= MAX_ASSESSMENT_WINDOW_MS
+export function quoteExpiryMs(deadlineMs: number, nowMs: number, reserveMs: number): number | undefined {
+  if (!hasUsableMarketWindow(deadlineMs, nowMs, reserveMs)) return undefined
+  return Math.min(nowMs + USER_REVIEW_WINDOW_MS, deadlineMs - reserveMs)
+}
+
+export function latencyReserveMs(p999Ms: number): number | undefined {
+  if (!Number.isFinite(p999Ms) || p999Ms < 0) return undefined
+  const reserve = Math.ceil(p999Ms * LATENCY_RESERVE_MULTIPLIER)
+  return reserve <= MAX_FIVE_MINUTE_MARKET_RESERVE_MS ? reserve : undefined
+}
+
+export function exceedsOnePriceTick(quotedPrice: number, freshPrice: number, tickSize: number): boolean {
+  return !Number.isFinite(quotedPrice) || !Number.isFinite(freshPrice) || !Number.isFinite(tickSize) ||
+    quotedPrice < 0 || quotedPrice > 1 || freshPrice < 0 || freshPrice > 1 || tickSize <= 0 || tickSize > 1 ||
+    Math.abs(quotedPrice - freshPrice) > tickSize + Number.EPSILON * 4
 }
 
 export function priceContractEndTimeMs(slug: string): number | undefined {

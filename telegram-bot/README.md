@@ -4,13 +4,16 @@ This bot is a read-only assessment and evidence interface. It does not connect t
 
 ## User flow
 
-1. Send `/start` in a private chat. Choose **Assess a BTC 5-minute market**, then **Assess Up** or **Assess Down**. The bot selects a usable market when the button is tapped, skipping windows with less than four minutes remaining. Users do not construct JSON or copy timestamps.
-2. One successful assessment is sponsored before account linking. A failed assessment or failed Telegram delivery does not consume that trial.
-3. To continue, use `/link`, sign in on the official Insight website, and explicitly confirm the one-time account link. It expires after 15 minutes and can be used once.
-4. Use `/account` to check the Insight credit balance and price. Linked assessments debit credits only after Insight returns a trusted signed result. The bot does not require users to create an API key. `/unlink` removes the association.
-5. Base lending, Hyperliquid perps, and DEX swap appear as coming soon. Their assessment routes remain closed until guided input forms and signed assessment-only APIs are ready.
+1. Send `/start` in a private chat. Choose **Assess a BTC 5-minute market**, then **Assess Up** or **Assess Down**. The bot selects a usable market when the button is tapped. Users do not construct JSON or copy timestamps.
+2. The bot first shows an assessment quote with the selected market, current outcome midpoint, tick size, and (for linked accounts) current cost and available balance. The quote stays usable for at most 120 seconds. A separate confirmation starts the assessment. The bot rechecks the market window, midpoint, account cost, and balance before starting; a rollover or price move greater than one live price tick requires a new confirmation.
+3. One successful assessment is sponsored before account linking. A failed assessment or failed Telegram delivery does not consume that trial.
+4. To continue, use `/link`, sign in on the official Insight website, and explicitly confirm the one-time account link. It expires after 15 minutes and can be used once.
+5. Use `/account` to check the Insight credit balance and price. Linked assessments debit credits only after Insight returns a trusted signed result. The bot does not require users to create an API key. `/unlink` removes the association.
+6. Base lending, Hyperliquid perps, and DEX swap appear as coming soon. Their assessment routes remain closed until guided input forms and signed assessment-only APIs are ready.
 
-For a command-line assessment, `/check btc up` or `/check btc down` is also supported. The bot selects the market at request time. Do not use old payload examples containing JSON, Unix deadlines, unsigned orders, recipients, or transaction calldata.
+The two-minute review window is separate from the market-close buffer. The Worker records successful confirmation-to-Telegram-delivery durations without Telegram IDs or request contents, retaining at most 10,000 samples for 30 days. Until it has 1,000 samples, it reserves up to 60 seconds for service completion; afterward it derives the reserve from P99.9 latency multiplied by 1.5. A reserve above 60 seconds disables the 5-minute flow until latency supports it. Market entry requires at least 120 seconds for user review plus the current reserve, and quotes expire no later than market close minus that reserve. Price drift is measured against the live market tick size, not a fixed percentage.
+
+For a command-line assessment, `/check btc up` or `/check btc down` is also supported. The bot selects the market at request time, sends a quote with an explicit confirmation button, and starts only after that confirmation. Do not use old payload examples containing JSON, Unix deadlines, unsigned orders, recipients, or transaction calldata.
 
 ## Configure the Worker
 

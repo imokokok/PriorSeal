@@ -1,5 +1,11 @@
 import { DurableObject } from 'cloudflare:workers'
 import { decideUpdateReservation } from './update-reservation.js'
+import {
+  COLD_START_MARKET_RESERVE_MS,
+  LATENCY_SAMPLE_MINIMUM,
+  latencyReserveMs,
+  MAX_FIVE_MINUTE_MARKET_RESERVE_MS,
+} from './assessment-window.js'
 
 type CheckCommand = 'check' | 'other'
 type Reservation = 'reserved' | 'duplicate' | 'in_progress' | 'rate_limited'
@@ -50,16 +56,24 @@ export class TelegramBotState extends DurableObject<Env> {
         requested_at INTEGER NOT NULL,
         completed INTEGER NOT NULL DEFAULT 0
       )`)
-      ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS assessment_confirmations (
+      ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS assessment_quotes (
         token TEXT PRIMARY KEY,
         telegram_user_id TEXT NOT NULL,
         market_slug TEXT NOT NULL,
         side TEXT NOT NULL,
         quoted_cost INTEGER NOT NULL,
+        reference_price REAL NOT NULL,
+        tick_size REAL NOT NULL,
         expires_at INTEGER NOT NULL,
         consumed INTEGER NOT NULL DEFAULT 0
       )`)
-      ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS assessment_confirmations_expiry ON assessment_confirmations(expires_at)')
+      ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS assessment_quotes_expiry ON assessment_quotes(expires_at)')
+      ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS polymarket_latency_samples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        duration_ms INTEGER NOT NULL,
+        recorded_at INTEGER NOT NULL
+      )`)
+      ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS polymarket_latency_recorded_at ON polymarket_latency_samples(recorded_at)')
       ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS sponsored_trial_budget (
         month TEXT NOT NULL,
         update_id INTEGER NOT NULL,
@@ -245,25 +259,78 @@ export class TelegramBotState extends DurableObject<Env> {
     )
   }
 
-  createAssessmentConfirmation(token: string, telegramUserId: number, slug: string, side: 'up' | 'down', cost: number, now: number): void {
+  createAssessmentQuote(
+    token: string,
+    telegramUserId: number,
+    slug: string,
+    side: 'up' | 'down',
+    cost: number,
+    referencePrice: number,
+    tickSize: number,
+    expiresAt: number,
+    now: number,
+  ): void {
     if (!/^[a-f0-9]{24}$/.test(token) || !Number.isSafeInteger(telegramUserId) || telegramUserId <= 0 ||
         !/^[a-z0-9][a-z0-9_-]{1,199}$/i.test(slug) || !Number.isSafeInteger(cost) || cost < 0 ||
-        !Number.isSafeInteger(now) || now < 0) throw new TypeError('Invalid assessment confirmation')
+        (side !== 'up' && side !== 'down') || !Number.isFinite(referencePrice) || referencePrice < 0 || referencePrice > 1 ||
+        !Number.isFinite(tickSize) || tickSize <= 0 || tickSize > 1 || !Number.isSafeInteger(now) || now < 0 ||
+        !Number.isSafeInteger(expiresAt) || expiresAt <= now || expiresAt > now + 120) {
+      throw new TypeError('Invalid assessment quote')
+    }
     const sql = this.ctx.storage.sql
-    sql.exec('DELETE FROM assessment_confirmations WHERE expires_at <= ?', now)
-    sql.exec('INSERT INTO assessment_confirmations(token, telegram_user_id, market_slug, side, quoted_cost, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
-      token, String(telegramUserId), slug, side, cost, now + 7 * 86_400)
+    sql.exec('DELETE FROM assessment_quotes WHERE expires_at <= ?', now)
+    sql.exec('INSERT INTO assessment_quotes(token, telegram_user_id, market_slug, side, quoted_cost, reference_price, tick_size, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      token, String(telegramUserId), slug, side, cost, referencePrice, tickSize, expiresAt)
   }
 
-  consumeAssessmentConfirmation(token: string, telegramUserId: number, now: number): { slug: string; side: 'up' | 'down'; cost: number } | null {
+  consumeAssessmentQuote(token: string, telegramUserId: number, now: number): {
+    slug: string; side: 'up' | 'down'; cost: number; referencePrice: number; tickSize: number; expiresAt: number
+  } | null {
     const sql = this.ctx.storage.sql
-    const row = sql.exec<{ market_slug: string; side: string; quoted_cost: number; expires_at: number; consumed: number }>(
-      'SELECT market_slug, side, quoted_cost, expires_at, consumed FROM assessment_confirmations WHERE token = ? AND telegram_user_id = ? LIMIT 1',
+    const row = sql.exec<{
+      market_slug: string; side: string; quoted_cost: number; reference_price: number; tick_size: number; expires_at: number; consumed: number
+    }>(
+      'SELECT market_slug, side, quoted_cost, reference_price, tick_size, expires_at, consumed FROM assessment_quotes WHERE token = ? AND telegram_user_id = ? LIMIT 1',
       token, String(telegramUserId),
     ).toArray()[0]
-    if (!row || row.expires_at <= now || row.consumed !== 0 || (row.side !== 'up' && row.side !== 'down')) return null
-    sql.exec('UPDATE assessment_confirmations SET consumed = 1 WHERE token = ? AND consumed = 0', token)
-    return { slug: row.market_slug, side: row.side, cost: row.quoted_cost }
+    if (!row || row.expires_at <= now || row.consumed !== 0 || (row.side !== 'up' && row.side !== 'down') ||
+        !Number.isFinite(row.reference_price) || !Number.isFinite(row.tick_size)) return null
+    sql.exec('UPDATE assessment_quotes SET consumed = 1 WHERE token = ? AND consumed = 0', token)
+    return {
+      slug: row.market_slug, side: row.side, cost: row.quoted_cost,
+      referencePrice: row.reference_price, tickSize: row.tick_size, expiresAt: row.expires_at,
+    }
+  }
+
+  recordPolymarketLatency(durationMs: number, now: number): void {
+    if (!Number.isSafeInteger(durationMs) || durationMs < 0 || durationMs > 3_600_000 ||
+        !Number.isSafeInteger(now) || now < 0) throw new TypeError('Invalid assessment latency sample')
+    const sql = this.ctx.storage.sql
+    sql.exec('DELETE FROM polymarket_latency_samples WHERE recorded_at < ?', now - 30 * 86_400)
+    sql.exec('INSERT INTO polymarket_latency_samples(duration_ms, recorded_at) VALUES (?, ?)', durationMs, now)
+    sql.exec(
+      'DELETE FROM polymarket_latency_samples WHERE id IN (SELECT id FROM polymarket_latency_samples ORDER BY recorded_at DESC LIMIT -1 OFFSET 10000)',
+    )
+  }
+
+  getPolymarketLatencyReserve(now: number): { reserveMs: number; source: 'cold-start-cap' | 'measured-p999' } | null {
+    if (!Number.isSafeInteger(now) || now < 0) throw new TypeError('Invalid latency sample cutoff')
+    const sql = this.ctx.storage.sql
+    sql.exec('DELETE FROM polymarket_latency_samples WHERE recorded_at < ?', now - 30 * 86_400)
+    const count = sql.exec<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM polymarket_latency_samples WHERE recorded_at >= ?', now - 30 * 86_400,
+    ).toArray()[0]?.total ?? 0
+    if (count < LATENCY_SAMPLE_MINIMUM) {
+      return { reserveMs: COLD_START_MARKET_RESERVE_MS, source: 'cold-start-cap' }
+    }
+    const p999 = sql.exec<{ duration_ms: number }>(
+      'SELECT duration_ms FROM polymarket_latency_samples WHERE recorded_at >= ? ORDER BY duration_ms ASC LIMIT 1 OFFSET ?',
+      now - 30 * 86_400, Math.max(0, Math.ceil(count * 0.999) - 1),
+    ).toArray()[0]?.duration_ms
+    if (typeof p999 !== 'number') return null
+    const reserveMs = latencyReserveMs(p999)
+    if (reserveMs === undefined || reserveMs > MAX_FIVE_MINUTE_MARKET_RESERVE_MS) return null
+    return { reserveMs, source: 'measured-p999' }
   }
 
   reserveSponsoredTrialBudget(updateId: number, credits: number, now: number): boolean {
