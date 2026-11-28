@@ -1,4 +1,5 @@
 import { verifyInsightPolymarketGuardDecision } from '../../sdk/src/insight-polymarket-guard.js'
+import { hashTypedData, keccak256, toBytes, verifyTypedData } from 'viem'
 import {
   readStoredMarketEvidence,
 } from './source-evidence.js'
@@ -28,7 +29,7 @@ type Env = {
   TELEGRAM_WEBHOOK_SECRET?: string
   WEBHOOK_SETUP_SECRET?: string
   INSIGHT_API_KEY?: string
-  TELEGRAM_INTEGRATION_SECRET?: string
+  TELEGRAM_INTEGRATION_PRIVATE_KEY?: string
   INSIGHT_BASE_URL?: string
   INSIGHT_KEY_REGISTRY_URL?: string
   ALLOWED_CHAT_IDS?: string
@@ -40,7 +41,8 @@ type TelegramMessage = { chat: { id: number }; from?: { id: number; language_cod
 type TelegramCallbackQuery = { id: string; from: { id: number; language_code?: string }; message?: TelegramMessage; data?: string }
 type TelegramUpdate = { update_id: number; message?: TelegramMessage; callback_query?: TelegramCallbackQuery }
 type GuardVerdict = 'ALLOW' | 'CAUTION' | 'BLOCK'
-type BotCommand = 'start' | 'help' | 'menu' | 'usage' | 'privacy' | 'cancel' | 'check' | 'evidence' | 'evidence-record' | 'link' | 'unlink' | 'account' | 'lending' | 'perp' | 'swap'
+type BotCommand = 'start' | 'help' | 'menu' | 'usage' | 'privacy' | 'cancel' | 'check' | 'evidence' | 'evidence-record' | 'link' | 'unlink' | 'account' | 'lending' | 'perp' | 'swap' | 'scenario-run'
+type TelegramScenario = 'base_lending' | 'hyperliquid_perps' | 'dex_swap'
 
 const MAX_BODY_BYTES = 32 * 1024
 const MAX_RESPONSE_BYTES = 512 * 1024
@@ -191,9 +193,9 @@ function assessmentMenu(): Record<string, unknown> {
   return { inline_keyboard: [
     [{ text: 'Assess a BTC 5-minute market', callback_data: 'market:btc:menu' }],
     [{ text: 'Link Insight account', callback_data: 'account:link' }, { text: 'Credits & account', callback_data: 'account:status' }],
-    [{ text: 'Base lending · coming soon', callback_data: 'scene:lending' }],
-    [{ text: 'Hyperliquid perps · coming soon', callback_data: 'scene:perp' }],
-    [{ text: 'DEX swap · coming soon', callback_data: 'scene:swap' }],
+    [{ text: 'Assess Base lending', callback_data: 'scene:lending' }],
+    [{ text: 'Assess Hyperliquid perps', callback_data: 'scene:perp' }],
+    [{ text: 'Assess DEX swap', callback_data: 'scene:swap' }],
   ] }
 }
 
@@ -202,10 +204,36 @@ function localizedMenu(locale: 'en' | 'zh'): Record<string, unknown> {
   return { inline_keyboard: [
     [{ text: '评估 BTC 5 分钟市场', callback_data: 'market:btc:menu' }],
     [{ text: '绑定 Insight 账户', callback_data: 'account:link' }, { text: '积分与账户', callback_data: 'account:status' }],
-    [{ text: 'Base 借贷 · 暂未开放', callback_data: 'scene:lending' }],
-    [{ text: 'Hyperliquid 永续 · 暂未开放', callback_data: 'scene:perp' }],
-    [{ text: 'DEX Swap · 暂未开放', callback_data: 'scene:swap' }],
+    [{ text: '评估 Base 借贷', callback_data: 'scene:lending' }],
+    [{ text: '评估 Hyperliquid 永续', callback_data: 'scene:perp' }],
+    [{ text: '评估 DEX Swap', callback_data: 'scene:swap' }],
   ] }
+}
+
+function parseScenarioCommand(command: BotCommand, raw: string): { scenario: TelegramScenario; request: Record<string, unknown> } | null {
+  const parts = raw.trim().split(/\s+/).filter(Boolean)
+  const number = (value: string | undefined) => value && /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,8})?$/.test(value) ? Number(value) : Number.NaN
+  if (command === 'lending' && parts.length === 5) {
+    const [action, collateralSymbol, loanSymbol, collateralValue, debtValue] = parts
+    if (!['supply', 'borrow'].includes(action!.toLowerCase()) || !['WETH', 'USDC'].includes(collateralSymbol!.toUpperCase()) || !['WETH', 'USDC'].includes(loanSymbol!.toUpperCase())) return null
+    const collateral = number(collateralValue); const debt = number(debtValue)
+    if (!Number.isFinite(collateral) || collateral <= 0 || !Number.isFinite(debt) || debt < 0) return null
+    return { scenario: 'base_lending', request: { scenario: 'base_lending', input: { protocolId: 'aave-v3-base', action: action!.toLowerCase(), collateralSymbol: collateralSymbol!.toUpperCase(), loanSymbol: loanSymbol!.toUpperCase(), collateralValueUsd: collateral, debtValueUsd: debt } } }
+  }
+  if (command === 'perp' && parts.length === 4) {
+    const [action, asset, size, margin] = parts
+    if (!['long', 'short'].includes(action!.toLowerCase()) || !['BTC', 'ETH'].includes(asset!.toUpperCase())) return null
+    const sizeUsd = number(size); const marginValueUsd = number(margin)
+    if (!Number.isFinite(sizeUsd) || sizeUsd <= 0 || !Number.isFinite(marginValueUsd) || marginValueUsd <= 0) return null
+    return { scenario: 'hyperliquid_perps', request: { scenario: 'hyperliquid_perps', input: { protocolId: 'hyperliquid-perps-mainnet', action: action!.toLowerCase() === 'long' ? 'open_long' : 'open_short', assetSymbol: asset!.toUpperCase(), marginAssetSymbol: 'USDC', sizeUsd, marginValueUsd } } }
+  }
+  if (command === 'swap' && parts.length === 3) {
+    const [pair, direction, amountIn] = parts
+    const profileId = pair!.toLowerCase() === 'weth-usdc' ? 'base-aerodrome-slipstream-weth-usdc-cl100' : pair!.toLowerCase() === 'usdc-usdt' ? 'base-aerodrome-slipstream-usdc-usdt-cl1' : null
+    if (!profileId || !['forward', 'reverse'].includes(direction!.toLowerCase()) || !/^(?:0\.(?:0*[1-9][0-9]*)|[1-9][0-9]*(?:\.[0-9]+)?)$/.test(amountIn!)) return null
+    return { scenario: 'dex_swap', request: { scenario: 'dex_swap', input: { profileId, direction: direction!.toLowerCase() === 'forward' ? 'token0-to-token1' : 'token1-to-token0', amountIn } } }
+  }
+  return null
 }
 
 function marketSideKeyboard(): Record<string, unknown> {
@@ -304,7 +332,7 @@ async function sendTelegramEvidenceRecord(env: Env, chatId: number, caption: str
     const form = new FormData()
     form.set('chat_id', String(chatId))
     form.set('caption', caption.slice(0, 1_024))
-    form.set('document', new Blob([content], { type: 'application/json' }), `priorseal-polymarket-evidence-${recordId}.json`)
+    form.set('document', new Blob([content], { type: 'application/json' }), `priorseal-assessment-evidence-${recordId}.json`)
     const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
       method: 'POST', body: form, signal: AbortSignal.timeout(10_000),
     })
@@ -332,6 +360,38 @@ async function fetchJson(url: string, init: RequestInit, maxBytes = MAX_RESPONSE
   try { return JSON.parse(text) as unknown } catch { throw new Error(`${service}_INVALID_JSON`) }
 }
 
+async function signedInsightJson(env: Env, url: string, init: RequestInit, maxBytes = MAX_RESPONSE_BYTES): Promise<unknown> {
+  const pem = env.TELEGRAM_INTEGRATION_PRIVATE_KEY
+  if (!pem) throw new Error('TELEGRAM_ACCOUNT_SERVICE_UNAVAILABLE')
+  const keyBytes = decodeBase64(pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, ''))
+  const key = await crypto.subtle.importKey('pkcs8', keyBytes, { name: 'Ed25519' }, false, ['sign'])
+  const method = (init.method ?? 'GET').toUpperCase()
+  const body = typeof init.body === 'string' ? new TextEncoder().encode(init.body) : new Uint8Array()
+  const bodyDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', body))
+  const bodyHash = Array.from(bodyDigest, byte => byte.toString(16).padStart(2, '0')).join('')
+  const timestamp = String(Math.floor(Date.now() / 1_000))
+  const path = new URL(url).pathname
+  const message = new TextEncoder().encode(`${timestamp}\n${method}\n${path}\n${bodyHash}`)
+  const signature = new Uint8Array(await crypto.subtle.sign('Ed25519', key, message))
+  const headers = new Headers(init.headers)
+  headers.delete('authorization')
+  headers.set('x-telegram-key-id', 'telegram-ed25519-v1')
+  headers.set('x-telegram-timestamp', timestamp)
+  headers.set('x-telegram-signature', encodeBase64(signature))
+  return fetchJson(url, { ...init, headers }, maxBytes)
+}
+
+function decodeBase64(value: string): Uint8Array {
+  const decoded = atob(value)
+  return Uint8Array.from(decoded, char => char.charCodeAt(0))
+}
+
+function encodeBase64(value: Uint8Array): string {
+  let binary = ''
+  for (const byte of value) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
 function polymarketAssessmentFailure(error: unknown, locale: 'en' | 'zh' = 'en'): string {
   if (locale === 'zh') return '当前无法生成或验证可信评估。没有发起交易，评估失败不会扣除用户积分；请稍后重试。'
   const message = error instanceof Error ? error.message : ''
@@ -357,10 +417,11 @@ type TelegramAccountStatus = {
   balance?: number
   frozen?: number
   assessmentCostCredits?: number
+  scenarioAssessmentCostCredits?: number
 }
 
 function insightBase(env: Env): URL {
-  if (!env.INSIGHT_BASE_URL || !env.TELEGRAM_INTEGRATION_SECRET) throw new Error('TELEGRAM_ACCOUNT_SERVICE_UNAVAILABLE')
+  if (!env.INSIGHT_BASE_URL || !env.TELEGRAM_INTEGRATION_PRIVATE_KEY) throw new Error('TELEGRAM_ACCOUNT_SERVICE_UNAVAILABLE')
   const base = new URL(env.INSIGHT_BASE_URL)
   if (base.protocol !== 'https:' || base.origin !== 'https://www.oracleinsight.xyz') throw new Error('BOT_UPSTREAM_URL_INVALID')
   return base
@@ -368,9 +429,9 @@ function insightBase(env: Env): URL {
 
 async function telegramAccountStatus(env: Env, telegramUserId: number): Promise<TelegramAccountStatus> {
   const endpoint = new URL('/api/telegram/account', insightBase(env))
-  const response = await fetchJson(endpoint.toString(), {
+  const response = await signedInsightJson(env, endpoint.toString(), {
     method: 'POST',
-    headers: { authorization: `Bearer ${env.TELEGRAM_INTEGRATION_SECRET}`, 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({ telegramUserId: String(telegramUserId) }),
   }, 16 * 1024)
   if (!isRecord(response) || response.success !== true || typeof response.linked !== 'boolean') {
@@ -380,6 +441,7 @@ async function telegramAccountStatus(env: Env, telegramUserId: number): Promise<
     const value = response[field]
     if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new Error('TELEGRAM_ACCOUNT_SERVICE_UNAVAILABLE')
   }
+  if (response.scenarioAssessmentCostCredits !== undefined && (!Number.isSafeInteger(response.scenarioAssessmentCostCredits) || (response.scenarioAssessmentCostCredits as number) <= 0)) throw new Error('TELEGRAM_ACCOUNT_SERVICE_UNAVAILABLE')
   if (response.linked && (response.frozen as number) > (response.balance as number)) throw new Error('TELEGRAM_ACCOUNT_SERVICE_UNAVAILABLE')
   return {
     linked: response.linked,
@@ -387,14 +449,99 @@ async function telegramAccountStatus(env: Env, telegramUserId: number): Promise<
     ...(typeof response.balance === 'number' ? { balance: response.balance } : {}),
     ...(typeof response.frozen === 'number' ? { frozen: response.frozen } : {}),
     assessmentCostCredits: response.assessmentCostCredits as number,
+    ...(typeof response.scenarioAssessmentCostCredits === 'number' ? { scenarioAssessmentCostCredits: response.scenarioAssessmentCostCredits } : {}),
   }
+}
+
+const TELEGRAM_SCENARIO_DOMAIN = { name: 'Insight Telegram Read-only Assessment', version: '1' } as const
+const TELEGRAM_SCENARIO_TYPES = { TelegramScenarioAssessment: [
+  { name: 'assessmentHash', type: 'bytes32' }, { name: 'scenario', type: 'string' },
+  { name: 'verdict', type: 'uint8' }, { name: 'issuedAt', type: 'uint256' },
+  { name: 'validUntil', type: 'uint256' }, { name: 'schemaVersion', type: 'uint256' },
+] } as const
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value)
+  if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (isRecord(value)) return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`
+  throw new Error('SCENARIO_RESPONSE_INVALID')
+}
+
+async function assessLinkedScenario(env: Env, telegramUserId: number, updateId: number, request: Record<string, unknown>, locale: 'en' | 'zh'): Promise<{ text: string; evidence: Record<string, unknown> }> {
+  const base = insightBase(env)
+  const registryUrl = new URL(env.INSIGHT_KEY_REGISTRY_URL ?? '', base)
+  if (registryUrl.origin !== base.origin || registryUrl.pathname !== '/.well-known/oracle-keys.json') throw new Error('BOT_UPSTREAM_URL_INVALID')
+  const [response, registry] = await Promise.all([
+    signedInsightJson(env, new URL('/api/telegram/scenario-assessment', base).toString(), {
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ telegramUserId: String(telegramUserId), updateId, request }),
+    }),
+    fetchJson(registryUrl.toString(), { headers: { accept: 'application/json' } }),
+  ])
+  if (!isRecord(response) || response.success !== true || !isRecord(response.billing) || response.billing.chargeConfirmed !== true ||
+      typeof response.billing.chargedCredits !== 'number' || !isRecord(response.data) || !isRecord(response.data.assessment) || !isRecord(response.data.attestation) || !isRecord(registry)) throw new Error('SCENARIO_RESPONSE_INVALID')
+  const decision = response.data
+  const attestation = decision.attestation
+  const data = isRecord(attestation.data) ? attestation.data : null
+  if (!data || decision.schema !== 'insight.telegram-scenario-assessment.v1' || decision.scenario !== request.scenario ||
+      attestation.type !== 'TelegramScenarioAssessment' || data.scenario !== decision.scenario || data.schemaVersion !== 1 ||
+      !Number.isSafeInteger(data.issuedAt) || !Number.isSafeInteger(data.validUntil) || (data.validUntil as number) <= (data.issuedAt as number) || (data.validUntil as number) - (data.issuedAt as number) > 30 * 86_400 ||
+      !Number.isSafeInteger(data.verdict) || !/^0x[\da-f]{64}$/i.test(String(data.assessmentHash)) ||
+      typeof attestation.attester !== 'string' || typeof attestation.signature !== 'string' || typeof attestation.uid !== 'string') throw new Error('SCENARIO_ATTESTATION_INVALID')
+  const committed = keccak256(toBytes(canonicalJson({ scenario: decision.scenario, assessment: decision.assessment })))
+  if (committed.toLowerCase() !== String(data.assessmentHash).toLowerCase()) throw new Error('SCENARIO_HASH_MISMATCH')
+  const riskVerdict = decision.assessment.verdict
+  const expectedVerdict = riskVerdict === 'ALLOW' ? 0 : riskVerdict === 'CAUTION' ? 1 : riskVerdict === 'BLOCK' ? 2 : -1
+  if (expectedVerdict < 0 || data.verdict !== expectedVerdict || attestation.signedAt !== new Date(Number(data.issuedAt) * 1000).toISOString() ||
+      attestation.validForSeconds !== Number(data.validUntil) - Number(data.issuedAt)) throw new Error('SCENARIO_ATTESTATION_INVALID')
+  const keys = Array.isArray(registry.public_keys) ? registry.public_keys : registry.keys
+  const revoked = Array.isArray(registry.revoked_keys) ? registry.revoked_keys : registry.revoked
+  if (!Array.isArray(keys) || !Array.isArray(revoked)) throw new Error('KEY_REGISTRY_INVALID')
+  const key = keys.find((item) => isRecord(item) && typeof item.public_key === 'string' && item.public_key.toLowerCase() === attestation.attester.toLowerCase())
+  if (!isRecord(key) || key.role === 'sample' || key.role === 'trail-signer' || key.revoked === true ||
+      revoked.some(item => isRecord(item) && item.key_id === key.key_id) ||
+      (typeof key.validFrom === 'string' && Date.parse(key.validFrom) > (data.issuedAt as number) * 1000) ||
+      (typeof key.validUntil === 'string' && Date.parse(key.validUntil) < (data.issuedAt as number) * 1000)) throw new Error('SCENARIO_ATTESTER_UNTRUSTED')
+  const message = { assessmentHash: String(data.assessmentHash) as `0x${string}`, scenario: String(data.scenario), verdict: Number(data.verdict), issuedAt: BigInt(Number(data.issuedAt)), validUntil: BigInt(Number(data.validUntil)), schemaVersion: 1n }
+  const typedData = { domain: TELEGRAM_SCENARIO_DOMAIN, types: TELEGRAM_SCENARIO_TYPES, primaryType: 'TelegramScenarioAssessment' as const, message }
+  if (canonicalJson(attestation.eip712) !== canonicalJson({ domain: TELEGRAM_SCENARIO_DOMAIN, types: TELEGRAM_SCENARIO_TYPES, primaryType: 'TelegramScenarioAssessment' }) ||
+      hashTypedData(typedData).toLowerCase() !== attestation.uid.toLowerCase() || !(await verifyTypedData({ ...typedData, address: attestation.attester as `0x${string}`, signature: attestation.signature as `0x${string}` }))) throw new Error('SCENARIO_SIGNATURE_INVALID')
+  const scenarioLabel = decision.scenario === 'base_lending'
+    ? (locale === 'zh' ? 'Base 借贷' : 'Base lending')
+    : decision.scenario === 'hyperliquid_perps'
+      ? (locale === 'zh' ? 'Hyperliquid 永续' : 'Hyperliquid perps')
+      : (locale === 'zh' ? 'DEX 报价' : 'DEX quote')
+  const verdictLabel = riskVerdict === 'ALLOW'
+    ? (locale === 'zh' ? '低风险信号' : 'ALLOW')
+    : riskVerdict === 'CAUTION'
+      ? (locale === 'zh' ? '需谨慎复核' : 'CAUTION')
+      : (locale === 'zh' ? '风险阻断' : 'BLOCK')
+  const detail = (value: unknown, limit: number) => Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string').slice(0, limit).map(item => safeField(item, 220))
+    : []
+  const notes = detail(decision.assessment.reasons, 3)
+  const limitations = detail(decision.assessment.limitations, 3)
+  const summary = [
+    `${locale === 'zh' ? '场景' : 'Scenario'}: ${scenarioLabel}`,
+    `${locale === 'zh' ? '评估' : 'Verdict'}: ${verdictLabel}`,
+    `${locale === 'zh' ? '评估时间' : 'Assessment time'}: ${String(decision.assessment.evaluatedAt ?? 'n/a')}`,
+    ...(notes.length ? [`${locale === 'zh' ? '判断依据' : 'Review notes'}: ${notes.join('; ')}`] : []),
+    ...(limitations.length ? [`${locale === 'zh' ? '范围限制' : 'Scope limits'}: ${limitations.join('; ')}`] : []),
+    `${locale === 'zh' ? '签名有效至' : 'Attestation valid through'}: ${new Date(Number(data.validUntil) * 1000).toISOString()}`,
+    `${locale === 'zh' ? '签名评估摘要' : 'Signed assessment'}: ${committed}`,
+    `${locale === 'zh' ? '交易权限' : 'Transaction authority'}: none`,
+    `${locale === 'zh' ? 'Insight 扣除积分' : 'Insight credits charged'}: ${String(isRecord(response.billing) ? response.billing.chargedCredits : 'confirmed')}`,
+    locale === 'zh' ? '这是只读评估，不是交易指令或结果保证。' : 'This is a read-only assessment, not a trade instruction or guarantee.',
+  ].join('\n')
+  return { text: summary, evidence: decision }
 }
 
 async function telegramUsage(env: Env, telegramUserId: number): Promise<Array<{ assessedAt: string; chargedCredits: number; verdict?: GuardVerdict }>> {
   const endpoint = new URL('/api/telegram/usage', insightBase(env))
-  const response = await fetchJson(endpoint.toString(), {
+  const response = await signedInsightJson(env, endpoint.toString(), {
     method: 'POST',
-    headers: { authorization: `Bearer ${env.TELEGRAM_INTEGRATION_SECRET}`, 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({ telegramUserId: String(telegramUserId) }),
   }, 16 * 1024)
   if (!isRecord(response) || response.success !== true || !Array.isArray(response.assessments)) throw new Error('TELEGRAM_USAGE_UNAVAILABLE')
@@ -407,9 +554,9 @@ async function telegramUsage(env: Env, telegramUserId: number): Promise<Array<{ 
 
 async function telegramAccountLink(env: Env, telegramUserId: number): Promise<string> {
   const endpoint = new URL('/api/telegram/link/start', insightBase(env))
-  const response = await fetchJson(endpoint.toString(), {
+  const response = await signedInsightJson(env, endpoint.toString(), {
     method: 'POST',
-    headers: { authorization: `Bearer ${env.TELEGRAM_INTEGRATION_SECRET}`, 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({ telegramUserId: String(telegramUserId) }),
   }, 16 * 1024)
   if (!isRecord(response) || response.success !== true || typeof response.link !== 'string') {
@@ -424,9 +571,9 @@ async function telegramAccountLink(env: Env, telegramUserId: number): Promise<st
 
 async function unlinkTelegramAccount(env: Env, telegramUserId: number): Promise<boolean> {
   const endpoint = new URL('/api/telegram/link/remove', insightBase(env))
-  const response = await fetchJson(endpoint.toString(), {
+  const response = await signedInsightJson(env, endpoint.toString(), {
     method: 'POST',
-    headers: { authorization: `Bearer ${env.TELEGRAM_INTEGRATION_SECRET}`, 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({ telegramUserId: String(telegramUserId) }),
   }, 16 * 1024)
   return isRecord(response) && response.success === true && response.unlinked === true
@@ -440,9 +587,9 @@ async function assessLinkedPolymarket(
   action: 'buy_up' | 'buy_down',
 ): Promise<{ decision: unknown; chargedCredits: number }> {
   const endpoint = new URL('/api/telegram/assessment', insightBase(env))
-  const response = await fetchJson(endpoint.toString(), {
+  const response = await signedInsightJson(env, endpoint.toString(), {
     method: 'POST',
-    headers: { authorization: `Bearer ${env.TELEGRAM_INTEGRATION_SECRET}`, 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({
       telegramUserId: String(telegramUserId),
       updateId,
@@ -461,9 +608,9 @@ async function assessLinkedPolymarket(
 
 async function refundUndeliveredAssessment(env: Env, telegramUserId: number, updateId: number): Promise<void> {
   const endpoint = new URL('/api/telegram/assessment/refund', insightBase(env))
-  const response = await fetchJson(endpoint.toString(), {
+  const response = await signedInsightJson(env, endpoint.toString(), {
     method: 'POST',
-    headers: { authorization: `Bearer ${env.TELEGRAM_INTEGRATION_SECRET}`, 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({ telegramUserId: String(telegramUserId), updateId }),
   }, 16 * 1024)
   if (!isRecord(response) || response.success !== true) throw new Error('TELEGRAM_ASSESSMENT_REFUND_UNCONFIRMED')
@@ -477,6 +624,13 @@ function guardFromResponse(value: unknown): Record<string, unknown> | null {
   if (!isRecord(value)) return null
   const data = value.success === true && isRecord(value.data) ? value.data : value
   return isRecord(data) && isRecord(data.guard) ? data.guard : null
+}
+
+function safeOperationalErrorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : ''
+  return /^(?:INSIGHT|TELEGRAM|KEY_REGISTRY|SCENARIO|ATTESTATION|POLYMARKET|MARKET|CREDIT|BOT)_[A-Z0-9_]{1,72}$/.test(message)
+    ? message
+    : 'UNCLASSIFIED'
 }
 
 function buildSummary(slug: string, action: 'buy_up' | 'buy_down', guard: Record<string, unknown>, locale: 'en' | 'zh' = 'en'): string {
@@ -637,9 +791,9 @@ export default {
             { command: 'help', description: '查看使用帮助' },
             { command: 'cancel', description: '取消当前步骤' },
             { command: 'unlink', description: '解除 Insight 绑定' },
-            { command: 'lending', description: 'Base 借贷 · 暂未开放' },
-            { command: 'perp', description: 'Hyperliquid 永续 · 暂未开放' },
-            { command: 'swap', description: 'DEX Swap · 暂未开放' },
+            { command: 'lending', description: 'Base 借贷只读评估' },
+            { command: 'perp', description: 'Hyperliquid 永续只读评估' },
+            { command: 'swap', description: 'DEX 只读报价与评估' },
           ],
         }
         const commandsResponse = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setMyCommands`, {
@@ -693,6 +847,7 @@ export default {
       slug: string; side: 'up' | 'down'; cost: number; referencePrice: number; tickSize: number; expiresAt: number
     } | null = null
     let confirmedReference: MarketReference | null = null
+    let confirmedScenario: { scenario: string; request: Record<string, unknown>; cost: number } | null = null
     let confirmationReceivedAtMs: number | null = null
     const locale = localeOf(update)
     if (callback) {
@@ -721,11 +876,24 @@ export default {
         await answerTelegramCallback(env, callback.id)
         command = { command: callbackData.endsWith(':link') ? 'link' : 'account', args: '' }
       } else if (callbackData.startsWith('scene:')) {
-        await answerTelegramCallback(env, callback.id, 'This scenario is not open for user testing yet.')
-        await sendTelegramMessage(env, message.chat.id, locale === 'zh'
-          ? '此场景仍在准备中。机器人不会索取 JSON、钱包访问、签名、订单或交易。可用 /menu 查看当前开放的 Polymarket 只读评估。'
-          : 'This scenario is still being prepared. The bot will not request JSON, wallet access, signatures, orders, or transactions. Use /menu to try the available read-only Polymarket assessment.')
+        const target = callbackData === 'scene:lending' ? 'lending' : callbackData === 'scene:perp' ? 'perp' : callbackData === 'scene:swap' ? 'swap' : null
+        if (!target) { await answerTelegramCallback(env, callback.id, 'Unknown scenario.'); return new Response('ok') }
+        await answerTelegramCallback(env, callback.id)
+        const prompt = target === 'lending'
+          ? (locale === 'zh' ? 'Base 借贷只读评估。发送一行：/lending <supply|borrow> <抵押资产 WETH|USDC> <借款资产 WETH|USDC> <操作后抵押价值USD> <操作后债务USD>\n例：/lending borrow WETH USDC 5000 1200\n这是你声明的假设值，不读取或改变钱包。' : 'Base lending read-only check. Send: /lending <supply|borrow> <collateral WETH|USDC> <loan WETH|USDC> <post-action collateral USD> <post-action debt USD>\nExample: /lending borrow WETH USDC 5000 1200\nThese are your declared what-if values; no wallet is read or changed.')
+          : target === 'perp'
+            ? (locale === 'zh' ? 'Hyperliquid 永续只读评估。发送：/perp <long|short> <BTC|ETH> <名义仓位USD> <保证金USD>\n例：/perp long BTC 600 300\n不会创建或提交订单。' : 'Hyperliquid perp read-only check. Send: /perp <long|short> <BTC|ETH> <notional USD> <margin USD>\nExample: /perp long BTC 600 300\nNo order is created or submitted.')
+            : (locale === 'zh' ? 'DEX 只读报价与风险检查（Base Aerodrome 已审查池）。发送：/swap <weth-usdc|usdc-usdt> <forward|reverse> <输入数量>\n例：/swap weth-usdc forward 0.01\n不需要收款地址；不生成授权或交易数据。' : 'DEX read-only quote and risk check (reviewed Base Aerodrome pools). Send: /swap <weth-usdc|usdc-usdt> <forward|reverse> <input amount>\nExample: /swap weth-usdc forward 0.01\nNo recipient is needed; no approval or transaction data is created.')
+        await sendTelegramMessage(env, message.chat.id, prompt)
         return new Response('ok')
+      } else if (callbackData.startsWith('scenario-confirm:')) {
+        const token = callbackData.slice('scenario-confirm:'.length)
+        if (!/^[a-f0-9]{24}$/.test(token)) { await answerTelegramCallback(env, callback.id, locale === 'zh' ? '确认无效。' : 'Invalid confirmation.'); return new Response('ok') }
+        const state = env.STATE.getByName(String(message.chat.id))
+        confirmedScenario = await state.consumeScenarioQuote(token, message.chat.id, Math.floor(Date.now() / 1000))
+        if (!confirmedScenario) { await answerTelegramCallback(env, callback.id, locale === 'zh' ? '此报价已过期或已使用，请重新准备。' : 'This quote expired or was used. Please prepare it again.'); return new Response('ok') }
+        await answerTelegramCallback(env, callback.id, locale === 'zh' ? '已确认，正在读取当前数据并评估。' : 'Confirmed. Reading current data and assessing.')
+        command = { command: 'scenario-run', args: '' }
       } else if (callbackData.startsWith('confirm:')) {
         const token = callbackData.slice('confirm:'.length)
         if (!/^[a-f0-9]{24}$/.test(token)) {
@@ -786,11 +954,14 @@ export default {
     const [requestedEvidenceRecordId, ...extraEvidenceRecordArgs] = evidenceRecordArgs
     const validEvidenceRecord = command.command === 'evidence-record' && Boolean(requestedEvidenceRecordId && !extraEvidenceRecordArgs.length &&
       /^\d{1,16}$/.test(requestedEvidenceRecordId) && Number.isSafeInteger(Number(requestedEvidenceRecordId)))
+    const scenarioCommand = command.command === 'lending' || command.command === 'perp' || command.command === 'swap'
+      ? parseScenarioCommand(command.command, command.args)
+      : null
     const object = env.STATE.getByName(String(message.chat.id))
     const reservation = await object.reserveUpdate(
       update.update_id,
       Math.floor(Date.now() / 1000),
-      validCheck || validEvidence ? 'check' : 'other',
+      validCheck || validEvidence || command.command === 'scenario-run' || Boolean(scenarioCommand) ? 'check' : 'other',
     )
     if (reservation === 'duplicate') return new Response('ok')
     if (reservation === 'in_progress') return new Response('update is still being processed', { status: 503 })
@@ -803,9 +974,67 @@ export default {
     let linkedAssessmentForRefund: { telegramUserId: number; updateId: number } | null = null
     if (reservation === 'rate_limited') {
       reply = `Request limit reached: up to ${MAX_SCENARIO_REQUESTS_PER_HOUR} scenario/source assessment requests per rolling hour and ${MAX_SCENARIO_REQUESTS_PER_DAY} per rolling day per chat.`
+    } else if (command.command === 'scenario-run' && confirmedScenario) {
+      try {
+        const account = await telegramAccountStatus(env, message.chat.id)
+        const currentCost = account.scenarioAssessmentCostCredits
+        const available = Math.max(0, (account.balance ?? 0) - (account.frozen ?? 0))
+        if (!account.linked) throw new Error('TELEGRAM_ACCOUNT_NOT_LINKED')
+        if (!Number.isSafeInteger(currentCost) || currentCost !== confirmedScenario.cost) throw new Error('SCENARIO_PRICE_CHANGED')
+        if (available < currentCost) throw new Error('CREDIT_EXHAUSTED')
+        linkedAssessmentForRefund = { telegramUserId: message.chat.id, updateId: update.update_id }
+        const assessed = await assessLinkedScenario(env, message.chat.id, update.update_id, confirmedScenario.request, locale)
+        reply = `${assessed.text}\nThe market data in this report is a snapshot at the assessment time, not a live quote.`
+        evidenceDocument = { recordId: update.update_id, value: assessed.evidence }
+        successfulPolymarketAssessment = true
+      } catch (error) {
+        const code = safeOperationalErrorCode(error)
+        console.error(JSON.stringify({ event: 'telegram_scenario_assessment_failed', code, scenario: confirmedScenario.scenario }))
+        let refundConfirmed = false
+        try { await refundUndeliveredAssessment(env, message.chat.id, update.update_id); refundConfirmed = true }
+        catch (refundError) {
+          const refundCode = safeOperationalErrorCode(refundError)
+          console.error(JSON.stringify({ event: 'telegram_scenario_refund_failed', code: refundCode }))
+        }
+        if (refundConfirmed) linkedAssessmentForRefund = null
+        reply = refundConfirmed
+          ? (code === 'SCENARIO_PRICE_CHANGED'
+            ? (locale === 'zh' ? '评估价格已变化，本次没有扣费。请重新发送场景指令查看新价格并确认。' : 'The assessment price changed. Nothing was charged. Send the scenario command again to review and confirm the new price.')
+            : code === 'CREDIT_EXHAUSTED'
+              ? (locale === 'zh' ? '当前可用积分不足，本次没有扣费。使用 /account 查看余额后再试。' : 'Available credits are insufficient. Nothing was charged; check /account and try again after topping up.')
+              : code === 'TELEGRAM_ACCOUNT_NOT_LINKED'
+                ? (locale === 'zh' ? 'Insight 账户绑定已失效，本次没有扣费。使用 /link 重新绑定后再试。' : 'The Insight account link is no longer active. Nothing was charged; use /link and try again.')
+                : (locale === 'zh' ? '无法生成或验证可信评估。系统已确认本次没有扣费或已完成冲正；请稍后重试。' : 'A trusted assessment could not be produced or verified. The system confirmed that no charge remains for this attempt; please retry later.'))
+          : (locale === 'zh' ? '无法生成或验证可信评估，系统暂时无法确认冲正。请先用 /account 查看余额，再联系支持；不要重复提交。' : 'A trusted assessment could not be produced or verified, and the system could not confirm the reversal. Check /account and contact support before retrying.')
+      }
+    } else if (command.command === 'lending' || command.command === 'perp' || command.command === 'swap') {
+      if (!command.args) {
+        reply = locale === 'zh' ? '请按上方场景提示发送参数。报价和余额会先展示；点击确认后才读取实时数据并评估。' : 'Send the values shown in the scenario instructions. The cost and balance are shown first; live data is read only after you confirm.'
+      } else if (!scenarioCommand) {
+        reply = locale === 'zh' ? '参数格式或数值无效。请使用 /menu 查看该场景的格式示例；未发起评估。' : 'The values or format are invalid. Use /menu to see the example for this scenario. No assessment was started.'
+      } else {
+        try {
+          const account = await telegramAccountStatus(env, message.chat.id)
+          const cost = account.scenarioAssessmentCostCredits
+          if (!account.linked) reply = locale === 'zh' ? '此场景需要绑定 Insight 账户并使用自己的积分。使用 /link 绑定后再试。' : 'This scene requires a linked Insight account and your own credits. Use /link, then try again.'
+          else if (!Number.isSafeInteger(cost) || !cost || !Number.isSafeInteger(account.balance) || !Number.isSafeInteger(account.frozen)) reply = locale === 'zh' ? '暂时无法核实价格或余额；没有评估，请稍后重试。' : 'The price or balance could not be verified. No assessment was requested; retry later.'
+          else if ((account.balance! - account.frozen!) < cost) reply = locale === 'zh' ? `可用积分不足。本次需要 ${cost}，当前可用 ${Math.max(0, account.balance! - account.frozen!)}。` : `Not enough available credits. This assessment needs ${cost}; available: ${Math.max(0, account.balance! - account.frozen!)}.`
+          else {
+            const tokenBytes = crypto.getRandomValues(new Uint8Array(12))
+            const token = Array.from(tokenBytes, byte => byte.toString(16).padStart(2, '0')).join('')
+            const now = Math.floor(Date.now() / 1000)
+            object.createScenarioQuote(token, message.chat.id, scenarioCommand.scenario, JSON.stringify(scenarioCommand.request), cost, now + 7 * 86_400, now)
+            const scenarioName = scenarioCommand.scenario === 'base_lending' ? (locale === 'zh' ? 'Base 借贷' : 'Base lending') : scenarioCommand.scenario === 'hyperliquid_perps' ? (locale === 'zh' ? 'Hyperliquid 永续' : 'Hyperliquid perps') : 'DEX swap'
+            reply = locale === 'zh'
+              ? `确认进行 ${scenarioName} 只读评估？最多扣除 ${cost} 积分（成功出具可信结果后扣除）。当前可用余额：${account.balance! - account.frozen!}。点击确认后才读取最新数据；此确认保留 7 天。机器人不会读取钱包、签名、创建授权或提交交易。`
+              : `Confirm the ${scenarioName} read-only assessment? Up to ${cost} credits, charged only after a trusted result is produced. Available balance: ${account.balance! - account.frozen!}. Current data is fetched after confirmation. This confirmation remains available for 7 days. The bot will not read a wallet, sign, authorize, or submit transactions.`
+            replyMarkup = { inline_keyboard: [[{ text: locale === 'zh' ? '确认并评估' : 'Confirm assessment', callback_data: `scenario-confirm:${token}` }], [{ text: locale === 'zh' ? '取消' : 'Cancel', callback_data: 'menu:cancel' }]] }
+          }
+        } catch { reply = locale === 'zh' ? '账户、价格或余额暂时无法核验；没有评估，请稍后重试。' : 'Account, price, or balance could not be verified. No assessment was requested; retry later.' }
+      }
     } else if (command.command === 'check' && validCheck && requestedSlug && requestedSide && !confirmedAssessment) {
       try {
-        const account = env.TELEGRAM_INTEGRATION_SECRET ? await telegramAccountStatus(env, message.chat.id) : null
+        const account = env.TELEGRAM_INTEGRATION_PRIVATE_KEY ? await telegramAccountStatus(env, message.chat.id) : null
         const cost = account?.assessmentCostCredits
         if (typeof cost !== 'number' || !Number.isSafeInteger(cost) || cost <= 0) {
           reply = locale === 'zh'
@@ -847,8 +1076,11 @@ export default {
       }
     } else if (command.command === 'start' || command.command === 'help' || command.command === 'menu' || command.command === 'cancel') {
       let linkedAccount: TelegramAccountStatus | null = null
-      if (env.TELEGRAM_INTEGRATION_SECRET && message.chat.id > 0) {
-        try { linkedAccount = await telegramAccountStatus(env, message.chat.id) } catch { /* keep the menu usable during a status outage */ }
+      if (env.TELEGRAM_INTEGRATION_PRIVATE_KEY && message.chat.id > 0) {
+        try { linkedAccount = await telegramAccountStatus(env, message.chat.id) } catch (error) {
+          const code = safeOperationalErrorCode(error)
+          console.error(JSON.stringify({ event: 'telegram_account_status_failed', code }))
+        }
       }
       if (command.command === 'help') {
         reply = locale === 'zh'
@@ -863,8 +1095,8 @@ export default {
             ? (locale === 'zh' ? `可体验一次试点赞助评估；每个账户一次，试点每月上限 ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} 积分。` : `You can try one sponsored pilot assessment per Telegram account, within a global monthly ceiling of ${SPONSORED_TRIAL_MONTHLY_CREDIT_CAP} credits.`)
             : (locale === 'zh' ? '暂时无法确认账户状态和评估价格，评估功能暂不可用；请稍后重试。' : 'Account status and assessment pricing are temporarily unavailable. Assessments stay disabled; please retry later.')
         reply = locale === 'zh'
-          ? `欢迎使用 Insight × PriorSeal。选择下方场景，点击后获取报价；市场在你确认时选择，不需要时间戳或 JSON。\n${paymentCopy}\nBase 借贷、Hyperliquid 永续、DEX Swap 暂未开放，直到易用流程和只读评估接口准备完成。\n机器人不连接钱包、不索取签名、不创建授权、不下单、不提交或转发交易。`
-          : `Welcome to Insight × PriorSeal. Choose a scenario below. You will see a quote before confirming; the market is selected at confirmation time, with no timestamps or JSON to prepare.\n${paymentCopy}\nBase lending, Hyperliquid perps, and DEX swap remain closed until their user-friendly flows and read-only assessment APIs are ready.\nThis bot never connects a wallet, asks for a signature, creates authorization, places orders, or submits or relays transactions.`
+          ? `欢迎使用 Insight × PriorSeal。选择场景并按提示填写假设参数；准备好后确认，最新市场数据在确认后读取。确认保留 7 天，不需要时间戳或 JSON。\n${paymentCopy}\n借贷与永续评估使用你填写的假设仓位；DEX 仅支持 Base 上已审查的 Aerodrome 池。\n机器人不连接钱包、不读取真实仓位、不索取签名、不创建授权、不下单、不提交或转发交易。`
+          : `Welcome to Insight × PriorSeal. Choose a scene and enter the requested what-if values. Confirm when ready; current market data is fetched after confirmation. Confirmations last 7 days and need no timestamps or JSON.\n${paymentCopy}\nLending and perp checks use your declared what-if positions. DEX is limited to reviewed Aerodrome pools on Base.\nThis bot does not connect a wallet, read live positions, request signatures, create authorization, place orders, or submit or relay transactions.`
         replyMarkup = localizedMenu(locale)
       }
     } else if (command.command === 'privacy') {
@@ -875,7 +1107,7 @@ export default {
       try {
         const usage = await telegramUsage(env, message.chat.id)
         reply = usage.length
-          ? `${locale === 'zh' ? '最近的 Polymarket 评估：' : 'Recent Polymarket assessments:'}\n${usage.map((item) => `${new Date(item.assessedAt).toISOString()} · ${item.verdict ?? (locale === 'zh' ? '未知' : 'unknown')} · ${item.chargedCredits} ${locale === 'zh' ? '积分' : 'credits'}`).join('\n')}`
+          ? `${locale === 'zh' ? '最近的评估：' : 'Recent assessments:'}\n${usage.map((item) => `${new Date(item.assessedAt).toISOString()} · ${item.verdict ?? (locale === 'zh' ? '未知' : 'unknown')} · ${item.chargedCredits} ${locale === 'zh' ? '积分' : 'credits'}`).join('\n')}`
           : (locale === 'zh' ? '暂无已计费的评估记录。' : 'No billed assessments yet.')
       } catch {
         reply = locale === 'zh' ? '暂时无法读取用量记录，请稍后重试。' : 'Usage history is temporarily unavailable. Please retry later.'
@@ -883,6 +1115,7 @@ export default {
       replyMarkup = localizedMenu(locale)
     } else if (command.command === 'link') {
       try {
+        object.clearScenarioQuotes(message.chat.id)
         const link = await telegramAccountLink(env, message.chat.id)
           reply = locale === 'zh'
             ? `请登录 Insight 官方网站并确认账户绑定。链接仅可使用一次，15 分钟后过期：\n${link}\n\n绑定仅关联账户，不会授权或提交交易。`
@@ -899,10 +1132,11 @@ export default {
           const balance = account.balance ?? 0
           const available = Math.max(0, balance - (account.frozen ?? 0))
           const cost = account.assessmentCostCredits
+          const scenarioCost = account.scenarioAssessmentCostCredits
           reply = typeof cost === 'number' && Number.isSafeInteger(cost) && cost > 0
             ? (locale === 'zh'
-              ? `已绑定 Insight 账户。总积分：${balance}；冻结：${account.frozen ?? 0}；可用：${available}。每次 Polymarket 评估 ${cost} 积分（当前可进行约 ${Math.floor(available / cost)} 次）。只有成功生成可信评估后才扣费。`
-              : `Insight account linked. Credits: ${balance}; frozen: ${account.frozen ?? 0}; available: ${available}. One Polymarket assessment costs ${cost} credits (about ${Math.floor(available / cost)} at the current balance). Credits are charged only after a trusted assessment is produced.`)
+              ? `已绑定 Insight 账户。总积分：${balance}；冻结：${account.frozen ?? 0}；可用：${available}。Polymarket 每次 ${cost} 积分${typeof scenarioCost === 'number' ? `；借贷、永续和 DEX 场景每次 ${scenarioCost} 积分` : ''}。只有成功生成可信评估后才扣费。`
+              : `Insight account linked. Credits: ${balance}; frozen: ${account.frozen ?? 0}; available: ${available}. Polymarket assessments cost ${cost} credits${typeof scenarioCost === 'number' ? `; other scene assessments cost ${scenarioCost}` : ''}. Credits are charged only after a trusted assessment is produced.`)
             : (locale === 'zh' ? '已绑定 Insight 账户，但暂时无法确认当前价格；评估暂不可用。' : 'Insight account linked, but current pricing is unavailable; assessments are temporarily disabled.')
         }
       } catch {
@@ -912,24 +1146,13 @@ export default {
     } else if (command.command === 'unlink') {
       try {
         const unlinked = await unlinkTelegramAccount(env, message.chat.id)
+        if (unlinked) object.clearScenarioQuotes(message.chat.id)
         reply = unlinked
           ? (locale === 'zh' ? 'Telegram 账户已解除与 Insight 的绑定。之后在此聊天中评估不会使用你的 Insight 积分。' : 'Your Telegram account is unlinked from Insight. Future assessments in this chat will not use your Insight credits.')
           : (locale === 'zh' ? '此 Telegram 聊天没有绑定 Insight 账户。' : 'No linked Insight account was found for this Telegram chat.')
       } catch {
         reply = locale === 'zh' ? '暂时无法解除绑定，没有确认账户变更，请稍后重试。' : 'Could not unlink the account right now. No account change was confirmed; please retry.'
       }
-    } else if (command.command === 'lending') {
-      reply = locale === 'zh'
-        ? 'Base 借贷暂未开放测试。现有 Mini App 仍需要原始调用数据；在引导表单和只读评估接口符合产品设计前，此入口保持关闭。'
-        : 'Base lending is not open for user testing yet. The current Mini App requires raw call data, so this entry stays closed until the form and assessment contract match the product design.'
-    } else if (command.command === 'perp') {
-      reply = locale === 'zh'
-        ? 'Hyperliquid 永续评估暂未开放测试。未来会采用引导式表单和充足的审核时间，不会要求 JSON、订单信封、签名或提交订单。'
-        : 'Hyperliquid perp assessment is not open for user testing yet. It will use a guided form and a long-lived review session; no JSON, order envelope, signature, or order submission will be required.'
-    } else if (command.command === 'swap') {
-      reply = locale === 'zh'
-        ? 'DEX Swap 评估暂未开放测试。未来会采用报价审核和风险限额表单；机器人不会创建授权或 Swap calldata，也不会提交交易。'
-        : 'DEX swap assessment is not open for user testing yet. It will use a reviewed quote and guided risk limits; the bot will not create approval/swap calldata or submit a transaction.'
     } else {
       if (command.command === 'check' && (!validCheck || !requestedSlug || !requestedSide)) {
         const hasSupportedShape = Boolean(requestedSlug && isSupportedPriceContractSlug(requestedSlug))
@@ -952,7 +1175,7 @@ export default {
             evidenceDocument = { recordId, value: payload }
           }
         } catch (error) {
-          const reason = error instanceof Error ? error.message.slice(0, 80) : 'UNKNOWN'
+          const reason = safeOperationalErrorCode(error)
           console.error(JSON.stringify({ event: 'polymarket_evidence_record_read_failed', code: reason }))
           reply = 'Could not read that stored evidence record safely.'
         }
@@ -960,7 +1183,7 @@ export default {
         reply = 'Polymarket source evidence is paused in this pilot. It will reopen after per-user credits and evidence delivery are connected.'
       } else {
         let linkedAccount: TelegramAccountStatus | null = null
-        if (env.TELEGRAM_INTEGRATION_SECRET) {
+        if (env.TELEGRAM_INTEGRATION_PRIVATE_KEY) {
           try {
             linkedAccount = await telegramAccountStatus(env, message.chat.id)
           } catch {
@@ -1023,11 +1246,11 @@ export default {
             successfulPolymarketAssessment = true
           } catch (error) {
             const reason = error instanceof Error ? error.message : 'UNKNOWN'
-            console.error(JSON.stringify({ event: 'telegram_linked_polymarket_assessment_failed', code: reason.slice(0, 80) }))
+            console.error(JSON.stringify({ event: 'telegram_linked_polymarket_assessment_failed', code: safeOperationalErrorCode(reason) }))
             try {
               await refundUndeliveredAssessment(env, message.chat.id, update.update_id)
             } catch (refundError) {
-              const refundReason = refundError instanceof Error ? refundError.message.slice(0, 80) : 'UNKNOWN'
+              const refundReason = safeOperationalErrorCode(refundError)
               console.error(JSON.stringify({ event: 'telegram_assessment_interrupted_refund_failed', code: refundReason }))
             }
             reply = reason === 'CREDIT_EXHAUSTED' || reason === 'INSIGHT_HTTP_402'
@@ -1058,7 +1281,7 @@ export default {
         } else if (!reply && linkedAccount && !linkedAccount.linked) {
           const cost = linkedAccount.assessmentCostCredits
           if (!confirmedAssessment || typeof cost !== 'number' || cost !== confirmedAssessment.cost ||
-              env.ALLOWED_CHAT_IDS?.trim() === '*' || !env.TELEGRAM_INTEGRATION_SECRET ||
+              env.ALLOWED_CHAT_IDS?.trim() === '*' || !env.TELEGRAM_INTEGRATION_PRIVATE_KEY ||
               !confirmedReference) {
             reply = locale === 'zh'
               ? '当前试用条件无法确认或不在封闭试点范围内，没有运行评估。请绑定账户后使用自己的积分，或稍后重试。'
@@ -1091,7 +1314,7 @@ export default {
               ? '\n赞助试用：未扣除你的积分。试用后请使用 /link 绑定 Insight 账户以继续。'
               : '\nSponsored trial: no user credits were charged. Link your Insight account with /link to continue after this sample.'
           } catch (error) {
-            const reason = error instanceof Error ? error.message.slice(0, 80) : 'UNKNOWN'
+            const reason = safeOperationalErrorCode(error)
             console.error(JSON.stringify({ event: 'polymarket_trial_assessment_failed', code: reason }))
             reply = polymarketAssessmentFailure(error, locale)
             if (reservedSponsoredBudget) env.STATE.getByName('sponsored-trial-global-v1').releaseSponsoredTrialBudget(update.update_id, Math.floor(Date.now() / 1000))
@@ -1115,15 +1338,28 @@ export default {
     }
 
     if (command.command === 'check' && !replyMarkup) replyMarkup = localizedMenu(locale)
-    const delivered = evidenceDocument
-      ? await sendTelegramEvidenceRecord(env, message.chat.id, reply ?? '', evidenceDocument.recordId, evidenceDocument.value) ||
-        await sendTelegramMessage(env, message.chat.id, 'The evidence record was found, but Telegram could not deliver its JSON document. Please retry /evidence-record.', replyMarkup)
-      : await sendTelegramMessage(env, message.chat.id, reply, replyMarkup)
+    let delivered: boolean
+    if (evidenceDocument) {
+      const reportDelivered = await sendTelegramEvidenceRecord(env, message.chat.id, reply ?? '', evidenceDocument.recordId, evidenceDocument.value)
+      if (!reportDelivered) {
+        successfulPolymarketAssessment = false
+        if (linkedAssessmentForRefund) {
+          try { await refundUndeliveredAssessment(env, linkedAssessmentForRefund.telegramUserId, linkedAssessmentForRefund.updateId); linkedAssessmentForRefund = null }
+          catch (error) {
+            const reason = safeOperationalErrorCode(error)
+            console.error(JSON.stringify({ event: 'telegram_scenario_report_refund_failed', code: reason }))
+          }
+        }
+      }
+      delivered = reportDelivered || await sendTelegramMessage(env, message.chat.id, linkedAssessmentForRefund
+        ? (locale === 'zh' ? '评估报告文件发送失败，冲正暂未确认。请先用 /account 查看余额并联系支持，不要重复提交。' : 'The report file could not be delivered and reversal is not confirmed. Check /account and contact support before retrying.')
+        : (locale === 'zh' ? '评估报告文件发送失败；系统已确认本次没有扣费或已完成冲正。请稍后重新请求。' : 'The report file could not be delivered; the system confirmed no charge remains for this attempt. Please retry later.'), replyMarkup)
+    } else delivered = await sendTelegramMessage(env, message.chat.id, reply, replyMarkup)
     if (delivered && linkedAssessmentForRefund && !successfulPolymarketAssessment) {
       try {
         await refundUndeliveredAssessment(env, linkedAssessmentForRefund.telegramUserId, linkedAssessmentForRefund.updateId)
       } catch (error) {
-        const reason = error instanceof Error ? error.message.slice(0, 80) : 'UNKNOWN'
+        const reason = safeOperationalErrorCode(error)
         console.error(JSON.stringify({ event: 'telegram_assessment_interrupted_refund_retry_failed', code: reason }))
       }
     }
@@ -1134,7 +1370,7 @@ export default {
         try {
           await refundUndeliveredAssessment(env, linkedAssessmentForRefund.telegramUserId, linkedAssessmentForRefund.updateId)
         } catch (error) {
-          const reason = error instanceof Error ? error.message.slice(0, 80) : 'UNKNOWN'
+          const reason = safeOperationalErrorCode(error)
           console.error(JSON.stringify({ event: 'telegram_assessment_delivery_refund_failed', code: reason }))
         }
       }
