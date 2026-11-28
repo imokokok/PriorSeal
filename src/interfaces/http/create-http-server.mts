@@ -118,14 +118,14 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
     const dispatch = async () => {
       if (path === '/mcp' && typeof req.headers.origin === 'string' && !mcpOriginAllowed(req.headers.origin, corsOrigins)) return respond(403, errorBody('ORIGIN_FORBIDDEN', 'MCP browser origin is not allowed', requestId));
       if (req.method === 'OPTIONS') return res.writeHead(204, cors).end();
-      if (!['GET', 'POST'].includes(req.method ?? '')) return respond(405, errorBody('METHOD_NOT_ALLOWED', 'Method not allowed', requestId), { allow: 'GET, POST, OPTIONS' });
+      if (!['GET', 'POST', 'HEAD'].includes(req.method ?? '')) return respond(405, errorBody('METHOD_NOT_ALLOWED', 'Method not allowed', requestId), { allow: 'GET, POST, OPTIONS, HEAD' });
       if (path === '/mcp' && req.method !== 'POST') return respond(405, errorBody('METHOD_NOT_ALLOWED', 'PriorSeal MCP accepts POST requests', requestId), { allow: 'POST, OPTIONS' });
-      if (req.method === 'GET' && path === '/i') {
+      if (['GET', 'HEAD'].includes(req.method ?? '') && path === '/i') {
         logger?.info?.({ event: 'experience.measurement', name: 'flagship_workflow' });
         return res.writeHead(302, { location: 'https://www.oracleinsight.xyz/', 'cache-control': 'no-store' }).end();
       }
-      if (req.method === 'GET' && path === '/health/live') return respond(200, { status: 'ok', requestId });
-      if (req.method === 'GET' && path === '/health/ready') return respond(200, { status: 'ready', storage: 'health' in store ? await store.health() : 'unknown', requestId });
+      if (['GET', 'HEAD'].includes(req.method ?? '') && path === '/health/live') return respond(200, { status: 'ok', requestId });
+      if (['GET', 'HEAD'].includes(req.method ?? '') && path === '/health/ready') return respond(200, { status: 'ready', storage: 'health' in store ? await store.health() : 'unknown', requestId });
       if (!paidRoute && req.method === 'GET' && serveStaticAsset && await serveStaticAsset({ pathname: path, req, res })) return;
       if (!paidRoute && !await rateLimiter.allow(requester(req, trustProxy), now())) return respond(429, errorBody('RATE_LIMITED', 'Too many requests', requestId), { 'retry-after': '60' });
       const body = req.method === 'POST' ? await readJsonBody(req, path === '/v1/archive' ? Math.max(maxBodyBytes, 1024 * 1024) : maxBodyBytes, deadline.signal) : {};
@@ -495,6 +495,31 @@ export function createHttpServer({ archiveCredentials = null, rpcChainIds, erc43
           respond(429, errorBody('RATE_LIMITED', 'Too many requests', requestId), { 'retry-after': '60' });
           return;
         }
+        if (req.method === 'HEAD') {
+          // Discovery catalog workers (PayAI sends HEAD before GET; x402dash
+          // rejects a route on a non-402 probe) refuse routes that answer 405.
+          // HEAD cannot carry a body, so a paid HEAD is meaningless: always
+          // issue the bare 402 quote — never verify or settle — and let the
+          // HTTP layer suppress the body (ServerResponse._hasBody is false
+          // for HEAD, including under the Workers nodejs compat handler).
+          let quote: Awaited<ReturnType<typeof x402Payments.prepare>>;
+          try {
+            const requestUrl = new URL(req.url ?? path, x402.resourceOrigin);
+            const resourceUrl = new URL(requestUrl.pathname, x402.resourceOrigin).toString();
+            quote = await x402Payments.prepare(paidRoute, resourceUrl, undefined, deadline.signal);
+          } catch (error) {
+            logger?.error?.({ event: 'x402.facilitator_unavailable', requestId, method: req.method, path, code: errorCode(error) || 'INTERNAL_ERROR', message: errorMessage(error) });
+            respond(503, errorBody('PAYMENT_UNAVAILABLE', 'Payment verification is temporarily unavailable', requestId));
+            return;
+          }
+          if (quote.kind !== 'required') {
+            respond(503, errorBody('PAYMENT_UNAVAILABLE', 'Payment verification is temporarily unavailable', requestId));
+            return;
+          }
+          logger?.info?.({ event: 'x402.head_probe', route: paidRoute.path, price: paidRoute.price, entrySource, journeyStage, availableNetworks: Array.isArray(quote.response.accepts) ? quote.response.accepts.length : 0 });
+          respond(402, quote.response, { 'payment-required': quote.header, 'cache-control': 'no-store' });
+          return;
+        }
         let prepared: Awaited<ReturnType<typeof x402Payments.prepare>>;
         try {
           const requestUrl = new URL(req.url ?? path, x402.resourceOrigin);
@@ -774,12 +799,12 @@ function paymentEvidenceId(body: unknown) {
 function matchPaidRoute(config: X402Config | undefined, method: string | undefined, path: string) {
   const direct = matchX402Route(config, method, path);
   if (direct) return direct;
-  const freshCheck = method?.toUpperCase() === 'GET' ? path.match(/^\/v1\/evidence\/receipts\/([^/]+)\/check$/) : null;
+  const freshCheck = ['GET', 'HEAD'].includes(method?.toUpperCase() ?? '') ? path.match(/^\/v1\/evidence\/receipts\/([^/]+)\/check$/) : null;
   if (freshCheck) {
     const bundleRoute = matchX402Route(config, method, `/v1/receipts/${freshCheck[1]}/bundle`);
     return bundleRoute ? { ...bundleRoute, path: '/v1/evidence/receipts/:receiptId/check', description: 'Perform a newly signed, read-only chain re-observation of an authorization-bound receipt' } : undefined;
   }
-  const evidence = method?.toUpperCase() === 'GET' ? path.match(/^\/v1\/evidence\/receipts\/([^/]+)$/) : null;
+  const evidence = ['GET', 'HEAD'].includes(method?.toUpperCase() ?? '') ? path.match(/^\/v1\/evidence\/receipts\/([^/]+)$/) : null;
   if (!evidence) return undefined;
   const bundleRoute = matchX402Route(config, method, `/v1/receipts/${evidence[1]}/bundle`);
   return bundleRoute ? { ...bundleRoute, path: '/v1/evidence/receipts/:receiptId', description: 'Export a chain-neutral Evidence API envelope with a portable verification bundle' } : undefined;
