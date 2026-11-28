@@ -6,7 +6,7 @@ The product does not create PriorSeal authorizations and does not connect to wal
 
 | Scenario | User entry | Insight role | PriorSeal role | Current state |
 | --- | --- | --- | --- | --- |
-| Polymarket | `/start` → buttons; optional `/check btc <up|down>` | Assess market integrity and collect reviewed source evidence | Verify signed decisions and evidence | Active pilot; chooses a market when the user taps, with at least four minutes before its window ends |
+| Polymarket | `/start` → buttons; optional `/check btc <up|down>` | Assess market integrity and collect reviewed source evidence | Verify signed decisions and evidence | Active pilot; a side tap shows a quote and balance first; a separate confirmation starts the assessment |
 | Base lending | Shown as coming soon | Assess a user-declared what-if position or read-only public position | Verify signed assessment evidence | Closed; no calldata or raw transaction form |
 | Hyperliquid perps | Shown as coming soon | Assess a guided position-size and margin scenario | Verify signed assessment evidence | Closed; no order envelope, IOC expiry, or account authorization |
 | DEX swap | Shown as coming soon | Assess a quote, route, and user-selected risk limits | Verify signed assessment evidence | Closed until the assessment-only API returns no approval/swap calldata |
@@ -19,10 +19,10 @@ PriorSeal's separate authorization and execution-verification products remain ou
 
 ## Polymarket
 
-- `/start` opens the scenario menu. The user chooses Up or Down with an inline button; the callback contains no market timestamp.
-- When the user taps a side, the bot picks the current or next BTC 5-minute window with at least four minutes remaining, then returns a signed read-only assessment. The user does not need to prepare expiring sample commands.
+- `/start` and `/menu` open the scenario menu. The user chooses Up or Down with an inline button; the callback contains no market timestamp.
+- A side tap displays the selected BTC 5-minute market, current per-assessment credit price, and available linked-account balance. It does not call the assessment service. A separate confirmation starts the signed read-only assessment; if the market window or price changes, the bot displays a replacement quote and waits for confirmation again. The user never prepares or copies expiring timestamps.
 - Polymarket requests are private-chat-only. A failed assessment returns a retry/menu action and never asks the user to edit a timestamp.
-- One successful sponsored sample is available before linking. `/link` opens a 15-minute one-time confirmation on the authenticated Insight website. `/account` reports linked status and credits; `/unlink` removes the association. Linked successful assessments consume the user's Insight credits idempotently; failed or undelivered samples do not consume the free trial.
+- One successful sponsored sample is available before linking, limited to one per Telegram account and a global ceiling of 200 Insight credits per UTC calendar month (currently at most ten samples at 20 credits each). This pilot subsidy is available only to the configured private beta allowlist; it fails closed if current pricing or the shared budget is unavailable. `/link` opens a 15-minute one-time confirmation on the authenticated Insight website. `/account` reports linked status and credits; `/usage` lists the last ten billed assessments; `/privacy` opens the privacy notice; `/help` and `/cancel` explain or exit the flow; `/unlink` removes the association. Linked successful assessments consume the user's Insight credits idempotently; failed assessments and undelivered trials release their reservations.
 - New `/evidence` collection is paused until it uses linked-account billing. `/evidence-record <record-id>` remains available only for signed records previously collected in that private chat; records are commitment-checked, retained for at most 30 days, and may contain expired signatures. Retrieval is not a fresh assessment.
 - This bot does not create or manage CLOB orders.
 

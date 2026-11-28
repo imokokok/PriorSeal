@@ -5,6 +5,7 @@ type CheckCommand = 'check' | 'other'
 type Reservation = 'reserved' | 'duplicate' | 'in_progress' | 'rate_limited'
 const EVIDENCE_RETENTION_SECONDS = 30 * 86_400
 const MAX_SOURCE_EVIDENCE_RECORDS = 100
+export const SPONSORED_TRIAL_MONTHLY_CREDIT_CAP = 200
 export const MAX_SCENARIO_REQUESTS_PER_HOUR = 60
 export const MAX_SCENARIO_REQUESTS_PER_DAY = 500
 
@@ -48,6 +49,24 @@ export class TelegramBotState extends DurableObject<Env> {
         update_id INTEGER NOT NULL,
         requested_at INTEGER NOT NULL,
         completed INTEGER NOT NULL DEFAULT 0
+      )`)
+      ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS assessment_confirmations (
+        token TEXT PRIMARY KEY,
+        telegram_user_id TEXT NOT NULL,
+        market_slug TEXT NOT NULL,
+        side TEXT NOT NULL,
+        quoted_cost INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        consumed INTEGER NOT NULL DEFAULT 0
+      )`)
+      ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS assessment_confirmations_expiry ON assessment_confirmations(expires_at)')
+      ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS sponsored_trial_budget (
+        month TEXT NOT NULL,
+        update_id INTEGER NOT NULL,
+        credits INTEGER NOT NULL,
+        completed INTEGER NOT NULL DEFAULT 0,
+        reserved_at INTEGER NOT NULL,
+        PRIMARY KEY(month, update_id)
       )`)
       const nextExpiry = ctx.storage.sql.exec<{ expires_at: number }>(
         'SELECT MIN(expires_at) AS expires_at FROM source_evidence',
@@ -224,5 +243,55 @@ export class TelegramBotState extends DurableObject<Env> {
       'DELETE FROM polymarket_trials WHERE telegram_user_id = ? AND update_id = ? AND completed = 0',
       String(telegramUserId), updateId,
     )
+  }
+
+  createAssessmentConfirmation(token: string, telegramUserId: number, slug: string, side: 'up' | 'down', cost: number, now: number): void {
+    if (!/^[a-f0-9]{24}$/.test(token) || !Number.isSafeInteger(telegramUserId) || telegramUserId <= 0 ||
+        !/^[a-z0-9][a-z0-9_-]{1,199}$/i.test(slug) || !Number.isSafeInteger(cost) || cost < 0 ||
+        !Number.isSafeInteger(now) || now < 0) throw new TypeError('Invalid assessment confirmation')
+    const sql = this.ctx.storage.sql
+    sql.exec('DELETE FROM assessment_confirmations WHERE expires_at <= ?', now)
+    sql.exec('INSERT INTO assessment_confirmations(token, telegram_user_id, market_slug, side, quoted_cost, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+      token, String(telegramUserId), slug, side, cost, now + 7 * 86_400)
+  }
+
+  consumeAssessmentConfirmation(token: string, telegramUserId: number, now: number): { slug: string; side: 'up' | 'down'; cost: number } | null {
+    const sql = this.ctx.storage.sql
+    const row = sql.exec<{ market_slug: string; side: string; quoted_cost: number; expires_at: number; consumed: number }>(
+      'SELECT market_slug, side, quoted_cost, expires_at, consumed FROM assessment_confirmations WHERE token = ? AND telegram_user_id = ? LIMIT 1',
+      token, String(telegramUserId),
+    ).toArray()[0]
+    if (!row || row.expires_at <= now || row.consumed !== 0 || (row.side !== 'up' && row.side !== 'down')) return null
+    sql.exec('UPDATE assessment_confirmations SET consumed = 1 WHERE token = ? AND consumed = 0', token)
+    return { slug: row.market_slug, side: row.side, cost: row.quoted_cost }
+  }
+
+  reserveSponsoredTrialBudget(updateId: number, credits: number, now: number): boolean {
+    if (!Number.isSafeInteger(updateId) || updateId < 0 || !Number.isSafeInteger(credits) || credits <= 0 ||
+        !Number.isSafeInteger(now) || now < 0) return false
+    const month = new Date(now * 1000).toISOString().slice(0, 7)
+    const sql = this.ctx.storage.sql
+    sql.exec('DELETE FROM sponsored_trial_budget WHERE month < ?', month)
+    const existing = sql.exec<{ completed: number; reserved_at: number }>(
+      'SELECT completed, reserved_at FROM sponsored_trial_budget WHERE month = ? AND update_id = ? LIMIT 1', month, updateId,
+    ).toArray()[0]
+    if (existing?.completed === 1 || (existing && existing.reserved_at > now - 120)) return false
+    if (existing) sql.exec('DELETE FROM sponsored_trial_budget WHERE month = ? AND update_id = ? AND completed = 0', month, updateId)
+    const total = sql.exec<{ credits: number }>(
+      'SELECT COALESCE(SUM(credits), 0) AS credits FROM sponsored_trial_budget WHERE month = ?', month,
+    ).toArray()[0]?.credits ?? 0
+    if (total + credits > SPONSORED_TRIAL_MONTHLY_CREDIT_CAP) return false
+    sql.exec('INSERT INTO sponsored_trial_budget(month, update_id, credits, completed, reserved_at) VALUES (?, ?, ?, 0, ?)', month, updateId, credits, now)
+    return true
+  }
+
+  completeSponsoredTrialBudget(updateId: number, now: number): void {
+    if (!Number.isSafeInteger(now) || now < 0) throw new TypeError('Invalid sponsored trial completion time')
+    this.ctx.storage.sql.exec('UPDATE sponsored_trial_budget SET completed = 1 WHERE update_id = ?', updateId)
+  }
+
+  releaseSponsoredTrialBudget(updateId: number, now: number): void {
+    const month = new Date(now * 1000).toISOString().slice(0, 7)
+    this.ctx.storage.sql.exec('DELETE FROM sponsored_trial_budget WHERE update_id = ? AND completed = 0', updateId)
   }
 }
