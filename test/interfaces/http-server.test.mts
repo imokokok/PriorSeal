@@ -564,6 +564,49 @@ test('x402 integration readiness is receipt-independent, exposes Bazaar query me
   assert.equal(smokeReport.activation.state, 'REQUIRES_REAL_TARGET');
 });
 
+test('HEAD on a paid x402 route answers the bare 402 quote and never verifies or settles', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+    calls.push(`${init?.method ?? 'GET'} ${url.pathname}`);
+    if (url.pathname === '/supported') return Response.json({ kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:8453' }] });
+    throw new Error(`Unexpected facilitator request: ${url.pathname}`);
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const keys = generateKeyPairSync('ed25519');
+  const privateKeyPem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const publicKeyPem = keys.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  const x402 = parseX402Config({
+    PRIORSEAL_X402_FACILITATOR_URL: 'https://head-probe-facilitator.test',
+    PRIORSEAL_X402_RESOURCE_ORIGIN: 'https://api.example.test',
+    PRIORSEAL_X402_PAY_TO: `0x${'b'.repeat(40)}`,
+    PRIORSEAL_X402_NETWORKS: 'eip155:8453',
+    PRIORSEAL_X402_ROUTES_JSON: JSON.stringify([{
+      method: 'GET', path: '/v1/integration-readiness/smoke', description: 'Verify payment and signed delivery compatibility', price: '$0.02',
+    }]),
+  });
+  assert.ok(x402);
+  const store = createMemoryStore();
+  const metrics: Array<Record<string, unknown>> = [];
+  const server = createHttpServer({
+    x402, store, privateKeyPem, publicKeyPem, issuer: 'priorseal.test', keyId: 'test-1', now: () => 1_000_000,
+    logger: { info(entry) { metrics.push(entry); } },
+  });
+  t.after(() => server.close());
+
+  const head = await request(server, '/v1/integration-readiness/smoke', { method: 'HEAD' });
+  assert.equal(head.status, 402);
+  assert.ok(typeof head.headers['payment-required'] === 'string' && head.headers['payment-required'].length > 0);
+  assert.equal(head.headers['cache-control'], 'no-store');
+  assert.deepEqual(calls, ['GET /supported'], 'a HEAD probe only builds the quote and never verifies or settles');
+  assert.ok(metrics.some((entry) => entry.event === 'x402.head_probe'));
+  assert.ok(!metrics.some((entry) => entry.event === 'x402.payment_authorized'));
+
+  const health = await request(server, '/health/live', { method: 'HEAD' });
+  assert.equal(health.status, 200, 'availability probes may HEAD the health endpoints');
+});
+
 test('capability discovery advertises only rails supported by the current facilitator', async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {

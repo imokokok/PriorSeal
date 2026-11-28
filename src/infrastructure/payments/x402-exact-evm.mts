@@ -258,7 +258,12 @@ function parseHypercoreMerchantConfig(raw: {
 }
 
 export function matchX402Route(config: X402Config | undefined, method: string | undefined, path: string) {
-  if (!config || method?.toUpperCase() !== 'GET') return undefined;
+  // HEAD matches GET routes: discovery catalog workers (PayAI's catalog worker
+  // sends HEAD before GET; x402dash rejects a route on a non-402 probe) refuse
+  // routes that answer 405, and RFC semantics say HEAD mirrors GET. The HTTP
+  // layer answers HEAD with the bare 402 quote only — never verify/settle.
+  const upperMethod = method?.toUpperCase();
+  if (!config || (upperMethod !== 'GET' && upperMethod !== 'HEAD')) return undefined;
   return config.routes.find(route => route.regex.test(path));
 }
 

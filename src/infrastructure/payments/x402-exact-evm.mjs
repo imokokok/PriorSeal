@@ -138,7 +138,8 @@ function parseHypercoreMerchantConfig(raw, timeoutMs, fetcher) {
   });
 }
 function matchX402Route(config, method, path) {
-  if (!config || method?.toUpperCase() !== "GET") return void 0;
+  const upperMethod = method?.toUpperCase();
+  if (!config || upperMethod !== "GET" && upperMethod !== "HEAD") return void 0;
   return config.routes.find((route) => route.regex.test(path));
 }
 async function discoverX402AvailableNetworks(config, signal) {
